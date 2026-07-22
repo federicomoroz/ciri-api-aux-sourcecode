@@ -8,29 +8,29 @@
         "width": 4752,
         "color": 4
       },
-      "id": "6ece30f0-b14a-4d24-b41f-b92af6d5b87f",
+      "id": "e1595a71-c3c0-4859-bed6-732da2557bba",
       "name": "Sticky Note — Resumen",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        10176,
-        4576
+        44720,
+        15088
       ]
     },
     {
       "parameters": {
         "content": "## 🟢 §1 — ENTRADA Y VALIDACIÓN\n\n**IF node** valida formato TXN-XXXXX.\n- ✅ True → **Set node** extrae campos limpios\n- ❌ False → responde 400 sin continuar\n\nError explícito desde el primer nodo.",
         "height": 1348,
-        "width": 680,
+        "width": 920,
         "color": 5
       },
-      "id": "0cbf8cb6-f638-41ea-9464-96831a2232ec",
+      "id": "925f2e61-a2f4-4164-bb18-991cf0fa8adb",
       "name": "Sticky Note — Sección 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        10176,
-        4688
+        44480,
+        15200
       ]
     },
     {
@@ -40,13 +40,13 @@
         "width": 776,
         "color": 3
       },
-      "id": "a21114b2-001e-4946-9b6d-269ace785db8",
+      "id": "0e4eb1af-595d-4b25-8269-103ce6c58d6c",
       "name": "Sticky Note — Sección 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        10864,
-        4688
+        45408,
+        15200
       ]
     },
     {
@@ -56,13 +56,13 @@
         "width": 1432,
         "color": 6
       },
-      "id": "5d81c3be-9149-4fdb-be54-952803e537e4",
+      "id": "a3f3b2b1-3fa6-4bad-ad84-a89709f74256",
       "name": "Sticky Note — Sección 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        11648,
-        4688
+        46192,
+        15200
       ]
     },
     {
@@ -72,13 +72,13 @@
         "width": 1840,
         "color": 2
       },
-      "id": "99816bdf-99dd-471b-abde-4debc9b29b8b",
+      "id": "b00d298c-388a-48cd-866c-f981d3de94ad",
       "name": "Sticky Note — Sección 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        13104,
-        4688
+        47648,
+        15200
       ]
     },
     {
@@ -88,13 +88,13 @@
         "width": 516,
         "color": 7
       },
-      "id": "3c113a09-a44d-4c71-ae30-99b2592b78e1",
+      "id": "8e5fb528-fff8-4b16-82a3-dc51114717cb",
       "name": "Sticky Note — HITL",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        13568,
-        5152
+        48112,
+        15664
       ]
     },
     {
@@ -104,13 +104,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "5068c258-94b1-4917-b06a-f5515b0fd988",
+      "id": "de19a385-8fa2-4199-b82f-91d4509e0c61",
       "name": "Webhook — Entrada",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        10224,
-        5200
+        44656,
+        15728
       ],
       "webhookId": "ciri-chargeback-agent"
     },
@@ -138,13 +138,13 @@
         },
         "options": {}
       },
-      "id": "1bcf7a12-3607-4337-a21f-31991aa2804e",
+      "id": "8d612ab2-e5d8-430c-99a4-05f8dcdc3fb6",
       "name": "Validar Formato — IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        10448,
-        5200
+        44864,
+        15728
       ]
     },
     {
@@ -173,13 +173,13 @@
         },
         "options": {}
       },
-      "id": "3130d921-3142-46a6-80c9-86ae18ab7bc3",
+      "id": "b00f1eb0-463e-42de-adfc-e13a0ed07254",
       "name": "Validar Formato TXN",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        10672,
-        5184
+        45056,
+        15712
       ]
     },
     {
@@ -190,13 +190,13 @@
           "responseCode": 400
         }
       },
-      "id": "a8cd6cdd-4072-4981-8b75-4f015962d6b3",
+      "id": "3b19dfd3-b5fb-4432-a000-5cb58e2b4431",
       "name": "Error — TXN Inválida",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        10672,
-        5408
+        45056,
+        15920
       ]
     },
     {
@@ -206,13 +206,13 @@
           "timeout": 30000
         }
       },
-      "id": "7558244c-ae7d-446b-b185-63ab093b91c2",
+      "id": "e3862e7d-eb19-40df-ad73-05d848500614",
       "name": "Obtener Transacción",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        10912,
-        5184
+        45456,
+        15696
       ]
     },
     {
@@ -222,13 +222,13 @@
           "timeout": 30000
         }
       },
-      "id": "2990633d-bcf5-4480-98df-5963c05cafc3",
+      "id": "a6613a31-126c-4aa8-b1c8-67e5e5c0565f",
       "name": "Obtener Logs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        11152,
-        5024
+        45696,
+        15536
       ]
     },
     {
@@ -263,13 +263,13 @@
           "timeout": 30000
         }
       },
-      "id": "964a10db-31ec-4b60-ba0e-42cd163b6e20",
+      "id": "42c9f469-6006-4370-bdb3-c9153d39929a",
       "name": "Buscar Políticas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        11152,
-        5184
+        45696,
+        15696
       ]
     },
     {
@@ -308,13 +308,13 @@
           "timeout": 30000
         }
       },
-      "id": "9475fe09-84bb-4e68-a645-680a21a7f622",
+      "id": "97aaf4ef-8256-456a-96be-6f7c25feeff2",
       "name": "Buscar Casos Similares",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        11152,
-        5344
+        45696,
+        15856
       ]
     },
     {
@@ -324,13 +324,13 @@
           "timeout": 30000
         }
       },
-      "id": "4ff9b08b-81e9-453d-93c0-ab26caf1a743",
+      "id": "c025d3f6-5e4c-4316-923a-b56db512fd07",
       "name": "Riesgo del Comercio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        11152,
-        5504
+        45696,
+        16016
       ]
     },
     {
@@ -353,13 +353,13 @@
         },
         "options": {}
       },
-      "id": "87d05096-2c9d-4a98-b737-a2517f2849ff",
+      "id": "7f74137b-6295-4691-a5d0-c03c4b17e51f",
       "name": "Evaluar Riesgo Comercio",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        11392,
-        5504
+        45936,
+        16016
       ]
     },
     {
@@ -369,13 +369,13 @@
           "timeout": 30000
         }
       },
-      "id": "8acafa0e-f5bc-4a3f-96a8-28dc640d3d5a",
+      "id": "80fa94c8-b712-4600-9adb-7bc0976002f9",
       "name": "Historial del Cliente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        11152,
-        5664
+        45696,
+        16176
       ]
     },
     {
@@ -392,13 +392,13 @@
         },
         "options": {}
       },
-      "id": "df9a0d1a-c0cf-4ae7-be00-007726cc960a",
+      "id": "b18c074d-d4c6-4067-a4f9-31769a468b0a",
       "name": "Evaluar Historial Cliente",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        11392,
-        5664
+        45936,
+        16176
       ]
     },
     {
@@ -445,39 +445,39 @@
         },
         "options": {}
       },
-      "id": "e1654c2e-8cf7-41c9-b52a-3d6b7fa5f820",
+      "id": "a54c6f70-c815-4434-bb25-849f89093f10",
       "name": "Verificar SLA",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        11152,
-        5824
+        45696,
+        16336
       ]
     },
     {
       "parameters": {
         "numberInputs": 6
       },
-      "id": "a849dfce-4242-4ef0-a684-4f713d196626",
+      "id": "7ce16f48-1a54-45e6-8a13-d314aa3b140c",
       "name": "Merge — Contexto Paralelo",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        11728,
-        5168
+        46272,
+        15680
       ]
     },
     {
       "parameters": {
         "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input    = $('Validar Formato TXN').item.json;\nconst txn      = $('Obtener Transacción').item.json;\nconst logsData = $('Obtener Logs').item.json;\nconst policies = $('Buscar Políticas').item.json;\nconst cases    = $('Buscar Casos Similares').item.json;\nconst sla      = $('Verificar SLA').item.json;\n\n// Merchant: datos crudos de FastAPI + flags evaluados en n8n\nconst merchant = {\n  ...$('Riesgo del Comercio').item.json,\n  ...$('Evaluar Riesgo Comercio').item.json,\n};\n\n// Cliente: datos crudos de FastAPI + flags evaluados en n8n\nconst client = {\n  ...$('Historial del Cliente').item.json,\n  ...$('Evaluar Historial Cliente').item.json,\n};\n\nconst slaStatus = sla.within_sla\n  ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n  : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`;\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant}, USD ${txn.amount_usd},`,\n  `canal ${txn.channel}, país ${txn.country}, score fraude ${txn.fraud_score}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
       },
-      "id": "9f75cb11-b0e1-4860-9002-33e224ec1c43",
+      "id": "6043be1d-cada-4855-b131-dda19a75c1f8",
       "name": "Compilar Contexto",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        11936,
-        5168
+        46480,
+        15680
       ]
     },
     {
@@ -533,13 +533,13 @@
           "timeout": 60000
         }
       },
-      "id": "751aaef1-feb6-4041-807a-72f799465665",
+      "id": "631ad35b-efc4-45d1-aed7-f3493c7d00c6",
       "name": "Sintetizar Resolución",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        12160,
-        5168
+        46704,
+        15680
       ]
     },
     {
@@ -588,13 +588,13 @@
           "timeout": 60000
         }
       },
-      "id": "1beb8c0f-6229-4e5d-9978-25ce555266d5",
+      "id": "ca21b01e-a656-4cfb-bf71-399b00c1227a",
       "name": "Juez de Calidad",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        12400,
-        5168
+        46944,
+        15680
       ]
     },
     {
@@ -611,26 +611,26 @@
         },
         "options": {}
       },
-      "id": "e295687f-254a-4758-89b7-4b2fe697c46a",
+      "id": "bc343687-e8a5-4555-8604-95c31215a3b5",
       "name": "Extraer Evaluación — Juez",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        12640,
-        5168
+        47184,
+        15680
       ]
     },
     {
       "parameters": {
         "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $input.first().json.judge_evaluation;\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n  }\n}];"
       },
-      "id": "bf7e7bb5-84a2-42aa-a812-9d9697796f70",
+      "id": "b2c2e9ca-e9c4-4cf3-a93f-9d42f78ada3b",
       "name": "Preparar Informe",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        12880,
-        5168
+        47424,
+        15680
       ]
     },
     {
@@ -741,13 +741,13 @@
         },
         "options": {}
       },
-      "id": "1f8a9611-6250-4243-8f67-848b75427815",
+      "id": "a5e2af70-dd7c-4c28-9d6d-d789c1c0e37b",
       "name": "Switch — Nivel de Riesgo",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        13120,
-        5136
+        47664,
+        15648
       ]
     },
     {
@@ -811,19 +811,19 @@
           "timeout": 30000
         }
       },
-      "id": "6cbff099-50f1-4ae4-88c9-e7d6c332c1cd",
+      "id": "016e9577-8af6-4bba-83be-d314c05c8c4d",
       "name": "Generar Reporte — BLOCKER",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        13616,
-        4928
+        48160,
+        15440
       ]
     },
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ $json.data }}",
         "options": {
           "responseCode": 200,
           "responseHeaders": {
@@ -836,13 +836,13 @@
           }
         }
       },
-      "id": "4dfae681-f172-4cea-bc0b-def12e7e0035",
+      "id": "0709e222-3fb6-44cb-a793-ea4f48eaed47",
       "name": "Responder — BLOCKER",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        13856,
-        4928
+        48400,
+        15440
       ]
     },
     {
@@ -895,13 +895,13 @@
         },
         "options": {}
       },
-      "id": "6298eb90-14f1-45cb-a661-f6bc1609ec94",
+      "id": "c0613f26-457e-461d-880a-46c217587e9b",
       "name": "Notificar Analista — HIGH",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        13520,
-        5408
+        48064,
+        15920
       ]
     },
     {
@@ -909,13 +909,13 @@
         "resume": "webhook",
         "options": {}
       },
-      "id": "6899ed85-d262-4896-8e3c-7fba194beaca",
+      "id": "e3c81e05-5aa7-4220-8ba7-5a38b903ee7b",
       "name": "Wait — Aprobación HITL",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        13760,
-        5408
+        48304,
+        15920
       ],
       "webhookId": "ciri-hitl-resume"
     },
@@ -923,13 +923,13 @@
       "parameters": {
         "jsCode": "// El analista POSTea { decision: 'APPROVE'|'REJECT', notes: '...' } al resume_url\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $('Extraer Evaluación — Juez').item.json.judge_evaluation;\n\nconst hitlDecision = {\n  analyst_decision: (resume.decision || 'APPROVE').toUpperCase(),\n  analyst_notes:    resume.notes || '',\n  final_outcome:    (resume.decision || 'APPROVE').toUpperCase() === 'REJECT' ? 'DENIED' : 'APPROVED',\n  timestamp:        new Date().toISOString(),\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       hitlDecision,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    _feedback_payload: {\n      transaction_id:    ctx.transaction_id,\n      analyst_decision:  hitlDecision.analyst_decision,\n      analyst_notes:     hitlDecision.analyst_notes,\n      final_outcome:     hitlDecision.final_outcome,\n      judge_score:       judge.overall_score ?? 0,\n    }\n  }\n}];"
       },
-      "id": "6f181924-b72b-450f-8c96-0ad786ca815b",
+      "id": "a341c635-7890-40f4-8803-ca441bcc91f5",
       "name": "Procesar Respuesta HITL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        14000,
-        5408
+        48544,
+        15920
       ]
     },
     {
@@ -965,13 +965,13 @@
           "timeout": 30000
         }
       },
-      "id": "e4052b7a-108d-476b-9421-80ccd53bcd1c",
+      "id": "30786dd8-9005-4808-9054-4c17ae21dabf",
       "name": "Registrar Feedback HITL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        14240,
-        5408
+        48784,
+        15920
       ]
     },
     {
@@ -1035,19 +1035,19 @@
           "timeout": 30000
         }
       },
-      "id": "79cb606e-fbc6-48db-85bf-007b57271b43",
+      "id": "69c213a0-79e2-470c-a33d-791222462c60",
       "name": "Generar Reporte — HIGH",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        14480,
-        5408
+        49024,
+        15920
       ]
     },
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ $json.data }}",
         "options": {
           "responseCode": 200,
           "responseHeaders": {
@@ -1060,13 +1060,13 @@
           }
         }
       },
-      "id": "b9ca2fb7-2aef-4c5c-b1be-93be614ee44d",
+      "id": "26c42537-c01f-4e83-93ee-7fc8023a4a68",
       "name": "Responder — HIGH",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        14720,
-        5408
+        49264,
+        15920
       ]
     },
     {
@@ -1130,19 +1130,19 @@
           "timeout": 30000
         }
       },
-      "id": "c9c6b81c-955f-4815-b53b-d90c3bc0d8df",
+      "id": "8c25b47d-2af7-4b37-9434-d17a625eedae",
       "name": "Generar Reporte — MEDIUM",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        13520,
-        5648
+        48064,
+        16160
       ]
     },
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ $json.data }}",
         "options": {
           "responseCode": 200,
           "responseHeaders": {
@@ -1155,13 +1155,13 @@
           }
         }
       },
-      "id": "c5aee274-46a9-4f89-b033-d55966d11b2b",
+      "id": "5017fe43-dfcc-43b7-90fc-18d3b95632f5",
       "name": "Responder — MEDIUM",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        13760,
-        5648
+        48304,
+        16160
       ]
     },
     {
@@ -1225,19 +1225,19 @@
           "timeout": 30000
         }
       },
-      "id": "8b155e77-12f4-4724-a6a4-e7bcaf183b53",
+      "id": "688b35b7-a4a6-43b0-9f17-6ccdd6719cbf",
       "name": "Generar Reporte — LOW",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        13520,
-        5888
+        48064,
+        16400
       ]
     },
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ $json.data }}",
         "options": {
           "responseCode": 200,
           "responseHeaders": {
@@ -1250,35 +1250,29 @@
           }
         }
       },
-      "id": "6166da4c-a9c4-4c49-851d-b4aef72bdf30",
+      "id": "aa284a5b-a022-4ab8-9b42-81195f9b656f",
       "name": "Responder — LOW",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        13760,
-        5888
+        48304,
+        16400
       ]
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "https://ciri-chargeback-agent.onrender.com/health",
         "options": {
-          "timeout": 55000,
-          "retry": {
-            "enabled": true,
-            "maxTries": 5,
-            "waitBetweenTries": 10000
-          }
+          "timeout": 55000
         }
       },
-      "id": "warmup-api-health-check",
+      "id": "fea7c0e7-93fb-49a2-bd7c-38bac309f07c",
       "name": "Despertar API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        10792,
-        5184
+        45232,
+        15712
       ],
       "onError": "continueErrorOutput"
     }
@@ -1660,7 +1654,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "f0df8e9c-053a-4a06-b8c8-2e41f5844606",
+  "versionId": "87343ca8-602f-4a16-a50b-a9e78245dc3a",
   "meta": {
     "instanceId": "36ed1d7aaae0ce47f22100fe1416286231c2bf358a8645fb0e55f588462fc9fb"
   },
@@ -1668,10 +1662,10 @@
   "id": "vbZqodrrvO3mHM7K",
   "tags": [
     {
-      "name": "CIRI",
-      "id": "hPqDvQS3dMdHEFrX",
       "updatedAt": "2026-07-22T05:17:01.070Z",
-      "createdAt": "2026-07-22T05:17:01.070Z"
+      "createdAt": "2026-07-22T05:17:01.070Z",
+      "id": "hPqDvQS3dMdHEFrX",
+      "name": "CIRI"
     }
   ]
 }
