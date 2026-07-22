@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 
 COPY api/pyproject.toml .
 COPY api/app/ app/
+COPY data/ data/
 
 RUN pip install --no-cache-dir .
 
