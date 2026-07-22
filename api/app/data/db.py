@@ -191,3 +191,33 @@ class Database:
             )
             conn.commit()
             return cursor.lastrowid
+
+    # --- Report Cache (idempotency) ---
+
+    def ensure_report_cache_table(self) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS report_cache (
+                    cache_key TEXT PRIMARY KEY,
+                    html TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
+            conn.commit()
+
+    def get_cached_report(self, cache_key: str) -> str | None:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT html FROM report_cache WHERE cache_key = ?", (cache_key,)
+            ).fetchone()
+            return row["html"] if row else None
+
+    def store_cached_report(self, cache_key: str, html: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._conn() as conn:
+            conn.execute(
+                """INSERT OR REPLACE INTO report_cache (cache_key, html, created_at)
+                   VALUES (?, ?, ?)""",
+                (cache_key, html, now),
+            )
+            conn.commit()

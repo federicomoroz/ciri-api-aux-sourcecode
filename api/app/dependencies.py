@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
         del data  # release immediately; GC can reclaim before next phase
 
     db = Database(db_path)
+    db.ensure_report_cache_table()
 
     # --- Phase 2: Connect external services (minimal RAM) ---
     qdrant = QdrantClient(
@@ -112,11 +113,7 @@ async def lifespan(app: FastAPI):
     analyzer = Analyzer(db)
 
     # Service layer
-    resolution_service = ResolutionService(
-        llm, tracer,
-        retriever=retriever,
-        cache_enabled=settings.semantic_cache_enabled,
-    )
+    resolution_service = ResolutionService(llm, tracer)
     feedback_service = FeedbackService(db, updater, tracer)
 
     # Report generator
