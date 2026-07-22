@@ -9,40 +9,47 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-# Download ONNX model + tokenizer to fixed path /app/models/ (no HF Hub at runtime).
-# model.onnx FP32 = 470 MB → OOM on Render 512 MB free tier.
-# INT8 quantized variants = 118 MB → ~130 MB ONNX session → fits in 512 MB.
-# Correct quantized filenames (model_quantized.onnx does NOT exist for this model):
-#   model_quint8_avx2.onnx   (118 MB, x86_64 AVX2 — broadest server compatibility)
-#   model_qint8_avx512.onnx  (118 MB, x86_64 AVX512 — fallback)
-# v7
+# Download ONNX model + tokenizer directly via HTTP (no hf_hub_download — avoids
+# HF Hub API rate limits and cache resolution failures in Render build).
+# INT8 quantized (118 MB) fits in Render 512 MB; FP32 model.onnx = 470 MB → OOM.
+# Build FAILS explicitly if download fails (no silent empty model).
+# v8
 RUN python -c "
-import os, shutil
-from huggingface_hub import hf_hub_download
+import os, requests, sys
 
 os.makedirs('/app/models', exist_ok=True)
-model_id = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+BASE = 'https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main'
 
+def download(url, dst):
+    print(f'Downloading {url}...')
+    r = requests.get(url, stream=True, timeout=300)
+    r.raise_for_status()
+    with open(dst, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=1024*1024):
+            f.write(chunk)
+    mb = os.path.getsize(dst) // 1024 // 1024
+    print(f'  -> {dst} ({mb} MB)')
+    return mb
+
+# Try INT8 quantized first (118 MB), fall back to O4 optimized (235 MB)
 onnx_dst = '/app/models/model.onnx'
-candidates = [
-    'onnx/model_quint8_avx2.onnx',   # INT8 quant, AVX2, 118 MB
-    'onnx/model_qint8_avx512.onnx',  # INT8 quant, AVX512, 118 MB
-    'onnx/model_qint8_arm64.onnx',   # INT8 quant, ARM64, 118 MB
-    'onnx/model_O4.onnx',            # FP32 optimised, 235 MB (last resort)
-]
-for filename in candidates:
+for onnx_file in ['onnx/model_quint8_avx2.onnx', 'onnx/model_qint8_avx512.onnx', 'onnx/model_O4.onnx']:
     try:
-        src = hf_hub_download(model_id, filename, local_files_only=False)
-        shutil.copy(src, onnx_dst)
-        size_mb = os.path.getsize(onnx_dst) // 1024 // 1024
-        print(f'OK {filename} -> /app/models/model.onnx ({size_mb} MB)')
+        mb = download(f'{BASE}/{onnx_file}', onnx_dst)
+        if mb < 50:
+            raise RuntimeError(f'File too small ({mb} MB)')
+        print(f'ONNX ready: {onnx_file} ({mb} MB)')
         break
     except Exception as e:
-        print(f'SKIP {filename}: {e}')
+        print(f'FAILED {onnx_file}: {e}')
+        if os.path.exists(onnx_dst):
+            os.remove(onnx_dst)
+else:
+    print('ERROR: all ONNX downloads failed', file=sys.stderr)
+    sys.exit(1)
 
-tok_src = hf_hub_download(model_id, 'tokenizer.json')
-shutil.copy(tok_src, '/app/models/tokenizer.json')
-print('Tokenizer -> /app/models/tokenizer.json')
+download(f'{BASE}/tokenizer.json', '/app/models/tokenizer.json')
+print('Build complete.')
 "
 
 # Copy application code
