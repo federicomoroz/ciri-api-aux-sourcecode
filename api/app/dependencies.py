@@ -108,14 +108,6 @@ async def lifespan(app: FastAPI):
             indexer.index_historical_cases(cases, txns)
         del policies, cases, txns  # release before serving
 
-    # --- Phase 5: Warm up embedder (ensures ONNX model is in RAM before first request) ---
-    # On Render free tier, lazy init during 6 parallel §2 requests causes crash.
-    # If Qdrant was pre-seeded (normal path), Phase 4 skips indexing entirely,
-    # so without this the model never loads until the first /api/policies/search hit.
-    logger.info("Warming up embedder — loading ONNX model into RAM...")
-    embedder.encode(["warmup"])
-    logger.info("Embedder ready.")
-
     # Analyzer
     analyzer = Analyzer(db)
 

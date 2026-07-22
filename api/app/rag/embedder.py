@@ -6,6 +6,8 @@ Same model (paraphrase-multilingual-MiniLM-L12-v2), same 384-dim vectors,
 same .encode(texts) interface.
 """
 
+import threading
+
 import numpy as np
 from fastembed import TextEmbedding
 
@@ -16,6 +18,9 @@ class FastEmbedder:
     Lazy initialization: ONNX model is NOT loaded until first .encode() call.
     This keeps startup RAM ~0MB for the embedder, deferring the ~150MB load
     to the first request (critical for Render free tier 512MB limit).
+
+    Thread-safe: a Lock ensures only one thread loads the model even when
+    multiple requests arrive simultaneously before the first load completes.
     """
 
     def __init__(self, model_name: str) -> None:
@@ -26,10 +31,13 @@ class FastEmbedder:
             else model_name
         )
         self._model: TextEmbedding | None = None  # loaded on first encode()
+        self._lock = threading.Lock()
 
     def _ensure_loaded(self) -> TextEmbedding:
         if self._model is None:
-            self._model = TextEmbedding(self._model_name)
+            with self._lock:
+                if self._model is None:  # double-check after acquiring lock
+                    self._model = TextEmbedding(self._model_name)
         return self._model
 
     def encode(self, texts: list[str], show_progress_bar: bool = False) -> np.ndarray:

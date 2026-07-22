@@ -9,11 +9,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-# Pre-download embedding model into /app/models (inside the Docker layer, not ~/.cache)
-# FASTEMBED_CACHE_PATH tells fastembed where to store/find model files at runtime too
+# Pre-download embedding model into /app/hf_cache (inside the Docker image layer).
+# HF_HOME controls where huggingface-hub caches model files — fastembed 0.8+ uses
+# huggingface-hub's snapshot_download internally, so this is the correct env var.
+# FASTEMBED_CACHE_PATH is kept for legacy fastembed path resolution.
+# Both env vars persist into the runtime container so the model is FOUND, not re-downloaded.
+ENV HF_HOME=/app/hf_cache
 ENV FASTEMBED_CACHE_PATH=/app/models
-# v3 — cache bust: forces re-download to /app/models (previous cache was in ~/.cache)
-RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup'])); print('Model cached at:', __import__(\"os\").environ[\"FASTEMBED_CACHE_PATH\"])"
+# v4 — HF_HOME replaces ~/.cache/huggingface at build AND runtime
+RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup'])); print('HF cache:', '/app/hf_cache')"
 
 # Copy application code
 COPY app/ app/
