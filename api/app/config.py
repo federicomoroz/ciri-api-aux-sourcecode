@@ -15,9 +15,10 @@ class Settings(BaseSettings):
     qdrant_cases_collection: str = "historical_cases"
     qdrant_cache_collection: str = "_semantic_cache"
 
-    # Embeddings
-    embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
-    embedding_dim: int = 384
+    # Embeddings (Voyage AI)
+    voyage_api_key: str = ""
+    embedding_model: str = "voyage-multilingual-2"
+    embedding_dim: int = 1024
 
     # SQLite
     sqlite_path: str = "data/chargeback.db"

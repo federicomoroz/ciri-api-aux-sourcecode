@@ -77,7 +77,7 @@ SIMILAR_CASES_TOP_K: int = 5
 POLICIES_TOP_K: int = 17                     # retrieve all; LLM filters relevance
 POLICIES_SCORE_THRESHOLD: float = 0.0        # no floor — return everything, rank later
 SEMANTIC_CACHE_THRESHOLD: float = 0.92       # min similarity to consider a cache hit
-EMBEDDING_DIM: int = 384                     # paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_DIM: int = 1024                    # voyage-multilingual-2 (Voyage AI API)
 
 # ── LLM ─────────────────────────────────────────────────────────────────────
 LLM_TRUNCATION_LENGTH: int = 200    # chars to log to tracer (not to LLM)

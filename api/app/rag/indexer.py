@@ -66,13 +66,19 @@ class QdrantIndexer:
         self.cache_collection = cache_collection
 
     def ensure_collections(self) -> None:
-        """Create the 3 Qdrant collections if they don't exist."""
+        """Create (or recreate if dim changed) the 3 Qdrant collections."""
         for name in [self.policies_collection, self.cases_collection, self.cache_collection]:
-            if not self.client.collection_exists(name):
-                self.client.create_collection(
-                    collection_name=name,
-                    vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
-                )
+            if self.client.collection_exists(name):
+                info = self.client.get_collection(name)
+                existing_dim = info.config.params.vectors.size
+                if existing_dim != EMBEDDING_DIM:
+                    self.client.delete_collection(name)
+                else:
+                    continue
+            self.client.create_collection(
+                collection_name=name,
+                vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
+            )
 
     def index_policies(self, policies: list[dict]) -> int:
         """Index all policies as Markdown documents. Returns count indexed."""
