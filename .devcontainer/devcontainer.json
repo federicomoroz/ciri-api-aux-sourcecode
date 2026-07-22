@@ -1,0 +1,19 @@
+{
+  "name": "CIRI Chargeback Agent",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [8000, 5678, 6333],
+  "portsAttributes": {
+    "8000": { "label": "FastAPI", "onAutoForward": "notify" },
+    "5678": { "label": "n8n", "onAutoForward": "notify" },
+    "6333": { "label": "Qdrant", "onAutoForward": "silent" }
+  },
+  "postCreateCommand": "cp .env.example .env && echo '\n⚠️  Edit .env and set CB_ANTHROPIC_API_KEY, then run: docker-compose up -d --build'",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-azuretools.vscode-docker"]
+    }
+  }
+}
