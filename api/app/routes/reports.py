@@ -8,12 +8,12 @@ from ..reports.generator import ReportGenerator
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
-@router.post("/html", response_class=HTMLResponse)
+@router.post("/html")
 def generate_html_report(
     req: ReportRequest,
     generator: ReportGenerator = Depends(get_report_generator),
-) -> str:
+) -> dict:
     """Generate an HTML report from all case analysis data.
-    Returns Content-Type: text/html."""
+    Returns JSON with html field for n8n compatibility."""
     html = generator.render(req.model_dump())
-    return HTMLResponse(content=html, status_code=200)
+    return {"html": html}
