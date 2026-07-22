@@ -1,108 +1,59 @@
 """
-Custom ONNX embedder — bypasses fastembed to use INT8 quantized model.
+Custom ONNX embedder loading from fixed /app/models/ path.
 
-Key constraints on Render free tier (512MB RAM):
-  - FP32  model.onnx     = ~120 MB disk → ~180 MB ONNX session → OOM
-  - INT8  model_quantized.onnx = ~30 MB disk → ~60 MB ONNX session → safe
+No HF Hub calls at runtime. The Dockerfile copies the model file to
+/app/models/model.onnx (prefers INT8 quantized ~30 MB, falls back to FP32 ~120 MB)
+and tokenizer.json to /app/models/tokenizer.json.
 
-All heavy imports (onnxruntime, tokenizers, huggingface_hub) are deferred to
-the first encode() call so startup RAM stays low.
-
-Thread-safe: double-checked locking ensures only one thread loads the model
-when 6 parallel n8n §2 requests arrive simultaneously.
+All heavy imports (onnxruntime, tokenizers) are deferred to first encode()
+call so startup RAM stays low. Thread-safe via double-checked locking.
 """
 
+import os
 import threading
 import numpy as np
 
-_MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-
-# Preference order: smallest (lowest RAM) first
-_ONNX_CANDIDATES = [
-    "onnx/model_quantized.onnx",  # INT8, ~30 MB — preferred
-    "onnx/model.onnx",            # FP32, ~120 MB — fallback
-]
+_MODEL_ONNX = os.environ.get("EMBEDDER_ONNX_PATH", "/app/models/model.onnx")
+_MODEL_TOKENIZER = os.environ.get("EMBEDDER_TOKENIZER_PATH", "/app/models/tokenizer.json")
 
 
 class FastEmbedder:
-    """Thin wrapper around the quantized ONNX model with a SentenceTransformer API.
-
-    Uses onnxruntime + tokenizers directly (no fastembed TextEmbedding) so we can
-    select the quantized ONNX file and control pooling explicitly.
-
-    Vectors are produced with mean-pooling + L2-normalisation, matching
-    fastembed 0.8+ behaviour for paraphrase-multilingual-MiniLM-L12-v2.
-    """
+    """Loads quantized ONNX model from fixed path. No network calls at runtime."""
 
     def __init__(self, model_name: str) -> None:
-        self._model_id = (
-            f"sentence-transformers/{model_name}"
-            if "/" not in model_name
-            else model_name
-        )
+        # model_name kept for API compatibility; actual path comes from env/const
+        self._model_name = model_name
         self._session = None
         self._tokenizer = None
+        self._input_names: set[str] = set()
         self._lock = threading.Lock()
-
-    # ------------------------------------------------------------------
-    # Lazy loading
-    # ------------------------------------------------------------------
 
     def _ensure_loaded(self):
         if self._session is None:
             with self._lock:
-                if self._session is None:  # double-check after acquiring lock
+                if self._session is None:
                     self._load()
         return self._session
 
     def _load(self) -> None:
-        """Download (or find in HF cache) and load quantized ONNX + tokenizer."""
         import onnxruntime as ort
         from tokenizers import Tokenizer
-        from huggingface_hub import hf_hub_download
-
-        # Prefer quantized file (HF_HUB_OFFLINE=1 at runtime → uses cache only)
-        onnx_path: str | None = None
-        for filename in _ONNX_CANDIDATES:
-            try:
-                onnx_path = hf_hub_download(
-                    repo_id=self._model_id, filename=filename
-                )
-                break
-            except Exception:
-                continue
-
-        if onnx_path is None:
-            raise RuntimeError(
-                f"No ONNX model found for {self._model_id}. "
-                "Tried: " + ", ".join(_ONNX_CANDIDATES)
-            )
-
-        tokenizer_path = hf_hub_download(
-            repo_id=self._model_id, filename="tokenizer.json"
-        )
 
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 1
         opts.inter_op_num_threads = 1
+
         self._session = ort.InferenceSession(
-            onnx_path,
+            _MODEL_ONNX,
             sess_options=opts,
             providers=["CPUExecutionProvider"],
         )
-        # Inspect actual input names (quantized export may omit token_type_ids)
         self._input_names = {inp.name for inp in self._session.get_inputs()}
-
-        self._tokenizer = Tokenizer.from_file(tokenizer_path)
+        self._tokenizer = Tokenizer.from_file(_MODEL_TOKENIZER)
         self._tokenizer.enable_truncation(max_length=512)
-        self._tokenizer.enable_padding()  # pads to longest text in each batch
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        self._tokenizer.enable_padding()
 
     def encode(self, texts: list[str], show_progress_bar: bool = False) -> np.ndarray:
-        """Return L2-normalised mean-pooled embeddings of shape (len(texts), 384)."""
         self._ensure_loaded()
         encodings = self._tokenizer.encode_batch(texts)
 
@@ -118,11 +69,9 @@ class FastEmbedder:
 
         outputs = self._session.run(None, feed)
 
-        # outputs[0] = last_hidden_state: (batch, seq_len, 384)
+        # Mean pooling + L2 normalise (fastembed 0.8+ behaviour for this model)
         token_embeddings = outputs[0]
         mask = attention_mask[:, :, np.newaxis].astype(np.float32)
         mean_emb = (token_embeddings * mask).sum(axis=1) / mask.sum(axis=1).clip(min=1e-9)
-
-        # L2 normalise
         norms = np.linalg.norm(mean_emb, axis=1, keepdims=True)
         return mean_emb / np.maximum(norms, 1e-9)

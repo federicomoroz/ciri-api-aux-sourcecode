@@ -9,30 +9,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-# HF_HOME controls where huggingface-hub caches model files at build AND runtime.
-# HF_HUB_OFFLINE=1 at runtime prevents any re-download — model must be in the image.
-# fastembed is still installed (as dep) but we use onnxruntime + tokenizers directly
-# to load the INT8 quantized model (~30 MB) instead of the FP32 model (~120 MB).
-ENV HF_HOME=/app/hf_cache
-ENV HF_HUB_OFFLINE=1
-ENV FASTEMBED_CACHE_PATH=/app/models
-
-# v5: download quantized ONNX + tokenizer into /app/hf_cache (inside the Docker layer).
-# Override HF_HUB_OFFLINE for this build step only so the download can happen.
-RUN HF_HUB_OFFLINE=0 python -c "
+# Download ONNX model files and copy to /app/models/ (fixed, known path).
+# No HF Hub calls at runtime — embedder loads directly from /app/models/.
+# Tries quantized (INT8, ~30 MB, ~60 MB session) first; falls back to FP32 (~120 MB).
+# v6
+RUN python -c "
+import os, shutil
 from huggingface_hub import hf_hub_download
-import os
+
+os.makedirs('/app/models', exist_ok=True)
 model_id = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
-# Prefer INT8 quantized (30 MB RAM) over FP32 (120 MB RAM)
+
+onnx_dst = '/app/models/model.onnx'
 for filename in ['onnx/model_quantized.onnx', 'onnx/model.onnx']:
     try:
-        p = hf_hub_download(model_id, filename)
-        print(f'Cached {filename}: {os.path.getsize(p) // 1024 // 1024} MB at {p}')
+        src = hf_hub_download(model_id, filename, local_files_only=False)
+        shutil.copy(src, onnx_dst)
+        size_mb = os.path.getsize(onnx_dst) // 1024 // 1024
+        print(f'Cached {filename} -> /app/models/model.onnx ({size_mb} MB)')
         break
     except Exception as e:
         print(f'Skip {filename}: {e}')
-tok = hf_hub_download(model_id, 'tokenizer.json')
-print(f'Tokenizer: {tok}')
+
+tok_src = hf_hub_download(model_id, 'tokenizer.json')
+shutil.copy(tok_src, '/app/models/tokenizer.json')
+print('Tokenizer copied to /app/models/tokenizer.json')
 "
 
 # Copy application code
