@@ -13,7 +13,7 @@ COPY api/app/ app/
 RUN pip install --no-cache-dir .
 
 # Pre-download embedding model (cached in layer, ~120MB)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup']))"
 
 # Copy data
 COPY data/ data/

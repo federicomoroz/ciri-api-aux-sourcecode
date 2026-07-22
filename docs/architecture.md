@@ -2,25 +2,87 @@
 
 ## Table of Contents
 
-1. [System Overview](#system-overview)
-2. [Full Flowchart](#full-flowchart)
-3. [Data Flow Description](#data-flow-description)
-4. [Architectural Decision Records](#architectural-decision-records)
+1. [System Overview](#system-overview) — Architecture Pattern
+2. [n8n Explicit Orchestration](#n8n-explicit-orchestration)
+3. [Full Flowchart](#full-flowchart)
+4. [Modularity](#modularity)
+5. [Scalability](#scalability)
+6. [Data Flow Description](#data-flow-description)
+7. [Architectural Decision Records](#architectural-decision-records)
 
 ---
 
 ## System Overview
 
-The CIRI Chargeback Agent is a multi-service system where each layer has a single responsibility:
+### Architecture Pattern
+
+**Explicit Workflow Orchestration with LLM-augmented tools** — sometimes called an *Agentic Pipeline*.
+
+This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — 22 named nodes, always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
+
+| | AI Agent clásico | Este sistema |
+|---|---|---|
+| Quién decide el flujo | El LLM | n8n (explícito, 22 nodos) |
+| Auditabilidad | Black box | Cada paso es un nodo visible |
+| Determinismo | No garantizado | Siempre la misma secuencia |
+| Debugging | Difícil | Nodo por nodo en el canvas |
+
+The LLM's role is scoped and deliberate: it evaluates policy compliance, synthesizes a resolution with reasoning, and acts as a quality judge. It does not orchestrate.
+
+---
+
+The CIRI Chargeback Agent is a multi-service system where each layer has a **single, clearly bounded responsibility**:
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Orchestration | n8n AI Agent | WHAT to do and WHEN — webhook entry, tool sequencing, HITL routing |
+| Orchestration | n8n (22 explicit nodes) | WHAT to do and WHEN — webhook, sequencing, routing by risk |
 | Business logic | FastAPI | HOW — policy retrieval, resolution synthesis, guardrails, feedback |
-| Semantic store | Qdrant | Unstructured truth — policies, historical cases, semantic cache |
-| Structured store | SQLite | Relational truth — transactions, logs, feedback, policy audit trail |
-| LLM | Claude Haiku | Policy evaluation, resolution, quality judge, log analysis |
+| Semantic store | Qdrant Cloud | Unstructured truth — policies, historical cases, semantic cache |
+| Structured store | SQLite | Relational truth — transactions, logs, feedback, audit trail |
+| LLM | Claude Sonnet 4.6 | Policy evaluation, resolution synthesis, quality judge, log analysis |
 | Observability | Langfuse | Token cost, latency, judge scores, cache hit rate |
+
+**Core principle:** n8n knows WHAT and WHEN. FastAPI knows HOW. The LLM only lives inside FastAPI endpoints — n8n never calls the LLM directly.
+
+---
+
+## n8n Explicit Orchestration
+
+The workflow contains **22 named nodes across 4 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named HTTP Request node with a specific endpoint and a specific purpose.
+
+```
+§1 — ENTRY (2 nodes)
+   [Webhook — Entrada]
+       ↓
+   [Validar Formato TXN]  ← Code node: validates TXN-XXXXX format
+
+§2 — CONTEXT ASSEMBLY (7 HTTP GET/POST calls)
+   [Obtener Transacción]     GET  /api/transactions/{id}
+   [Obtener Logs]            GET  /api/logs/{tx_id}
+   [Buscar Políticas]        GET  /api/policies/search        ← RAG: Qdrant semantic
+   [Buscar Casos Similares]  GET  /api/cases/similar          ← RAG: Qdrant semantic
+   [Riesgo del Comercio]     GET  /api/merchants/{name}/risk
+   [Historial del Cliente]   GET  /api/clients/{id}/history
+   [Verificar SLA]           POST /api/sla/check
+
+§3 — AI ANALYSIS (3 nodes)
+   [Compilar Contexto]        ← Code node: merges all 7 results
+       ↓
+   [Sintetizar Resolución]    POST /api/analyze/resolve  ← LLM: synthesis + guardrails
+       ↓
+   [Juez de Calidad]          POST /api/analyze/judge    ← LLM-as-Judge: score 1–10
+
+§4 — RISK ROUTING (Switch + 4 branches)
+   [Preparar Informe]         ← Code node: builds ReportRequest payload
+       ↓
+   [Switch — Nivel de Riesgo]
+      BLOCKER → [Generar Reporte] → [Responder HTML]
+      HIGH    → [Generar Reporte] → [Responder HTML]
+      MEDIUM  → [Generar Reporte] → [Responder HTML]
+      LOW     → [Generar Reporte] → [Responder HTML]
+```
+
+**Why explicit instead of AI Agent?** An AI Agent node decides autonomously which tools to call and in what order. That creates a black box — no audit trail, non-deterministic sequencing, impossible to debug when it skips a step. The explicit workflow guarantees that every investigation always executes the same 7 context-gathering steps in the same order, every time.
 
 ---
 
@@ -28,84 +90,129 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a singl
 
 ```mermaid
 flowchart TD
-    WEBHOOK([Analyst / Webhook\nPOST /webhook/chargeback]) --> N8N_AGENT
+    WEBHOOK([Analyst / Webhook\nPOST /webhook/chargeback-agent]) --> VALIDATE
 
-    subgraph N8N ["n8n AI Agent (~19 nodes)"]
-        N8N_AGENT[AI Agent node\nClaude Haiku] --> TOOL_CALLS
-        TOOL_CALLS{Tool calls\nvia HTTP} --> GET_TX
-        TOOL_CALLS --> GET_LOGS
-        TOOL_CALLS --> SEARCH_POL
-        TOOL_CALLS --> SEARCH_CASES
-        TOOL_CALLS --> MERCHANT
-        TOOL_CALLS --> SLA_CHECK
-        TOOL_CALLS --> RESOLVE
-        TOOL_CALLS --> JUDGE_CALL
-        TOOL_CALLS --> REPORT
-        HITL_WAIT([HITL — Analyst reviews\nHTML report])
-        FEEDBACK_SUBMIT([POST /api/feedback])
-    end
-
-    subgraph FASTAPI ["FastAPI — Business Logic (port 8000)"]
+    subgraph N8N ["n8n — Explicit Orchestrator (22 nodes)"]
+        VALIDATE[Validar Formato TXN\nCode node]
         GET_TX[GET /api/transactions/:id]
-        GET_LOGS[GET /api/transactions/:id/logs]
-        SEARCH_POL[GET /api/policies/search\nQueryBuilder + Qdrant]
-        SEARCH_CASES[GET /api/cases/similar\nQdrant semantic]
+        GET_LOGS[GET /api/logs/:tx_id]
+        SEARCH_POL[GET /api/policies/search]
+        SEARCH_CASES[GET /api/cases/similar]
         MERCHANT[GET /api/merchants/:name/risk]
-        SLA_CHECK[GET /api/sla/:id]
-        RESOLVE[POST /api/analyze/resolve\nv1_policy_eval → v1_resolution\n+ guardrails]
-        JUDGE_CALL[POST /api/analyze/judge\nv1_judge — 5 criteria]
-        REPORT[GET /api/reports/:id\nJinja2 HTML]
-        FEEDBACK_SUBMIT
-        LOG_ANALYZE[POST /api/logs/analyze\nv1_log_analysis]
+        CLIENT[GET /api/clients/:id/history]
+        SLA[POST /api/sla/check]
+        COMPILE[Compilar Contexto\nCode node]
+        RESOLVE[POST /api/analyze/resolve]
+        JUDGE[POST /api/analyze/judge]
+        PREPARE[Preparar Informe\nCode node]
+        SWITCH{Switch\nrisk_level}
+        REPORT_B[POST /api/reports/html\nBLOCKER]
+        REPORT_H[POST /api/reports/html\nHIGH]
+        REPORT_M[POST /api/reports/html\nMEDIUM]
+        REPORT_L[POST /api/reports/html\nLOW]
     end
 
-    subgraph VECTOR ["Qdrant (port 6333)"]
+    subgraph FASTAPI ["FastAPI — Business Logic"]
+        direction TB
+        ROUTES[Routes\nthin handlers ~20 lines]
+        SERVICES[Services\nResolutionService · FeedbackService]
+        RAG_LAYER[RAG\nQdrantRetriever · QueryBuilder · RAGUpdater]
+        ANALYSIS[Analysis\nAnalyzer · flags · SLA · patterns]
+        DOMAIN[Domain\nenums · constants · models · parsing]
+        LLM_CLIENT[LLM Client\nAnthropicClient · Protocol]
+        PROMPTS[Prompts\nv1_resolution · v1_judge · v1_log_analysis]
+    end
+
+    subgraph VECTOR ["Qdrant Cloud"]
         Q_POL[(policies\n17 docs · 384 dims)]
-        Q_CASES[(historical_cases\n60+ docs · 384 dims)]
+        Q_CASES[(historical_cases\n60+ docs · grows automatically)]
         Q_CACHE[(_semantic_cache\nthreshold 0.92)]
     end
 
     subgraph DB ["SQLite"]
         DB_TX[(transactions · 100)]
         DB_LOGS[(logs · 150+)]
-        DB_CASES[(cases)]
-        DB_FEEDBACK[(feedback)]
-        DB_POLICIES[(policies — source of truth)]
+        DB_FEEDBACK[(feedback · audit trail)]
     end
 
-    subgraph LLM_LAYER ["Claude via Anthropic API"]
-        PROMPT_PE[v1_policy_eval\nAuditor de cumplimiento]
-        PROMPT_RES[v1_resolution\nAnalista senior]
-        PROMPT_JDG[v1_judge\nSupervisor de calidad]
-        PROMPT_LOG[v1_log_analysis\nAnalista de sistemas]
-    end
+    VALIDATE --> GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & MERCHANT & CLIENT & SLA
+    GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & MERCHANT & CLIENT & SLA --> COMPILE
+    COMPILE --> RESOLVE --> JUDGE --> PREPARE --> SWITCH
+    SWITCH --> REPORT_B & REPORT_H & REPORT_M & REPORT_L
 
     SEARCH_POL --> Q_POL
     SEARCH_CASES --> Q_CASES
     RESOLVE --> Q_CACHE
-    RESOLVE --> PROMPT_PE
-    RESOLVE --> PROMPT_RES
-    JUDGE_CALL --> PROMPT_JDG
-    LOG_ANALYZE --> PROMPT_LOG
 
     GET_TX --> DB_TX
     GET_LOGS --> DB_LOGS
-    MERCHANT --> DB_TX
-    SLA_CHECK --> DB_CASES
-
-    JUDGE_CALL -->|score < 7.0\nfail| HITL_WAIT
-    JUDGE_CALL -->|score >= 7.0\napproved| REPORT
-
-    HITL_WAIT -->|Analyst decision| FEEDBACK_SUBMIT
-    FEEDBACK_SUBMIT -->|judge_score >= 8.0| Q_CASES
-    FEEDBACK_SUBMIT --> DB_FEEDBACK
 
     style N8N fill:#f0f8ff,stroke:#4a90d9
     style FASTAPI fill:#f0fff0,stroke:#4a9d4a
     style VECTOR fill:#fff8f0,stroke:#d9904a
     style DB fill:#fff0f8,stroke:#d94a90
-    style LLM_LAYER fill:#f8f0ff,stroke:#904ad9
 ```
+
+---
+
+## Modularity
+
+The system is structured in concentric layers. Each layer depends only on the layers below it. No layer has upward dependencies.
+
+```
+routes/          ← HTTP interface only. ~20 lines each. Zero business logic.
+    ↓
+services/        ← Orchestrates domain operations. No HTTP knowledge.
+    ↓
+analysis/ · rag/ · llm/   ← Pure domain logic. No FastAPI imports.
+    ↓
+data/            ← Pure data access. No business logic.
+    ↓
+domain/          ← Models, enums, constants. No external dependencies.
+```
+
+**Practical consequences of this structure:**
+
+| Change needed | Files touched | Files untouched |
+|---|---|---|
+| Swap Anthropic → OpenAI | `llm/client.py` only | Everything else |
+| Swap Qdrant → Pinecone | `rag/indexer.py` + `rag/retriever.py` | Everything else |
+| Add new API endpoint | One file in `routes/` | All existing routes |
+| Add new policy | `POST /api/policies/` (API call, no code) | Entire codebase |
+| Update a prompt | One versioned file in `llm/prompts/` | Everything else |
+| Change fraud score threshold | `domain/constants.py` line 1 | Everything else |
+
+**n8n modularity:** Adding a new data source (e.g., a fraud score API) is one more HTTP Request node in §2. The rest of the workflow is untouched. Adding a new risk level is one more branch in the §4 Switch node.
+
+**Protocol-based LLM client:** `llm/client.py` defines a `LLMClient` Protocol. `AnthropicClient` implements it. Tests use `MockLLMClient`. Swapping providers requires implementing the Protocol — no call sites change.
+
+---
+
+## Scalability
+
+### Horizontal scaling (stateless API)
+
+FastAPI is fully stateless. All state lives in Qdrant Cloud and SQLite. Multiple instances of the API can run behind a load balancer without coordination. Adding capacity is a one-line change in the deployment config.
+
+### Knowledge base grows automatically
+
+Every resolved case with `judge_score >= 8.0` is automatically indexed as a new precedent in Qdrant `historical_cases`. The RAG system improves over time without any manual intervention. A system that processed 1,000 chargebacks has 1,000+ precedents to draw from; a new installation has 60.
+
+### Policies scale without code
+
+The system supports any number of policies in any category. Adding a new regulatory requirement, a new payment method policy, or a new exception rule is a single API call. No code review, no deploy, no downtime. The LLM evaluates compliance from the natural language description.
+
+### Semantic cache reduces LLM cost at scale
+
+The `_semantic_cache` collection stores embeddings of recent resolutions. If an incoming request is semantically similar (cosine similarity ≥ 0.92) to a cached one, the LLM call is skipped entirely. In a production fintech processing thousands of similar cases daily, this dramatically reduces API cost.
+
+### Versioned prompts enable safe iteration
+
+All prompts are in versioned files (`v1_resolution.py`, `v1_judge.py`, etc.). Updating a prompt is a file change that can be A/B tested, rolled back, or deployed independently of the business logic. The version prefix makes it explicit which prompt version produced which resolution in the audit trail.
+
+### Observable at every dimension
+
+Langfuse traces every LLM call with: model, token count, latency, prompt version, judge score. This makes it possible to identify when a prompt version is underperforming, which merchants generate the most expensive cases, and what the p99 latency is per endpoint — without touching application code.
 
 ---
 
@@ -113,66 +220,66 @@ flowchart TD
 
 ### Phase 1: Entry
 
-A chargeback investigation starts when a webhook fires (analyst submits a transaction ID, or n8n polls for new cases). The n8n AI Agent receives the payload and begins autonomously calling FastAPI tools in sequence.
+A chargeback investigation starts when a webhook fires. n8n's `[Validar Formato TXN]` Code node validates the `TXN-XXXXX` format before any downstream call is made, failing fast with a clear error message if the format is wrong.
 
-### Phase 2: Context assembly (parallel tool calls)
+### Phase 2: Context assembly (§2 — 7 parallel calls)
 
-The agent calls four endpoints in parallel to gather all evidence:
+n8n fires 7 HTTP calls to gather all evidence:
 
-1. `GET /api/transactions/{id}` — structured transaction data from SQLite (amount, merchant, country, payment method, fraud_score, client_vip)
-2. `GET /api/transactions/{id}/logs` — all event logs for the transaction
-3. `GET /api/policies/search` — semantic search over Qdrant `policies` collection; the QueryBuilder enriches the query deterministically before embedding
-4. `GET /api/cases/similar` — top-5 semantically similar historical cases from Qdrant `historical_cases`
+1. `GET /api/transactions/{id}` — structured data from SQLite (amount, merchant, country, fraud_score, client_vip)
+2. `GET /api/logs/{tx_id}` — all event logs for the transaction (INFO/WARN/ERROR severity)
+3. `GET /api/policies/search` — semantic search over Qdrant `policies`; QueryBuilder enriches the query deterministically before embedding (see ADR-005)
+4. `GET /api/cases/similar` — top-5 semantically similar historical cases from Qdrant
+5. `GET /api/merchants/{name}/risk` — chargeback ratio, fraud flags, known problematic merchants
+6. `GET /api/clients/{id}/history` — client's chargeback history, VIP status, previous resolutions
+7. `POST /api/sla/check` — deadline calculation: 10 days LATAM / 15 days non-LATAM
 
-Additional context: `GET /api/merchants/{name}/risk` and `GET /api/sla/{id}`.
+### Phase 3: Resolution synthesis (§3)
 
-### Phase 3: Log analysis (optional)
+`[Compilar Contexto]` merges all 7 results into a single structured object. `POST /api/analyze/resolve` then executes internally:
 
-If the log count exceeds a threshold or contains ERROR/WARN events, the agent calls `POST /api/logs/analyze`, which runs `v1_log_analysis` prompt through Claude to detect 9 anomaly patterns (TIMEOUT_RETRY, FRAUD_ALERT, DOUBLE_CHARGE_DETECT, SLA_BREACH, etc.).
+1. Checks `_semantic_cache` — if hit (similarity ≥ 0.92), returns cached resolution immediately
+2. Formats policies for LLM context via `rag/formatter.py`
+3. Calls `v1_resolution` prompt → Resolution JSON with verdict, risk_level, reasoning, blockers
+4. Applies post-LLM guardrails: APPROVE + BLOCKER active → force REJECT (hallucination guard)
+5. Returns Resolution with any guardrail warnings appended
 
-### Phase 4: Resolution synthesis
+`POST /api/analyze/judge` evaluates the resolution across 5 criteria (factual accuracy, policy compliance, reasoning quality, risk classification, recommendation clarity). Returns `overall_score` 1.0–10.0.
 
-`POST /api/analyze/resolve` is the main pipeline endpoint. It executes internally in five steps:
+### Phase 4: Risk routing (§4)
 
-1. Formats the policies retrieved from Qdrant for LLM context
-2. Calls `v1_policy_eval` → array of `{policy_code, verdict, reasoning, requires_human_review}`
-3. Calls `v1_resolution` with transaction + policy verdicts + precedents + logs + merchant risk + client history → Resolution JSON
-4. Applies post-LLM guardrails (APPROVE+BLOCKER → force REJECT; compensation cap; confidence check)
-5. Returns the final Resolution with any guardrail warnings appended
+`[Preparar Informe]` builds the `ReportRequest` payload. The Switch node routes by `resolution.risk_level`:
 
-Before calling Claude, the endpoint checks the `_semantic_cache` collection (threshold 0.92). If a near-identical query is cached, it returns the cached response immediately.
+- **BLOCKER** — auto-reject. Crypto payment or fraud score ≤ 30 with active blocker policy. Report generated immediately.
+- **HIGH** — elevated risk. VIP client or high-value transaction. Report includes HITL form for analyst review.
+- **MEDIUM** — standard risk. Report with full reasoning and recommended action.
+- **LOW** — low risk. Expedited report with auto-approval recommendation.
 
-### Phase 5: Quality gate
+All four branches call the same `POST /api/reports/html` endpoint with the same `ReportRequest` shape. The HTML template renders conditionally based on `risk_level` and `verdict`.
 
-`POST /api/analyze/judge` evaluates the resolution across 5 criteria (1.0–10.0 each). `overall_score >= 7.0` → approved. `overall_score < 7.0` → HITL required; the workflow routes to the analyst review step in n8n.
+### Phase 5: Auto-improvement
 
-### Phase 6: Human-in-the-loop (conditional)
-
-If the Judge rejects the resolution quality, n8n generates an HTML report (`GET /api/reports/{id}`) and waits for the analyst to review and submit feedback via `POST /api/feedback/`.
-
-### Phase 7: Auto-improvement
-
-`POST /api/feedback/` saves the analyst decision to SQLite. If `judge_score >= 8.0`, it calls `RAGUpdater.on_case_resolved()`, which indexes the resolved case as a new precedent in Qdrant `historical_cases`. Future similar cases will now retrieve this case as a high-quality example.
+When an analyst submits feedback via `POST /api/feedback`, `FeedbackService` saves it to SQLite. If `judge_score >= 8.0`, `RAGUpdater.on_case_resolved()` indexes the resolved case as a new precedent in Qdrant `historical_cases`. Future similar cases will retrieve this case as a high-quality example, continuously improving resolution quality.
 
 ---
 
 ## Architectural Decision Records
 
-### ADR-001: n8n as Orchestrator
+### ADR-001: n8n as Explicit Orchestrator (not AI Agent)
 
 **Status:** Accepted
 
-**Context:** The system needs an orchestration layer that can handle webhooks, sequence multiple tool calls, manage conditional branching (HITL vs. auto-approve), and provide a visual audit trail for non-technical stakeholders.
+**Context:** The system needs an orchestration layer that provides a visual, auditable flow for non-technical stakeholders and guarantees deterministic execution order for every chargeback investigation.
 
-**Decision:** Use n8n AI Agent as the sole orchestrator. The n8n workflow contains ~19 nodes: webhook trigger, AI Agent node (Claude with tool calling enabled), individual HTTP Request nodes wired as tools, and a conditional HITL branch.
+**Decision:** Use n8n with 22 explicit HTTP Request nodes — no AI Agent node, no LLM-based tool calling in n8n. Every step is a named node. The LLM is called only from FastAPI endpoints (`/api/analyze/resolve` and `/api/analyze/judge`).
 
 **Consequences:**
-- n8n provides a visual representation of the full investigation flow, useful for demo and audit
-- The AI Agent node autonomously decides which tools to call and in what order, based on the transaction context
-- n8n must remain a thin shell — no IF nodes containing chargeback business logic
-- The workflow is version-controlled via `n8n/chargeback_agent_flow.json` export
+- Every investigation executes the exact same 7 context-gathering steps in the same order, every time
+- The workflow is a complete visual audit trail — any stakeholder can open n8n and see exactly what happened
+- Adding a new data source = one HTTP Request node in §2, no code change
+- The workflow JSON is version-controlled and importable in any n8n instance
 
-**Alternatives rejected:** LangGraph — adds Python dependency overhead and hides the visual flow; pure Python orchestration — no visual audit trail for business stakeholders.
+**Alternatives rejected:** n8n AI Agent — non-deterministic tool call ordering, no audit trail, impossible to guarantee all 7 context sources are always consulted; LangGraph — adds Python dependency overhead, hides the visual flow.
 
 ---
 
@@ -182,15 +289,15 @@ If the Judge rejects the resolution quality, n8n generates an HTML report (`GET 
 
 **Context:** Business logic needs to be independently testable, versioned, and callable by multiple orchestrators (n8n today, potentially others tomorrow).
 
-**Decision:** All domain logic lives in FastAPI. This includes: policy retrieval (RAG), resolution synthesis, guardrail validation, quality judging, HTML report generation, SLA calculation, merchant risk profiling, and the feedback/auto-index pipeline.
+**Decision:** All domain logic lives in FastAPI behind clean HTTP endpoints. n8n communicates via REST only.
 
 **Consequences:**
-- Every piece of logic is a standard HTTP endpoint — testable with pytest and curl
-- n8n communicates via REST, making it replaceable without touching the logic layer
-- OpenAPI documentation at `/docs` is auto-generated and always current
-- The API is the single source of truth for what the agent can do
+- Every piece of logic is testable with `pytest` independently of n8n
+- 50 tests pass without any n8n or Qdrant running (mocked in `tests/conftest.py`)
+- n8n is replaceable (Temporal, Airflow, a cron job) without touching FastAPI
+- OpenAPI docs at `/docs` are auto-generated and always current
 
-**Alternatives rejected:** Embedding logic in n8n Code nodes — not testable, not reusable, not version-controlled independently.
+**Alternatives rejected:** Embedding logic in n8n Code nodes — not testable, not reusable, not independently versioned.
 
 ---
 
@@ -198,17 +305,16 @@ If the Judge rejects the resolution quality, n8n generates an HTML report (`GET 
 
 **Status:** Accepted
 
-**Context:** The system has two fundamentally different data retrieval needs: semantic similarity search (find policies/cases similar in meaning to the current transaction) and exact structured queries (get transaction by ID, filter logs by severity, count chargebacks per client).
+**Context:** Two fundamentally different data retrieval needs: semantic similarity (find policies/cases similar in meaning) and exact structured queries (get transaction by ID, filter logs by severity).
 
-**Decision:** Use Qdrant for semantic data (policies, historical cases, cache) and SQLite for structured data (transactions, logs, cases, feedback, policy source of truth). SQLite is the write-primary store; Qdrant is derived from it via indexing.
+**Decision:** Qdrant for semantic data; SQLite for structured data. SQLite is write-primary; Qdrant is derived from it via `RAGUpdater`.
 
 **Consequences:**
-- Qdrant `policies` collection is always in sync with SQLite because every CRUD operation triggers immediate re-indexing via `RAGUpdater`
-- SQLite provides a full audit trail and supports exact-match queries that vector search cannot
-- No PostgreSQL dependency — SQLite runs in-process with zero configuration
-- The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`, 384 dims) is loaded once at startup and held in memory via FastAPI lifespan
+- Every policy CRUD operation triggers immediate Qdrant re-indexing — no stale embeddings
+- SQLite provides a full audit trail with timestamps for every policy change
+- No PostgreSQL dependency — SQLite runs in-process, zero configuration
 
-**Alternatives rejected:** PostgreSQL with pgvector — operational overhead not justified for a single-node system; pure Qdrant — no structured query capability, no foreign keys, no audit trail.
+**Alternatives rejected:** PostgreSQL with pgvector — operational overhead not justified; pure Qdrant — no structured query capability, no foreign keys, no audit trail.
 
 ---
 
@@ -216,22 +322,18 @@ If the Judge rejects the resolution quality, n8n generates an HTML report (`GET 
 
 **Status:** Accepted
 
-**Context:** Chargeback policies change frequently due to regulatory updates, network rule changes (Visa/Mastercard), and internal risk calibrations. Hard-coding policy logic in Python means every change requires a code review, deployment, and redeploy.
+**Context:** Chargeback policies change frequently due to regulatory updates, network rule changes (Visa/Mastercard), and internal risk calibrations.
 
-**Decision:** The 17 policies are stored as Markdown documents in Qdrant (for semantic search) and as rows in SQLite (source of truth). The REST API (`POST/PUT/DELETE /api/policies/`) enables policy management. Every write automatically triggers re-indexing in Qdrant via `RAGUpdater`.
+**Decision:** 17 policies stored as Markdown in Qdrant + rows in SQLite. REST API enables management. Every write re-indexes immediately.
 
-**Consequences:**
-- Policy changes take effect immediately — no code change, no redeploy
-- The LLM evaluates policy compliance using the natural language description, not hard-coded rules
-- Policies can be audited in SQLite (`updated_at`, `created_at` timestamps)
-- New policy categories (e.g., EXCEPCIÓN, SLA) are added without touching Python code
-
-**Example:** Adding a new fraud policy for a new payment method requires only:
+**Example — adding a new fraud policy:**
 ```bash
 POST /api/policies/
-{"code": "POL-FRD-005", "category": "FRAUDE", "name": "...", "description": "...", "reference": "..."}
+{"code": "POL-FRD-005", "category": "FRAUDE", "name": "Nuevo método de pago", "description": "..."}
 ```
-The policy is immediately available to the next resolution request.
+Available to the next resolution request. No code change. No deploy. No downtime.
+
+**Alternatives rejected:** Hard-coded Python classes — every policy change requires code review, PR, and deployment.
 
 ---
 
@@ -239,11 +341,11 @@ The policy is immediately available to the next resolution request.
 
 **Status:** Accepted
 
-**Context:** Building the Qdrant search query requires enriching the raw transaction data with domain knowledge (e.g., "Cripto" implies irreversibility; score < 30 implies high fraud risk). This enrichment could be done by an LLM (flexible but non-deterministic and costly) or by rule-based logic (reproducible, free, fast).
+**Context:** Building Qdrant search queries requires domain enrichment. This could be done by an LLM (flexible, costly, non-deterministic) or by rule-based logic (reproducible, free, fast).
 
-**Decision:** The `QueryBuilder` class in `api/app/rag/retriever.py` builds all Qdrant queries without an LLM call, using four deterministic enrichment rules:
+**Decision:** `QueryBuilder` in `rag/retriever.py` builds all queries without an LLM call:
 
-| Condition | Appended text |
+| Condition | Enrichment |
 |---|---|
 | `payment_method == "Cripto"` | `"criptomonedas no reversible blocker"` |
 | `fraud_score < 30` | `"transaccion de alto riesgo fraude score bajo"` |
@@ -251,11 +353,9 @@ The policy is immediately available to the next resolution request.
 | `channel == "IVR"` | `"limite monto IVR"` |
 
 **Consequences:**
-- Retrieval is reproducible: the same transaction always generates the same query
+- Same transaction always generates the same query — reproducible and debuggable
 - Zero token cost at retrieval time
-- Queries can be logged and debugged without LLM interpretation
-- The enrichment vocabulary is tuned to match the language used in the stored policy documents
-- For policies: `top_k=17, threshold=0.0` — retrieve all 17 policies, let the LLM determine relevance
+- For policies: `top_k=17, threshold=0.0` — retrieve all, let the LLM determine relevance
 - For cases: `top_k=5, threshold=0.40` — only semantically meaningful precedents
 
-**Alternatives rejected:** LLM-generated queries — non-deterministic, adds latency and cost to every request, harder to debug when retrieval quality is poor.
+**Alternatives rejected:** LLM-generated queries — adds latency and cost to every request, non-deterministic, harder to debug.

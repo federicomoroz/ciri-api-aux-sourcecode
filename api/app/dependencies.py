@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, Request
 from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
+from .rag.embedder import FastEmbedder
 
 from .analysis.analyzer import Analyzer
 from .config import Settings
@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     )
 
     # Embedding model (loaded once, ~25MB, shared across requests)
-    embedder = SentenceTransformer(settings.embedding_model)
+    embedder = FastEmbedder(settings.embedding_model)
 
     # Tracer
     tracer = (

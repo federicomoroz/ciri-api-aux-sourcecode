@@ -13,7 +13,7 @@ import uuid
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
-from sentence_transformers import SentenceTransformer
+from .embedder import FastEmbedder
 
 from ..domain.constants import (
     FRAUD_SCORE_DEFAULT,
@@ -75,7 +75,7 @@ class QdrantRetriever:
     def __init__(
         self,
         client: QdrantClient,
-        embedder: SentenceTransformer,
+        embedder: FastEmbedder,
         policies_collection: str = "policies",
         cases_collection: str = "historical_cases",
         cache_collection: str = "_semantic_cache",

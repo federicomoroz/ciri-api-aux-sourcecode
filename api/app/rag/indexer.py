@@ -13,9 +13,8 @@ import uuid
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
-from sentence_transformers import SentenceTransformer
-
 from ..domain.constants import EMBEDDING_DIM
+from .embedder import FastEmbedder
 
 
 def _make_id(text: str) -> str:
@@ -55,7 +54,7 @@ class QdrantIndexer:
     def __init__(
         self,
         client: QdrantClient,
-        embedder: SentenceTransformer,
+        embedder: FastEmbedder,
         policies_collection: str = "policies",
         cases_collection: str = "historical_cases",
         cache_collection: str = "_semantic_cache",
