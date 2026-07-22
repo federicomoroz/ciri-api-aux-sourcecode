@@ -12,7 +12,8 @@ RUN pip install --no-cache-dir -e .
 # Pre-download embedding model into /app/models (inside the Docker layer, not ~/.cache)
 # FASTEMBED_CACHE_PATH tells fastembed where to store/find model files at runtime too
 ENV FASTEMBED_CACHE_PATH=/app/models
-RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup']))"
+# v3 — cache bust: forces re-download to /app/models (previous cache was in ~/.cache)
+RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup'])); print('Model cached at:', __import__(\"os\").environ[\"FASTEMBED_CACHE_PATH\"])"
 
 # Copy application code
 COPY app/ app/
