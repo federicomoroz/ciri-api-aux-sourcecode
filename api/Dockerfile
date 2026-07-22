@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-# Pre-download embedding model via fastembed (same library used at runtime)
-# This caches the ONNX files in the image — no HuggingFace download at request time
+# Pre-download embedding model into /app/models (inside the Docker layer, not ~/.cache)
+# FASTEMBED_CACHE_PATH tells fastembed where to store/find model files at runtime too
+ENV FASTEMBED_CACHE_PATH=/app/models
 RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup']))"
 
 # Copy application code
