@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-# Pre-download embedding model (cached in Docker layer, avoids download at runtime)
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+# Pre-download embedding model via fastembed (same library used at runtime)
+# This caches the ONNX files in the image — no HuggingFace download at request time
+RUN python -c "from fastembed import TextEmbedding; list(TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2').embed(['warmup']))"
 
 # Copy application code
 COPY app/ app/

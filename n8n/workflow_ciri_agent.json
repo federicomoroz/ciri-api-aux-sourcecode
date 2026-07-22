@@ -3,82 +3,98 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo HTTP visible. Sin cajas negras. Sin AI Agent como orquestador. FastAPI ejecuta la lógica; n8n dirige el flujo.",
+        "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo visible. Sin AI Agent black box. n8n decide el flujo; FastAPI ejecuta la lógica de negocio.",
         "height": 80,
-        "width": 4400,
+        "width": 4752,
         "color": 4
       },
-      "id": "453cc8a6-0edb-4c18-875d-c189999d014b",
+      "id": "6ece30f0-b14a-4d24-b41f-b92af6d5b87f",
       "name": "Sticky Note — Resumen",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1232,
-        1536
+        10176,
+        4576
       ]
     },
     {
       "parameters": {
-        "content": "## 🟢 SECCIÓN 1 — Entrada y Validación\n\n**Webhook** expone `POST /webhook/chargeback-agent`.\n\n**Validar TXN** verifica formato `TXN-XXXXX` y extrae:\n- `transaction_id`\n- `motivo` (opcional)\n- `cliente_vip` (bool)",
-        "height": 300,
-        "width": 716,
+        "content": "## 🟢 §1 — ENTRADA Y VALIDACIÓN\n\n**IF node** valida formato TXN-XXXXX.\n- ✅ True → **Set node** extrae campos limpios\n- ❌ False → responde 400 sin continuar\n\nError explícito desde el primer nodo.",
+        "height": 1348,
+        "width": 680,
         "color": 5
       },
-      "id": "4d213f88-4fd9-4163-9e37-3742fe7a06aa",
+      "id": "0cbf8cb6-f638-41ea-9464-96831a2232ec",
       "name": "Sticky Note — Sección 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1184,
-        1680
+        10176,
+        4688
       ]
     },
     {
       "parameters": {
-        "content": "## 🔵 SECCIÓN 2 — Recopilación de Contexto (7 herramientas FastAPI)\n\nCadena lineal: cada nodo puede referenciar datos de cualquier nodo anterior con `$('NombreNodo').item.json`.\n\n`Obtener TX → Logs → Políticas RAG → Casos Similares RAG → Riesgo Comercio → Historial Cliente → SLA`\n\nTodas son llamadas **GET/POST determinísticas** a FastAPI — sin LLM en esta sección.",
-        "height": 300,
-        "width": 1524,
+        "content": "## 🔵 §2 — CONTEXTO PARALELO\n\nDespués de obtener la transacción, **6 ramas corren en paralelo**. El nodo **Merge** espera a que todas terminen.\n\n**Nodos nativos de n8n (sin FastAPI):**\n- ✅ **Evaluar Riesgo Comercio** (Set): computa `flags` e `is_strategic` de los datos crudos del comercio.\n- ✅ **Evaluar Historial Cliente** (Set): computa `flags` de riesgo del cliente.\n- ✅ **Verificar SLA** (Set): calcula días transcurridos y límite SLA según país y VIP — sin HTTP call.\n\nReducción de latencia: de ~6× a ~1× el tiempo de un call.",
+        "height": 1356,
+        "width": 776,
         "color": 3
       },
-      "id": "b744c644-1983-4e98-b996-81e83bcf44d0",
+      "id": "a21114b2-001e-4946-9b6d-269ace785db8",
       "name": "Sticky Note — Sección 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1920,
-        1680
+        10864,
+        4688
       ]
     },
     {
       "parameters": {
-        "content": "## 🟣 SECCIÓN 3 — Análisis con IA\n\n**Compilar Contexto**: fusiona los 7 resultados en un objeto unificado.\n\n**Sintetizar Resolución**: llama `POST /api/analyze/resolve` → LLM evalúa políticas + casos + logs → devuelve `recommended_action`, `risk_level`, `confidence`, `guardrail_warnings`.\n\n**Juez de Calidad**: llama `POST /api/analyze/judge` → LLM-as-Judge (score 1–10).",
-        "height": 300,
-        "width": 960,
+        "content": "## 🟣 §3 — ANÁLISIS CON IA\n\n**Compilar Contexto**: fusiona los 6 resultados del Merge en un objeto unificado.\n\n**Sintetizar Resolución** → FastAPI (LLM con guardrails + caché semántico) evalúa políticas + casos + logs → devuelve `recommended_action`, `risk_level`, `confidence`, `guardrail_warnings`.\n\n**Juez de Calidad** → **Claude directo vía Anthropic API** (HTTP Request nativo). Sin pasar por FastAPI: n8n envía el contexto completo + resolución propuesta, Claude devuelve JSON de evaluación.\n\n**Extraer Evaluación** (Set): parsea la respuesta de Anthropic y expone `judge_evaluation` como objeto n8n.",
+        "height": 1352,
+        "width": 1432,
         "color": 6
       },
-      "id": "eb35f32a-fc16-440f-b258-c5a8bb9242c2",
+      "id": "5d81c3be-9149-4fdb-be54-952803e537e4",
       "name": "Sticky Note — Sección 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3456,
-        1664
+        11648,
+        4688
       ]
     },
     {
       "parameters": {
-        "content": "## 🔀 SECCIÓN 4 — Enrutamiento por Riesgo\n\n**Switch** enruta por `resolution.risk_level`:\n- **BLOCKER** → rechazado automático → reporte HTML inmediato\n- **HIGH** → reporte HTML con formulario HITL embebido *(extensión: agregar `Wait` node + notificación Slack/Gmail antes de generar reporte)*\n- **MEDIUM** → reporte HTML con alerta de revisión\n- **LOW** → reporte HTML con aprobación automática\n\nTodos los reportes llaman al mismo endpoint `POST /api/reports/html`.",
-        "height": 324,
-        "width": 760,
+        "content": "## 🔀 §4 — ENRUTAMIENTO POR RIESGO\n\n**Switch** por `resolution.risk_level`:\n- **BLOCKER** → rechazo automático inmediato\n- **HIGH** → flujo HITL (ver abajo)\n- **MEDIUM** → alerta de revisión\n- **LOW** → aprobación automática\n\nTodos los reportes: `POST /api/reports/html`",
+        "height": 1360,
+        "width": 1840,
         "color": 2
       },
-      "id": "b3516135-2c39-4418-9f2d-43adadf3234e",
+      "id": "99816bdf-99dd-471b-abde-4debc9b29b8b",
       "name": "Sticky Note — Sección 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4448,
-        1648
+        13104,
+        4688
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🔶 RAMA HIGH — HITL (Human-in-the-Loop)\n\n1. **Notificar Analista** prepara el payload con `$execution.resumeUrl`\n   *(en prod: conectar nodo Gmail o Slack antes del Wait)*\n2. **Wait** pausa la ejecución hasta recibir aprobación\n3. Analista POST `{ decision, notes }` al `resumeUrl`\n4. **Procesar HITL** incorpora la decisión al contexto\n5. **Registrar Feedback** → POST /api/feedback (auto-indexa si score ≥ 8.0)\n6. Genera y responde el reporte final",
+        "height": 220,
+        "width": 516,
+        "color": 7
+      },
+      "id": "3c113a09-a44d-4c71-ae30-99b2592b78e1",
+      "name": "Sticky Note — HITL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        13568,
+        5152
       ]
     },
     {
@@ -88,55 +104,131 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "7fdde72c-ede9-45ab-b82c-ed3d9f117114",
+      "id": "5068c258-94b1-4917-b06a-f5515b0fd988",
       "name": "Webhook — Entrada",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        1472,
-        2272
+        10224,
+        5200
       ],
       "webhookId": "ciri-chargeback-agent"
     },
     {
       "parameters": {
-        "jsCode": "// Extraer y validar el body del webhook\nconst body = $input.first().json.body || {};\n\nconst txnId      = (body.transaction_id || '').trim();\nconst motivo     = (body.motivo || '').trim();\nconst clienteVip = Boolean(body.cliente_vip);\n\n// Validar formato TXN-XXXXX (exactamente 5 dígitos)\nif (!txnId.match(/^TXN-\\d{5}$/)) {\n  throw new Error(\n    `Formato de transaction_id inválido: \"${txnId}\". ` +\n    `Se esperaba TXN-XXXXX (ej: TXN-00051).`\n  );\n}\n\nreturn [{ json: { transaction_id: txnId, motivo, cliente_vip: clienteVip } }];"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-txn-format",
+              "leftValue": "={{ ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || '').trim() }}",
+              "rightValue": "TXN-[0-9]{5}",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
-      "id": "da072941-6f48-40b1-942d-53b8d2fc0dab",
-      "name": "Validar Formato TXN",
-      "type": "n8n-nodes-base.code",
+      "id": "1bcf7a12-3607-4337-a21f-31991aa2804e",
+      "name": "Validar Formato — IF",
+      "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        1696,
-        2272
+        10448,
+        5200
       ]
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/transactions/' + $json.transaction_id }}",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-txn-id",
+              "name": "transaction_id",
+              "value": "={{ ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "field-motivo",
+              "name": "motivo",
+              "value": "={{ ($input.first().json.body?.motivo || $input.first().json.motivo || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "field-vip",
+              "name": "cliente_vip",
+              "value": "={{ Boolean($input.first().json.body?.cliente_vip || $input.first().json.cliente_vip) }}",
+              "type": "boolean"
+            }
+          ]
+        },
         "options": {}
       },
-      "id": "4a478364-6fa5-425f-9438-3a856f08b00b",
+      "id": "3130d921-3142-46a6-80c9-86ae18ab7bc3",
+      "name": "Validar Formato TXN",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        10672,
+        5184
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { error: 'Formato de transaction_id inválido. Se esperaba TXN-XXXXX (ej: TXN-00051).', received: ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || '(vacío)') } }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a8cd6cdd-4072-4981-8b75-4f015962d6b3",
+      "name": "Error — TXN Inválida",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        10672,
+        5408
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/transactions/' + $('Validar Formato TXN').item.json.transaction_id }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "7558244c-ae7d-446b-b185-63ab093b91c2",
       "name": "Obtener Transacción",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1952,
-        2272
+        10912,
+        5184
       ]
     },
     {
       "parameters": {
         "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "554a44e9-e3cf-4e8a-b939-441a32e4b3e0",
+      "id": "2990633d-bcf5-4480-98df-5963c05cafc3",
       "name": "Obtener Logs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2176,
-        2272
+        11152,
+        5024
       ]
     },
     {
@@ -167,15 +259,17 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "478e3852-b699-4065-85e8-8ec75a4ab834",
+      "id": "964a10db-31ec-4b60-ba0e-42cd163b6e20",
       "name": "Buscar Políticas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2400,
-        2272
+        11152,
+        5184
       ]
     },
     {
@@ -210,88 +304,180 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "4a7f7836-b241-4754-9244-8d3e58fe1b03",
+      "id": "9475fe09-84bb-4e68-a645-680a21a7f622",
       "name": "Buscar Casos Similares",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2624,
-        2272
+        11152,
+        5344
       ]
     },
     {
       "parameters": {
         "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "ca91a4a4-4be7-490d-bdf0-726113612058",
+      "id": "4ff9b08b-81e9-453d-93c0-ab26caf1a743",
       "name": "Riesgo del Comercio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2832,
-        2272
+        11152,
+        5504
       ]
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
-        "options": {}
-      },
-      "id": "d027fa74-e313-4504-b064-578f70367f69",
-      "name": "Historial del Cliente",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        3056,
-        2272
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/sla/check",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
+        "assignments": {
+          "assignments": [
             {
-              "name": "case_open_date",
-              "value": "={{ $('Obtener Transacción').item.json.date }}"
+              "id": "field-merchant-flags",
+              "name": "flags",
+              "value": "={{ [$json.cb_ratio > 0.02 ? 'suspended_merchant' : $json.cb_ratio > 0.01 ? 'high_cb_ratio' : null].filter(x => x !== null) }}",
+              "type": "array"
             },
             {
-              "name": "country",
-              "value": "={{ $('Obtener Transacción').item.json.country }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $('Validar Formato TXN').item.json.cliente_vip }}"
+              "id": "field-merchant-strategic",
+              "name": "is_strategic",
+              "value": "={{ $json.total_volume_usd > 1000000 }}",
+              "type": "boolean"
             }
           ]
         },
         "options": {}
       },
-      "id": "28182696-8b26-4d50-a7e1-2483a095cb4e",
-      "name": "Verificar SLA",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "87d05096-2c9d-4a98-b737-a2517f2849ff",
+      "name": "Evaluar Riesgo Comercio",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        3280,
-        2272
+        11392,
+        5504
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input      = $('Validar Formato TXN').item.json;\nconst txn        = $('Obtener Transacción').item.json;\nconst logsData   = $('Obtener Logs').item.json;\nconst policies   = $('Buscar Políticas').item.json;\nconst cases      = $('Buscar Casos Similares').item.json;\nconst merchant   = $('Riesgo del Comercio').item.json;\nconst client     = $('Historial del Cliente').item.json;\nconst sla        = $('Verificar SLA').item.json;\n\nconst slaStatus = sla.within_sla\n  ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n  : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`;\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant}, USD ${txn.amount_usd},`,\n  `canal ${txn.channel}, país ${txn.country}, score fraude ${txn.fraud_score}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "1297b168-fa5f-4ca1-8640-bd4db026da49",
+      "id": "8acafa0e-f5bc-4a3f-96a8-28dc640d3d5a",
+      "name": "Historial del Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        11152,
+        5664
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-client-flags",
+              "name": "flags",
+              "value": "={{ [$json.total_chargebacks > 3 ? 'recidivist' : null, ($json.countries_used || []).length > 3 ? 'geo_anomaly' : null].filter(x => x !== null) }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "df9a0d1a-c0cf-4ae7-be00-007726cc960a",
+      "name": "Evaluar Historial Cliente",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        11392,
+        5664
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-days-elapsed",
+              "name": "days_elapsed",
+              "value": "={{ Math.floor((Date.now() - new Date($('Obtener Transacción').item.json.date).getTime()) / 86400000) }}",
+              "type": "number"
+            },
+            {
+              "id": "field-sla-limit",
+              "name": "sla_limit_days",
+              "value": "={{ $('Validar Formato TXN').item.json.cliente_vip ? 5 : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').item.json.country) ? 15 : 10 }}",
+              "type": "number"
+            },
+            {
+              "id": "field-sla-type",
+              "name": "sla_type",
+              "value": "={{ $('Validar Formato TXN').item.json.cliente_vip ? 'vip' : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').item.json.country) ? 'extended' : 'standard' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-policy-ref",
+              "name": "policy_reference",
+              "value": "={{ $('Validar Formato TXN').item.json.cliente_vip ? 'POL-EXC-002 (5 días)' : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').item.json.country) ? 'POL-EXC-004 (15 días)' : 'POL-SLA-002 (10 días)' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-within-sla",
+              "name": "within_sla",
+              "value": "={{ Math.floor((Date.now() - new Date($('Obtener Transacción').item.json.date).getTime()) / 86400000) <= ($('Validar Formato TXN').item.json.cliente_vip ? 5 : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').item.json.country) ? 15 : 10) }}",
+              "type": "boolean"
+            },
+            {
+              "id": "field-compensation",
+              "name": "compensation_applicable",
+              "value": "={{ Math.floor((Date.now() - new Date($('Obtener Transacción').item.json.date).getTime()) / 86400000) > ($('Validar Formato TXN').item.json.cliente_vip ? 5 : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').item.json.country) ? 15 : 10) }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1654c2e-8cf7-41c9-b52a-3d6b7fa5f820",
+      "name": "Verificar SLA",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        11152,
+        5824
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 6
+      },
+      "id": "a849dfce-4242-4ef0-a684-4f713d196626",
+      "name": "Merge — Contexto Paralelo",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        11728,
+        5168
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input    = $('Validar Formato TXN').item.json;\nconst txn      = $('Obtener Transacción').item.json;\nconst logsData = $('Obtener Logs').item.json;\nconst policies = $('Buscar Políticas').item.json;\nconst cases    = $('Buscar Casos Similares').item.json;\nconst sla      = $('Verificar SLA').item.json;\n\n// Merchant: datos crudos de FastAPI + flags evaluados en n8n\nconst merchant = {\n  ...$('Riesgo del Comercio').item.json,\n  ...$('Evaluar Riesgo Comercio').item.json,\n};\n\n// Cliente: datos crudos de FastAPI + flags evaluados en n8n\nconst client = {\n  ...$('Historial del Cliente').item.json,\n  ...$('Evaluar Historial Cliente').item.json,\n};\n\nconst slaStatus = sla.within_sla\n  ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n  : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`;\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant}, USD ${txn.amount_usd},`,\n  `canal ${txn.channel}, país ${txn.country}, score fraude ${txn.fraud_score}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
+      },
+      "id": "9f75cb11-b0e1-4860-9002-33e224ec1c43",
       "name": "Compilar Contexto",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3536,
-        2272
+        11936,
+        5168
       ]
     },
     {
@@ -343,56 +529,108 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "226a73ba-a149-49c6-a933-51835d435231",
+      "id": "751aaef1-feb6-4041-807a-72f799465665",
       "name": "Sintetizar Resolución",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3760,
-        2272
+        12160,
+        5168
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/judge",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.CB_ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
-              "name": "resolution",
-              "value": "={{ $json }}"
+              "name": "model",
+              "value": "claude-haiku-4-5-20251001"
             },
             {
-              "name": "full_context",
-              "value": "={{ { transaction: $('Compilar Contexto').item.json.tx_data, motivo: $('Compilar Contexto').item.json.motivo, policies: $('Compilar Contexto').item.json.policies, similar_cases: $('Compilar Contexto').item.json.similar_cases } }}"
+              "name": "max_tokens",
+              "value": 1024
+            },
+            {
+              "name": "system",
+              "value": "Eres un supervisor de calidad de resoluciones de contracargos en una fintech latinoamericana.\nTu tarea: evaluar la calidad de una resolucion propuesta en 5 criterios.\n\nCRITERIOS (cada uno se evalua de 1.0 a 10.0):\n1. policy_consistency: La resolucion respeta todos los BLOCKERs y FAILs detectados?\n   - Un APPROVE con cualquier BLOCKER activo = score 1.0 (error critico)\n   - Resolucion coherente con todos los veredictos = score 9-10\n2. justification_quality: La justificacion cita evidencia especifica?\n   - Cita IDs, montos, scores, codigos de politica = score alto\n   - Justificacion vaga o generica = score bajo\n3. precedent_usage: La resolucion aprovecho los casos historicos similares?\n   - Menciona casos especificos y extrae aprendizajes = score alto\n   - Ignora los precedentes = score bajo\n4. risk_assessment: El risk_level asignado es correcto dado los veredictos y el fraud_score?\n   - BLOCKER correcto con BLOCKER verdict = score alto\n   - Risk level inconsistente con evidencia = score bajo\n5. actionability: Los next_steps son concretos, realizables y relevantes para este caso?\n   - Pasos especificos y en orden logico = score alto\n   - Pasos vagos o inaplicables = score bajo\n\noverall_score = promedio aritmetico de los 5 criterios.\napproved = true si overall_score >= 7.0\n\nREGLAS:\n1. Se critico pero justo. Una resolucion que cite datos especificos merece mayor puntaje.\n2. Un APPROVE con BLOCKER activo es el error mas grave posible — policy_consistency = 1.0 automaticamente.\n3. strengths: lista de 1-3 aspectos positivos concretos de la resolucion.\n4. weaknesses: lista de 1-3 areas de mejora concretas.\n5. Responde UNICAMENTE con JSON valido. En espanol. Sin texto adicional.\n\nFormato de respuesta:\n{\n  \"overall_score\": 7.5,\n  \"criteria\": {\n    \"policy_consistency\": 8.0,\n    \"justification_quality\": 7.0,\n    \"precedent_usage\": 7.5,\n    \"risk_assessment\": 8.0,\n    \"actionability\": 7.0\n  },\n  \"approved\": true,\n  \"strengths\": [\"Fortaleza 1 concreta\", \"Fortaleza 2 concreta\"],\n  \"weaknesses\": [\"Debilidad 1 concreta\", \"Debilidad 2 concreta\"]\n}"
+            },
+            {
+              "name": "messages",
+              "value": "={{ [{ role: 'user', content: '## EVIDENCIA COMPLETA (contexto del caso)\\n' + JSON.stringify({ transaction: $('Compilar Contexto').item.json.tx_data, motivo: $('Compilar Contexto').item.json.motivo, policies: $('Compilar Contexto').item.json.policies, similar_cases: $('Compilar Contexto').item.json.similar_cases }, null, 2) + '\\n\\n## RESOLUCION PROPUESTA\\n' + JSON.stringify($('Sintetizar Resolución').item.json, null, 2) + '\\n\\nEvalúa la resolución y devuelve el JSON de evaluación.' }] }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "1beb8c0f-6229-4e5d-9978-25ce555266d5",
+      "name": "Juez de Calidad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        12400,
+        5168
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-judge-eval",
+              "name": "judge_evaluation",
+              "value": "={{ JSON.parse($json.content[0].text) }}",
+              "type": "object"
             }
           ]
         },
         "options": {}
       },
-      "id": "9214e920-e3b0-4adf-b81e-38c08a1cca7c",
-      "name": "Juez de Calidad",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "e295687f-254a-4758-89b7-4b2fe697c46a",
+      "name": "Extraer Evaluación — Juez",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        3984,
-        2272
+        12640,
+        5168
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $input.first().json;  // output de Juez de Calidad\n\nreturn [{\n  json: {\n    // Campos de ReportRequest\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n  }\n}];"
+        "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $input.first().json.judge_evaluation;\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n  }\n}];"
       },
-      "id": "b5e2dccf-6644-4a69-b307-6d429687b963",
+      "id": "bf7e7bb5-84a2-42aa-a812-9d9697796f70",
       "name": "Preparar Informe",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4192,
-        2272
+        12880,
+        5168
       ]
     },
     {
@@ -503,13 +741,13 @@
         },
         "options": {}
       },
-      "id": "a4a0ce35-1151-47f6-b31a-3b7006801f68",
+      "id": "1f8a9611-6250-4243-8f67-848b75427815",
       "name": "Switch — Nivel de Riesgo",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        4464,
-        2240
+        13120,
+        5136
       ]
     },
     {
@@ -569,15 +807,17 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "8b8f6ce1-149c-4010-ab68-d7626342f68c",
+      "id": "6cbff099-50f1-4ae4-88c9-e7d6c332c1cd",
       "name": "Generar Reporte — BLOCKER",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4768,
-        2000
+        13616,
+        4928
       ]
     },
     {
@@ -596,13 +836,142 @@
           }
         }
       },
-      "id": "7f509249-1873-4407-8dac-6edce6008987",
+      "id": "4dfae681-f172-4cea-bc0b-def12e7e0035",
       "name": "Responder — BLOCKER",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        5024,
-        2000
+        13856,
+        4928
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resume-url",
+              "name": "resume_url",
+              "value": "={{ $execution.resumeUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "txn-id",
+              "name": "transaction_id",
+              "value": "={{ $('Compilar Contexto').item.json.transaction_id }}",
+              "type": "string"
+            },
+            {
+              "id": "risk",
+              "name": "risk_level",
+              "value": "HIGH",
+              "type": "string"
+            },
+            {
+              "id": "summary",
+              "name": "agent_analysis",
+              "value": "={{ $('Compilar Contexto').item.json.agent_analysis }}",
+              "type": "string"
+            },
+            {
+              "id": "resolution",
+              "name": "resolution",
+              "value": "={{ $('Sintetizar Resolución').item.json.recommended_action }}",
+              "type": "string"
+            },
+            {
+              "id": "judge-score",
+              "name": "judge_score",
+              "value": "={{ $('Extraer Evaluación — Juez').item.json.judge_evaluation.overall_score }}",
+              "type": "number"
+            },
+            {
+              "id": "instruction",
+              "name": "_note",
+              "value": "Conectar nodo Gmail o Slack aquí para enviar resume_url al analista",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6298eb90-14f1-45cb-a661-f6bc1609ec94",
+      "name": "Notificar Analista — HIGH",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        13520,
+        5408
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "id": "6899ed85-d262-4896-8e3c-7fba194beaca",
+      "name": "Wait — Aprobación HITL",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        13760,
+        5408
+      ],
+      "webhookId": "ciri-hitl-resume"
+    },
+    {
+      "parameters": {
+        "jsCode": "// El analista POSTea { decision: 'APPROVE'|'REJECT', notes: '...' } al resume_url\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $('Extraer Evaluación — Juez').item.json.judge_evaluation;\n\nconst hitlDecision = {\n  analyst_decision: (resume.decision || 'APPROVE').toUpperCase(),\n  analyst_notes:    resume.notes || '',\n  final_outcome:    (resume.decision || 'APPROVE').toUpperCase() === 'REJECT' ? 'DENIED' : 'APPROVED',\n  timestamp:        new Date().toISOString(),\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       hitlDecision,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    _feedback_payload: {\n      transaction_id:    ctx.transaction_id,\n      analyst_decision:  hitlDecision.analyst_decision,\n      analyst_notes:     hitlDecision.analyst_notes,\n      final_outcome:     hitlDecision.final_outcome,\n      judge_score:       judge.overall_score ?? 0,\n    }\n  }\n}];"
+      },
+      "id": "6f181924-b72b-450f-8c96-0ad786ca815b",
+      "name": "Procesar Respuesta HITL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        14000,
+        5408
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/feedback",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "transaction_id",
+              "value": "={{ $json._feedback_payload.transaction_id }}"
+            },
+            {
+              "name": "analyst_decision",
+              "value": "={{ $json._feedback_payload.analyst_decision }}"
+            },
+            {
+              "name": "analyst_notes",
+              "value": "={{ $json._feedback_payload.analyst_notes }}"
+            },
+            {
+              "name": "final_outcome",
+              "value": "={{ $json._feedback_payload.final_outcome }}"
+            },
+            {
+              "name": "judge_score",
+              "value": "={{ $json._feedback_payload.judge_score }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e4052b7a-108d-476b-9421-80ccd53bcd1c",
+      "name": "Registrar Feedback HITL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        14240,
+        5408
       ]
     },
     {
@@ -614,63 +983,65 @@
           "parameters": [
             {
               "name": "transaction",
-              "value": "={{ $json.transaction }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.transaction }}"
             },
             {
               "name": "resolution",
-              "value": "={{ $json.resolution }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.resolution }}"
             },
             {
               "name": "judge_evaluation",
-              "value": "={{ $json.judge_evaluation }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.judge_evaluation }}"
             },
             {
               "name": "agent_analysis",
-              "value": "={{ $json.agent_analysis }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.agent_analysis }}"
             },
             {
               "name": "merchant_risk",
-              "value": "={{ $json.merchant_risk }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.merchant_risk }}"
             },
             {
               "name": "client_profile",
-              "value": "={{ $json.client_profile }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.client_profile }}"
             },
             {
               "name": "logs",
-              "value": "={{ $json.logs }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.logs }}"
             },
             {
               "name": "policies_evaluated",
-              "value": "={{ $json.policies_evaluated }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.policies_evaluated }}"
             },
             {
               "name": "similar_cases",
-              "value": "={{ $json.similar_cases }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.similar_cases }}"
             },
             {
               "name": "hitl_decision",
-              "value": "={{ $json.hitl_decision }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.hitl_decision }}"
             },
             {
               "name": "cache_hit",
-              "value": "={{ $json.cache_hit }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.cache_hit }}"
             },
             {
               "name": "guardrail_warnings",
-              "value": "={{ $json.guardrail_warnings }}"
+              "value": "={{ $('Procesar Respuesta HITL').item.json.guardrail_warnings }}"
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "75b79429-fe3f-4999-8f6f-5771f20ae8c3",
+      "id": "79cb606e-fbc6-48db-85bf-007b57271b43",
       "name": "Generar Reporte — HIGH",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4768,
-        2208
+        14480,
+        5408
       ]
     },
     {
@@ -689,13 +1060,13 @@
           }
         }
       },
-      "id": "1fb88a10-92d6-4fab-a084-dbd933f6f6b6",
+      "id": "b9ca2fb7-2aef-4c5c-b1be-93be614ee44d",
       "name": "Responder — HIGH",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        5024,
-        2208
+        14720,
+        5408
       ]
     },
     {
@@ -755,15 +1126,17 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "d7bdb206-7a39-4d70-aee2-0bd8572f918d",
+      "id": "c9c6b81c-955f-4815-b53b-d90c3bc0d8df",
       "name": "Generar Reporte — MEDIUM",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4768,
-        2400
+        13520,
+        5648
       ]
     },
     {
@@ -782,13 +1155,13 @@
           }
         }
       },
-      "id": "ce54b9b4-d8f3-42b8-8011-f9dc6337871a",
+      "id": "c5aee274-46a9-4f89-b033-d55966d11b2b",
       "name": "Responder — MEDIUM",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        5024,
-        2400
+        13760,
+        5648
       ]
     },
     {
@@ -848,15 +1221,17 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 30000
+        }
       },
-      "id": "0c22bcce-38e0-4195-8077-a9f2e95db4be",
+      "id": "8b155e77-12f4-4724-a6a4-e7bcaf183b53",
       "name": "Generar Reporte — LOW",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4768,
-        2624
+        13520,
+        5888
       ]
     },
     {
@@ -875,14 +1250,37 @@
           }
         }
       },
-      "id": "66572e38-78af-498b-aaeb-fc66a6a17013",
+      "id": "6166da4c-a9c4-4c49-851d-b4aef72bdf30",
       "name": "Responder — LOW",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        5024,
-        2624
+        13760,
+        5888
       ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://ciri-chargeback-agent.onrender.com/health",
+        "options": {
+          "timeout": 55000,
+          "retry": {
+            "enabled": true,
+            "maxTries": 5,
+            "waitBetweenTries": 10000
+          }
+        }
+      },
+      "id": "warmup-api-health-check",
+      "name": "Despertar API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10792,
+        5184
+      ],
+      "onError": "continueErrorOutput"
     }
   ],
   "pinData": {},
@@ -891,7 +1289,25 @@
       "main": [
         [
           {
+            "node": "Validar Formato — IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Formato — IF": {
+      "main": [
+        [
+          {
             "node": "Validar Formato TXN",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error — TXN Inválida",
             "type": "main",
             "index": 0
           }
@@ -902,7 +1318,7 @@
       "main": [
         [
           {
-            "node": "Obtener Transacción",
+            "node": "Despertar API",
             "type": "main",
             "index": 0
           }
@@ -916,6 +1332,31 @@
             "node": "Obtener Logs",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Buscar Políticas",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Buscar Casos Similares",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Riesgo del Comercio",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Historial del Cliente",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Verificar SLA",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -924,7 +1365,7 @@
       "main": [
         [
           {
-            "node": "Buscar Políticas",
+            "node": "Merge — Contexto Paralelo",
             "type": "main",
             "index": 0
           }
@@ -935,20 +1376,9 @@
       "main": [
         [
           {
-            "node": "Buscar Casos Similares",
+            "node": "Merge — Contexto Paralelo",
             "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Buscar Casos Similares": {
-      "main": [
-        [
-          {
-            "node": "Riesgo del Comercio",
-            "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]
@@ -957,7 +1387,7 @@
       "main": [
         [
           {
-            "node": "Historial del Cliente",
+            "node": "Evaluar Riesgo Comercio",
             "type": "main",
             "index": 0
           }
@@ -968,14 +1398,14 @@
       "main": [
         [
           {
-            "node": "Verificar SLA",
+            "node": "Evaluar Historial Cliente",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verificar SLA": {
+    "Merge — Contexto Paralelo": {
       "main": [
         [
           {
@@ -1012,6 +1442,17 @@
       "main": [
         [
           {
+            "node": "Extraer Evaluación — Juez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Evaluación — Juez": {
+      "main": [
+        [
+          {
             "node": "Preparar Informe",
             "type": "main",
             "index": 0
@@ -1041,7 +1482,7 @@
         ],
         [
           {
-            "node": "Generar Reporte — HIGH",
+            "node": "Notificar Analista — HIGH",
             "type": "main",
             "index": 0
           }
@@ -1067,6 +1508,50 @@
         [
           {
             "node": "Responder — BLOCKER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notificar Analista — HIGH": {
+      "main": [
+        [
+          {
+            "node": "Wait — Aprobación HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait — Aprobación HITL": {
+      "main": [
+        [
+          {
+            "node": "Procesar Respuesta HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Respuesta HITL": {
+      "main": [
+        [
+          {
+            "node": "Registrar Feedback HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Feedback HITL": {
+      "main": [
+        [
+          {
+            "node": "Generar Reporte — HIGH",
             "type": "main",
             "index": 0
           }
@@ -1105,6 +1590,68 @@
           }
         ]
       ]
+    },
+    "Buscar Casos Similares": {
+      "main": [
+        [
+          {
+            "node": "Merge — Contexto Paralelo",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Evaluar Riesgo Comercio": {
+      "main": [
+        [
+          {
+            "node": "Merge — Contexto Paralelo",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Evaluar Historial Cliente": {
+      "main": [
+        [
+          {
+            "node": "Merge — Contexto Paralelo",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Verificar SLA": {
+      "main": [
+        [
+          {
+            "node": "Merge — Contexto Paralelo",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Despertar API": {
+      "main": [
+        [
+          {
+            "node": "Obtener Transacción",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Obtener Transacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -1113,7 +1660,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "7bd76b78-e64f-46a1-bd85-57bb8f02dedc",
+  "versionId": "f0df8e9c-053a-4a06-b8c8-2e41f5844606",
   "meta": {
     "instanceId": "36ed1d7aaae0ce47f22100fe1416286231c2bf358a8645fb0e55f588462fc9fb"
   },

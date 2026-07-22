@@ -13,13 +13,13 @@ The feedback loop closes the gap between automated resolution and human expertis
 │                        FULL FEEDBACK LOOP                                   │
 │                                                                             │
 │  1. CASE ARRIVES                                                            │
-│     Webhook → n8n AI Agent → FastAPI pipeline                              │
+│     Webhook → n8n explicit orchestrator → FastAPI pipeline                 │
 │                                                                             │
 │  2. AGENT RESOLVES                                                          │
 │     RAG (policies + precedents) → LLM → Resolution JSON                   │
 │                                                                             │
 │  3. JUDGE EVALUATES                                                         │
-│     POST /api/analyze/judge → overall_score (1.0–10.0)                    │
+│     n8n HTTP Request → Anthropic API → overall_score (1.0–10.0)           │
 │           │                                                                 │
 │           ├── score >= 7.0 ──────────────────────────────────┐             │
 │           │                                                   │             │
@@ -131,6 +131,8 @@ Auto-indexed cases become permanent precedents that influence future resolutions
 ### Judge as hallucination detector
 
 The Judge's `policy_consistency` criterion detects the most dangerous hallucination: recommending `APPROVE` when a `BLOCKER` verdict was produced. If the Judge sees this, it assigns `policy_consistency = 1.0` and the `overall_score` drops below 7.0, routing to HITL. The guardrail in `/api/analyze/resolve` catches this before the Judge even runs (see Guardrails section).
+
+**Judge call path:** The Judge (v1_judge prompt) is called directly from n8n via HTTP Request to `https://api.anthropic.com/v1/messages`, not via a FastAPI proxy. This ensures the model is Claude (not n8n's built-in LLM node) and makes the external API call visible as a named node in the canvas. The `[Extraer Evaluación — Juez]` Set node immediately parses `content[0].text` into `judge_evaluation` — making the contract explicit.
 
 ---
 
@@ -301,7 +303,7 @@ Langfuse is configured via `CB_LANGFUSE_ENABLED=true` and credentials in `.env`.
 | Token count (input/output) | `usage.input_tokens`, `usage.output_tokens` | Every LLM call |
 | Latency per call | Span duration | Every LLM call |
 | Token cost (estimated) | `usage.total_cost` | Every LLM call |
-| Judge overall score | Custom score `judge_score` | POST /api/analyze/judge |
+| Judge overall score | Custom score `judge_score` | n8n execution log (judge called directly from n8n) |
 | Analyst feedback score | Custom score `analyst_feedback_judge_score` | POST /api/feedback/ |
 | Cache hit | Span attribute `cache_hit: true/false` | Before LLM calls |
 | Error rate | Failed spans | Every LLM call |
@@ -331,11 +333,12 @@ Trace: POST /api/analyze/resolve [TXN-00051]
   ├── Span: v1_policy_eval [tokens=1847, latency=890ms]
   ├── Span: v1_resolution [tokens=3204, latency=1340ms]
   ├── Span: guardrails [warnings=1: APPROVE+BLOCKER corrected]
-  └── Score: judge_score = 0.0 (not yet judged — separate call)
+  └── Score: judge_score = 0.0 (judge runs separately in n8n)
 
-Trace: POST /api/analyze/judge [TXN-00051]
-  ├── Span: v1_judge [tokens=2156, latency=1120ms]
-  └── Score: judge_score = 9.2
+n8n execution log: [Juez de Calidad] node [TXN-00051]
+  → POST https://api.anthropic.com/v1/messages (claude-haiku-4-5)
+  → [Extraer Evaluación — Juez]: JSON.parse(content[0].text)
+  → judge_evaluation.overall_score = 9.2
 ```
 
 ### Enabling observability

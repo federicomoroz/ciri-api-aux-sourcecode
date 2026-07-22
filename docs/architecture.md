@@ -22,7 +22,7 @@ This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to c
 
 | | AI Agent clásico | Este sistema |
 |---|---|---|
-| Quién decide el flujo | El LLM | n8n (explícito, 22 nodos) |
+| Quién decide el flujo | El LLM | n8n (explícito, ~28 nodos) |
 | Auditabilidad | Black box | Cada paso es un nodo visible |
 | Determinismo | No garantizado | Siempre la misma secuencia |
 | Debugging | Difícil | Nodo por nodo en el canvas |
@@ -35,51 +35,60 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a **sin
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Orchestration | n8n (22 explicit nodes) | WHAT to do and WHEN — webhook, sequencing, routing by risk |
-| Business logic | FastAPI | HOW — policy retrieval, resolution synthesis, guardrails, feedback |
+| Orchestration | n8n (~28 explicit nodes) | WHAT to do and WHEN — webhook, sequencing, native computation, routing by risk |
+| Business logic | FastAPI | HOW — RAG retrieval, resolution synthesis with guardrails, feedback auto-indexing |
 | Semantic store | Qdrant Cloud | Unstructured truth — policies, historical cases, semantic cache |
 | Structured store | SQLite | Relational truth — transactions, logs, feedback, audit trail |
-| LLM | Claude Sonnet 4.6 | Policy evaluation, resolution synthesis, quality judge, log analysis |
-| Observability | Langfuse | Token cost, latency, judge scores, cache hit rate |
+| LLM (resolve) | Claude via FastAPI | Policy evaluation + synthesis with guardrails and semantic cache |
+| LLM (judge) | Claude via Anthropic API directo | Quality scoring 1–10 — called directly from n8n HTTP Request node |
+| Observability | Langfuse | Token cost, latency, resolve scores, cache hit rate |
 
-**Core principle:** n8n knows WHAT and WHEN. FastAPI knows HOW. The LLM only lives inside FastAPI endpoints — n8n never calls the LLM directly.
+**Core principle:** n8n knows WHAT and WHEN; uses native nodes (Set, IF, Switch, Merge) for deterministic logic. FastAPI handles RAG, LLM synthesis with guardrails, and feedback. The Judge (Claude) is called directly from n8n — visible as an HTTP Request node, no proxy layer.
 
 ---
 
 ## n8n Explicit Orchestration
 
-The workflow contains **22 named nodes across 4 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named HTTP Request node with a specific endpoint and a specific purpose.
+The workflow contains **~28 named nodes across 4 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named node with a specific purpose — native n8n nodes for deterministic logic, HTTP Request nodes for external calls.
 
 ```
-§1 — ENTRY (2 nodes)
+§1 — ENTRY (3 nodes)
    [Webhook — Entrada]
+       ↓ (true branch)
+   [Validar Formato — IF]     ← IF node: validates TXN-XXXXX format
        ↓
-   [Validar Formato TXN]  ← Code node: validates TXN-XXXXX format
+   [Validar Formato TXN]      ← Set node: normalizes webhook input fields
 
-§2 — CONTEXT ASSEMBLY (7 HTTP GET/POST calls)
-   [Obtener Transacción]     GET  /api/transactions/{id}
-   [Obtener Logs]            GET  /api/logs/{tx_id}
-   [Buscar Políticas]        GET  /api/policies/search        ← RAG: Qdrant semantic
-   [Buscar Casos Similares]  GET  /api/cases/similar          ← RAG: Qdrant semantic
-   [Riesgo del Comercio]     GET  /api/merchants/{name}/risk
-   [Historial del Cliente]   GET  /api/clients/{id}/history
-   [Verificar SLA]           POST /api/sla/check
+§2 — CONTEXT ASSEMBLY (11 nodes — 5 HTTP calls + 2 Set evaluations + 1 native Set + Merge)
+   [Obtener Transacción]         GET  /api/transactions/{id}
+   [Obtener Logs]                GET  /api/logs/{tx_id}
+   [Buscar Políticas]            GET  /api/policies/search     ← RAG: Qdrant semantic
+   [Buscar Casos Similares]      GET  /api/cases/similar        ← RAG: Qdrant semantic
+   [Riesgo del Comercio]         GET  /api/merchants/{name}/risk  ← raw stats
+   [Evaluar Riesgo Comercio]     ← Set node: computes is_suspended, is_high_risk, is_strategic flags
+   [Historial del Cliente]       GET  /api/clients/{id}/history  ← raw history
+   [Evaluar Historial Cliente]   ← Set node: computes is_recidivist, has_geo_anomaly, is_vip flags
+   [Verificar SLA]               ← Set node (native): date math → within_sla, sla_limit_days, policy_reference
+   [Merge — Contexto Paralelo]   ← Merge node: waits for all 6 parallel branches (indices 0–5)
 
-§3 — AI ANALYSIS (3 nodes)
-   [Compilar Contexto]        ← Code node: merges all 7 results
+§3 — AI ANALYSIS (5 nodes)
+   [Compilar Contexto]            ← Code node: merges all branch outputs into unified context
        ↓
-   [Sintetizar Resolución]    POST /api/analyze/resolve  ← LLM: synthesis + guardrails
+   [Sintetizar Resolución]        POST /api/analyze/resolve  ← LLM: RAG + synthesis + guardrails
        ↓
-   [Juez de Calidad]          POST /api/analyze/judge    ← LLM-as-Judge: score 1–10
+   [Juez de Calidad]              POST https://api.anthropic.com/v1/messages  ← Claude direct
+       ↓
+   [Extraer Evaluación — Juez]    ← Set node: JSON.parse(content[0].text) → judge_evaluation
+       ↓
+   [Preparar Informe]             ← Code node: builds ReportRequest payload
 
-§4 — RISK ROUTING (Switch + 4 branches)
-   [Preparar Informe]         ← Code node: builds ReportRequest payload
-       ↓
+§4 — RISK ROUTING (Switch + 4 branches × 2 nodes each)
    [Switch — Nivel de Riesgo]
-      BLOCKER → [Generar Reporte] → [Responder HTML]
-      HIGH    → [Generar Reporte] → [Responder HTML]
-      MEDIUM  → [Generar Reporte] → [Responder HTML]
-      LOW     → [Generar Reporte] → [Responder HTML]
+      BLOCKER → [Generar Reporte] → [Responder — BLOCKER]
+      HIGH    → [Notificar Analista] → [Wait — Aprobación HITL] → [Procesar Respuesta HITL]
+             → [Registrar Feedback HITL] → [Generar Reporte] → [Responder — HIGH]
+      MEDIUM  → [Generar Reporte] → [Responder — MEDIUM]
+      LOW     → [Generar Reporte] → [Responder — LOW]
 ```
 
 **Why explicit instead of AI Agent?** An AI Agent node decides autonomously which tools to call and in what order. That creates a black box — no audit trail, non-deterministic sequencing, impossible to debug when it skips a step. The explicit workflow guarantees that every investigation always executes the same 7 context-gathering steps in the same order, every time.
@@ -92,35 +101,37 @@ The workflow contains **22 named nodes across 4 sections**. There is no AI Agent
 flowchart TD
     WEBHOOK([Analyst / Webhook\nPOST /webhook/chargeback-agent]) --> VALIDATE
 
-    subgraph N8N ["n8n — Explicit Orchestrator (22 nodes)"]
-        VALIDATE[Validar Formato TXN\nCode node]
+    subgraph N8N ["n8n — Explicit Orchestrator (~28 nodes)"]
+        VALIDATE[Validar Formato TXN\nIF + Set nodes]
         GET_TX[GET /api/transactions/:id]
         GET_LOGS[GET /api/logs/:tx_id]
         SEARCH_POL[GET /api/policies/search]
         SEARCH_CASES[GET /api/cases/similar]
-        MERCHANT[GET /api/merchants/:name/risk]
-        CLIENT[GET /api/clients/:id/history]
-        SLA[POST /api/sla/check]
+        MERCHANT[GET /api/merchants/:name/risk\nraw stats]
+        EVAL_M[Evaluar Riesgo Comercio\nSet node · flags]
+        CLIENT[GET /api/clients/:id/history\nraw history]
+        EVAL_C[Evaluar Historial Cliente\nSet node · flags]
+        SLA[Verificar SLA\nSet node · date math]
+        MERGE[Merge — Contexto Paralelo\nwaits for indices 0–5]
         COMPILE[Compilar Contexto\nCode node]
-        RESOLVE[POST /api/analyze/resolve]
-        JUDGE[POST /api/analyze/judge]
+        RESOLVE[POST /api/analyze/resolve\nRAG + LLM + guardrails]
+        JUDGE[POST api.anthropic.com/v1/messages\nClaude directo]
+        EXTRACT[Extraer Evaluación — Juez\nSet node · JSON.parse]
         PREPARE[Preparar Informe\nCode node]
         SWITCH{Switch\nrisk_level}
-        REPORT_B[POST /api/reports/html\nBLOCKER]
-        REPORT_H[POST /api/reports/html\nHIGH]
-        REPORT_M[POST /api/reports/html\nMEDIUM]
-        REPORT_L[POST /api/reports/html\nLOW]
+        REPORT_B[POST /api/reports/html → Responder BLOCKER]
+        REPORT_H[HITL flow → POST /api/reports/html → Responder HIGH]
+        REPORT_M[POST /api/reports/html → Responder MEDIUM]
+        REPORT_L[POST /api/reports/html → Responder LOW]
     end
 
     subgraph FASTAPI ["FastAPI — Business Logic"]
         direction TB
-        ROUTES[Routes\nthin handlers ~20 lines]
         SERVICES[Services\nResolutionService · FeedbackService]
         RAG_LAYER[RAG\nQdrantRetriever · QueryBuilder · RAGUpdater]
-        ANALYSIS[Analysis\nAnalyzer · flags · SLA · patterns]
         DOMAIN[Domain\nenums · constants · models · parsing]
         LLM_CLIENT[LLM Client\nAnthropicClient · Protocol]
-        PROMPTS[Prompts\nv1_resolution · v1_judge · v1_log_analysis]
+        PROMPTS[Prompts\nv1_resolution · v1_log_analysis]
     end
 
     subgraph VECTOR ["Qdrant Cloud"]
@@ -135,9 +146,15 @@ flowchart TD
         DB_FEEDBACK[(feedback · audit trail)]
     end
 
+    subgraph ANTHROPIC ["Anthropic API (external)"]
+        ANT[api.anthropic.com/v1/messages\nClaude Haiku — Judge]
+    end
+
     VALIDATE --> GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & MERCHANT & CLIENT & SLA
-    GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & MERCHANT & CLIENT & SLA --> COMPILE
-    COMPILE --> RESOLVE --> JUDGE --> PREPARE --> SWITCH
+    MERCHANT --> EVAL_M
+    CLIENT --> EVAL_C
+    GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & EVAL_M & EVAL_C & SLA --> MERGE
+    MERGE --> COMPILE --> RESOLVE --> JUDGE --> EXTRACT --> PREPARE --> SWITCH
     SWITCH --> REPORT_B & REPORT_H & REPORT_M & REPORT_L
 
     SEARCH_POL --> Q_POL
@@ -147,10 +164,13 @@ flowchart TD
     GET_TX --> DB_TX
     GET_LOGS --> DB_LOGS
 
+    JUDGE --> ANT
+
     style N8N fill:#f0f8ff,stroke:#4a90d9
     style FASTAPI fill:#f0fff0,stroke:#4a9d4a
     style VECTOR fill:#fff8f0,stroke:#d9904a
     style DB fill:#fff0f8,stroke:#d94a90
+    style ANTHROPIC fill:#fdf0ff,stroke:#9d4ad9
 ```
 
 ---
@@ -222,21 +242,23 @@ Langfuse traces every LLM call with: model, token count, latency, prompt version
 
 A chargeback investigation starts when a webhook fires. n8n's `[Validar Formato TXN]` Code node validates the `TXN-XXXXX` format before any downstream call is made, failing fast with a clear error message if the format is wrong.
 
-### Phase 2: Context assembly (§2 — 7 parallel calls)
+### Phase 2: Context assembly (§2 — 5 HTTP calls + native n8n nodes)
 
-n8n fires 7 HTTP calls to gather all evidence:
+n8n fires 5 HTTP calls and uses 3 native Set nodes to gather all evidence:
 
 1. `GET /api/transactions/{id}` — structured data from SQLite (amount, merchant, country, fraud_score, client_vip)
 2. `GET /api/logs/{tx_id}` — all event logs for the transaction (INFO/WARN/ERROR severity)
 3. `GET /api/policies/search` — semantic search over Qdrant `policies`; QueryBuilder enriches the query deterministically before embedding (see ADR-005)
 4. `GET /api/cases/similar` — top-5 semantically similar historical cases from Qdrant
-5. `GET /api/merchants/{name}/risk` — chargeback ratio, fraud flags, known problematic merchants
-6. `GET /api/clients/{id}/history` — client's chargeback history, VIP status, previous resolutions
-7. `POST /api/sla/check` — deadline calculation: 10 days LATAM / 15 days non-LATAM
+5. `GET /api/merchants/{name}/risk` — raw stats (cb_ratio, total_transactions, fraud_flags); **flags computed in n8n** via `[Evaluar Riesgo Comercio]` Set node (is_suspended, is_high_risk, is_strategic)
+6. `GET /api/clients/{id}/history` — raw client history; **risk flags computed in n8n** via `[Evaluar Historial Cliente]` Set node (is_recidivist, has_geo_anomaly, is_vip)
+7. `[Verificar SLA]` — **native n8n Set node** using date math expressions: `Math.floor((Date.now() - new Date(tx.date)) / 86400000)`, LATAM check inline, `sla_limit_days` (5 VIP / 10 LATAM / 15 non-LATAM)
+
+All 6 parallel branches converge at `[Merge — Contexto Paralelo]` (Merge node, indices 0–5 explicitly connected).
 
 ### Phase 3: Resolution synthesis (§3)
 
-`[Compilar Contexto]` merges all 7 results into a single structured object. `POST /api/analyze/resolve` then executes internally:
+`[Compilar Contexto]` merges all branch outputs — including both raw HTTP data and n8n-evaluated flags — into a single structured object. `POST /api/analyze/resolve` then executes internally:
 
 1. Checks `_semantic_cache` — if hit (similarity ≥ 0.92), returns cached resolution immediately
 2. Formats policies for LLM context via `rag/formatter.py`
@@ -244,7 +266,7 @@ n8n fires 7 HTTP calls to gather all evidence:
 4. Applies post-LLM guardrails: APPROVE + BLOCKER active → force REJECT (hallucination guard)
 5. Returns Resolution with any guardrail warnings appended
 
-`POST /api/analyze/judge` evaluates the resolution across 5 criteria (factual accuracy, policy compliance, reasoning quality, risk classification, recommendation clarity). Returns `overall_score` 1.0–10.0.
+`[Juez de Calidad]` calls **Anthropic API directly** from n8n (`POST https://api.anthropic.com/v1/messages`), using `$env.CB_ANTHROPIC_API_KEY`. The v1_judge system prompt is inlined in the HTTP Request body. The adjacent `[Extraer Evaluación — Juez]` Set node immediately parses the Anthropic response (`JSON.parse($json.content[0].text)`) — making the external contract visually explicit on the canvas. Returns `overall_score` 1.0–10.0 across 5 criteria: factual accuracy, policy compliance, reasoning quality, risk classification, recommendation clarity.
 
 ### Phase 4: Risk routing (§4)
 
@@ -271,12 +293,13 @@ When an analyst submits feedback via `POST /api/feedback`, `FeedbackService` sav
 
 **Context:** The system needs an orchestration layer that provides a visual, auditable flow for non-technical stakeholders and guarantees deterministic execution order for every chargeback investigation.
 
-**Decision:** Use n8n with 22 explicit HTTP Request nodes — no AI Agent node, no LLM-based tool calling in n8n. Every step is a named node. The LLM is called only from FastAPI endpoints (`/api/analyze/resolve` and `/api/analyze/judge`).
+**Decision:** Use n8n with ~28 explicit named nodes — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge, Wait) handle all deterministic logic. HTTP Request nodes are reserved for external calls, always paired with a Set node immediately after to make the external contract explicit. The synthesis LLM is called via FastAPI (`/api/analyze/resolve`); the Judge (Claude) is called directly from n8n via HTTP Request to Anthropic API — guaranteeing the model is Claude, not n8n's built-in LLM node.
 
 **Consequences:**
-- Every investigation executes the exact same 7 context-gathering steps in the same order, every time
+- Every investigation executes the exact same steps in the same order, every time
 - The workflow is a complete visual audit trail — any stakeholder can open n8n and see exactly what happened
-- Adding a new data source = one HTTP Request node in §2, no code change
+- Native n8n nodes handle SLA, merchant flags, client flags, and judge response parsing — zero FastAPI calls for deterministic logic
+- Adding a new data source = one HTTP Request node + one Set node in §2, no code change
 - The workflow JSON is version-controlled and importable in any n8n instance
 
 **Alternatives rejected:** n8n AI Agent — non-deterministic tool call ordering, no audit trail, impossible to guarantee all 7 context sources are always consulted; LangGraph — adds Python dependency overhead, hides the visual flow.

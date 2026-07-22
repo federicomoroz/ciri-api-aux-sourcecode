@@ -1,6 +1,8 @@
 # Prompts — CIRI Chargeback Agent
 
-All prompts are stored as versioned Python modules under `api/app/llm/prompts/`. Each module exports `SYSTEM`, `USER_TEMPLATE`, and a `render()` function that returns `(system_prompt, user_prompt)` as a tuple. No prompt strings exist inline in route or service code.
+Prompts are stored as versioned Python modules under `api/app/llm/prompts/`. Each module exports `SYSTEM`, `USER_TEMPLATE`, and a `render()` function that returns `(system_prompt, user_prompt)` as a tuple.
+
+**Exception — v1_judge:** The Judge prompt is inlined directly in the `[Juez de Calidad]` HTTP Request node in n8n. This avoids a FastAPI proxy hop and guarantees the Judge always uses Claude (not n8n's built-in LLM node). The Python file `v1_judge.py` is the canonical source; the n8n node body parameter mirrors it.
 
 ---
 
@@ -237,6 +239,8 @@ Analista senior de contracargos (senior chargeback analyst) at a Latin American 
 
 **File:** `api/app/llm/prompts/v1_judge.py`
 
+**Execution path:** Called directly from n8n `[Juez de Calidad]` HTTP Request node → `POST https://api.anthropic.com/v1/messages` using `$env.CB_ANTHROPIC_API_KEY`. Response is parsed by `[Extraer Evaluación — Juez]` Set node via `JSON.parse($json.content[0].text)`. The FastAPI `/api/analyze/judge` route still exists for standalone testing but is bypassed in the main workflow.
+
 ### Purpose
 
 Act as an independent quality supervisor evaluating the resolution produced by v1_resolution. This implements the LLM-as-Judge pattern. The Judge score gates both human escalation and auto-indexing of new precedents.
@@ -376,4 +380,4 @@ All four prompts run at `temperature=0.3` (configurable via `CB_LLM_TEMPERATURE`
 
 ### Structured output enforcement
 
-All prompts instruct the LLM to "Responde UNICAMENTE con JSON valido. Sin texto adicional." The `_parse_json_safely()` function in `analyze.py` provides a fallback parser that strips markdown code fences and finds embedded JSON if the model adds surrounding text despite the instruction.
+All prompts instruct the LLM to "Responde UNICAMENTE con JSON valido. Sin texto adicional." The `parse_json_safely()` function in `llm/parsing.py` provides a fallback parser that strips markdown code fences and finds embedded JSON if the model adds surrounding text despite the instruction. For v1_judge (called from n8n), the `[Extraer Evaluación — Juez]` Set node uses a robust expression: `JSON.parse($json.content[0].text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())`.

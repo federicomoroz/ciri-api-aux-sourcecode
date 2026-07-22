@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends
 
-from ..analysis.analyzer import Analyzer
-from ..dependencies import get_analyzer
+from ..data.db import Database
+from ..dependencies import get_db
 
 router = APIRouter(prefix="/api/merchants", tags=["merchants"])
 
 
 @router.get("/{name}/risk")
-def get_merchant_risk(name: str, analyzer: Analyzer = Depends(get_analyzer)) -> dict:
-    """Compute merchant risk profile (CB ratio, volume, flags).
-    Used by n8n AI Agent as 'merchant_risk_profile' tool."""
-    return analyzer.merchant_risk_profile(name)
+def get_merchant_risk(name: str, db: Database = Depends(get_db)) -> dict:
+    """Raw merchant stats (CB ratio, volume, transaction history).
+    Flags and risk classification computed in n8n via native Set nodes."""
+    return db.get_merchant_stats(name)
