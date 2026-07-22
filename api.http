@@ -1,0 +1,179 @@
+### CIRI Chargeback Agent — REST Client
+### Requiere extensión: humao.rest-client
+### Seleccionar entorno: Ctrl+Shift+P → "Rest Client: Switch Environment" → local
+
+@fastapi = {{$dotenv fastapi}}
+@n8n     = {{$dotenv n8n}}
+
+# ─────────────────────────────────────────────────────────────
+# HEALTH
+# ─────────────────────────────────────────────────────────────
+
+### FastAPI health (SQLite + Qdrant)
+GET http://localhost:8000/health
+
+###
+
+# ─────────────────────────────────────────────────────────────
+# TEST PANEL
+# ─────────────────────────────────────────────────────────────
+
+### Abrir test panel en browser
+# http://localhost:8000/panel
+
+### Estado de n8n (usado por el panel)
+GET http://localhost:8000/api/panel/n8n-status
+
+### Analizar directamente (sin n8n) — BLOCKER
+POST http://localhost:8000/api/panel/analyze
+Content-Type: application/json
+
+{
+  "transaction_id": "TXN-00051",
+  "motivo": "No reconoce la compra",
+  "cliente_vip": false
+}
+
+### Analizar — HIGH (HITL + VIP)
+POST http://localhost:8000/api/panel/analyze
+Content-Type: application/json
+
+{
+  "transaction_id": "TXN-00042",
+  "motivo": "Fraude con tarjeta",
+  "cliente_vip": true
+}
+
+### Analizar — WARNING SLA (no-LATAM)
+POST http://localhost:8000/api/panel/analyze
+Content-Type: application/json
+
+{
+  "transaction_id": "TXN-00089",
+  "motivo": "Cargo duplicado",
+  "cliente_vip": false
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────
+# N8N WEBHOOK (flujo completo con orquestación explícita)
+# ─────────────────────────────────────────────────────────────
+
+### BLOCKER via n8n
+POST http://localhost:5678/webhook/chargeback-agent
+Content-Type: application/json
+
+{
+  "transaction_id": "TXN-00051",
+  "motivo": "No reconoce la compra",
+  "cliente_vip": false
+}
+
+### HIGH (HITL) via n8n
+POST http://localhost:5678/webhook/chargeback-agent
+Content-Type: application/json
+
+{
+  "transaction_id": "TXN-00042",
+  "motivo": "Fraude con tarjeta",
+  "cliente_vip": true
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────
+# TRANSACCIONES
+# ─────────────────────────────────────────────────────────────
+
+### Listar todas (compact — usado por dropdown del panel)
+GET http://localhost:8000/api/transactions
+
+### Obtener transacción por ID
+GET http://localhost:8000/api/transactions/TXN-00051
+
+### Obtener logs de una transacción
+GET http://localhost:8000/api/logs/TXN-00051
+
+###
+
+# ─────────────────────────────────────────────────────────────
+# CLIENTES Y COMERCIOS
+# ─────────────────────────────────────────────────────────────
+
+### Historial del cliente
+GET http://localhost:8000/api/clients/CLI-0010/history
+
+### Perfil de riesgo del comercio
+GET http://localhost:8000/api/merchants/Amazon/risk
+
+###
+
+# ─────────────────────────────────────────────────────────────
+# POLÍTICAS (CRUD dinámico — re-indexa Qdrant en tiempo real)
+# ─────────────────────────────────────────────────────────────
+
+### Listar todas las políticas
+GET http://localhost:8000/api/policies
+
+### Buscar políticas semánticamente (RAG)
+GET http://localhost:8000/api/policies/search?motivo=fraude&channel=Web&payment_method=Cripto&fraud_score=8&country=ARG
+
+### Obtener política específica
+GET http://localhost:8000/api/policies/POL-FRD-001
+
+### Editar política (re-indexa en Qdrant inmediatamente, sin redeploy)
+PUT http://localhost:8000/api/policies/POL-FRD-001
+Content-Type: application/json
+
+{
+  "description": "Score mínimo para bloqueo automático ahora es 40. Cripto requiere score >= 5."
+}
+
+### Crear política nueva
+POST http://localhost:8000/api/policies
+Content-Type: application/json
+
+{
+  "code": "POL-TEST-001",
+  "name": "Política de prueba",
+  "category": "test",
+  "description": "Política temporal para testing del panel.",
+  "reference": "TEST-001"
+}
+
+### Eliminar política
+DELETE http://localhost:8000/api/policies/POL-TEST-001
+
+###
+
+# ─────────────────────────────────────────────────────────────
+# ANÁLISIS (llamadas directas a los endpoints del agente)
+# ─────────────────────────────────────────────────────────────
+
+### Buscar casos similares (RAG)
+GET http://localhost:8000/api/cases/similar?merchant=Amazon&amount=150.0&payment_method=Cripto&country=ARG&fraud_score=8&motivo=fraude
+
+### Verificar SLA
+POST http://localhost:8000/api/sla/check
+Content-Type: application/json
+
+{
+  "case_open_date": "2024-12-01",
+  "country": "ARG",
+  "cliente_vip": false
+}
+
+### Enviar feedback (activa auto-indexado si judge_score >= 8.0)
+POST http://localhost:8000/api/feedback
+Content-Type: application/json
+
+{
+  "transaction_id": "TXN-00051",
+  "analyst_decision": "REJECT",
+  "analyst_notes": "Confirmo el rechazo. Operación con Cripto en cuenta nueva.",
+  "final_outcome": "REJECT",
+  "judge_score": 9.0
+}
+
+###

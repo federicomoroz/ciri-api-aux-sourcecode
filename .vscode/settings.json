@@ -1,0 +1,58 @@
+{
+  // ── Editor ────────────────────────────────────────────────────────────────
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.tabSize": 4,
+  "files.trimTrailingWhitespace": true,
+
+  // ── Python ────────────────────────────────────────────────────────────────
+  "python.defaultInterpreterPath": "${workspaceFolder}/api/.venv/Scripts/python.exe",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // ── JSON: asociar los archivos n8n al schema de n8n as code ───────────────
+  "json.schemas": [
+    {
+      "fileMatch": ["n8n/*.json", "n8n/**/*.json"],
+      "url": "n8n-as-code://workflow-schema"
+    }
+  ],
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+
+  // ── HTML (templates Jinja2) ───────────────────────────────────────────────
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "files.associations": {
+    "*.html": "html"
+  },
+
+  // ── REST Client (para probar endpoints sin salir de VSCode) ───────────────
+  "rest-client.environmentVariables": {
+    "local": {
+      "fastapi": "http://localhost:8000",
+      "n8n":     "http://localhost:5678"
+    }
+  },
+  "rest-client.defaultEnvironment": "local",
+
+  // ── Excluir de búsquedas ──────────────────────────────────────────────────
+  "search.exclude": {
+    "**/__pycache__": true,
+    "**/.venv": true,
+    "**/node_modules": true,
+    "**/*.pyc": true,
+    "data/chargeback.db": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true
+  }
+}

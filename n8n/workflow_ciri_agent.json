@@ -1,0 +1,806 @@
+{
+  "name": "CIRI Chargeback Agent — Orquestación Explícita",
+  "nodes": [
+
+    {
+      "id": "sticky-overview",
+      "name": "Sticky Note — Resumen",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, -120],
+      "parameters": {
+        "width": 3700,
+        "height": 100,
+        "color": 4,
+        "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo HTTP visible. Sin cajas negras. Sin AI Agent como orquestador. FastAPI ejecuta la lógica; n8n dirige el flujo."
+      }
+    },
+
+    {
+      "id": "sticky-sec1",
+      "name": "Sticky Note — Sección 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 20],
+      "parameters": {
+        "width": 540,
+        "height": 260,
+        "color": 5,
+        "content": "## 🟢 SECCIÓN 1 — Entrada y Validación\n\n**Webhook** expone `POST /webhook/chargeback-agent`.\n\n**Validar TXN** verifica formato `TXN-XXXXX` y extrae:\n- `transaction_id`\n- `motivo` (opcional)\n- `cliente_vip` (bool)"
+      }
+    },
+
+    {
+      "id": "sticky-sec2",
+      "name": "Sticky Note — Sección 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [500, 20],
+      "parameters": {
+        "width": 1600,
+        "height": 260,
+        "color": 3,
+        "content": "## 🔵 SECCIÓN 2 — Recopilación de Contexto (7 herramientas FastAPI)\n\nCadena lineal: cada nodo puede referenciar datos de cualquier nodo anterior con `$('NombreNodo').item.json`.\n\n`Obtener TX → Logs → Políticas RAG → Casos Similares RAG → Riesgo Comercio → Historial Cliente → SLA`\n\nTodas son llamadas **GET/POST determinísticas** a FastAPI — sin LLM en esta sección."
+      }
+    },
+
+    {
+      "id": "sticky-sec3",
+      "name": "Sticky Note — Sección 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2160, 20],
+      "parameters": {
+        "width": 740,
+        "height": 260,
+        "color": 6,
+        "content": "## 🟣 SECCIÓN 3 — Análisis con IA\n\n**Compilar Contexto**: fusiona los 7 resultados en un objeto unificado.\n\n**Sintetizar Resolución**: llama `POST /api/analyze/resolve` → LLM evalúa políticas + casos + logs → devuelve `recommended_action`, `risk_level`, `confidence`, `guardrail_warnings`.\n\n**Juez de Calidad**: llama `POST /api/analyze/judge` → LLM-as-Judge (score 1–10)."
+      }
+    },
+
+    {
+      "id": "sticky-sec4",
+      "name": "Sticky Note — Sección 4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2960, 20],
+      "parameters": {
+        "width": 900,
+        "height": 260,
+        "color": 2,
+        "content": "## 🔀 SECCIÓN 4 — Enrutamiento por Riesgo\n\n**Preparar Informe**: construye el payload exacto que espera `POST /api/reports/html`.\n\n**Switch** enruta por `resolution.risk_level`:\n- `BLOCKER` → rechazado automático → HTML inmediato\n- `HIGH` → reporte con formulario HITL → HTML inmediato *(producción: intercalar Wait node + notificación)*\n- `MEDIUM` → reporte con alerta → HTML inmediato\n- `LOW` → reporte aprobación → HTML inmediato"
+      }
+    },
+
+    {
+      "id": "node-webhook",
+      "name": "Webhook — Entrada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 340],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chargeback-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "ciri-chargeback-agent"
+    },
+
+    {
+      "id": "node-validar-txn",
+      "name": "Validar Formato TXN",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 340],
+      "parameters": {
+        "jsCode": "// Extraer y validar el body del webhook\nconst body = $input.first().json.body || {};\n\nconst txnId      = (body.transaction_id || '').trim();\nconst motivo     = (body.motivo || '').trim();\nconst clienteVip = Boolean(body.cliente_vip);\n\n// Validar formato TXN-XXXXX (exactamente 5 dígitos)\nif (!txnId.match(/^TXN-\\d{5}$/)) {\n  throw new Error(\n    `Formato de transaction_id inválido: \"${txnId}\". ` +\n    `Se esperaba TXN-XXXXX (ej: TXN-00051).`\n  );\n}\n\nreturn [{ json: { transaction_id: txnId, motivo, cliente_vip: clienteVip } }];"
+      }
+    },
+
+    {
+      "id": "node-get-txn",
+      "name": "Obtener Transacción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 340],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://api:8000/api/transactions/' + $json.transaction_id }}",
+        "authentication": "none",
+        "sendHeaders": false,
+        "sendQuery": false,
+        "sendBody": false,
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-get-logs",
+      "name": "Obtener Logs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 340],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://api:8000/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
+        "authentication": "none",
+        "sendHeaders": false,
+        "sendQuery": false,
+        "sendBody": false,
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-search-policies",
+      "name": "Buscar Políticas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 340],
+      "parameters": {
+        "method": "GET",
+        "url": "http://api:8000/api/policies/search",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "motivo",
+              "value": "={{ $('Validar Formato TXN').item.json.motivo }}"
+            },
+            {
+              "name": "channel",
+              "value": "={{ $('Obtener Transacción').item.json.channel }}"
+            },
+            {
+              "name": "payment_method",
+              "value": "={{ $('Obtener Transacción').item.json.payment_method }}"
+            },
+            {
+              "name": "fraud_score",
+              "value": "={{ $('Obtener Transacción').item.json.fraud_score }}"
+            },
+            {
+              "name": "country",
+              "value": "={{ $('Obtener Transacción').item.json.country }}"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-similar-cases",
+      "name": "Buscar Casos Similares",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 340],
+      "parameters": {
+        "method": "GET",
+        "url": "http://api:8000/api/cases/similar",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "merchant",
+              "value": "={{ $('Obtener Transacción').item.json.merchant }}"
+            },
+            {
+              "name": "amount",
+              "value": "={{ $('Obtener Transacción').item.json.amount_usd }}"
+            },
+            {
+              "name": "payment_method",
+              "value": "={{ $('Obtener Transacción').item.json.payment_method }}"
+            },
+            {
+              "name": "country",
+              "value": "={{ $('Obtener Transacción').item.json.country }}"
+            },
+            {
+              "name": "fraud_score",
+              "value": "={{ $('Obtener Transacción').item.json.fraud_score }}"
+            },
+            {
+              "name": "motivo",
+              "value": "={{ $('Validar Formato TXN').item.json.motivo }}"
+            }
+          ]
+        },
+        "sendBody": false,
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-merchant-risk",
+      "name": "Riesgo del Comercio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1420, 340],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://api:8000/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
+        "authentication": "none",
+        "sendHeaders": false,
+        "sendQuery": false,
+        "sendBody": false,
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-client-history",
+      "name": "Historial del Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 340],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://api:8000/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
+        "authentication": "none",
+        "sendHeaders": false,
+        "sendQuery": false,
+        "sendBody": false,
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-check-sla",
+      "name": "Verificar SLA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1860, 340],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/sla/check",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "case_open_date",
+              "value": "={{ $('Obtener Transacción').item.json.date }}"
+            },
+            {
+              "name": "country",
+              "value": "={{ $('Obtener Transacción').item.json.country }}"
+            },
+            {
+              "name": "cliente_vip",
+              "value": "={{ $('Validar Formato TXN').item.json.cliente_vip }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-compilar-contexto",
+      "name": "Compilar Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2080, 340],
+      "parameters": {
+        "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input      = $('Validar Formato TXN').item.json;\nconst txn        = $('Obtener Transacción').item.json;\nconst logsData   = $('Obtener Logs').item.json;\nconst policies   = $('Buscar Políticas').item.json;\nconst cases      = $('Buscar Casos Similares').item.json;\nconst merchant   = $('Riesgo del Comercio').item.json;\nconst client     = $('Historial del Cliente').item.json;\nconst sla        = $('Verificar SLA').item.json;\n\nconst slaStatus = sla.within_sla\n  ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n  : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`;\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant}, USD ${txn.amount_usd},`,\n  `canal ${txn.channel}, país ${txn.country}, score fraude ${txn.fraud_score}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
+      }
+    },
+
+    {
+      "id": "node-resolve",
+      "name": "Sintetizar Resolución",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2300, 340],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/analyze/resolve",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "transaction_id",
+              "value": "={{ $json.transaction_id }}"
+            },
+            {
+              "name": "agent_analysis",
+              "value": "={{ $json.agent_analysis }}"
+            },
+            {
+              "name": "tx_data",
+              "value": "={{ $json.tx_data }}"
+            },
+            {
+              "name": "policies",
+              "value": "={{ $json.policies }}"
+            },
+            {
+              "name": "similar_cases",
+              "value": "={{ $json.similar_cases }}"
+            },
+            {
+              "name": "logs",
+              "value": "={{ $json.logs }}"
+            },
+            {
+              "name": "merchant_risk",
+              "value": "={{ $json.merchant_risk }}"
+            },
+            {
+              "name": "client_history",
+              "value": "={{ $json.client_history }}"
+            },
+            {
+              "name": "motivo",
+              "value": "={{ $json.motivo }}"
+            },
+            {
+              "name": "cliente_vip",
+              "value": "={{ $json.cliente_vip }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-judge",
+      "name": "Juez de Calidad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2520, 340],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/analyze/judge",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "resolution",
+              "value": "={{ $json }}"
+            },
+            {
+              "name": "full_context",
+              "value": "={{ { transaction: $('Compilar Contexto').item.json.tx_data, motivo: $('Compilar Contexto').item.json.motivo, policies: $('Compilar Contexto').item.json.policies, similar_cases: $('Compilar Contexto').item.json.similar_cases } }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-preparar-informe",
+      "name": "Preparar Informe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2740, 340],
+      "parameters": {
+        "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $input.first().json;  // output de Juez de Calidad\n\nreturn [{\n  json: {\n    // Campos de ReportRequest\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n  }\n}];"
+      }
+    },
+
+    {
+      "id": "node-switch",
+      "name": "Switch — Nivel de Riesgo",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [2960, 340],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-blocker",
+                    "leftValue": "={{ $json.resolution.risk_level }}",
+                    "rightValue": "BLOCKER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "BLOCKER"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-high",
+                    "leftValue": "={{ $json.resolution.risk_level }}",
+                    "rightValue": "HIGH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HIGH"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-medium",
+                    "leftValue": "={{ $json.resolution.risk_level }}",
+                    "rightValue": "MEDIUM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MEDIUM"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "cond-low",
+                    "leftValue": "={{ $json.resolution.risk_level }}",
+                    "rightValue": "LOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "LOW"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-report-blocker",
+      "name": "Generar Reporte — BLOCKER",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3180, 100],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/reports/html",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "transaction",        "value": "={{ $json.transaction }}" },
+            { "name": "resolution",         "value": "={{ $json.resolution }}" },
+            { "name": "judge_evaluation",   "value": "={{ $json.judge_evaluation }}" },
+            { "name": "agent_analysis",     "value": "={{ $json.agent_analysis }}" },
+            { "name": "merchant_risk",      "value": "={{ $json.merchant_risk }}" },
+            { "name": "client_profile",     "value": "={{ $json.client_profile }}" },
+            { "name": "logs",               "value": "={{ $json.logs }}" },
+            { "name": "policies_evaluated", "value": "={{ $json.policies_evaluated }}" },
+            { "name": "similar_cases",      "value": "={{ $json.similar_cases }}" },
+            { "name": "hitl_decision",      "value": "={{ $json.hitl_decision }}" },
+            { "name": "cache_hit",          "value": "={{ $json.cache_hit }}" },
+            { "name": "guardrail_warnings", "value": "={{ $json.guardrail_warnings }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-respond-blocker",
+      "name": "Responder — BLOCKER",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3400, 100],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": "sticky-high",
+      "name": "Sticky Note — HIGH HITL",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3160, 200],
+      "parameters": {
+        "width": 460,
+        "height": 220,
+        "color": 6,
+        "content": "## 🔶 Rama HIGH — HITL\n\nEl reporte HTML incluye un formulario de aprobación que llama directamente a `POST /api/feedback`.\n\n**Extensión producción:** intercalar nodo `Wait` (resume via webhook) + nodo de notificación (Gmail / Slack) antes de `Generar Reporte — HIGH`."
+      }
+    },
+
+    {
+      "id": "node-report-high",
+      "name": "Generar Reporte — HIGH",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3180, 360],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/reports/html",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "transaction",        "value": "={{ $json.transaction }}" },
+            { "name": "resolution",         "value": "={{ $json.resolution }}" },
+            { "name": "judge_evaluation",   "value": "={{ $json.judge_evaluation }}" },
+            { "name": "agent_analysis",     "value": "={{ $json.agent_analysis }}" },
+            { "name": "merchant_risk",      "value": "={{ $json.merchant_risk }}" },
+            { "name": "client_profile",     "value": "={{ $json.client_profile }}" },
+            { "name": "logs",               "value": "={{ $json.logs }}" },
+            { "name": "policies_evaluated", "value": "={{ $json.policies_evaluated }}" },
+            { "name": "similar_cases",      "value": "={{ $json.similar_cases }}" },
+            { "name": "hitl_decision",      "value": "={{ $json.hitl_decision }}" },
+            { "name": "cache_hit",          "value": "={{ $json.cache_hit }}" },
+            { "name": "guardrail_warnings", "value": "={{ $json.guardrail_warnings }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-respond-high",
+      "name": "Responder — HIGH",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3400, 360],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": "node-report-medium",
+      "name": "Generar Reporte — MEDIUM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3180, 580],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/reports/html",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "transaction",        "value": "={{ $json.transaction }}" },
+            { "name": "resolution",         "value": "={{ $json.resolution }}" },
+            { "name": "judge_evaluation",   "value": "={{ $json.judge_evaluation }}" },
+            { "name": "agent_analysis",     "value": "={{ $json.agent_analysis }}" },
+            { "name": "merchant_risk",      "value": "={{ $json.merchant_risk }}" },
+            { "name": "client_profile",     "value": "={{ $json.client_profile }}" },
+            { "name": "logs",               "value": "={{ $json.logs }}" },
+            { "name": "policies_evaluated", "value": "={{ $json.policies_evaluated }}" },
+            { "name": "similar_cases",      "value": "={{ $json.similar_cases }}" },
+            { "name": "hitl_decision",      "value": "={{ $json.hitl_decision }}" },
+            { "name": "cache_hit",          "value": "={{ $json.cache_hit }}" },
+            { "name": "guardrail_warnings", "value": "={{ $json.guardrail_warnings }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-respond-medium",
+      "name": "Responder — MEDIUM",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3400, 580],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": "node-report-low",
+      "name": "Generar Reporte — LOW",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3180, 800],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/api/reports/html",
+        "authentication": "none",
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "transaction",        "value": "={{ $json.transaction }}" },
+            { "name": "resolution",         "value": "={{ $json.resolution }}" },
+            { "name": "judge_evaluation",   "value": "={{ $json.judge_evaluation }}" },
+            { "name": "agent_analysis",     "value": "={{ $json.agent_analysis }}" },
+            { "name": "merchant_risk",      "value": "={{ $json.merchant_risk }}" },
+            { "name": "client_profile",     "value": "={{ $json.client_profile }}" },
+            { "name": "logs",               "value": "={{ $json.logs }}" },
+            { "name": "policies_evaluated", "value": "={{ $json.policies_evaluated }}" },
+            { "name": "similar_cases",      "value": "={{ $json.similar_cases }}" },
+            { "name": "hitl_decision",      "value": "={{ $json.hitl_decision }}" },
+            { "name": "cache_hit",          "value": "={{ $json.cache_hit }}" },
+            { "name": "guardrail_warnings", "value": "={{ $json.guardrail_warnings }}" }
+          ]
+        },
+        "options": {}
+      }
+    },
+
+    {
+      "id": "node-respond-low",
+      "name": "Responder — LOW",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3400, 800],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "text/html; charset=utf-8" }
+            ]
+          }
+        }
+      }
+    }
+
+  ],
+
+  "connections": {
+    "Webhook — Entrada": {
+      "main": [[{ "node": "Validar Formato TXN",    "type": "main", "index": 0 }]]
+    },
+    "Validar Formato TXN": {
+      "main": [[{ "node": "Obtener Transacción",    "type": "main", "index": 0 }]]
+    },
+    "Obtener Transacción": {
+      "main": [[{ "node": "Obtener Logs",            "type": "main", "index": 0 }]]
+    },
+    "Obtener Logs": {
+      "main": [[{ "node": "Buscar Políticas",        "type": "main", "index": 0 }]]
+    },
+    "Buscar Políticas": {
+      "main": [[{ "node": "Buscar Casos Similares",  "type": "main", "index": 0 }]]
+    },
+    "Buscar Casos Similares": {
+      "main": [[{ "node": "Riesgo del Comercio",     "type": "main", "index": 0 }]]
+    },
+    "Riesgo del Comercio": {
+      "main": [[{ "node": "Historial del Cliente",   "type": "main", "index": 0 }]]
+    },
+    "Historial del Cliente": {
+      "main": [[{ "node": "Verificar SLA",           "type": "main", "index": 0 }]]
+    },
+    "Verificar SLA": {
+      "main": [[{ "node": "Compilar Contexto",       "type": "main", "index": 0 }]]
+    },
+    "Compilar Contexto": {
+      "main": [[{ "node": "Sintetizar Resolución",   "type": "main", "index": 0 }]]
+    },
+    "Sintetizar Resolución": {
+      "main": [[{ "node": "Juez de Calidad",         "type": "main", "index": 0 }]]
+    },
+    "Juez de Calidad": {
+      "main": [[{ "node": "Preparar Informe",        "type": "main", "index": 0 }]]
+    },
+    "Preparar Informe": {
+      "main": [[{ "node": "Switch — Nivel de Riesgo","type": "main", "index": 0 }]]
+    },
+    "Switch — Nivel de Riesgo": {
+      "main": [
+        [{ "node": "Generar Reporte — BLOCKER", "type": "main", "index": 0 }],
+        [{ "node": "Generar Reporte — HIGH",    "type": "main", "index": 0 }],
+        [{ "node": "Generar Reporte — MEDIUM",  "type": "main", "index": 0 }],
+        [{ "node": "Generar Reporte — LOW",     "type": "main", "index": 0 }]
+      ]
+    },
+    "Generar Reporte — BLOCKER": {
+      "main": [[{ "node": "Responder — BLOCKER", "type": "main", "index": 0 }]]
+    },
+    "Generar Reporte — HIGH": {
+      "main": [[{ "node": "Responder — HIGH",    "type": "main", "index": 0 }]]
+    },
+    "Generar Reporte — MEDIUM": {
+      "main": [[{ "node": "Responder — MEDIUM",  "type": "main", "index": 0 }]]
+    },
+    "Generar Reporte — LOW": {
+      "main": [[{ "node": "Responder — LOW",     "type": "main", "index": 0 }]]
+    }
+  },
+
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "versionId": "2.0.0",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "ciri-chargeback-agent"
+  },
+  "tags": ["chargeback", "explicit-flow", "mercadopago"]
+}

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIRI — Architecture Map</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #080c18;
+      --surface:    rgba(255,255,255,0.035);
+      --border:     rgba(255,255,255,0.09);
+      --c-entry:    #22d3ee;
+      --c-n8n:      #4a90d9;
+      --c-fastapi:  #4ade80;
+      --c-qdrant:   #fb923c;
+      --c-sqlite:   #f472b6;
+      --c-claude:   #a78bfa;
+      --c-langfuse: #94a3b8;
+      --c-loop:     #f59e0b;
+      --text-1: #e2e8f0;
+      --text-2: #94a3b8;
+      --text-3: #475569;
+      --ff-head: Georgia, 'Times New Roman', serif;
+      --ff-mono: 'Courier New', 'Lucida Console', monospace;
+      --ff-body: system-ui, -apple-system, sans-serif;
+    }
+
+    html { font-size: 14px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text-1);
+      font-family: var(--ff-body);
+      min-height: 100vh;
+    }
+
+    /* Dot grid background */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Scanlines */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ── Header ── */
+    .hdr {
+      position: relative; z-index: 10;
+      padding: 20px 48px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(8,12,24,0.8);
+      backdrop-filter: blur(12px);
+    }
+    .hdr-title {
+      font-family: var(--ff-head);
+      font-size: 1.4rem; font-weight: 400; letter-spacing: 0.04em;
+    }
+    .hdr-title em { color: var(--c-entry); font-style: normal; }
+    .hdr-sub {
+      font-family: var(--ff-mono);
+      font-size: 0.7rem; color: var(--text-3); letter-spacing: 0.1em;
+    }
+
+    /* ── Main grid ── */
+    .wrap {
+      position: relative; z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr 260px;
+      gap: 0;
+      padding: 36px 48px;
+    }
+
+    /* SVG overlay */
+    #svg-overlay {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none; z-index: 8;
+      overflow: visible;
+    }
+
+    /* ── Flow column ── */
+    .flow {
+      display: flex; flex-direction: column; gap: 20px;
+      padding-right: 56px;
+    }
+
+    /* ── Glass card ── */
+    .card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 22px;
+      backdrop-filter: blur(10px);
+      transition: transform .2s, box-shadow .25s;
+    }
+    .card:hover { transform: translateY(-2px); }
+
+    /* color glow variants */
+    .card[data-c="entry"]   { border-color: rgba(34,211,238,.28);  box-shadow: 0 0 24px rgba(34,211,238,.08);  }
+    .card[data-c="n8n"]     { border-color: rgba(74,144,217,.28);  box-shadow: 0 0 24px rgba(74,144,217,.08);  }
+    .card[data-c="fastapi"] { border-color: rgba(74,222,128,.28);  box-shadow: 0 0 24px rgba(74,222,128,.08);  }
+    .card[data-c="qdrant"]  { border-color: rgba(251,146,60,.28);  box-shadow: 0 0 24px rgba(251,146,60,.08);  }
+    .card[data-c="sqlite"]  { border-color: rgba(244,114,182,.28); box-shadow: 0 0 24px rgba(244,114,182,.08); }
+    .card[data-c="claude"]  { border-color: rgba(167,139,250,.28); box-shadow: 0 0 24px rgba(167,139,250,.08); }
+    .card[data-c="langfuse"]{ border-color: rgba(148,163,184,.28); box-shadow: 0 0 24px rgba(148,163,184,.08); }
+
+    .card:hover[data-c="entry"]   { box-shadow: 0 4px 32px rgba(34,211,238,.18);  }
+    .card:hover[data-c="n8n"]     { box-shadow: 0 4px 32px rgba(74,144,217,.18);  }
+    .card:hover[data-c="fastapi"] { box-shadow: 0 4px 32px rgba(74,222,128,.18);  }
+    .card:hover[data-c="qdrant"]  { box-shadow: 0 4px 32px rgba(251,146,60,.18);  }
+    .card:hover[data-c="sqlite"]  { box-shadow: 0 4px 32px rgba(244,114,182,.18); }
+    .card:hover[data-c="claude"]  { box-shadow: 0 4px 32px rgba(167,139,250,.18); }
+    .card:hover[data-c="langfuse"]{ box-shadow: 0 4px 32px rgba(148,163,184,.18); }
+
+    /* Card header row */
+    .ch {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    }
+    .ch-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    }
+    .ch-title {
+      font-family: var(--ff-head);
+      font-size: 1rem; font-weight: 400; letter-spacing: 0.02em;
+    }
+    .ch-port {
+      font-family: var(--ff-mono); font-size: 0.65rem;
+      color: var(--text-3); background: rgba(255,255,255,0.05);
+      padding: 2px 7px; border-radius: 4px; margin-left: auto;
+    }
+
+    .card-sub {
+      font-family: var(--ff-mono); font-size: 0.7rem;
+      color: var(--text-2); margin-bottom: 12px; line-height: 1.5;
+    }
+
+    /* Entry */
+    .entry-ep {
+      font-family: var(--ff-mono); font-size: 0.68rem;
+      color: var(--c-entry);
+      background: rgba(34,211,238,0.07);
+      border: 1px solid rgba(34,211,238,0.2);
+      padding: 6px 14px; border-radius: 6px;
+      display: inline-block; margin-top: 4px;
+      letter-spacing: 0.03em;
+    }
+
+    /* N8N Tools grid */
+    .tools-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px;
+    }
+    .tool {
+      font-family: var(--ff-mono); font-size: 0.62rem;
+      color: var(--c-n8n);
+      background: rgba(74,144,217,0.08);
+      border: 1px solid rgba(74,144,217,0.18);
+      padding: 6px 8px; border-radius: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* FastAPI modules */
+    .mods-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px;
+    }
+    .mod {
+      background: rgba(74,222,128,0.05);
+      border: 1px solid rgba(74,222,128,0.14);
+      border-radius: 8px; padding: 9px 11px;
+    }
+    .mod-title {
+      font-family: var(--ff-mono); font-size: 0.68rem;
+      color: var(--c-fastapi); font-weight: 700; margin-bottom: 5px;
+    }
+    .mod ul { list-style: none; }
+    .mod li {
+      font-family: var(--ff-mono); font-size: 0.58rem;
+      color: var(--text-2); line-height: 1.65;
+    }
+    .mod li::before { content: '· '; color: var(--c-fastapi); opacity: .45; }
+
+    /* Loop badge */
+    .loop-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--ff-mono); font-size: 0.62rem;
+      color: var(--c-loop);
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.28);
+      padding: 4px 12px; border-radius: 20px; margin-top: 10px;
+    }
+
+    /* Deps row */
+    .deps-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+    }
+
+    /* Collection / table lists */
+    .coll-list { display: flex; flex-direction: column; gap: 7px; }
+    .coll-item {
+      font-family: var(--ff-mono); font-size: 0.65rem;
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .coll-name { }
+    .coll-meta { color: var(--text-3); font-size: 0.58rem; }
+
+    /* Prompts */
+    .prompts-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 7px;
+    }
+    .prompt {
+      background: rgba(167,139,250,0.06);
+      border: 1px solid rgba(167,139,250,0.18);
+      border-radius: 6px; padding: 7px 10px;
+    }
+    .prompt-code {
+      font-family: var(--ff-mono); font-size: 0.62rem;
+      color: var(--c-claude); display: block; margin-bottom: 2px;
+    }
+    .prompt-role {
+      font-size: 0.58rem; color: var(--text-3); font-style: italic;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: sticky; top: 36px; align-self: start;
+    }
+    .metric {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 11px;
+      background: rgba(148,163,184,0.05);
+      border-radius: 6px;
+      border-left: 2px solid var(--c-langfuse);
+      margin-bottom: 6px;
+    }
+    .metric-label {
+      font-family: var(--ff-mono); font-size: 0.64rem; color: var(--text-2);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 14px;
+      padding: 16px 48px;
+      border-top: 1px solid var(--border);
+      position: relative; z-index: 10;
+    }
+    .leg-item {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--ff-mono); font-size: 0.62rem; color: var(--text-2);
+    }
+    .leg-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    /* Footer */
+    .ftr {
+      position: relative; z-index: 10;
+      padding: 14px 48px;
+      border-top: 1px solid var(--border);
+      font-family: var(--ff-mono); font-size: 0.65rem;
+      color: var(--text-3); letter-spacing: 0.06em;
+      display: flex; justify-content: space-between;
+      background: rgba(8,12,24,0.6);
+    }
+
+    /* SVG animation */
+    @keyframes dash { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+    @keyframes loop { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+    .flow-line { stroke-dasharray: 8 4; animation: dash .9s linear infinite; }
+    .loop-line { stroke-dasharray: 10 6; animation: loop 1.4s linear infinite; }
+
+    /* Tooltip */
+    [title] { cursor: help; }
+
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; padding: 24px 20px; }
+      .flow { padding-right: 0; }
+      .mods-grid { grid-template-columns: repeat(3, 1fr); }
+      .deps-row { grid-template-columns: 1fr; }
+      .sidebar { position: static; margin-top: 20px; }
+    }
+    @media (max-width: 580px) {
+      .tools-grid { grid-template-columns: repeat(2, 1fr); }
+      .prompts-grid { grid-template-columns: 1fr; }
+      .hdr { flex-direction: column; gap: 6px; padding: 16px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hdr">
+  <h1 class="hdr-title"><em>CIRI</em> Chargeback Agent</h1>
+  <span class="hdr-sub">Architecture Map &nbsp;·&nbsp; v2.0 &nbsp;·&nbsp; FastAPI + n8n + Qdrant + Claude Sonnet 4.6</span>
+</header>
+
+<div class="wrap" id="wrap">
+
+  <!-- SVG arrows injected by JS -->
+  <svg id="svg-overlay" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="a-cyan"    markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#22d3ee"/></marker>
+      <marker id="a-blue"    markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#4a90d9"/></marker>
+      <marker id="a-green"   markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#4ade80"/></marker>
+      <marker id="a-orange"  markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#fb923c"/></marker>
+      <marker id="a-pink"    markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#f472b6"/></marker>
+      <marker id="a-purple"  markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#a78bfa"/></marker>
+      <marker id="a-slate"   markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#94a3b8"/></marker>
+      <marker id="a-amber"   markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="#f59e0b"/></marker>
+    </defs>
+  </svg>
+
+  <!-- ══ Main flow ══ -->
+  <div class="flow">
+
+    <!-- Entry -->
+    <div class="card" data-c="entry" id="c-entry"
+         title="Punto de entrada. El analista envía un transaction_id por webhook y el agente investiga autónomamente.">
+      <div class="ch">
+        <div class="ch-dot" style="background:#22d3ee;box-shadow:0 0 6px #22d3ee88"></div>
+        <span class="ch-title">Analista / Sistema Externo</span>
+      </div>
+      <div style="color:var(--text-2);font-size:0.75rem;margin-bottom:6px;">Dispara investigación de contracargo</div>
+      <span class="entry-ep">POST /webhook/chargeback-agent &nbsp;·&nbsp; { "transaction_id": "TXN-XXXXX" }</span>
+    </div>
+
+    <!-- N8N -->
+    <div class="card" data-c="n8n" id="c-n8n"
+         title="Orquestador explícito — cada paso es un nodo HTTP visible. Cero nodos IA. LLM vive solo en FastAPI.">
+      <div class="ch">
+        <div class="ch-dot" style="background:#4a90d9;box-shadow:0 0 6px #4a90d988"></div>
+        <span class="ch-title">n8n &mdash; Orquestador Explícito</span>
+        <span class="ch-port">:5678</span>
+      </div>
+      <div class="card-sub">22 nodos &nbsp;·&nbsp; 4 secciones &nbsp;·&nbsp; cero nodos IA &nbsp;·&nbsp; solo HTTP Request</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.65rem;">
+          <span style="background:rgba(74,144,217,0.15);border:1px solid rgba(74,144,217,0.3);border-radius:3px;padding:2px 6px;color:#4a90d9;font-weight:700;flex-shrink:0">§1</span>
+          <span style="color:var(--text-2)">Webhook</span>
+          <span style="color:var(--text-3)">→</span>
+          <span style="color:var(--text-2)">Validar TXN (Code)</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:4px;font-size:0.65rem;">
+          <span style="background:rgba(74,144,217,0.15);border:1px solid rgba(74,144,217,0.3);border-radius:3px;padding:2px 6px;color:#4a90d9;font-weight:700;flex-shrink:0">§2</span>
+          <div style="color:var(--text-2);line-height:1.5">7 HTTP calls: lookup_transaction · get_logs · search_policies · similar_cases · merchant_risk · client_history · check_sla</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.65rem;flex-wrap:wrap;">
+          <span style="background:rgba(74,144,217,0.15);border:1px solid rgba(74,144,217,0.3);border-radius:3px;padding:2px 6px;color:#4a90d9;font-weight:700;flex-shrink:0">§3</span>
+          <span style="color:var(--text-2)">Compilar (Code)</span>
+          <span style="color:var(--text-3)">→</span>
+          <span style="color:var(--c-claude)">Resolver (LLM)</span>
+          <span style="color:var(--text-3)">→</span>
+          <span style="color:var(--c-claude)">Juez (LLM)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;font-size:0.65rem;flex-wrap:wrap;">
+          <span style="background:rgba(74,144,217,0.15);border:1px solid rgba(74,144,217,0.3);border-radius:3px;padding:2px 6px;color:#4a90d9;font-weight:700;flex-shrink:0">§4</span>
+          <span style="color:var(--text-2)">Preparar (Code)</span>
+          <span style="color:var(--text-3)">→</span>
+          <span style="color:var(--text-2)">Switch(risk_level)</span>
+          <span style="color:var(--text-3)">→</span>
+          <span style="color:var(--text-2)">4× Reporte HTML</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:10px;flex-wrap:wrap;">
+        <span style="font-size:0.6rem;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:3px;padding:2px 6px">BLOCKER</span>
+        <span style="font-size:0.6rem;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);color:#fb923c;border-radius:3px;padding:2px 6px">HIGH</span>
+        <span style="font-size:0.6rem;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);color:#eab308;border-radius:3px;padding:2px 6px">MEDIUM</span>
+        <span style="font-size:0.6rem;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#4ade80;border-radius:3px;padding:2px 6px">LOW</span>
+      </div>
+    </div>
+
+    <!-- FastAPI -->
+    <div class="card" data-c="fastapi" id="c-fastapi"
+         title="Lógica de negocio completa. Cada endpoint es una herramienta del agente. Testeable con pytest sin n8n.">
+      <div class="ch">
+        <div class="ch-dot" style="background:#4ade80;box-shadow:0 0 6px #4ade8088"></div>
+        <span class="ch-title">FastAPI &mdash; Business Logic</span>
+        <span class="ch-port">:8000</span>
+      </div>
+      <div class="mods-grid">
+        <div class="mod">
+          <div class="mod-title">Routes</div>
+          <ul><li>thin HTTP handlers</li><li>Depends injection</li><li>delegan a Services</li></ul>
+        </div>
+        <div class="mod">
+          <div class="mod-title">Services</div>
+          <ul><li>ResolutionService</li><li>FeedbackService</li><li>guardrails</li></ul>
+        </div>
+        <div class="mod">
+          <div class="mod-title">RAG</div>
+          <ul><li>QdrantRetriever</li><li>QueryBuilder</li><li>RAGUpdater</li><li>formatter.py</li></ul>
+        </div>
+        <div class="mod">
+          <div class="mod-title">Analysis</div>
+          <ul><li>Analyzer</li><li>flags · SLA</li><li>error patterns</li><li>count_severities</li></ul>
+        </div>
+        <div class="mod">
+          <div class="mod-title">Domain</div>
+          <ul><li>enums.py</li><li>constants.py</li><li>models.py</li><li>parsing.py</li></ul>
+        </div>
+      </div>
+      <div class="loop-badge">↺ &nbsp;Auto-mejora: feedback → RAG update cuando judge_score ≥ 8.0</div>
+      <div style="margin-top:8px;font-family:var(--ff-mono);font-size:0.6rem;color:var(--text-3)">
+        constants.py · 27+ magic numbers &nbsp;|&nbsp; enums.py · type safety &nbsp;|&nbsp; services/ · thin routes &nbsp;|&nbsp; claude-sonnet-4-6
+      </div>
+    </div>
+
+    <!-- Deps row: Qdrant | SQLite | Claude -->
+    <div class="deps-row">
+
+      <div class="card" data-c="qdrant" id="c-qdrant"
+           title="Vector store semántico. Sincronizado con SQLite vía RAGUpdater en cada CRUD de política.">
+        <div class="ch">
+          <div class="ch-dot" style="background:#fb923c;box-shadow:0 0 6px #fb923c88"></div>
+          <span class="ch-title">Qdrant</span>
+          <span class="ch-port">:6333</span>
+        </div>
+        <div class="coll-list">
+          <div class="coll-item">
+            <span class="coll-name" style="color:var(--c-qdrant)">policies</span>
+            <span class="coll-meta">17 docs · 384 dims</span>
+          </div>
+          <div class="coll-item">
+            <span class="coll-name" style="color:var(--c-qdrant)">historical_cases</span>
+            <span class="coll-meta">60+ · auto-grow</span>
+          </div>
+          <div class="coll-item">
+            <span class="coll-name" style="color:var(--c-qdrant)">_semantic_cache</span>
+            <span class="coll-meta">threshold 0.92</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" data-c="sqlite" id="c-sqlite"
+           title="Verdad estructurada. Source of truth para políticas. Audit trail completo de feedback.">
+        <div class="ch">
+          <div class="ch-dot" style="background:#f472b6;box-shadow:0 0 6px #f472b688"></div>
+          <span class="ch-title">SQLite</span>
+          <span class="ch-port">local file</span>
+        </div>
+        <div class="coll-list">
+          <div class="coll-item"><span class="coll-name" style="color:var(--c-sqlite)">transactions</span><span class="coll-meta">100 rows</span></div>
+          <div class="coll-item"><span class="coll-name" style="color:var(--c-sqlite)">logs</span><span class="coll-meta">150+ eventos</span></div>
+          <div class="coll-item"><span class="coll-name" style="color:var(--c-sqlite)">cases</span><span class="coll-meta">histórico</span></div>
+          <div class="coll-item"><span class="coll-name" style="color:var(--c-sqlite)">policies</span><span class="coll-meta">source of truth</span></div>
+          <div class="coll-item"><span class="coll-name" style="color:var(--c-sqlite)">feedback</span><span class="coll-meta">analista + scores</span></div>
+        </div>
+      </div>
+
+      <div class="card" data-c="claude" id="c-claude"
+           title="4 prompts versionados (v1_*). Evaluación de políticas → síntesis de resolución → juez de calidad. Modelo: claude-sonnet-4-6.">
+        <div class="ch">
+          <div class="ch-dot" style="background:#a78bfa;box-shadow:0 0 6px #a78bfa88"></div>
+          <span class="ch-title">Claude Sonnet 4.6</span>
+          <span class="ch-port">Anthropic API</span>
+        </div>
+        <div class="prompts-grid">
+          <div class="prompt"><span class="prompt-code">v1_policy_eval</span><span class="prompt-role">auditor de cumplimiento</span></div>
+          <div class="prompt"><span class="prompt-code">v1_resolution</span><span class="prompt-role">analista senior</span></div>
+          <div class="prompt"><span class="prompt-code">v1_judge</span><span class="prompt-role">supervisor de calidad</span></div>
+          <div class="prompt"><span class="prompt-code">v1_log_analysis</span><span class="prompt-role">analista de sistemas</span></div>
+        </div>
+      </div>
+
+    </div><!-- /deps-row -->
+  </div><!-- /flow -->
+
+  <!-- ══ Sidebar ══ -->
+  <div class="sidebar">
+    <div class="card" data-c="langfuse" id="c-langfuse"
+         title="Observabilidad opcional. Habilitar con CB_LANGFUSE_ENABLED=true en .env">
+      <div class="ch">
+        <div class="ch-dot" style="background:#94a3b8;box-shadow:0 0 6px #94a3b888"></div>
+        <span class="ch-title">Langfuse</span>
+      </div>
+      <div class="card-sub" style="font-size:0.65rem">
+        Observabilidad LLM<br>
+        <span style="color:var(--c-langfuse);opacity:.7">CB_LANGFUSE_ENABLED=true</span>
+      </div>
+      <div class="metric"><span class="metric-label">token cost · por modelo y request</span></div>
+      <div class="metric"><span class="metric-label">latency · p50 / p99 por endpoint</span></div>
+      <div class="metric"><span class="metric-label">judge scores · evolución temporal</span></div>
+      <div class="metric"><span class="metric-label">cache hits · resolve_chargeback</span></div>
+      <div class="metric"><span class="metric-label">traces vinculados por operación</span></div>
+      <div class="metric"><span class="metric-label">resolve · judge · feedback linked</span></div>
+    </div>
+  </div>
+
+</div><!-- /wrap -->
+
+<!-- Legend -->
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#22d3ee"></div>Entrada</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#4a90d9"></div>n8n Orquestación</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#4ade80"></div>FastAPI Lógica</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#fb923c"></div>Qdrant Vector</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#f472b6"></div>SQLite Relacional</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#a78bfa"></div>Claude LLM</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#94a3b8"></div>Langfuse Obs.</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#f59e0b"></div>↺ Auto-mejora</div>
+</div>
+
+<footer class="ftr">
+  <span>CIRI Chargeback Agent &nbsp;·&nbsp; Architecture v2.0</span>
+  <span>n8n Explícito + FastAPI + Qdrant + SQLite + Claude Sonnet 4.6 + Langfuse</span>
+</footer>
+
+<script>
+(function () {
+  function pt(el, wrap) {
+    const r = el.getBoundingClientRect();
+    const w = wrap.getBoundingClientRect();
+    const sx = window.scrollX, sy = window.scrollY;
+    const cx = (r.left + r.right) / 2 - w.left;
+    const cy = (r.top + r.bottom) / 2 - w.top;
+    return {
+      cx, cy,
+      top:    { x: cx,      y: r.top - w.top },
+      bot:    { x: cx,      y: r.bottom - w.top },
+      left:   { x: r.left - w.left,  y: cy },
+      right:  { x: r.right - w.left, y: cy },
+      tl:     { x: r.left - w.left,  y: r.top - w.top },
+      bl:     { x: r.left - w.left,  y: r.bottom - w.top },
+      br:     { x: r.right - w.left, y: r.bottom - w.top },
+    };
+  }
+
+  function arrow(svg, d, color, markerId, cls) {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', cls === 'loop-line' ? '2.2' : '1.5');
+    p.setAttribute('fill', 'none');
+    p.setAttribute('opacity', cls === 'loop-line' ? '0.85' : '0.55');
+    p.setAttribute('marker-end', `url(#${markerId})`);
+    if (cls) p.setAttribute('class', cls);
+    svg.appendChild(p);
+  }
+
+  function label(svg, x, y, txt, color) {
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const len = txt.length * 6.2 + 8;
+    bg.setAttribute('x', x - 1); bg.setAttribute('y', y - 11);
+    bg.setAttribute('width', len); bg.setAttribute('height', 14);
+    bg.setAttribute('rx', 3); bg.setAttribute('fill', '#080c18');
+    bg.setAttribute('fill-opacity', '.9');
+    svg.appendChild(bg);
+
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', x + 3); t.setAttribute('y', y);
+    t.setAttribute('fill', color); t.setAttribute('font-size', '10');
+    t.setAttribute('font-family', "'Courier New', monospace");
+    t.setAttribute('opacity', '.85');
+    t.textContent = txt;
+    svg.appendChild(t);
+  }
+
+  function draw() {
+    const svg = document.getElementById('svg-overlay');
+    const wrap = document.getElementById('wrap');
+
+    // Clear non-defs children
+    Array.from(svg.children).forEach(c => { if (c.tagName !== 'defs') c.remove(); });
+
+    svg.setAttribute('width', wrap.scrollWidth);
+    svg.setAttribute('height', wrap.scrollHeight);
+
+    const E = pt(document.getElementById('c-entry'),   wrap);
+    const N = pt(document.getElementById('c-n8n'),     wrap);
+    const F = pt(document.getElementById('c-fastapi'), wrap);
+    const Q = pt(document.getElementById('c-qdrant'),  wrap);
+    const S = pt(document.getElementById('c-sqlite'),  wrap);
+    const C = pt(document.getElementById('c-claude'),  wrap);
+    const L = pt(document.getElementById('c-langfuse'),wrap);
+
+    // 1. Entry → N8N
+    const e2n_mid = (E.bot.y + N.top.y) / 2;
+    arrow(svg, `M ${E.bot.x} ${E.bot.y} L ${N.top.x} ${N.top.y}`,
+          '#22d3ee', 'a-cyan', 'flow-line');
+    label(svg, E.bot.x + 10, e2n_mid, 'POST /webhook', '#22d3ee');
+
+    // 2. N8N → FastAPI
+    const n2f_mid = (N.bot.y + F.top.y) / 2;
+    arrow(svg, `M ${N.bot.x} ${N.bot.y} L ${F.top.x} ${F.top.y}`,
+          '#4a90d9', 'a-blue', 'flow-line');
+    label(svg, N.bot.x + 10, n2f_mid, '9 HTTP tools · REST', '#4a90d9');
+
+    // 3. FastAPI → Qdrant (left branch)
+    const branchY = F.bot.y + 14;
+    arrow(svg,
+      `M ${F.cx} ${F.bot.y} L ${F.cx} ${branchY} L ${Q.cx} ${branchY} L ${Q.cx} ${Q.top.y}`,
+      '#fb923c', 'a-orange', 'flow-line');
+    label(svg, Q.cx - 50, branchY - 4, 'embed+search', '#fb923c');
+
+    // 4. FastAPI → SQLite (center branch)
+    arrow(svg,
+      `M ${F.cx} ${F.bot.y} L ${F.cx} ${branchY} L ${S.cx} ${branchY} L ${S.cx} ${S.top.y}`,
+      '#f472b6', 'a-pink', 'flow-line');
+    label(svg, S.cx + 6, branchY - 4, 'queries', '#f472b6');
+
+    // 5. FastAPI → Claude (right branch)
+    arrow(svg,
+      `M ${F.cx} ${F.bot.y} L ${F.cx} ${branchY} L ${C.cx} ${branchY} L ${C.cx} ${C.top.y}`,
+      '#a78bfa', 'a-purple', 'flow-line');
+    label(svg, C.cx - 30, branchY - 4, 'v1_* prompts', '#a78bfa');
+
+    // 6. FastAPI → Langfuse (right)
+    arrow(svg,
+      `M ${F.right.x} ${F.right.y} C ${F.right.x + 30} ${F.right.y} ${L.left.x - 30} ${L.left.y} ${L.left.x} ${L.left.y}`,
+      '#94a3b8', 'a-slate', 'flow-line');
+    label(svg, F.right.x + 20, F.right.y - 8, 'traces + scores', '#94a3b8');
+
+    // 7. Auto-improvement loop (amber) — feedback from FastAPI bottom-left curving to Qdrant left
+    const loopX = F.tl.x - 44;
+    arrow(svg,
+      `M ${F.bl.x} ${F.bl.y - 10}
+       C ${loopX - 10} ${F.bl.y + 20}
+         ${loopX - 10} ${Q.tl.y - 20}
+         ${Q.left.x} ${Q.left.y}`,
+      '#f59e0b', 'a-amber', 'loop-line');
+    label(svg, loopX - 108, (F.bl.y + Q.tl.y) / 2 + 4, '↺ auto-index score≥8', '#f59e0b');
+  }
+
+  function init() { setTimeout(draw, 120); }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else { init(); }
+
+  window.addEventListener('resize', () => {
+    clearTimeout(window._drawT);
+    window._drawT = setTimeout(draw, 80);
+  });
+})();
+</script>
+</body>
+</html>

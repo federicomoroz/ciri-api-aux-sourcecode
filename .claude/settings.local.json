@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python:*)",
+      "WebSearch",
+      "Bash(ls does:*)",
+      "Bash(python3:*)",
+      "Bash(PYTHONIOENCODING=utf-8 python3:*)",
+      "Bash(pip:*)",
+      "Bash(xargs wc:*)",
+      "Bash(node:*)",
+      "Bash(npm install:*)",
+      "Bash(n8n:*)",
+      "Bash(code:*)",
+      "Bash(wc:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker compose:*)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)"
+    ]
+  }
+}

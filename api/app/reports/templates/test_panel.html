@@ -1,0 +1,2057 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CIRI · Agente de Contracargos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ─────────────────────────────────────────────
+       RESET & BASE
+    ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #080c18;
+      --bg-mid:      #0d1321;
+      --bg-card:     rgba(255,255,255,0.033);
+      --bg-card-h:   rgba(255,255,255,0.055);
+      --border:      rgba(255,255,255,0.07);
+      --border-h:    rgba(255,255,255,0.14);
+
+      --text-primary:   #e8eaf0;
+      --text-secondary: #7b859e;
+      --text-muted:     #3e485a;
+
+      /* accent palette */
+      --red:    #ef4444;
+      --red-d:  #7f1d1d;
+      --red-g:  rgba(239,68,68,0.15);
+      --amber:  #f59e0b;
+      --amber-d:#78350f;
+      --amber-g:rgba(245,158,11,0.15);
+      --blue:   #3b82f6;
+      --blue-d: #1e3a8a;
+      --blue-g: rgba(59,130,246,0.15);
+      --green:  #22c55e;
+      --green-g:rgba(34,197,94,0.12);
+
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --font-head: 'Syne', system-ui, sans-serif;
+
+      --radius: 14px;
+      --radius-sm: 8px;
+      --radius-lg: 20px;
+
+      --glow-red:   0 0 28px rgba(239,68,68,0.35);
+      --glow-amber: 0 0 28px rgba(245,158,11,0.35);
+      --glow-blue:  0 0 28px rgba(59,130,246,0.35);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-mono);
+      background-color: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      /* dot-grid background */
+      background-image:
+        radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* ─────────────────────────────────────────────
+       NOISE OVERLAY (subtle film grain)
+    ───────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* ─────────────────────────────────────────────
+       LAYOUT SHELL
+    ───────────────────────────────────────────── */
+    .shell {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ─────────────────────────────────────────────
+       HEADER
+    ───────────────────────────────────────────── */
+    .site-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,12,24,0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo-block {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 15px;
+      color: #fff;
+      letter-spacing: -0.5px;
+      flex-shrink: 0;
+      box-shadow: 0 0 20px rgba(124,58,237,0.4);
+    }
+
+    .logo-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .logo-title {
+      font-family: var(--font-head);
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.3px;
+      line-height: 1;
+    }
+
+    .logo-sub {
+      font-size: 10px;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-dot {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      letter-spacing: 0.8px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .header-tag {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ─────────────────────────────────────────────
+       MAIN CONTENT
+    ───────────────────────────────────────────── */
+    .main-content {
+      flex: 1;
+      display: flex;
+      gap: 0;
+      padding: 28px 32px;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ─────────────────────────────────────────────
+       LEFT PANEL
+    ───────────────────────────────────────────── */
+    .left-panel {
+      width: 35%;
+      flex-shrink: 0;
+      padding-right: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .panel-label {
+      font-size: 10px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+
+    /* ─────────────────────────────────────────────
+       SCENARIO CARDS
+    ───────────────────────────────────────────── */
+    .scenario-card {
+      position: relative;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 16px 18px;
+      cursor: pointer;
+      transition: border-color 0.25s, background 0.25s, box-shadow 0.25s, transform 0.18s;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .scenario-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.3s;
+      border-radius: inherit;
+    }
+
+    .scenario-card:hover {
+      background: var(--bg-card-h);
+      transform: translateY(-1px);
+    }
+
+    .scenario-card.active {
+      border-width: 1px;
+      transform: translateY(-2px);
+    }
+
+    /* Red scenario */
+    .scenario-card[data-accent="red"]:hover,
+    .scenario-card[data-accent="red"].active {
+      border-color: var(--red);
+      box-shadow: var(--glow-red), inset 0 0 40px rgba(239,68,68,0.06);
+    }
+    .scenario-card[data-accent="red"]::before { background: var(--red-g); }
+    .scenario-card[data-accent="red"]:hover::before,
+    .scenario-card[data-accent="red"].active::before { opacity: 1; }
+
+    /* Amber scenario */
+    .scenario-card[data-accent="amber"]:hover,
+    .scenario-card[data-accent="amber"].active {
+      border-color: var(--amber);
+      box-shadow: var(--glow-amber), inset 0 0 40px rgba(245,158,11,0.06);
+    }
+    .scenario-card[data-accent="amber"]::before { background: var(--amber-g); }
+    .scenario-card[data-accent="amber"]:hover::before,
+    .scenario-card[data-accent="amber"].active::before { opacity: 1; }
+
+    /* Blue scenario */
+    .scenario-card[data-accent="blue"]:hover,
+    .scenario-card[data-accent="blue"].active {
+      border-color: var(--blue);
+      box-shadow: var(--glow-blue), inset 0 0 40px rgba(59,130,246,0.06);
+    }
+    .scenario-card[data-accent="blue"]::before { background: var(--blue-g); }
+    .scenario-card[data-accent="blue"]:hover::before,
+    .scenario-card[data-accent="blue"].active::before { opacity: 1; }
+
+    .scenario-inner { position: relative; z-index: 1; }
+
+    .scenario-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .scenario-badge {
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 99px;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+
+    .badge-red   { color: var(--red);   border-color: rgba(239,68,68,0.5);   background: rgba(239,68,68,0.1);   }
+    .badge-amber { color: var(--amber); border-color: rgba(245,158,11,0.5);  background: rgba(245,158,11,0.1);  }
+    .badge-blue  { color: var(--blue);  border-color: rgba(59,130,246,0.5);  background: rgba(59,130,246,0.1);  }
+
+    .result-tag {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 4px;
+      opacity: 0.75;
+    }
+
+    .tag-red   { background: var(--red-d);   color: #fca5a5; }
+    .tag-amber { background: var(--amber-d); color: #fcd34d; }
+    .tag-blue  { background: var(--blue-d);  color: #93c5fd; }
+
+    .scenario-txn {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+      letter-spacing: -0.3px;
+    }
+
+    .scenario-motivo {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+
+    .scenario-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .meta-chip {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    /* Active indicator line */
+    .scenario-card.active::after {
+      content: '';
+      position: absolute;
+      left: 0; top: 12px; bottom: 12px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+    }
+    .scenario-card[data-accent="red"].active::after   { background: var(--red); }
+    .scenario-card[data-accent="amber"].active::after { background: var(--amber); }
+    .scenario-card[data-accent="blue"].active::after  { background: var(--blue); }
+
+    /* ─────────────────────────────────────────────
+       CUSTOM FORM
+    ───────────────────────────────────────────── */
+    .form-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 18px;
+    }
+
+    .form-title {
+      font-size: 11px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .form-input,
+    .form-textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+      border-color: rgba(99,102,241,0.6);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 72px;
+      line-height: 1.5;
+    }
+
+    .form-input::placeholder,
+    .form-textarea::placeholder { color: var(--text-muted); }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      cursor: pointer;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--amber);
+      cursor: pointer;
+    }
+
+    .checkbox-label {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    /* ─────────────────────────────────────────────
+       SUBMIT BUTTON
+    ───────────────────────────────────────────── */
+    .btn-analyze {
+      width: 100%;
+      padding: 13px 20px;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+      color: #fff;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 4px 20px rgba(37,99,235,0.35);
+    }
+
+    .btn-analyze:hover:not(:disabled) {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 28px rgba(37,99,235,0.5);
+    }
+
+    .btn-analyze:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-analyze:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-analyze.loading {
+      animation: btn-pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes btn-pulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(37,99,235,0.35); }
+      50%       { box-shadow: 0 4px 32px rgba(124,58,237,0.65), 0 0 0 4px rgba(124,58,237,0.12); }
+    }
+
+    .btn-shimmer {
+      position: absolute;
+      top: 0; left: -100%;
+      width: 60%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+      animation: shimmer 2.5s ease-in-out infinite;
+    }
+
+    @keyframes shimmer {
+      0%   { left: -60%; }
+      100% { left: 160%; }
+    }
+
+    .btn-text { position: relative; z-index: 1; }
+
+    /* ─────────────────────────────────────────────
+       RIGHT PANEL
+    ───────────────────────────────────────────── */
+    .right-panel {
+      flex: 1;
+      min-width: 0;
+      border-left: 1px solid var(--border);
+      padding-left: 28px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .right-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .right-title {
+      font-family: var(--font-head);
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: 0.2px;
+    }
+
+    .meta-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .meta-item {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .elapsed-badge {
+      font-size: 10px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: var(--green-g);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: var(--green);
+      display: none;
+    }
+
+    .elapsed-badge.visible { display: inline-block; }
+
+    /* ─────────────────────────────────────────────
+       IDLE STATE
+    ───────────────────────────────────────────── */
+    .idle-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      border-radius: var(--radius-lg);
+      border: 1px dashed var(--border);
+      min-height: 480px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .idle-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: rgba(37,99,235,0.08);
+      border: 1px solid rgba(37,99,235,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .idle-icon svg { opacity: 0.4; }
+
+    .idle-title {
+      font-family: var(--font-head);
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .idle-sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      max-width: 380px;
+      line-height: 1.7;
+    }
+
+    .idle-hint {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      opacity: 0.6;
+      letter-spacing: 0.5px;
+    }
+
+    /* ─────────────────────────────────────────────
+       LOADING STEPS
+    ───────────────────────────────────────────── */
+    .loading-state {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 28px 32px;
+      min-height: 480px;
+    }
+
+    .loading-state.visible { display: flex; }
+
+    .loading-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(99,102,241,0.2);
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-headline {
+      font-family: var(--font-head);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .loading-subline {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex: 1;
+    }
+
+    .step-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 11px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.035);
+      opacity: 0.28;
+      transition: opacity 0.4s;
+    }
+
+    .step-row:last-child { border-bottom: none; }
+
+    .step-row.done    { opacity: 1; }
+    .step-row.active  { opacity: 1; }
+    .step-row.pending { opacity: 0.28; }
+
+    .step-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 12px;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .step-row.pending .step-icon {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+    }
+
+    .step-row.active .step-icon {
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.4);
+      animation: icon-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes icon-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0.3); }
+      50%       { box-shadow: 0 0 0 5px rgba(99,102,241,0); }
+    }
+
+    .step-row.done .step-icon {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.35);
+    }
+
+    .step-row.done   .step-icon::after { content: '✓'; color: var(--green); font-weight: 700; }
+    .step-row.active .step-icon::after { content: ''; display: block; width: 10px; height: 10px; border-radius: 50%; background: #6366f1; animation: dot-blink 0.9s ease-in-out infinite; }
+    .step-row.pending .step-icon::after { content: '·'; color: var(--text-muted); font-size: 18px; line-height: 1; }
+
+    @keyframes dot-blink {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.3; transform: scale(0.6); }
+    }
+
+    .step-content { flex: 1; }
+
+    .step-label {
+      font-size: 12.5px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .step-row.pending .step-label { color: var(--text-muted); }
+
+    .step-detail {
+      font-size: 10.5px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .step-row.pending .step-detail { display: none; }
+
+    .step-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      min-width: 44px;
+      text-align: right;
+    }
+
+    /* Progress bar */
+    .progress-track {
+      height: 2px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 2px;
+      margin: 16px 0 20px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2563eb, #7c3aed);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+      box-shadow: 0 0 8px rgba(99,102,241,0.6);
+    }
+
+    /* ─────────────────────────────────────────────
+       RESULT IFRAME
+    ───────────────────────────────────────────── */
+    .result-state {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .result-state.visible { display: flex; }
+
+    .result-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .result-verdict {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .verdict-pill {
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 99px;
+    }
+
+    .verdict-blocker { background: rgba(239,68,68,0.15); color: var(--red);   border: 1px solid rgba(239,68,68,0.35);  }
+    .verdict-hitl    { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+    .verdict-warning { background: rgba(59,130,246,0.15);  color: var(--blue);  border: 1px solid rgba(59,130,246,0.35); }
+    .verdict-ok      { background: rgba(34,197,94,0.12);   color: var(--green); border: 1px solid rgba(34,197,94,0.3);  }
+
+    .result-meta-text {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .btn-reset {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      padding: 5px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      letter-spacing: 0.8px;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .btn-reset:hover {
+      background: rgba(255,255,255,0.06);
+      color: var(--text-primary);
+    }
+
+    .report-iframe {
+      flex: 1;
+      width: 100%;
+      min-height: 560px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #fff;
+      display: block;
+    }
+
+    /* ─────────────────────────────────────────────
+       ERROR STATE
+    ───────────────────────────────────────────── */
+    .error-state {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .error-state.visible { display: flex; }
+
+    .error-banner {
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(239,68,68,0.35);
+      background: rgba(239,68,68,0.08);
+      padding: 14px 16px;
+    }
+
+    .error-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--red);
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .error-msg {
+      font-size: 11.5px;
+      color: #fca5a5;
+      line-height: 1.6;
+    }
+
+    .amber-banner {
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(245,158,11,0.35);
+      background: rgba(245,158,11,0.08);
+      padding: 10px 14px;
+      font-size: 11px;
+      color: var(--amber);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .amber-banner svg { flex-shrink: 0; }
+
+    /* ─────────────────────────────────────────────
+       TOAST
+    ───────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      min-width: 280px;
+      max-width: 400px;
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      animation: toast-in 0.3s ease;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .toast-error {
+      background: rgba(30,8,8,0.9);
+      border: 1px solid rgba(239,68,68,0.45);
+      color: #fca5a5;
+    }
+
+    .toast-amber {
+      background: rgba(30,22,8,0.9);
+      border: 1px solid rgba(245,158,11,0.45);
+      color: #fcd34d;
+    }
+
+    .toast-icon { flex-shrink: 0; margin-top: 1px; }
+    .toast-body { flex: 1; }
+    .toast-title { font-weight: 600; margin-bottom: 3px; }
+    .toast-text  { font-size: 11px; opacity: 0.85; line-height: 1.5; }
+
+    /* ─────────────────────────────────────────────
+       FOOTER
+    ───────────────────────────────────────────── */
+    .site-footer {
+      border-top: 1px solid var(--border);
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .footer-text {
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 16px;
+    }
+
+    .footer-link {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-decoration: none;
+      opacity: 0.7;
+      transition: opacity 0.2s, color 0.2s;
+      letter-spacing: 0.5px;
+    }
+
+    .footer-link:hover {
+      opacity: 1;
+      color: var(--text-secondary);
+    }
+
+    /* ─────────────────────────────────────────────
+       DIVIDER / LABEL HELPERS
+    ───────────────────────────────────────────── */
+    .section-gap { margin-top: 6px; }
+    .panel-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 18px 0 16px;
+    }
+
+    /* ─────────────────────────────────────────────
+       FORM SELECT (new)
+    ───────────────────────────────────────────── */
+    .form-select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 9px 32px 9px 12px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%237b859e' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      cursor: pointer;
+    }
+    .form-select:focus {
+      border-color: rgba(99,102,241,0.6);
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    }
+    .form-select option {
+      background: #0d1321;
+      color: var(--text-primary);
+    }
+    .form-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+
+    /* ─────────────────────────────────────────────
+       TXN PREVIEW CARD (new)
+    ───────────────────────────────────────────── */
+    .txn-preview {
+      background: rgba(255,255,255,0.025);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+    .txn-preview-row {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .txn-preview-key {
+      font-size: 9px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .txn-preview-val {
+      font-size: 12px;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+    }
+    .score-high   { color: var(--red); }
+    .score-medium { color: var(--amber); }
+    .score-low    { color: var(--green); }
+
+    /* ─────────────────────────────────────────────
+       VIP TOGGLE (new)
+    ───────────────────────────────────────────── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .toggle-row input[type="checkbox"] { display: none; }
+    .toggle-track {
+      width: 34px;
+      height: 18px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      position: relative;
+      flex-shrink: 0;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .toggle-thumb {
+      width: 12px;
+      height: 12px;
+      background: var(--text-muted);
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle-row input:checked ~ .toggle-track { background: rgba(245,158,11,0.25); border-color: var(--amber); }
+    .toggle-row input:checked ~ .toggle-track .toggle-thumb { transform: translateX(16px); background: var(--amber); }
+    .toggle-label { font-size: 12px; color: var(--text-secondary); }
+
+    /* ─────────────────────────────────────────────
+       HEALTH STATUS (new)
+    ───────────────────────────────────────────── */
+    .health-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .health-chip {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+      transition: color 0.3s, border-color 0.3s;
+    }
+    .health-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    .health-chip.ok   { color: var(--green); border-color: rgba(34,197,94,0.35); }
+    .health-chip.ok   .health-dot { background: var(--green); }
+    .health-chip.warn { color: var(--amber); border-color: rgba(245,158,11,0.35); }
+    .health-chip.warn .health-dot { background: var(--amber); }
+    .health-chip.err  { color: var(--red);   border-color: rgba(239,68,68,0.35); }
+    .health-chip.err  .health-dot { background: var(--red); }
+
+    /* ─────────────────────────────────────────────
+       SESSION HISTORY (new)
+    ───────────────────────────────────────────── */
+    .history-list { display: flex; flex-direction: column; gap: 6px; }
+    .history-empty {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 12px 0;
+    }
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .history-item:hover { border-color: var(--border-h); background: var(--bg-card-h); }
+    .history-badge {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    .hist-BLOCKER { background: rgba(239,68,68,0.15); color: var(--red); }
+    .hist-HIGH    { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .hist-MEDIUM  { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .hist-LOW     { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .hist-ERR     { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+    .history-info { flex: 1; min-width: 0; }
+    .history-txn  { font-size: 11.5px; color: var(--text-primary); font-family: var(--font-mono); }
+    .history-meta { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+
+    /* ─────────────────────────────────────────────
+       RESPONSIVE
+    ───────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      .main-content {
+        flex-direction: column;
+        padding: 20px 16px;
+        gap: 24px;
+      }
+
+      .left-panel {
+        width: 100%;
+        padding-right: 0;
+      }
+
+      .right-panel {
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding-left: 0;
+        padding-top: 24px;
+      }
+
+      .site-header { padding: 14px 16px; }
+      .site-footer { padding: 10px 16px; }
+    }
+
+    @media (max-width: 580px) {
+      .header-tag { display: none; }
+      .logo-sub   { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ═══════════════════════════════════════════
+       HEADER
+  ════════════════════════════════════════════ -->
+  <header class="site-header">
+    <div class="logo-block">
+      <div class="logo-icon">CI</div>
+      <div class="logo-text">
+        <span class="logo-title">CIRI · Agente de Contracargos</span>
+        <span class="logo-sub">Continuous Improvement &amp; Risk Intelligence</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="health-bar">
+        <span class="health-chip" id="hc-fastapi"><span class="health-dot"></span>FastAPI</span>
+        <span class="health-chip" id="hc-sqlite"><span class="health-dot"></span>SQLite</span>
+        <span class="health-chip" id="hc-qdrant"><span class="health-dot"></span>Qdrant</span>
+        <span class="health-chip" id="hc-n8n"><span class="health-dot"></span>n8n</span>
+      </div>
+      <span class="header-tag">v2.0 · Test Panel</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════
+       MAIN
+  ════════════════════════════════════════════ -->
+  <div class="main-content">
+
+    <!-- ─────────────── LEFT PANEL ─────────────── -->
+    <aside class="left-panel">
+
+      <!-- Scenarios -->
+      <p class="panel-label">Escenarios de prueba</p>
+
+      <!-- BLOCKER: Red -->
+      <div class="scenario-card" data-accent="red" data-idx="0" onclick="selectScenario(0)">
+        <div class="scenario-inner">
+          <div class="scenario-header">
+            <span class="scenario-badge badge-red">Blocker</span>
+            <span class="result-tag tag-red">AUTO-RECHAZADA</span>
+          </div>
+          <p class="scenario-txn">TXN-00051</p>
+          <p class="scenario-motivo">No reconoce la compra</p>
+          <div class="scenario-meta">
+            <span class="meta-chip">Cripto</span>
+            <span class="meta-chip">Score fraude 8</span>
+            <span class="meta-chip">POL-FRD-001 FAIL</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- HITL: Amber -->
+      <div class="scenario-card" data-accent="amber" data-idx="1" onclick="selectScenario(1)">
+        <div class="scenario-inner">
+          <div class="scenario-header">
+            <span class="scenario-badge badge-amber">HITL</span>
+            <span class="result-tag tag-amber">REVISION HUMANA</span>
+          </div>
+          <p class="scenario-txn">TXN-00042</p>
+          <p class="scenario-motivo">Fraude con tarjeta robada</p>
+          <div class="scenario-meta">
+            <span class="meta-chip">Tarjeta credito</span>
+            <span class="meta-chip">Score 4</span>
+            <span class="meta-chip">Cliente VIP</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- WARNING: Blue -->
+      <div class="scenario-card" data-accent="blue" data-idx="2" onclick="selectScenario(2)">
+        <div class="scenario-inner">
+          <div class="scenario-header">
+            <span class="scenario-badge badge-blue">Warning SLA</span>
+            <span class="result-tag tag-blue">ALERTA SLA</span>
+          </div>
+          <p class="scenario-txn">TXN-00089</p>
+          <p class="scenario-motivo">Cargo duplicado</p>
+          <div class="scenario-meta">
+            <span class="meta-chip">Booking.com</span>
+            <span class="meta-chip">Score 8</span>
+            <span class="meta-chip">USA · no-LATAM</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom form -->
+      <hr class="panel-divider"/>
+      <div class="form-card">
+        <p class="form-title">Consulta personalizada</p>
+
+        <!-- TXN dropdown -->
+        <div class="form-group">
+          <label class="form-label" for="sel-txn">Transacción</label>
+          <select class="form-select" id="sel-txn" onchange="onTxnSelect()">
+            <option value="">Cargando transacciones...</option>
+          </select>
+          <!-- Preview card shown once a TXN is selected -->
+          <div class="txn-preview" id="txn-preview" style="display:none">
+            <div class="txn-preview-row">
+              <span class="txn-preview-key">Comercio</span>
+              <span class="txn-preview-val" id="pv-merchant">—</span>
+            </div>
+            <div class="txn-preview-row">
+              <span class="txn-preview-key">Monto</span>
+              <span class="txn-preview-val" id="pv-amount">—</span>
+            </div>
+            <div class="txn-preview-row">
+              <span class="txn-preview-key">País · Canal</span>
+              <span class="txn-preview-val" id="pv-country">—</span>
+            </div>
+            <div class="txn-preview-row">
+              <span class="txn-preview-key">Score fraude</span>
+              <span class="txn-preview-val" id="pv-score">—</span>
+            </div>
+            <div class="txn-preview-row">
+              <span class="txn-preview-key">Método pago</span>
+              <span class="txn-preview-val" id="pv-method">—</span>
+            </div>
+            <div class="txn-preview-row">
+              <span class="txn-preview-key">Estado</span>
+              <span class="txn-preview-val" id="pv-status">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Motivo dropdown -->
+        <div class="form-group">
+          <label class="form-label" for="sel-motivo">Motivo del contracargo</label>
+          <select class="form-select" id="sel-motivo" onchange="onMotivoSelect()">
+            <option value="No reconoce la compra">No reconoce la compra</option>
+            <option value="Fraude con tarjeta">Fraude con tarjeta</option>
+            <option value="Cargo duplicado">Cargo duplicado</option>
+            <option value="Servicio no prestado">Servicio no prestado</option>
+            <option value="Producto no recibido">Producto no recibido</option>
+            <option value="Monto incorrecto">Monto incorrecto</option>
+            <option value="Cancelación no procesada">Cancelación no procesada</option>
+            <option value="Dispositivo comprometido">Dispositivo comprometido</option>
+            <option value="__custom__">── Motivo personalizado ──</option>
+          </select>
+          <input
+            class="form-input"
+            id="inp-motivo-custom"
+            type="text"
+            placeholder="Describir motivo..."
+            style="display:none;margin-top:8px"
+            oninput="onCustomFormChange()"
+          />
+        </div>
+
+        <!-- VIP toggle -->
+        <div class="form-group" style="margin-bottom:0">
+          <label class="toggle-row" for="inp-vip">
+            <input type="checkbox" id="inp-vip" onchange="onCustomFormChange()" />
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-label">Cliente VIP</span>
+          </label>
+          <p class="form-hint">Activa revisión HITL cuando riesgo es HIGH</p>
+        </div>
+      </div>
+
+      <!-- Submit -->
+      <button class="btn-analyze" id="btn-submit" onclick="submitAnalysis()" disabled>
+        <span class="btn-shimmer"></span>
+        <span class="btn-text" id="btn-label">Seleccionar escenario</span>
+      </button>
+
+      <!-- Session history -->
+      <hr class="panel-divider"/>
+      <p class="panel-label">Historial de sesión</p>
+      <div class="history-list" id="history-list">
+        <p class="history-empty" id="history-empty">Sin consultas aún.</p>
+      </div>
+
+    </aside>
+
+    <!-- ─────────────── RIGHT PANEL ─────────────── -->
+    <section class="right-panel">
+      <div class="right-header">
+        <div>
+          <p class="right-title">Panel de resultados</p>
+        </div>
+        <div class="meta-bar">
+          <span class="meta-item" id="meta-txn-id">—</span>
+          <span class="elapsed-badge" id="elapsed-badge"></span>
+        </div>
+      </div>
+
+      <!-- Idle -->
+      <div class="idle-state" id="idle-state">
+        <div class="idle-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+        </div>
+        <p class="idle-title">Sin caso activo</p>
+        <p class="idle-sub">
+          Selecciona uno de los escenarios predefinidos o ingresa un ID
+          de transaccion personalizado para ejecutar el agente.
+        </p>
+        <p class="idle-hint">Pipeline: n8n AI Agent → FastAPI Tools → Qdrant + SQLite → LLM</p>
+      </div>
+
+      <!-- Loading -->
+      <div class="loading-state" id="loading-state">
+        <div class="loading-header">
+          <div class="loading-spinner"></div>
+          <div>
+            <p class="loading-headline">Agente ejecutando pipeline...</p>
+            <p class="loading-subline" id="loading-subline">Inicializando · <span id="timer-display">0s</span></p>
+          </div>
+        </div>
+
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+
+        <div class="steps-list" id="steps-list">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="result-state" id="result-state">
+        <div class="result-toolbar">
+          <div class="result-verdict">
+            <span class="verdict-pill" id="verdict-pill">—</span>
+            <span class="result-meta-text" id="result-meta-text"></span>
+          </div>
+          <button class="btn-reset" onclick="resetPanel()">Nueva consulta</button>
+        </div>
+        <iframe
+          class="report-iframe"
+          id="report-frame"
+          title="Reporte de contracargo"
+          sandbox="allow-same-origin allow-scripts"
+        ></iframe>
+      </div>
+
+      <!-- Error -->
+      <div class="error-state" id="error-state">
+        <div class="error-banner">
+          <p class="error-title">Error en el pipeline</p>
+          <p class="error-msg" id="error-msg-text">—</p>
+        </div>
+        <div class="amber-banner" id="fallback-banner" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          n8n no disponible — ejecutando pipeline directo via FastAPI
+        </div>
+        <button class="btn-reset" onclick="resetPanel()">Reintentar</button>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <span class="footer-text">CIRI Chargeback Agent · Test Panel · n8n :5678 → FastAPI :8000</span>
+    <div class="footer-links">
+      <a class="footer-link" href="/docs" target="_blank">API Docs</a>
+      <a class="footer-link" href="/health" target="_blank">Health</a>
+      <a class="footer-link" href="http://localhost:5678" target="_blank">n8n UI</a>
+    </div>
+  </footer>
+
+</div><!-- /shell -->
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   CIRI TEST PANEL — vanilla JS
+══════════════════════════════════════════════════════════ */
+
+// Detecta si se abre como archivo estático (file://) o desde el servidor.
+// Cuando se abre como archivo: las rutas deben apuntar a http://localhost:8000.
+// Cuando se sirve desde FastAPI en :8000: rutas relativas funcionan igual.
+const API_BASE = window.location.protocol === 'file:'
+  ? 'http://localhost:8000'
+  : '';
+
+// ─── SCENARIOS ────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    transaction_id: 'TXN-00051',
+    motivo:         'No reconoce la compra',
+    cliente_vip:    false,
+    label:          'TXN-00051 · BLOCKER',
+    accentClass:    'verdict-blocker',
+    verdictLabel:   'AUTO-RECHAZADA',
+  },
+  {
+    transaction_id: 'TXN-00042',
+    motivo:         'Fraude con tarjeta robada',
+    cliente_vip:    true,
+    label:          'TXN-00042 · HITL',
+    accentClass:    'verdict-hitl',
+    verdictLabel:   'REVISION HUMANA',
+  },
+  {
+    transaction_id: 'TXN-00089',
+    motivo:         'Cargo duplicado',
+    cliente_vip:    false,
+    label:          'TXN-00089 · WARNING SLA',
+    accentClass:    'verdict-warning',
+    verdictLabel:   'ALERTA SLA',
+  },
+];
+
+// ─── LOADING STEPS ────────────────────────────────────────
+const STEPS = [
+  { label: 'Identificando transaccion...',              detail: 'GET /api/transactions/{id} → SQLite',                       icon: 'db',    delay: 0   },
+  { label: 'Recuperando logs de eventos...',            detail: 'GET /api/logs/{tx_id} → historial completo',                icon: 'log',   delay: 3200 },
+  { label: 'Buscando politicas aplicables en RAG...',   detail: 'GET /api/policies/search → Qdrant vector search',           icon: 'rag',   delay: 6400 },
+  { label: 'Recuperando casos precedentes similares...', detail: 'GET /api/cases/similar → embeddings paraphrase-MiniLM',   icon: 'cases', delay: 9600 },
+  { label: 'Evaluando perfil de riesgo del comercio...', detail: 'GET /api/merchants/{name}/risk → CB ratio + flags',        icon: 'merch', delay: 12800 },
+  { label: 'Verificando SLA...',                        detail: 'POST /api/sla/check → LATAM 10d / no-LATAM 15d',           icon: 'sla',   delay: 16000 },
+  { label: 'Sintetizando resolucion con LLM...',        detail: 'POST /api/analyze/resolve → Claude Sonnet 4.6 · T=0.3',   icon: 'llm',   delay: 19200 },
+  { label: 'Ejecutando juez de calidad...',             detail: 'POST /api/analyze/judge → LLM-as-Judge · 5 criterios',     icon: 'judge', delay: 22400 },
+  { label: 'Generando informe final...',                detail: 'POST /api/reports/html → Jinja2 template render',          icon: 'rep',   delay: 25600 },
+];
+
+// ─── STATE ────────────────────────────────────────────────
+let selectedIdx    = null;   // 0-2 for preset scenarios
+let isCustom       = false;  // true when using the custom form
+let abortCtrl      = null;
+let timerInterval  = null;
+let stepTimers     = [];
+let startTime      = null;
+let allTransactions = [];    // populated from /api/transactions
+
+// ─── DOM REFS ─────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+// ─── LOAD TRANSACTIONS (dropdown) ─────────────────────────
+async function loadTransactions() {
+  try {
+    const r    = await fetch(API_BASE + '/api/transactions');
+    const data = await r.json();
+    allTransactions = data.transactions || [];
+
+    const sel = $('sel-txn');
+    sel.innerHTML = '<option value="">— Seleccionar transacción —</option>';
+    allTransactions.forEach(tx => {
+      const score  = tx.fraud_score;
+      const flag   = score >= 7 ? '🔴' : score >= 4 ? '🟡' : '🟢';
+      const opt    = document.createElement('option');
+      opt.value    = tx.id;
+      opt.textContent = `${tx.id} · ${tx.merchant} · $${Number(tx.amount_usd).toFixed(0)} · ${tx.country} · Score ${score} ${flag}`;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    const sel = $('sel-txn');
+    sel.innerHTML = '<option value="">Error cargando transacciones</option>';
+  }
+}
+
+function onTxnSelect() {
+  const txnId = $('sel-txn').value;
+  if (!txnId) {
+    $('txn-preview').style.display = 'none';
+    deactivateCustom();
+    return;
+  }
+
+  // Show preview card
+  const tx = allTransactions.find(t => t.id === txnId);
+  if (tx) {
+    $('pv-merchant').textContent = tx.merchant;
+    $('pv-amount').textContent   = `$${Number(tx.amount_usd).toFixed(2)} USD`;
+    $('pv-country').textContent  = `${tx.country} · ${tx.channel}`;
+    const score = tx.fraud_score;
+    const scoreEl = $('pv-score');
+    scoreEl.textContent = score + '/10';
+    scoreEl.className   = 'txn-preview-val ' + (score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low');
+    $('pv-method').textContent = tx.payment_method;
+    $('pv-status').textContent = tx.status;
+    $('txn-preview').style.display = 'grid';
+  }
+
+  // Deselect preset cards
+  document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
+  selectedIdx = null;
+  isCustom    = true;
+  refreshSubmitBtn();
+}
+
+function onMotivoSelect() {
+  const val = $('sel-motivo').value;
+  const customInput = $('inp-motivo-custom');
+  customInput.style.display = val === '__custom__' ? 'block' : 'none';
+  if (val !== '__custom__') customInput.value = '';
+  onCustomFormChange();
+}
+
+function onCustomFormChange() {
+  const txnId = $('sel-txn').value;
+  if (txnId) {
+    isCustom = true;
+    refreshSubmitBtn();
+  }
+}
+
+function deactivateCustom() {
+  isCustom = false;
+  if (selectedIdx === null) disableSubmit('Seleccionar escenario');
+}
+
+function refreshSubmitBtn() {
+  const txnId   = $('sel-txn').value;
+  const motivoSel = $('sel-motivo').value;
+  const motivo  = motivoSel === '__custom__' ? $('inp-motivo-custom').value.trim() : motivoSel;
+  if (txnId && motivo) {
+    enableSubmit(txnId + ' · custom');
+  } else if (txnId) {
+    disableSubmit('Seleccionar motivo');
+  } else {
+    disableSubmit('Seleccionar transacción');
+  }
+}
+
+// ─── SCENARIO SELECTION ───────────────────────────────────
+function selectScenario(idx) {
+  selectedIdx = idx;
+  isCustom    = false;
+
+  // Deselect custom form
+  $('sel-txn').value = '';
+  $('txn-preview').style.display = 'none';
+
+  // Update card UI
+  document.querySelectorAll('.scenario-card').forEach((c, i) => {
+    c.classList.toggle('active', i === idx);
+  });
+
+  enableSubmit(SCENARIOS[idx].label);
+}
+
+function enableSubmit(label) {
+  const btn = $('btn-submit');
+  btn.disabled = false;
+  $('btn-label').textContent = 'Analizar · ' + label;
+  btn.classList.remove('loading');
+}
+
+function disableSubmit(label) {
+  const btn = $('btn-submit');
+  btn.disabled = true;
+  $('btn-label').textContent = label || 'Seleccionar escenario';
+}
+
+// ─── SUBMIT ───────────────────────────────────────────────
+async function submitAnalysis() {
+  let payload;
+
+  if (isCustom) {
+    const txnId     = $('sel-txn').value.trim();
+    const motivoSel = $('sel-motivo').value;
+    const motivo    = motivoSel === '__custom__' ? $('inp-motivo-custom').value.trim() : motivoSel;
+    if (!txnId || !motivo) return;
+    payload = { transaction_id: txnId, motivo, cliente_vip: $('inp-vip').checked };
+  } else if (selectedIdx !== null) {
+    const s = SCENARIOS[selectedIdx];
+    payload = { transaction_id: s.transaction_id, motivo: s.motivo, cliente_vip: s.cliente_vip };
+  } else {
+    return;
+  }
+
+  startAnalysis(payload);
+}
+
+// ─── ANALYSIS PIPELINE ────────────────────────────────────
+async function startAnalysis(payload) {
+  // UI reset to loading
+  showPanel('loading');
+  $('btn-submit').disabled = true;
+  $('btn-submit').classList.add('loading');
+  $('btn-label').textContent = 'Procesando...';
+  $('meta-txn-id').textContent = payload.transaction_id;
+  $('elapsed-badge').classList.remove('visible');
+
+  // Build steps DOM
+  buildStepsDom();
+
+  // Start elapsed timer
+  startTime = Date.now();
+  updateTimer();
+  timerInterval = setInterval(updateTimer, 500);
+
+  // Schedule step animations
+  scheduleSteps();
+
+  // Abort controller
+  abortCtrl = new AbortController();
+
+  try {
+    const resp = await fetch(API_BASE + '/api/panel/analyze', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+      signal:  abortCtrl.signal,
+    });
+
+    clearStepTimers();
+    stopTimer();
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const contentType = resp.headers.get('content-type') || '';
+    const body        = await resp.text();
+
+    if (!body || body.trim() === '') {
+      throw new Error('El pipeline devolvio una respuesta vacia.');
+    }
+
+    // Finish all steps visually
+    finishAllSteps();
+
+    // Show result
+    showResult(body, payload, elapsed);
+
+  } catch (err) {
+    clearStepTimers();
+    stopTimer();
+
+    if (err.name === 'AbortError') return;
+
+    const isNetwork = err.message.toLowerCase().includes('fetch') ||
+                      err.message.toLowerCase().includes('network') ||
+                      err.message.toLowerCase().includes('failed');
+
+    showError(err.message, isNetwork);
+    showToast(isNetwork ? 'amber' : 'error',
+              isNetwork ? 'n8n no disponible' : 'Error en el pipeline',
+              err.message);
+  }
+
+  $('btn-submit').disabled = false;
+  $('btn-submit').classList.remove('loading');
+  $('btn-label').textContent = 'Analizar · ' + (isCustom ? $('inp-txn').value : SCENARIOS[selectedIdx]?.label || '?');
+}
+
+// ─── STEP ANIMATION ───────────────────────────────────────
+function buildStepsDom() {
+  const list = $('steps-list');
+  list.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const row = document.createElement('div');
+    row.className = 'step-row pending';
+    row.id        = 'step-' + i;
+    row.innerHTML = `
+      <div class="step-icon"></div>
+      <div class="step-content">
+        <p class="step-label">${s.label}</p>
+        <p class="step-detail">${s.detail}</p>
+      </div>
+      <span class="step-time" id="step-time-${i}"></span>
+    `;
+    list.appendChild(row);
+  });
+  updateProgress(0);
+}
+
+function scheduleSteps() {
+  clearStepTimers();
+  STEPS.forEach((s, i) => {
+    const t = setTimeout(() => {
+      // Mark previous step done
+      if (i > 0) markStep(i - 1, 'done');
+      markStep(i, 'active');
+      updateProgress(Math.round((i / STEPS.length) * 90));
+      $('loading-subline').innerHTML = s.label.replace('...', '') +
+        ' · <span id="timer-display">' + elapsed() + 's</span>';
+    }, s.delay);
+    stepTimers.push(t);
+  });
+}
+
+function clearStepTimers() {
+  stepTimers.forEach(clearTimeout);
+  stepTimers = [];
+}
+
+function markStep(idx, state) {
+  const row = $('step-' + idx);
+  if (!row) return;
+  row.className = 'step-row ' + state;
+  if (state === 'done') {
+    $('step-time-' + idx).textContent = elapsed() + 's';
+  }
+}
+
+function finishAllSteps() {
+  STEPS.forEach((_, i) => markStep(i, 'done'));
+  updateProgress(100);
+}
+
+function updateProgress(pct) {
+  $('progress-fill').style.width = pct + '%';
+}
+
+// ─── TIMER ────────────────────────────────────────────────
+function elapsed() {
+  return ((Date.now() - startTime) / 1000).toFixed(1);
+}
+
+function updateTimer() {
+  const el = document.getElementById('timer-display');
+  if (el) el.textContent = elapsed() + 's';
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+// ─── PANEL VISIBILITY ─────────────────────────────────────
+function showPanel(which) {
+  $('idle-state').style.display    = which === 'idle'    ? '' : 'none';
+  $('loading-state').className     = 'loading-state'    + (which === 'loading' ? ' visible' : '');
+  $('result-state').className      = 'result-state'     + (which === 'result'  ? ' visible' : '');
+  $('error-state').className       = 'error-state'      + (which === 'error'   ? ' visible' : '');
+}
+
+function showResult(html, payload, elapsed) {
+  showPanel('result');
+
+  // Pick verdict styling based on scenario or generic
+  let accentClass  = 'verdict-ok';
+  let verdictLabel = 'PROCESADA';
+
+  if (!isCustom && selectedIdx !== null && selectedIdx < 3) {
+    accentClass  = SCENARIOS[selectedIdx].accentClass;
+    verdictLabel = SCENARIOS[selectedIdx].verdictLabel;
+  }
+
+  const pill = $('verdict-pill');
+  pill.className   = 'verdict-pill ' + accentClass;
+  pill.textContent = verdictLabel;
+
+  $('result-meta-text').textContent =
+    payload.transaction_id + (payload.cliente_vip ? ' · VIP' : '') + ' · ' + elapsed + 's';
+
+  const elapsedBadge = $('elapsed-badge');
+  elapsedBadge.textContent = elapsed + 's';
+  elapsedBadge.classList.add('visible');
+
+  // Inject HTML into iframe via srcdoc
+  const frame = $('report-frame');
+  frame.srcdoc = html;
+
+  // After iframe loads, read risk_level from data attribute in report body
+  frame.onload = () => {
+    let riskLevel = 'OK';
+    try {
+      const riskAttr = frame.contentDocument?.body?.getAttribute('data-risk-level');
+      if (riskAttr) riskLevel = riskAttr;
+    } catch {}
+    addToHistory({
+      txn_id:    payload.transaction_id,
+      motivo:    payload.motivo,
+      vip:       payload.cliente_vip,
+      elapsed,
+      risk:      riskLevel,
+      time:      new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+      payload,
+    });
+  };
+}
+
+function showError(msg, isNetwork) {
+  showPanel('error');
+  $('error-msg-text').textContent = msg;
+  $('fallback-banner').style.display = isNetwork ? 'flex' : 'none';
+}
+
+// ─── RESET ────────────────────────────────────────────────
+function resetPanel() {
+  if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
+  clearStepTimers();
+  stopTimer();
+
+  showPanel('idle');
+  $('elapsed-badge').classList.remove('visible');
+  $('meta-txn-id').textContent = '—';
+  $('btn-submit').classList.remove('loading');
+
+  if (selectedIdx !== null && selectedIdx < 3) {
+    enableSubmit(SCENARIOS[selectedIdx].label);
+  } else if (isCustom) {
+    refreshSubmitBtn();
+  } else {
+    disableSubmit('Seleccionar escenario');
+  }
+}
+
+// ─── HISTORY ──────────────────────────────────────────────
+const SESSION_HISTORY_KEY = 'ciri_panel_history';
+
+function addToHistory(entry) {
+  let history = getHistory();
+  history.unshift(entry);
+  if (history.length > 10) history = history.slice(0, 10);
+  try { sessionStorage.setItem(SESSION_HISTORY_KEY, JSON.stringify(history)); } catch {}
+  renderHistory();
+}
+
+function getHistory() {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_HISTORY_KEY) || '[]'); } catch { return []; }
+}
+
+function renderHistory() {
+  const list    = $('history-list');
+  const empty   = $('history-empty');
+  const history = getHistory();
+
+  if (!list) return;
+  // Clear existing items (keep the empty notice)
+  list.querySelectorAll('.history-item').forEach(el => el.remove());
+
+  if (history.length === 0) {
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  history.forEach((entry, idx) => {
+    const risk  = entry.risk || 'OK';
+    const item  = document.createElement('div');
+    item.className = 'history-item';
+    item.title     = `Motivo: ${entry.motivo}${entry.vip ? ' · VIP' : ''}`;
+    item.innerHTML = `
+      <span class="history-badge hist-${risk}">${risk}</span>
+      <div class="history-info">
+        <div class="history-txn">${entry.txn_id}</div>
+        <div class="history-meta">${entry.motivo.slice(0, 32)}${entry.motivo.length > 32 ? '…' : ''}${entry.vip ? ' · VIP' : ''}</div>
+      </div>
+      <span class="history-time">${entry.time}</span>
+    `;
+    item.onclick = () => rerunFromHistory(entry);
+    list.appendChild(item);
+  });
+}
+
+function rerunFromHistory(entry) {
+  // Populate the custom form and submit
+  const sel = $('sel-txn');
+  if (sel) {
+    sel.value = entry.txn_id;
+    onTxnSelect();
+    // Set motivo
+    const motivoSel = $('sel-motivo');
+    const presets   = Array.from(motivoSel.options).map(o => o.value);
+    if (presets.includes(entry.motivo)) {
+      motivoSel.value = entry.motivo;
+      $('inp-motivo-custom').style.display = 'none';
+    } else {
+      motivoSel.value = '__custom__';
+      $('inp-motivo-custom').style.display = 'block';
+      $('inp-motivo-custom').value = entry.motivo;
+    }
+    if (entry.vip !== undefined) $('inp-vip').checked = entry.vip;
+    refreshSubmitBtn();
+  }
+}
+
+// ─── TOAST ────────────────────────────────────────────────
+function showToast(type, title, text) {
+  const c = $('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+
+  const iconSvg = type === 'error'
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+    : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+
+  t.innerHTML = `
+    <span class="toast-icon">${iconSvg}</span>
+    <div class="toast-body">
+      <p class="toast-title">${title}</p>
+      <p class="toast-text">${text.slice(0, 200)}</p>
+    </div>
+  `;
+
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 7000);
+}
+
+// ─── HEALTH CHECK ─────────────────────────────────────────
+function setChip(id, cls, label) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'health-chip ' + cls;
+  el.innerHTML = `<span class="health-dot"></span>${label}`;
+}
+
+async function checkHealth() {
+  // FastAPI + SQLite + Qdrant
+  try {
+    const r    = await fetch(API_BASE + '/health');
+    const data = await r.json();
+    const ok   = data.status === 'healthy';
+    setChip('hc-fastapi', ok ? 'ok' : 'warn', 'FastAPI ✓');
+
+    const sqlOk = data.sqlite === 'ok';
+    setChip('hc-sqlite', sqlOk ? 'ok' : 'err', 'SQLite ' + (sqlOk ? '✓' : '✗'));
+
+    const qdOk = data.qdrant === 'ok';
+    const cols  = data.collections || {};
+    const total = Object.values(cols).reduce((s, v) => s + (v || 0), 0);
+    setChip('hc-qdrant', qdOk ? 'ok' : 'err',
+      qdOk ? `Qdrant ✓ · ${total} docs` : 'Qdrant ✗');
+  } catch {
+    setChip('hc-fastapi', 'err', 'FastAPI ✗');
+    setChip('hc-sqlite',  'err', 'SQLite ✗');
+    setChip('hc-qdrant',  'err', 'Qdrant ✗');
+  }
+
+  // n8n
+  try {
+    const r    = await fetch(API_BASE + '/api/panel/n8n-status');
+    const data = await r.json();
+    setChip('hc-n8n', data.available ? 'ok' : 'warn',
+      data.available ? 'n8n ✓' : 'n8n ✗ (fallback)');
+  } catch {
+    setChip('hc-n8n', 'warn', 'n8n ✗ (fallback)');
+  }
+}
+
+// ─── INIT ─────────────────────────────────────────────────
+showPanel('idle');
+disableSubmit('Seleccionar escenario');
+checkHealth();
+setInterval(checkHealth, 30_000);   // re-check every 30s
+loadTransactions();
+renderHistory();
+</script>
+</body>
+</html>

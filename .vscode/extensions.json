@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    // ── n8n ──────────────────────────────────────────────────────────────────
+    // Canvas visual embebido + sync con instancia n8n + schemas de 537 nodos
+    "etienne-lescot.n8n-as-code",
+
+    // ── Python ───────────────────────────────────────────────────────────────
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "charliermarsh.ruff",
+
+    // ── REST / API testing ───────────────────────────────────────────────────
+    "humao.rest-client",
+
+    // ── Docker ───────────────────────────────────────────────────────────────
+    "ms-azuretools.vscode-docker",
+
+    // ── General DX ───────────────────────────────────────────────────────────
+    "streetsidesoftware.code-spell-checker",
+    "streetsidesoftware.code-spell-checker-spanish"
+  ]
+}
