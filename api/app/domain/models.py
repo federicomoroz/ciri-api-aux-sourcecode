@@ -168,6 +168,12 @@ class PolicyUpdate(BaseModel):
     reference: str | None = None
 
 
+class CacheLookupRequest(BaseModel):
+    transaction_id: str
+    motivo: str | None = None
+    cliente_vip: bool = False
+
+
 class ReportRequest(BaseModel):
     transaction: dict
     resolution: dict
@@ -181,3 +187,5 @@ class ReportRequest(BaseModel):
     hitl_decision: dict | None = None
     cache_hit: bool = False
     guardrail_warnings: list[str] = []
+    motivo: str | None = None
+    cliente_vip: bool = False

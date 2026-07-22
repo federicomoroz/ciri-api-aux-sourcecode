@@ -112,7 +112,11 @@ async def lifespan(app: FastAPI):
     analyzer = Analyzer(db)
 
     # Service layer
-    resolution_service = ResolutionService(llm, tracer)
+    resolution_service = ResolutionService(
+        llm, tracer,
+        retriever=retriever,
+        cache_enabled=settings.semantic_cache_enabled,
+    )
     feedback_service = FeedbackService(db, updater, tracer)
 
     # Report generator

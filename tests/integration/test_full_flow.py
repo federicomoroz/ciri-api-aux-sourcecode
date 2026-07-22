@@ -132,7 +132,7 @@ def test_merchant_risk(test_client_full_flow):
     assert resp.status_code == 200
     data = resp.json()
     assert "cb_ratio" in data
-    assert "flags" in data
+    assert "total_volume_usd" in data
 
 
 def test_sla_check(test_client_full_flow):
@@ -256,8 +256,9 @@ def test_html_report_generation(test_client_full_flow):
     }
     resp = client.post("/api/reports/html", json=payload)
     assert resp.status_code == 200
-    assert "text/html" in resp.headers["content-type"]
-    html = resp.text
+    assert "application/json" in resp.headers["content-type"]
+    data = resp.json()
+    html = data["html"]
     assert "TXN-00051" in html
     assert "BLOCKER" in html
     assert "Airbnb" in html

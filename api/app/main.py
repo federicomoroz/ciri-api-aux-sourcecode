@@ -5,6 +5,7 @@ from fastapi.responses import RedirectResponse
 from .dependencies import lifespan
 from .routes import (
     analyze,
+    cache,
     cases,
     clients,
     feedback,
@@ -47,6 +48,7 @@ def root() -> RedirectResponse:
 
 
 app.include_router(health.router)
+app.include_router(cache.router)
 app.include_router(transactions.router)
 app.include_router(logs.router)
 app.include_router(clients.router)

@@ -2,9 +2,11 @@
 Service layer for resolution and judge operations.
 
 Extracts orchestration logic from routes/analyze.py, keeping HTTP handlers thin.
+Integrates semantic cache (Qdrant) to skip LLM calls for near-identical queries.
 """
 
 import json
+import logging
 
 from ..analysis.analyzer import Analyzer
 from ..domain.constants import (
@@ -19,12 +21,31 @@ from ..llm.client import LLMClient
 from ..llm import prompts
 from ..llm.parsing import parse_json_safely
 from ..observability.tracer import Tracer
+from ..rag.retriever import QdrantRetriever
+
+logger = logging.getLogger(__name__)
 
 
 class ResolutionService:
-    def __init__(self, llm: LLMClient, tracer: Tracer):
+    def __init__(
+        self,
+        llm: LLMClient,
+        tracer: Tracer,
+        retriever: QdrantRetriever | None = None,
+        cache_enabled: bool = True,
+    ):
         self.llm = llm
         self.tracer = tracer
+        self.retriever = retriever
+        self.cache_enabled = cache_enabled and retriever is not None
+
+    def _build_cache_key(self, tx_data: dict, motivo: str | None, cliente_vip: bool) -> str:
+        """Deterministic cache key from the immutable inputs of a resolve call."""
+        return (
+            f"resolve:{tx_data.get('id', '')}|{motivo or ''}|{cliente_vip}|"
+            f"{tx_data.get('merchant', '')}|{tx_data.get('amount_usd', 0)}|"
+            f"{tx_data.get('fraud_score', 0)}|{tx_data.get('payment_method', '')}"
+        )
 
     def resolve(
         self,
@@ -37,8 +58,25 @@ class ResolutionService:
         motivo: str | None,
         cliente_vip: bool,
     ) -> dict:
-        """Full resolution pipeline: policy eval → log summary → resolution synthesis → guardrails."""
+        """Full resolution pipeline: policy eval → log summary → resolution synthesis → guardrails.
+        Uses semantic cache to skip LLM calls for near-identical requests."""
         tx_id = tx_data.get("id", "unknown")
+
+        # Semantic cache check — skip entire LLM pipeline if near-identical query was seen
+        cache_key = self._build_cache_key(tx_data, motivo, cliente_vip)
+        if self.cache_enabled:
+            cached = self.retriever.check_semantic_cache(cache_key)
+            if cached:
+                logger.info("Semantic cache HIT for %s", tx_id)
+                if isinstance(cached, dict):
+                    cached["_cache_hit"] = True
+                    return cached
+                # cached is a string (legacy) — parse it
+                result = parse_json_safely(cached, {})
+                if result:
+                    result["_cache_hit"] = True
+                    return result
+
         trace_id = self.tracer.trace(
             "resolve_chargeback",
             input={"transaction_id": tx_id, "motivo": motivo, "cliente_vip": cliente_vip},
@@ -92,7 +130,17 @@ class ResolutionService:
 
         # Step 5: Guardrails
         warnings = self._validate_resolution(resolution, tx_data)
-        return {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id}
+        result = {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id}
+
+        # Store in semantic cache for future near-identical queries
+        if self.cache_enabled:
+            try:
+                self.retriever.store_in_cache(cache_key, result)
+                logger.info("Semantic cache STORE for %s", tx_id)
+            except Exception as e:
+                logger.warning("Failed to store in semantic cache: %s", e)
+
+        return result
 
     def judge(self, resolution: dict, full_context: dict) -> dict:
         """LLM-as-Judge: evaluate resolution quality across 5 criteria."""
