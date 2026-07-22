@@ -2,55 +2,27 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps
-RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+# System deps — curl added for model download (busts v8 cached layer)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc curl && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-# Download ONNX model + tokenizer directly via HTTP (no hf_hub_download — avoids
-# HF Hub API rate limits and cache resolution failures in Render build).
+# Download ONNX model + tokenizer via curl (-fL follows LFS redirects; fails on HTTP 4xx/5xx).
 # INT8 quantized (118 MB) fits in Render 512 MB; FP32 model.onnx = 470 MB → OOM.
-# Build FAILS explicitly if download fails (no silent empty model).
-# v8
-RUN python -c "
-import os, requests, sys
-
-os.makedirs('/app/models', exist_ok=True)
-BASE = 'https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main'
-
-def download(url, dst):
-    print(f'Downloading {url}...')
-    r = requests.get(url, stream=True, timeout=300)
-    r.raise_for_status()
-    with open(dst, 'wb') as f:
-        for chunk in r.iter_content(chunk_size=1024*1024):
-            f.write(chunk)
-    mb = os.path.getsize(dst) // 1024 // 1024
-    print(f'  -> {dst} ({mb} MB)')
-    return mb
-
-# Try INT8 quantized first (118 MB), fall back to O4 optimized (235 MB)
-onnx_dst = '/app/models/model.onnx'
-for onnx_file in ['onnx/model_quint8_avx2.onnx', 'onnx/model_qint8_avx512.onnx', 'onnx/model_O4.onnx']:
-    try:
-        mb = download(f'{BASE}/{onnx_file}', onnx_dst)
-        if mb < 50:
-            raise RuntimeError(f'File too small ({mb} MB)')
-        print(f'ONNX ready: {onnx_file} ({mb} MB)')
-        break
-    except Exception as e:
-        print(f'FAILED {onnx_file}: {e}')
-        if os.path.exists(onnx_dst):
-            os.remove(onnx_dst)
-else:
-    print('ERROR: all ONNX downloads failed', file=sys.stderr)
-    sys.exit(1)
-
-download(f'{BASE}/tokenizer.json', '/app/models/tokenizer.json')
-print('Build complete.')
-"
+# Tries 3 quantized variants; build FAILS if all fail (no silent empty model).
+# v9 — curl replaces Python requests; apt-get change busts all downstream cache layers.
+RUN mkdir -p /app/models && \
+    BASE="https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main" && \
+    DEST=/app/models/model.onnx && \
+    ( curl -fL --retry 3 --connect-timeout 30 --max-time 300 -o "$DEST" "$BASE/onnx/model_quint8_avx2.onnx" || \
+      (rm -f "$DEST" && curl -fL --retry 3 --connect-timeout 30 --max-time 300 -o "$DEST" "$BASE/onnx/model_qint8_avx512.onnx") || \
+      (rm -f "$DEST" && curl -fL --retry 3 --connect-timeout 30 --max-time 300 -o "$DEST" "$BASE/onnx/model_O4.onnx") ) && \
+    SIZE=$(wc -c < "$DEST") && [ "$SIZE" -gt 50000000 ] && \
+    echo "ONNX ready: $(( SIZE / 1024 / 1024 )) MB" && \
+    curl -fL --retry 3 --connect-timeout 30 --max-time 120 -o /app/models/tokenizer.json "$BASE/tokenizer.json" && \
+    echo "Build complete:" && ls -lh /app/models/
 
 # Copy application code
 COPY app/ app/
