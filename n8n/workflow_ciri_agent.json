@@ -106,7 +106,7 @@
       "position": [540, 340],
       "parameters": {
         "method": "GET",
-        "url": "={{ 'http://api:8000/api/transactions/' + $json.transaction_id }}",
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/transactions/' + $json.transaction_id }}",
         "authentication": "none",
         "sendHeaders": false,
         "sendQuery": false,
@@ -123,7 +123,7 @@
       "position": [760, 340],
       "parameters": {
         "method": "GET",
-        "url": "={{ 'http://api:8000/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
         "authentication": "none",
         "sendHeaders": false,
         "sendQuery": false,
@@ -140,7 +140,7 @@
       "position": [980, 340],
       "parameters": {
         "method": "GET",
-        "url": "http://api:8000/api/policies/search",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/policies/search",
         "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
@@ -180,7 +180,7 @@
       "position": [1200, 340],
       "parameters": {
         "method": "GET",
-        "url": "http://api:8000/api/cases/similar",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/cases/similar",
         "authentication": "none",
         "sendQuery": true,
         "queryParameters": {
@@ -224,7 +224,7 @@
       "position": [1420, 340],
       "parameters": {
         "method": "GET",
-        "url": "={{ 'http://api:8000/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
         "authentication": "none",
         "sendHeaders": false,
         "sendQuery": false,
@@ -241,7 +241,7 @@
       "position": [1640, 340],
       "parameters": {
         "method": "GET",
-        "url": "={{ 'http://api:8000/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
         "authentication": "none",
         "sendHeaders": false,
         "sendQuery": false,
@@ -258,7 +258,7 @@
       "position": [1860, 340],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/sla/check",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/sla/check",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
@@ -301,7 +301,7 @@
       "position": [2300, 340],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/analyze/resolve",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/resolve",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
@@ -361,7 +361,7 @@
       "position": [2520, 340],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/analyze/judge",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/judge",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
@@ -512,7 +512,7 @@
       "position": [3180, 100],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/reports/html",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
@@ -578,7 +578,7 @@
       "position": [3180, 360],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/reports/html",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
@@ -630,7 +630,7 @@
       "position": [3180, 580],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/reports/html",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
@@ -682,7 +682,7 @@
       "position": [3180, 800],
       "parameters": {
         "method": "POST",
-        "url": "http://api:8000/api/reports/html",
+        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
         "authentication": "none",
         "sendBody": true,
         "contentType": "json",
