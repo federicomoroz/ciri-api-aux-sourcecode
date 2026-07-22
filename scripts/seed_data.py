@@ -18,14 +18,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from api.app.config import Settings
 from api.app.data.loader import init_sqlite, load_excel
+from api.app.rag.embedder import FastEmbedder
 from api.app.rag.indexer import QdrantIndexer
 
 try:
     from qdrant_client import QdrantClient
-    from sentence_transformers import SentenceTransformer
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Run: pip install qdrant-client sentence-transformers")
+    print("Run: pip install qdrant-client fastembed")
     sys.exit(1)
 
 
@@ -53,17 +53,20 @@ def seed():
     # Step 3: Qdrant collections
     print(f"\n[3/4] Connecting to Qdrant: {settings.qdrant_url}")
     try:
-        qdrant = QdrantClient(url=settings.qdrant_url)
+        qdrant = QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key or None,
+        )
         qdrant.get_collections()
         print("      Connected.")
     except Exception as e:
         print(f"      ERROR: Cannot connect to Qdrant: {e}")
-        print("      Make sure Qdrant is running: docker-compose up -d qdrant")
+        print("      Make sure Qdrant is running (or check CB_QDRANT_URL / CB_QDRANT_API_KEY)")
         sys.exit(1)
 
     # Step 4: Index
     print(f"\n[4/4] Loading embedding model: {settings.embedding_model}")
-    embedder = SentenceTransformer(settings.embedding_model)
+    embedder = FastEmbedder(settings.embedding_model)
 
     indexer = QdrantIndexer(qdrant, embedder)
     indexer.ensure_collections()
