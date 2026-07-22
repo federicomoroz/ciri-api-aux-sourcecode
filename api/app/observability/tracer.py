@@ -81,8 +81,8 @@ class LangfuseTracer:
             self.langfuse.generation(
                 name=name,
                 model=model,
-                prompt=input,
-                completion=output,
+                input=input,
+                output=output,
                 usage={"input": tokens_in, "output": tokens_out},
                 latency=latency_ms / 1000,
                 trace_id=trace_id,
