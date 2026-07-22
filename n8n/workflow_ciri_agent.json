@@ -7,10 +7,10 @@
       "name": "Sticky Note — Resumen",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-100, -120],
+      "position": [-160, -160],
       "parameters": {
-        "width": 3700,
-        "height": 100,
+        "width": 4400,
+        "height": 80,
         "color": 4,
         "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo HTTP visible. Sin cajas negras. Sin AI Agent como orquestador. FastAPI ejecuta la lógica; n8n dirige el flujo."
       }
@@ -21,10 +21,10 @@
       "name": "Sticky Note — Sección 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-100, 20],
+      "position": [-160, 280],
       "parameters": {
-        "width": 540,
-        "height": 260,
+        "width": 700,
+        "height": 300,
         "color": 5,
         "content": "## 🟢 SECCIÓN 1 — Entrada y Validación\n\n**Webhook** expone `POST /webhook/chargeback-agent`.\n\n**Validar TXN** verifica formato `TXN-XXXXX` y extrae:\n- `transaction_id`\n- `motivo` (opcional)\n- `cliente_vip` (bool)"
       }
@@ -35,10 +35,10 @@
       "name": "Sticky Note — Sección 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [500, 20],
+      "position": [500, 280],
       "parameters": {
-        "width": 1600,
-        "height": 260,
+        "width": 1620,
+        "height": 300,
         "color": 3,
         "content": "## 🔵 SECCIÓN 2 — Recopilación de Contexto (7 herramientas FastAPI)\n\nCadena lineal: cada nodo puede referenciar datos de cualquier nodo anterior con `$('NombreNodo').item.json`.\n\n`Obtener TX → Logs → Políticas RAG → Casos Similares RAG → Riesgo Comercio → Historial Cliente → SLA`\n\nTodas son llamadas **GET/POST determinísticas** a FastAPI — sin LLM en esta sección."
       }
@@ -49,10 +49,10 @@
       "name": "Sticky Note — Sección 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [2160, 20],
+      "position": [2080, 280],
       "parameters": {
-        "width": 740,
-        "height": 260,
+        "width": 960,
+        "height": 300,
         "color": 6,
         "content": "## 🟣 SECCIÓN 3 — Análisis con IA\n\n**Compilar Contexto**: fusiona los 7 resultados en un objeto unificado.\n\n**Sintetizar Resolución**: llama `POST /api/analyze/resolve` → LLM evalúa políticas + casos + logs → devuelve `recommended_action`, `risk_level`, `confidence`, `guardrail_warnings`.\n\n**Juez de Calidad**: llama `POST /api/analyze/judge` → LLM-as-Judge (score 1–10)."
       }
@@ -63,12 +63,12 @@
       "name": "Sticky Note — Sección 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [2960, 20],
+      "position": [3000, 60],
       "parameters": {
-        "width": 900,
-        "height": 260,
+        "width": 760,
+        "height": 1060,
         "color": 2,
-        "content": "## 🔀 SECCIÓN 4 — Enrutamiento por Riesgo\n\n**Preparar Informe**: construye el payload exacto que espera `POST /api/reports/html`.\n\n**Switch** enruta por `resolution.risk_level`:\n- `BLOCKER` → rechazado automático → HTML inmediato\n- `HIGH` → reporte con formulario HITL → HTML inmediato *(producción: intercalar Wait node + notificación)*\n- `MEDIUM` → reporte con alerta → HTML inmediato\n- `LOW` → reporte aprobación → HTML inmediato"
+        "content": "## 🔀 SECCIÓN 4 — Enrutamiento por Riesgo\n\n**Switch** enruta por `resolution.risk_level`:\n- **BLOCKER** → rechazado automático → reporte HTML inmediato\n- **HIGH** → reporte HTML con formulario HITL embebido *(extensión: agregar `Wait` node + notificación Slack/Gmail antes de generar reporte)*\n- **MEDIUM** → reporte HTML con alerta de revisión\n- **LOW** → reporte HTML con aprobación automática\n\nTodos los reportes llaman al mismo endpoint `POST /api/reports/html`."
       }
     },
 
@@ -77,7 +77,7 @@
       "name": "Webhook — Entrada",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [100, 340],
+      "position": [80, 460],
       "parameters": {
         "httpMethod": "POST",
         "path": "chargeback-agent",
@@ -92,7 +92,7 @@
       "name": "Validar Formato TXN",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [320, 340],
+      "position": [300, 460],
       "parameters": {
         "jsCode": "// Extraer y validar el body del webhook\nconst body = $input.first().json.body || {};\n\nconst txnId      = (body.transaction_id || '').trim();\nconst motivo     = (body.motivo || '').trim();\nconst clienteVip = Boolean(body.cliente_vip);\n\n// Validar formato TXN-XXXXX (exactamente 5 dígitos)\nif (!txnId.match(/^TXN-\\d{5}$/)) {\n  throw new Error(\n    `Formato de transaction_id inválido: \"${txnId}\". ` +\n    `Se esperaba TXN-XXXXX (ej: TXN-00051).`\n  );\n}\n\nreturn [{ json: { transaction_id: txnId, motivo, cliente_vip: clienteVip } }];"
       }
@@ -103,7 +103,7 @@
       "name": "Obtener Transacción",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [540, 340],
+      "position": [560, 460],
       "parameters": {
         "method": "GET",
         "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/transactions/' + $json.transaction_id }}",
@@ -120,7 +120,7 @@
       "name": "Obtener Logs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [760, 340],
+      "position": [780, 460],
       "parameters": {
         "method": "GET",
         "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
@@ -137,7 +137,7 @@
       "name": "Buscar Políticas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [980, 340],
+      "position": [1000, 460],
       "parameters": {
         "method": "GET",
         "url": "https://ciri-chargeback-agent.onrender.com/api/policies/search",
@@ -177,7 +177,7 @@
       "name": "Buscar Casos Similares",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1200, 340],
+      "position": [1220, 460],
       "parameters": {
         "method": "GET",
         "url": "https://ciri-chargeback-agent.onrender.com/api/cases/similar",
@@ -221,7 +221,7 @@
       "name": "Riesgo del Comercio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1420, 340],
+      "position": [1440, 460],
       "parameters": {
         "method": "GET",
         "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
@@ -238,7 +238,7 @@
       "name": "Historial del Cliente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1640, 340],
+      "position": [1660, 460],
       "parameters": {
         "method": "GET",
         "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
@@ -255,7 +255,7 @@
       "name": "Verificar SLA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1860, 340],
+      "position": [1880, 460],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/sla/check",
@@ -287,7 +287,7 @@
       "name": "Compilar Contexto",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2080, 340],
+      "position": [2140, 460],
       "parameters": {
         "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input      = $('Validar Formato TXN').item.json;\nconst txn        = $('Obtener Transacción').item.json;\nconst logsData   = $('Obtener Logs').item.json;\nconst policies   = $('Buscar Políticas').item.json;\nconst cases      = $('Buscar Casos Similares').item.json;\nconst merchant   = $('Riesgo del Comercio').item.json;\nconst client     = $('Historial del Cliente').item.json;\nconst sla        = $('Verificar SLA').item.json;\n\nconst slaStatus = sla.within_sla\n  ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n  : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`;\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant}, USD ${txn.amount_usd},`,\n  `canal ${txn.channel}, país ${txn.country}, score fraude ${txn.fraud_score}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
       }
@@ -298,7 +298,7 @@
       "name": "Sintetizar Resolución",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2300, 340],
+      "position": [2360, 460],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/resolve",
@@ -358,7 +358,7 @@
       "name": "Juez de Calidad",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2520, 340],
+      "position": [2580, 460],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/judge",
@@ -386,7 +386,7 @@
       "name": "Preparar Informe",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2740, 340],
+      "position": [2800, 460],
       "parameters": {
         "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').item.json;\nconst resolution = $('Sintetizar Resolución').item.json;\nconst judge      = $input.first().json;  // output de Juez de Calidad\n\nreturn [{\n  json: {\n    // Campos de ReportRequest\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n  }\n}];"
       }
@@ -397,7 +397,7 @@
       "name": "Switch — Nivel de Riesgo",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
-      "position": [2960, 340],
+      "position": [3060, 460],
       "parameters": {
         "mode": "rules",
         "rules": {
@@ -509,7 +509,7 @@
       "name": "Generar Reporte — BLOCKER",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3180, 100],
+      "position": [3300, 180],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
@@ -541,7 +541,7 @@
       "name": "Responder — BLOCKER",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3400, 100],
+      "position": [3540, 180],
       "parameters": {
         "respondWith": "text",
         "responseBody": "={{ $json }}",
@@ -557,25 +557,11 @@
     },
 
     {
-      "id": "sticky-high",
-      "name": "Sticky Note — HIGH HITL",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [3160, 200],
-      "parameters": {
-        "width": 460,
-        "height": 220,
-        "color": 6,
-        "content": "## 🔶 Rama HIGH — HITL\n\nEl reporte HTML incluye un formulario de aprobación que llama directamente a `POST /api/feedback`.\n\n**Extensión producción:** intercalar nodo `Wait` (resume via webhook) + nodo de notificación (Gmail / Slack) antes de `Generar Reporte — HIGH`."
-      }
-    },
-
-    {
       "id": "node-report-high",
       "name": "Generar Reporte — HIGH",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3180, 360],
+      "position": [3300, 400],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
@@ -607,7 +593,7 @@
       "name": "Responder — HIGH",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3400, 360],
+      "position": [3540, 400],
       "parameters": {
         "respondWith": "text",
         "responseBody": "={{ $json }}",
@@ -627,7 +613,7 @@
       "name": "Generar Reporte — MEDIUM",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3180, 580],
+      "position": [3300, 620],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
@@ -659,7 +645,7 @@
       "name": "Responder — MEDIUM",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3400, 580],
+      "position": [3540, 620],
       "parameters": {
         "respondWith": "text",
         "responseBody": "={{ $json }}",
@@ -679,7 +665,7 @@
       "name": "Generar Reporte — LOW",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3180, 800],
+      "position": [3300, 840],
       "parameters": {
         "method": "POST",
         "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
@@ -711,7 +697,7 @@
       "name": "Responder — LOW",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [3400, 800],
+      "position": [3540, 840],
       "parameters": {
         "respondWith": "text",
         "responseBody": "={{ $json }}",
@@ -802,5 +788,5 @@
     "templateCredsSetupCompleted": false,
     "instanceId": "ciri-chargeback-agent"
   },
-  "tags": ["chargeback", "explicit-flow", "mercadopago"]
+  "tags": []
 }
