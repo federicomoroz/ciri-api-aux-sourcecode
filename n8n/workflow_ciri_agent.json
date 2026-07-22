@@ -213,7 +213,13 @@
       "position": [
         45456,
         15696
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -229,7 +235,13 @@
       "position": [
         45696,
         15536
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -270,7 +282,13 @@
       "position": [
         45696,
         15696
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -315,7 +333,13 @@
       "position": [
         45696,
         15856
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -331,7 +355,13 @@
       "position": [
         45696,
         16016
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -376,7 +406,13 @@
       "position": [
         45696,
         16176
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -540,7 +576,13 @@
       "position": [
         46704,
         15680
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -595,7 +637,13 @@
       "position": [
         46944,
         15680
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -818,7 +866,13 @@
       "position": [
         48160,
         15440
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -972,7 +1026,13 @@
       "position": [
         48784,
         15920
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1042,7 +1102,13 @@
       "position": [
         49024,
         15920
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1137,7 +1203,13 @@
       "position": [
         48064,
         16160
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1232,7 +1304,13 @@
       "position": [
         48064,
         16400
-      ]
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1263,7 +1341,7 @@
       "parameters": {
         "url": "https://ciri-chargeback-agent.onrender.com/health",
         "options": {
-          "timeout": 55000
+          "timeout": 90000
         }
       },
       "id": "fea7c0e7-93fb-49a2-bd7c-38bac309f07c",
@@ -1274,7 +1352,12 @@
         45232,
         15712
       ],
-      "onError": "continueErrorOutput"
+      "onError": "continueErrorOutput",
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      }
     }
   ],
   "pinData": {},
