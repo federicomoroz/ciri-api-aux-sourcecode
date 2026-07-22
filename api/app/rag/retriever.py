@@ -105,13 +105,13 @@ class QdrantRetriever:
         query = self.query_builder.for_policies(motivo, channel, payment_method, fraud_score, country)
         vector = self._embed(query)
 
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.policies_collection,
-            query_vector=vector,
+            query=vector,
             limit=top_k,
             score_threshold=score_threshold,
             with_payload=True,
-        )
+        ).points
 
         return [
             {**r.payload, "score": round(r.score, 4), "_query": query}
@@ -135,13 +135,13 @@ class QdrantRetriever:
         )
         vector = self._embed(query)
 
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.cases_collection,
-            query_vector=vector,
+            query=vector,
             limit=top_k,
             score_threshold=score_threshold,
             with_payload=True,
-        )
+        ).points
 
         return [
             {**r.payload, "score": round(r.score, 4), "_query": query}
@@ -152,13 +152,13 @@ class QdrantRetriever:
         """Search cache for near-identical queries. Returns cached response or None."""
         try:
             vector = self._embed(query)
-            results = self.client.search(
+            results = self.client.query_points(
                 collection_name=self.cache_collection,
-                query_vector=vector,
+                query=vector,
                 limit=1,
                 score_threshold=threshold,
                 with_payload=True,
-            )
+            ).points
             if results:
                 return results[0].payload.get("response")
         except Exception as e:
