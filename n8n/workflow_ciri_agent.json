@@ -201,7 +201,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/transactions/' + $('Validar Formato TXN').item.json.transaction_id }}",
+        "url": "={{ 'http://api:8000/api/transactions/' + $('Validar Formato TXN').item.json.transaction_id }}",
         "options": {
           "timeout": 30000
         }
@@ -217,7 +217,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
+        "url": "={{ 'http://api:8000/api/logs/' + $('Validar Formato TXN').item.json.transaction_id }}",
         "options": {
           "timeout": 30000
         }
@@ -233,7 +233,7 @@
     },
     {
       "parameters": {
-        "url": "https://ciri-chargeback-agent.onrender.com/api/policies/search",
+        "url": "http://api:8000/api/policies/search",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -274,7 +274,7 @@
     },
     {
       "parameters": {
-        "url": "https://ciri-chargeback-agent.onrender.com/api/cases/similar",
+        "url": "http://api:8000/api/cases/similar",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -319,7 +319,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
+        "url": "={{ 'http://api:8000/api/merchants/' + encodeURIComponent($('Obtener Transacción').item.json.merchant) + '/risk' }}",
         "options": {
           "timeout": 30000
         }
@@ -364,7 +364,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
+        "url": "={{ 'http://api:8000/api/clients/' + $('Obtener Transacción').item.json.client_id + '/history' }}",
         "options": {
           "timeout": 30000
         }
@@ -483,7 +483,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/resolve",
+        "url": "http://api:8000/api/analyze/resolve",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -753,7 +753,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "http://api:8000/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -935,7 +935,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/feedback",
+        "url": "http://api:8000/api/feedback",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -977,7 +977,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "http://api:8000/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1072,7 +1072,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "http://api:8000/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1167,7 +1167,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "http://api:8000/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1262,7 +1262,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://ciri-chargeback-agent.onrender.com/health",
+        "url": "http://api:8000/health",
         "options": {
           "timeout": 55000,
           "retry": {

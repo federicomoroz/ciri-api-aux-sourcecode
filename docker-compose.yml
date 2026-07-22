@@ -42,6 +42,7 @@ services:
       - "5678:5678"
     volumes:
       - ./n8n/data:/home/node/.n8n
+    env_file: .env           # passes CB_ANTHROPIC_API_KEY to n8n env
     environment:
       - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://localhost:5678
