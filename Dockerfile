@@ -5,15 +5,17 @@ WORKDIR /app
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy code before installing (hatchling needs app/ to exist)
 COPY api/pyproject.toml .
-RUN pip install --no-cache-dir -e .
+COPY api/app/ app/
 
-# Pre-download embedding model (cached in layer)
+# Install Python dependencies
+RUN pip install --no-cache-dir .
+
+# Pre-download embedding model (cached in layer, ~120MB)
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
 
-# Copy app code and data
-COPY api/app/ app/
+# Copy data
 COPY data/ data/
 
 EXPOSE 8000
