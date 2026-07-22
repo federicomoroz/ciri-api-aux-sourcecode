@@ -1459,25 +1459,8 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/cache/lookup",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "transaction_id",
-              "value": "={{ $('Validar Formato TXN').item.json.transaction_id }}"
-            },
-            {
-              "name": "motivo",
-              "value": "={{ $('Validar Formato TXN').item.json.motivo }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $('Validar Formato TXN').item.json.cliente_vip }}"
-            }
-          ]
-        },
+        "method": "GET",
+        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').item.json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').item.json.cliente_vip || false) }}",
         "options": {
           "timeout": 10000
         }
@@ -1556,7 +1539,7 @@
     },
     {
       "parameters": {
-        "content": "## 🔄 Idempotencia\n\n**Verificar Caché** consulta Qdrant antes de ejecutar el pipeline.\nSi el mismo `(transaction_id, motivo, cliente_vip)` fue analizado antes:\n- **HIT** → responde HTML cacheado en ~200ms (header `X-Cache: HIT`)\n- **MISS** → ejecuta pipeline completo. El reporte se cachea automáticamente al generarse.\n\nEvita re-ejecutar 2 llamadas LLM (~25s) para requests duplicados.",
+        "content": "## 🔄 Idempotencia\n\n**Verificar Caché** consulta SQLite antes de ejecutar el pipeline.\nSi el mismo `(transaction_id, cliente_vip)` fue analizado antes:\n- **HIT** → responde HTML cacheado en ~200ms (header `X-Cache: HIT`)\n- **MISS** → ejecuta pipeline completo. El reporte se cachea automáticamente al generarse.\n\nEvita re-ejecutar 2 llamadas LLM (~25s) para requests duplicados.",
         "height": 240,
         "width": 400,
         "color": 5

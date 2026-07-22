@@ -168,11 +168,6 @@ class PolicyUpdate(BaseModel):
     reference: str | None = None
 
 
-class CacheLookupRequest(BaseModel):
-    transaction_id: str
-    motivo: str | None = None
-    cliente_vip: bool = False
-
 
 class ReportRequest(BaseModel):
     transaction: dict
