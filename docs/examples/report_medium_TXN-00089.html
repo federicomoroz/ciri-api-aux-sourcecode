@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Contracargo — TXN-00089</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .badge-blocker { @apply bg-red-700 text-white px-3 py-1 rounded-full font-bold text-sm; }
+        .badge-high { @apply bg-orange-500 text-white px-3 py-1 rounded-full font-bold text-sm; }
+        .badge-medium { @apply bg-yellow-500 text-black px-3 py-1 rounded-full font-bold text-sm; }
+        .badge-low { @apply bg-green-500 text-white px-3 py-1 rounded-full font-bold text-sm; }
+        .verdict-blocker { background: #dc2626; color: white; }
+        .verdict-fail { background: #f97316; color: white; }
+        .verdict-warning { background: #eab308; color: black; }
+        .verdict-pass { background: #22c55e; color: white; }
+        .verdict-not_applicable { background: #94a3b8; color: white; }
+        .log-error { border-left: 4px solid #dc2626; background: #fef2f2; }
+        .log-warn { border-left: 4px solid #f97316; background: #fff7ed; }
+        .log-info { border-left: 4px solid #94a3b8; background: #f8fafc; }
+        .score-bar { height: 8px; border-radius: 4px; background: #e2e8f0; }
+        .score-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #22c55e, #3b82f6); }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen" data-risk-level="BLOCKER">
+<div class="max-w-5xl mx-auto px-4 py-8">
+
+    <!-- SECTION 1: Header -->
+    <header class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <div class="flex items-center justify-between flex-wrap gap-4">
+            <div>
+                <p class="text-sm text-gray-500 font-medium uppercase tracking-wide">Agente Inteligente de Contracargos · CIRI</p>
+                <h1 class="text-3xl font-bold text-gray-900 mt-1">TXN-00089</h1>
+                <p class="text-gray-500 mt-1">Booking · 2024-01-27 · USD 889.02</p>
+            </div>
+            <div class="text-center">
+                
+                
+                    <span class="inline-block bg-red-700 text-white px-5 py-2 rounded-full font-bold text-lg shadow">🚫 BLOCKER</span>
+                
+                <p class="text-xs text-gray-400 mt-2">Nivel de riesgo</p>
+            </div>
+        </div>
+        
+        
+    </header>
+
+    <!-- SECTION 2: Transaction Summary -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">📋 Transacción</h2>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div><p class="text-xs text-gray-500">Cliente</p><p class="font-semibold">CLI-0029</p></div>
+            <div><p class="text-xs text-gray-500">Comercio</p><p class="font-semibold">Booking</p></div>
+            <div><p class="text-xs text-gray-500">Monto</p><p class="font-semibold text-lg">USD 889.02</p></div>
+            <div><p class="text-xs text-gray-500">Método de Pago</p><p class="font-semibold">Débito Visa</p></div>
+            <div><p class="text-xs text-gray-500">País</p><p class="font-semibold">USA</p></div>
+            <div><p class="text-xs text-gray-500">Canal</p><p class="font-semibold">App Móvil</p></div>
+            <div><p class="text-xs text-gray-500">Dispositivo</p><p class="font-semibold">Desktop/Linux</p></div>
+            <div><p class="text-xs text-gray-500">Estado</p><p class="font-semibold">Contracargo iniciado</p></div>
+            <div>
+                <p class="text-xs text-gray-500">Score Antifraude</p>
+                <p class="font-bold text-lg text-red-600">
+                    8/100
+                </p>
+                <div class="score-bar mt-1 w-full">
+                    <div class="score-fill" style="width: 8%; background: #dc2626;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p class="text-xs text-gray-500">Notas</p>
+            <p class="text-sm">Alto riesgo detectado</p>
+        </div>
+        
+    </section>
+
+    <!-- SECTION 3: Client Profile -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">👤 Perfil del Cliente</h2>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="text-center bg-gray-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-gray-800">4</p>
+                <p class="text-xs text-gray-500">Transacciones</p>
+            </div>
+            <div class="text-center bg-red-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-gray-800">3</p>
+                <p class="text-xs text-gray-500">Contracargos</p>
+            </div>
+            <div class="text-center bg-gray-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-gray-800">1</p>
+                <p class="text-xs text-gray-500">Rechazadas</p>
+            </div>
+            <div class="text-center bg-gray-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-gray-800">3</p>
+                <p class="text-xs text-gray-500">Países</p>
+            </div>
+        </div>
+        
+        
+    </section>
+
+    <!-- SECTION 4: Merchant Risk -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">🏪 Perfil de Riesgo del Comercio</h2>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="text-center bg-gray-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-gray-800">9</p>
+                <p class="text-xs text-gray-500">Transacciones</p>
+            </div>
+            <div class="text-center bg-red-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-red-600">33.3%</p>
+                <p class="text-xs text-gray-500">Ratio CB</p>
+            </div>
+            <div class="text-center bg-gray-50 rounded-lg p-3">
+                <p class="text-2xl font-bold text-gray-800">3</p>
+                <p class="text-xs text-gray-500">Contracargos</p>
+            </div>
+            <div class="text-center bg-gray-50 rounded-lg p-3">
+                <p class="text-sm font-bold text-gray-600">
+                    Estándar
+                </p>
+                <p class="text-xs text-gray-500">USD 21865 total</p>
+            </div>
+        </div>
+        
+        
+    </section>
+
+    <!-- SECTION 5: Policy Evaluation -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">📜 Evaluación de Políticas</h2>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-left text-gray-500 border-b border-gray-100">
+                        <th class="pb-3 pr-4">Código</th>
+                        <th class="pb-3 pr-4">Veredicto</th>
+                        <th class="pb-3">Razonamiento</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                    <tr class="border-b border-gray-50 hover:bg-gray-50">
+                        <td class="py-3 pr-4 font-mono font-semibold text-blue-700 whitespace-nowrap"></td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <span class="px-2 py-1 rounded text-xs font-bold verdict-">
+                                
+                            </span>
+                            
+                        </td>
+                        <td class="py-3 text-gray-600"></td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </div>
+        
+    </section>
+
+    <!-- SECTION 6: Similar Precedents -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">🔍 Precedentes Similares (RAG)</h2>
+        
+        <div class="space-y-3">
+            
+            <div class="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono font-bold text-blue-700">CB-0031</span>
+                    <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
+                        68% similitud
+                    </span>
+                </div>
+                <p class="text-sm text-gray-700"><strong>Motivo:</strong> Monto incorrecto</p>
+                <p class="text-sm text-gray-700"><strong>Resolución:</strong> Reembolso parcial (28 días)</p>
+                <p class="text-sm text-gray-500">Booking · Débito Visa · USA · USD 889.02</p>
+                <p class="text-sm text-gray-400 mt-1 italic">Cliente fue contactado, desistió del reclamo.</p>
+            </div>
+            
+            <div class="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono font-bold text-blue-700">CB-0008</span>
+                    <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
+                        62% similitud
+                    </span>
+                </div>
+                <p class="text-sm text-gray-700"><strong>Motivo:</strong> No reconoce la compra</p>
+                <p class="text-sm text-gray-700"><strong>Resolución:</strong> En escalación (41 días)</p>
+                <p class="text-sm text-gray-500">Booking · Cripto · ARG · USD 1080.15</p>
+                <p class="text-sm text-gray-400 mt-1 italic">Cliente fue contactado, desistió del reclamo.</p>
+            </div>
+            
+            <div class="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono font-bold text-blue-700">CB-0032</span>
+                    <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
+                        61% similitud
+                    </span>
+                </div>
+                <p class="text-sm text-gray-700"><strong>Motivo:</strong> Cargo duplicado</p>
+                <p class="text-sm text-gray-700"><strong>Resolución:</strong> A favor del comercio (13 días)</p>
+                <p class="text-sm text-gray-500">Uber · Débito Visa · USA · USD 3609.77</p>
+                <p class="text-sm text-gray-400 mt-1 italic">Tarjeta clonada — se derivó a área de fraude.</p>
+            </div>
+            
+            <div class="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono font-bold text-blue-700">CB-0019</span>
+                    <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
+                        59% similitud
+                    </span>
+                </div>
+                <p class="text-sm text-gray-700"><strong>Motivo:</strong> Cargo duplicado</p>
+                <p class="text-sm text-gray-700"><strong>Resolución:</strong> En escalación (44 días)</p>
+                <p class="text-sm text-gray-500">Netflix · Crédito Visa · ARG · USD 3872.47</p>
+                <p class="text-sm text-gray-400 mt-1 italic">Canal no habitual para el cliente — geolocalización distinta.</p>
+            </div>
+            
+            <div class="border border-gray-100 rounded-xl p-4 hover:bg-gray-50 transition">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono font-bold text-blue-700">CB-0028</span>
+                    <span class="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs font-semibold">
+                        59% similitud
+                    </span>
+                </div>
+                <p class="text-sm text-gray-700"><strong>Motivo:</strong> Defecto de producto</p>
+                <p class="text-sm text-gray-700"><strong>Resolución:</strong> A favor del comercio (8 días)</p>
+                <p class="text-sm text-gray-500">Airbnb · Débito MC · PER · USD 1030.90</p>
+                <p class="text-sm text-gray-400 mt-1 italic">Score antifraude bajo — transacción sospechosa desde origen.</p>
+            </div>
+            
+        </div>
+        
+    </section>
+
+    <!-- SECTION 7: Log Analysis -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">🔎 Logs de Eventos</h2>
+        
+        <div class="space-y-2 max-h-80 overflow-y-auto">
+            
+            <div class="log-info p-2 rounded text-xs font-mono">
+                <span class="text-gray-400">2024-01-02 07:14:41</span>
+                <span class="font-bold ml-2 text-gray-500">[INFO]</span>
+                <span class="text-blue-700 ml-2">FRAUD_CHECK</span>
+                <span class="text-gray-500 ml-2">FraudEngine</span>
+                <span class="ml-2">HTTP 200</span>
+                <span class="text-gray-600 ml-2">Score calculado: 30. Resultado: APROBADO.</span>
+            </div>
+            
+            <div class="log-warn p-2 rounded text-xs font-mono">
+                <span class="text-gray-400">2024-01-03 03:31:26</span>
+                <span class="font-bold ml-2 text-orange-500">[WARN]</span>
+                <span class="text-blue-700 ml-2">TIMEOUT_RETRY</span>
+                <span class="text-gray-500 ml-2">PaymentGateway</span>
+                <span class="ml-2">HTTP 504</span>
+                <span class="text-gray-600 ml-2">Timeout en comunicación con red. Reintentando (intento 2/3).</span>
+            </div>
+            
+        </div>
+        
+    </section>
+
+    <!-- SECTION 8: Resolution -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">⚖️ Resolución Recomendada</h2>
+        <div class="text-center mb-6">
+            
+            
+                <span class="inline-block bg-red-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">❌ RECHAZAR</span>
+            
+            <p class="text-gray-500 mt-2 text-sm">Confianza: <strong>93%</strong></p>
+        </div>
+
+        <div class="bg-gray-50 rounded-xl p-4 mb-4">
+            <h3 class="font-semibold text-gray-700 mb-2">Justificación</h3>
+            <p class="text-gray-600 leading-relaxed">La transacción TXN-00089 presenta un veredicto BLOCKER bajo POL-FRD-001: el fraud_score de 8 está muy por debajo del umbral mínimo de 30, y las notas de la transacción confirman &#39;Alto riesgo detectado&#39;. Conforme a la Regla 1 del sistema, la presencia de al menos un BLOCKER obliga a recomendar REJECT sin excepciones. El riesgo se agrava por múltiples factores concurrentes: (1) el historial del cliente CLI-0029 muestra 3 contracargos sobre 4 transacciones totales (tasa del 75%), con 1 transacción rechazada previamente, lo que indica un perfil de alto riesgo; (2) el perfil del comercio Booking refleja una tasa de contracargos del 33.33% (3 de 9 transacciones), muy superior al umbral crítico evaluado en POL-CB-004; (3) existe una inconsistencia de canal/dispositivo: la transacción se registra como &#39;App Móvil&#39; pero el dispositivo es &#39;Desktop/Linux&#39;, lo que es técnicamente contradictorio y sugiere posible manipulación o fraude; (4) el log registra un TIMEOUT_RETRY en la comunicación con la red durante el procesamiento, lo que puede indicar una anomalía técnica en la autorización; (5) el precedente CB-0031 es prácticamente idéntico (mismo comercio Booking, mismo monto USD 889.02, mismo score 8) y resultó en reembolso parcial tras 28 días, lo que refuerza la necesidad de revisión exhaustiva. Las políticas POL-CB-002 y POL-CB-003 emiten WARNING por falta de documentación de respaldo y ausencia de notificación confirmada al comercio. POL-CB-001 requiere verificación de fecha de apertura del reclamo para confirmar vigencia del plazo de 120 días. POL-SLA-001 y POL-SLA-002 advierten sobre posibles incumplimientos de SLA que deben monitorearse. No se evidencia incumplimiento de SLA consumado a la fecha, por lo que compensation_applicable es false conforme a POL-SLA-004.</p>
+        </div>
+
+        
+        <div>
+            <h3 class="font-semibold text-gray-700 mb-2">Próximos pasos</h3>
+            <ul class="space-y-2">
+                
+                <li class="flex items-start gap-2">
+                    <span class="text-green-500 font-bold mt-0.5">✓</span>
+                    <span class="text-gray-600 text-sm">Rechazar formalmente el contracargo TXN-00089 por violación BLOCKER de POL-FRD-001 (fraud score 8, por debajo del umbral mínimo de 30) y documentar la resolución en el sistema de gestión de casos.</span>
+                </li>
+                
+                <li class="flex items-start gap-2">
+                    <span class="text-green-500 font-bold mt-0.5">✓</span>
+                    <span class="text-gray-600 text-sm">Investigar la inconsistencia canal/dispositivo (App Móvil vs Desktop/Linux) y el evento TIMEOUT_RETRY en los logs para determinar si el cargo duplicado fue generado por el reintento de autorización; coordinar con el equipo técnico y la red Visa para obtener el registro de autorizaciones.</span>
+                </li>
+                
+                <li class="flex items-start gap-2">
+                    <span class="text-green-500 font-bold mt-0.5">✓</span>
+                    <span class="text-gray-600 text-sm">Revisar el historial completo del cliente CLI-0029 (3 CBs sobre 4 transacciones, actividad en COL/URY/USA) bajo POL-FRD-002 y POL-CB-005 para evaluar si corresponde bloquear preventivamente la cuenta o escalar a investigación de fraude.</span>
+                </li>
+                
+                <li class="flex items-start gap-2">
+                    <span class="text-green-500 font-bold mt-0.5">✓</span>
+                    <span class="text-gray-600 text-sm">Notificar formalmente al comercio Booking sobre el contracargo iniciado, registrando la fecha de notificación para controlar el plazo de respuesta de 15 días hábiles según POL-EXC-004 y POL-CB-003, y verificar el cumplimiento del SLA de primera respuesta al cliente (POL-SLA-001).</span>
+                </li>
+                
+                <li class="flex items-start gap-2">
+                    <span class="text-green-500 font-bold mt-0.5">✓</span>
+                    <span class="text-gray-600 text-sm">Evaluar el perfil de riesgo del comercio Booking (tasa de CB del 33.33%) bajo POL-CB-004 con datos agregados del mes calendario, y considerar medidas de mitigación como restricciones de procesamiento o revisión de la relación comercial.</span>
+                </li>
+                
+            </ul>
+        </div>
+        
+
+        
+
+        
+        <div class="mt-4 bg-purple-50 border border-purple-100 rounded-lg p-3">
+            <p class="text-xs text-gray-500 mb-1">Precedentes utilizados</p>
+            <p class="text-sm text-gray-600">El precedente más relevante es CB-0031 (comercio Booking, monto USD 889.02, score 8), prácticamente idéntico a TXN-00089, que resultó en reembolso parcial tras 28 días de gestión. El caso CB-0008 (Booking, USD 1,080.15, score 25) se encuentra en escalación tras 41 días, lo que sugiere que los casos de Booking con scores bajos tienden a ser complejos y prolongados. Los casos CB-0032 (Uber) y CB-0028 (Airbnb) con scores altos (56 y 53) se resolvieron a favor del comercio en plazos cortos (13 y 8 días), reforzando la correlación entre fraud score bajo y mayor complejidad/riesgo. El patrón indica que casos con score inferior a 30 en Booking requieren investigación exhaustiva y tienden a resolverse con reembolso o escalación.</p>
+        </div>
+        
+    </section>
+
+    <!-- SECTION 9: Judge Evaluation -->
+    <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">🏆 Evaluación de Calidad (LLM-as-Judge)</h2>
+        
+        <div class="flex items-center gap-6 mb-6">
+            <div class="text-center">
+                <div class="text-5xl font-black text-green-600">
+                    9.1
+                </div>
+                <p class="text-xs text-gray-500">/ 10.0</p>
+                <span class="inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                    ✓ APROBADO
+                </span>
+            </div>
+            <div class="flex-1 space-y-3">
+                
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-600">Policy Consistency</span>
+                        <span class="font-semibold">9.5</span>
+                    </div>
+                    <div class="score-bar">
+                        <div class="score-fill" style="width: 95%;"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-600">Justification Quality</span>
+                        <span class="font-semibold">9.5</span>
+                    </div>
+                    <div class="score-bar">
+                        <div class="score-fill" style="width: 95%;"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-600">Precedent Usage</span>
+                        <span class="font-semibold">9.0</span>
+                    </div>
+                    <div class="score-bar">
+                        <div class="score-fill" style="width: 90%;"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-600">Risk Assessment</span>
+                        <span class="font-semibold">9.0</span>
+                    </div>
+                    <div class="score-bar">
+                        <div class="score-fill" style="width: 90%;"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-gray-600">Actionability</span>
+                        <span class="font-semibold">8.5</span>
+                    </div>
+                    <div class="score-bar">
+                        <div class="score-fill" style="width: 85%;"></div>
+                    </div>
+                </div>
+                
+                
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <div class="bg-green-50 rounded-xl p-4">
+                <h3 class="font-semibold text-green-700 mb-2 text-sm">✓ Fortalezas</h3>
+                <ul class="space-y-1">
+                    
+                    <li class="text-green-600 text-xs">• La resolución identifica correctamente el BLOCKER de POL-FRD-001 (fraud_score 8 vs umbral mínimo 30) y emite REJECT de forma consistente, sin contradicciones entre los 17 veredictos de política evaluados, incluyendo el manejo apropiado de NOT_APPLICABLE para políticas sin datos suficientes.</li>
+                    
+                    <li class="text-green-600 text-xs">• La justificación es excepcionalmente específica: cita el ID de transacción TXN-00089, el cliente CLI-0029, el monto exacto USD 889.02, el fraud_score 8, los códigos de política (POL-FRD-001, POL-CB-002, POL-CB-003, POL-CB-004, POL-EXC-004), la inconsistencia técnica App Móvil vs Desktop/Linux, y el evento TIMEOUT_RETRY de los logs como posible causa del cobro duplicado declarado.</li>
+                    
+                    <li class="text-green-600 text-xs">• El uso de precedentes es sólido y comparativo: CB-0031 se identifica como caso prácticamente idéntico (mismo comercio, monto y score), CB-0008 refuerza la tendencia de complejidad en Booking con scores bajos, y CB-0032/CB-0028 aportan el contraste con scores altos resueltos rápidamente, extrayendo un patrón accionable sobre casos con score inferior a 30.</li>
+                    
+                </ul>
+            </div>
+            
+            
+            <div class="bg-orange-50 rounded-xl p-4">
+                <h3 class="font-semibold text-orange-700 mb-2 text-sm">⚠ Áreas de mejora</h3>
+                <ul class="space-y-1">
+                    
+                    <li class="text-orange-600 text-xs">• El risk_level asignado es &#39;BLOCKER&#39;, que no es un nivel de riesgo estándar (se esperaría &#39;CRITICAL&#39; o &#39;HIGH&#39;); aunque la intención es clara, usar el término del veredicto de política como nivel de riesgo genera ambigüedad semántica en el campo y podría causar errores en sistemas que consuman este campo.</li>
+                    
+                    <li class="text-orange-600 text-xs">• El paso 1 de next_steps indica &#39;rechazar formalmente el contracargo&#39; pero no especifica el canal o sistema concreto donde debe documentarse (ej. nombre del sistema de gestión, formulario específico, responsable asignado), lo que reduce levemente su ejecutabilidad inmediata para el analista receptor.</li>
+                    
+                    <li class="text-orange-600 text-xs">• POL-CB-005 se marca como NOT_APPLICABLE argumentando falta de datos del historial de los últimos 6 meses, pero la propia justificación menciona &#39;3 CBs sobre 4 transacciones totales&#39; del cliente CLI-0029, lo que sugiere que sí existe información parcial que podría haber justificado al menos un veredicto WARNING en lugar de NOT_APPLICABLE, siendo inconsistente internamente.</li>
+                    
+                </ul>
+            </div>
+            
+        </div>
+        
+    </section>
+
+    <!-- SECTION 10: HITL Form (conditional) -->
+    
+    <section class="bg-yellow-50 border-2 border-yellow-400 rounded-2xl shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-bold text-yellow-800 mb-4">👤 Revisión del Analista Requerida</h2>
+        <p class="text-yellow-700 mb-4 text-sm">
+            Este caso requiere revisión manual. Motivo: <strong>Múltiples políticas requieren revisión humana: verificación de fecha de apertura del reclamo (POL-CB-001), recopilación de documentación de respaldo (POL-CB-002), investigación de inconsistencia canal/dispositivo, análisis del historial del cliente (POL-CB-005, POL-FRD-002), y monitoreo de SLAs (POL-SLA-001, POL-SLA-002). Adicionalmente, el precedente CB-0031 idéntico y el perfil de riesgo extremo del cliente y del comercio requieren revisión por un analista senior.</strong>
+        </p>
+        <form id="hitl-form" class="space-y-4">
+            <input type="hidden" name="transaction_id" value="TXN-00089">
+            <input type="hidden" name="judge_score" value="9.1">
+
+            <div>
+                <p class="font-semibold text-gray-700 mb-2">Decisión del Analista</p>
+                <div class="flex gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="analyst_decision" value="APPROVED" class="text-green-600">
+                        <span class="text-green-700 font-semibold">✅ Aprobar</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="analyst_decision" value="REJECTED" class="text-red-600">
+                        <span class="text-red-700 font-semibold">❌ Rechazar</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="analyst_decision" value="MODIFIED" class="text-blue-600">
+                        <span class="text-blue-700 font-semibold">✏️ Modificar</span>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label class="block font-semibold text-gray-700 mb-1">Notas del Analista</label>
+                <textarea name="analyst_notes" rows="3"
+                    class="w-full border border-gray-300 rounded-lg p-3 text-sm focus:outline-none focus:border-yellow-500"
+                    placeholder="Ingrese su justificación o modificaciones..."></textarea>
+            </div>
+
+            <button type="submit"
+                class="bg-yellow-500 hover:bg-yellow-600 text-black font-bold px-6 py-3 rounded-xl transition shadow">
+                Enviar Decisión
+            </button>
+        </form>
+        <script>
+            document.getElementById('hitl-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = Object.fromEntries(new FormData(e.target));
+                alert('Decisión enviada: ' + data.analyst_decision + '. Gracias por su revisión.');
+            });
+        </script>
+    </section>
+    
+
+    <!-- HITL Decision (if already resolved) -->
+    
+
+    <!-- Footer -->
+    <footer class="bg-gray-100 rounded-xl p-4 text-center text-xs text-gray-400">
+        <p>Generado: <strong>2026-07-22 20:48 UTC</strong> | Agente: CIRI Chargeback Agent v1.0</p>
+        <p class="mt-1">Prompts: v1_policy_eval, v1_resolution, v1_judge, v1_log_analysis | Embeddings: paraphrase-multilingual-MiniLM-L12-v2</p>
+        
+        <p class="mt-1">Judge score: <strong>9.1/10</strong> | Cache hit: <strong>No</strong></p>
+        
+    </footer>
+
+</div>
+</body>
+</html>
