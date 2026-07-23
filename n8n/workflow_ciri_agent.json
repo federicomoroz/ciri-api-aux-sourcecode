@@ -19,7 +19,7 @@
     },
     {
       "parameters": {
-        "content": "## 🟢 §1 — Entrada y Validación\n\n**Qué hace:**\n• Webhook recibe `transaction_id` + `motivo`\n• IF valida formato TXN-XXXXX (regex)\n• ✅ True → Set extrae campos limpios\n• ❌ False → HTTP 400 al caller\n\n**Error handling:**\n• respondToWebhook (400)\n• → Stop and Error → Error Handler\n\n**Output:** Campos validados para §2",
+        "content": "## 🟢 §1 — Entrada y Validación\n\n**Qué hace:**\n• Webhook recibe `transaction_id` + `motivo`\n• IF valida formato TXN-XXXXX (regex)\n• ✅ True → Set extrae campos limpios\n• ❌ False → Stop and Error → Error Handler\n\n**Output:** Campos validados para §2",
         "height": 1800,
         "width": 1080,
         "color": 5
@@ -164,23 +164,6 @@
       "position": [
         59640,
         22200
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { error: 'Formato de transaction_id inválido. Se esperaba TXN-XXXXX (ej: TXN-00051).', received: ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || '(vacío)') } }}",
-        "options": {
-          "responseCode": 400
-        }
-      },
-      "id": "a1c48d7e-b258-455f-97f1-6cb49acfc985",
-      "name": "Error — TXN Inválida",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        59640,
-        22800
       ]
     },
     {
@@ -1041,57 +1024,6 @@
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { error: 'Servicio temporalmente no disponible. La API no respondió después de 3 reintentos.', transaction_id: $('Validar Formato TXN').first().json.transaction_id, suggestion: 'Reintente en 60 segundos (cold start de Render).' } }}",
-        "options": {
-          "responseCode": 503
-        }
-      },
-      "id": "69e6628f-7f09-4b69-843d-1a1367208e2f",
-      "name": "Error — API No Disponible",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        60920,
-        22800
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { error: 'Error en el análisis con IA. El servicio LLM no pudo procesar la solicitud.', transaction_id: $('Validar Formato TXN').first().json.transaction_id, suggestion: 'Verifique los créditos de la API de Anthropic y reintente.' } }}",
-        "options": {
-          "responseCode": 500
-        }
-      },
-      "id": "5fbe84d5-1596-48ac-afa1-63d2eb764e21",
-      "name": "Error — Análisis Fallido",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        62520,
-        22800
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { error: 'Error al generar el reporte HTML.', transaction_id: $('Validar Formato TXN').first().json.transaction_id, suggestion: 'Reintente la solicitud.' } }}",
-        "options": {
-          "responseCode": 500
-        }
-      },
-      "id": "679eb01e-459d-4838-bae8-7971238720fd",
-      "name": "Error — Reporte Fallido",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        64840,
-        23400
-      ]
-    },
-    {
-      "parameters": {
         "method": "GET",
         "url": "={{ $vars.API_BASE_URL + '/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').first().json.cliente_vip || false) }}",
         "options": {
@@ -1138,36 +1070,20 @@
       "typeVersion": 2,
       "position": [
         60500,
-        21600
+        21400
       ]
     },
     {
       "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/html; charset=utf-8"
-              },
-              {
-                "name": "X-Cache",
-                "value": "HIT"
-              }
-            ]
-          }
-        }
+        "jsCode": "// Formatear respuesta de caché para el Responder unificado\nconst html = $input.first().json.html;\nreturn [{\n  json: {\n    html: html\n  }\n}];"
       },
       "id": "6f598020-515a-4d19-b148-193dcdb3241e",
-      "name": "Responder — Caché",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "name": "Formatear Caché",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         60820,
-        21600
+        21280
       ]
     },
     {
@@ -1242,7 +1158,7 @@
     },
     {
       "parameters": {
-        "errorMessage": "={{Formato de transaction_id inválido. Solicitud rechazada con HTTP 400.}}"
+        "errorMessage": "Formato de transaction_id inválido. Se esperaba TXN-XXXXX."
       },
       "id": "2e7c0e1f-7df9-40ff-898f-e9fe61a63873",
       "name": "Propagar → Error Handler — TXN",
@@ -1255,7 +1171,7 @@
     },
     {
       "parameters": {
-        "errorMessage": "={{API no disponible después de reintentos. Respuesta HTTP 503 enviada al cliente.}}"
+        "errorMessage": "API no disponible después de 3 reintentos (cold start)."
       },
       "id": "489f690b-d1c5-4682-b270-a9f666d216ec",
       "name": "Propagar → Error Handler — API",
@@ -1268,7 +1184,7 @@
     },
     {
       "parameters": {
-        "errorMessage": "={{Fallo en análisis LLM (Anthropic). Respuesta HTTP 500 enviada al cliente.}}"
+        "errorMessage": "Error en análisis LLM (Anthropic). Verifique créditos de API."
       },
       "id": "ea5b5689-b081-44ff-b171-4f8a9a87fbde",
       "name": "Propagar → Error Handler — Análisis",
@@ -1281,7 +1197,7 @@
     },
     {
       "parameters": {
-        "errorMessage": "={{Error al generar reporte HTML. Respuesta HTTP 500 enviada al cliente.}}"
+        "errorMessage": "Error al generar reporte HTML."
       },
       "id": "27d06f68-8f20-4892-8b38-53247130023e",
       "name": "Propagar → Error Handler — Reporte",
@@ -1427,7 +1343,7 @@
         ],
         [
           {
-            "node": "Error — TXN Inválida",
+            "node": "Propagar → Error Handler — TXN",
             "type": "main",
             "index": 0
           }
@@ -1481,7 +1397,7 @@
         ],
         [
           {
-            "node": "Error — API No Disponible",
+            "node": "Propagar → Error Handler — API",
             "type": "main",
             "index": 0
           }
@@ -1565,7 +1481,7 @@
         ],
         [
           {
-            "node": "Error — Análisis Fallido",
+            "node": "Propagar → Error Handler — Análisis",
             "type": "main",
             "index": 0
           }
@@ -1583,7 +1499,7 @@
         ],
         [
           {
-            "node": "Error — Análisis Fallido",
+            "node": "Propagar → Error Handler — Análisis",
             "type": "main",
             "index": 0
           }
@@ -1644,7 +1560,7 @@
         ],
         [
           {
-            "node": "Error — Reporte Fallido",
+            "node": "Propagar → Error Handler — Reporte",
             "type": "main",
             "index": 0
           }
@@ -1779,7 +1695,7 @@
       "main": [
         [
           {
-            "node": "Responder — Caché",
+            "node": "Formatear Caché",
             "type": "main",
             "index": 0
           }
@@ -1833,50 +1749,6 @@
         ]
       ]
     },
-    "Error — TXN Inválida": {
-      "main": [
-        [
-          {
-            "node": "Propagar → Error Handler — TXN",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error — API No Disponible": {
-      "main": [
-        [
-          {
-            "node": "Propagar → Error Handler — API",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error — Análisis Fallido": {
-      "main": [
-        [
-          {
-            "node": "Propagar → Error Handler — Análisis",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error — Reporte Fallido": {
-      "main": [
-        [
-          {
-            "node": "Propagar → Error Handler — Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Generar Reporte": {
       "main": [
         [
@@ -1888,7 +1760,7 @@
         ],
         [
           {
-            "node": "Error — Reporte Fallido",
+            "node": "Propagar → Error Handler — Reporte",
             "type": "main",
             "index": 0
           }
@@ -1906,7 +1778,18 @@
         ],
         [
           {
-            "node": "Error — Reporte Fallido",
+            "node": "Propagar → Error Handler — Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatear Caché": {
+      "main": [
+        [
+          {
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }

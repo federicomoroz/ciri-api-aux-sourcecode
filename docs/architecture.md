@@ -18,11 +18,11 @@
 
 **Explicit Workflow Orchestration with LLM-augmented tools** — sometimes called an *Agentic Pipeline*.
 
-This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — ~54 named nodes, always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
+This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — 42 nodes (37 executable + 5 sticky), always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
 
 | | AI Agent clásico | Este sistema |
 |---|---|---|
-| Quién decide el flujo | El LLM | n8n (explícito, ~54 nodos) |
+| Quién decide el flujo | El LLM | n8n (explícito, 42 nodos) |
 | Auditabilidad | Black box | Cada paso es un nodo visible |
 | Determinismo | No garantizado | Siempre la misma secuencia |
 | Debugging | Difícil | Nodo por nodo en el canvas |
@@ -35,7 +35,7 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a **sin
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Orchestration | n8n (~54 nodes: 43 exec + 11 sticky) | WHAT to do and WHEN — webhook, form trigger, sequencing, native computation, guardrails visibility, routing by risk |
+| Orchestration | n8n (42 nodes: 37 exec + 5 sticky) | WHAT to do and WHEN — webhook, sequencing, native computation, guardrails visibility, routing by risk |
 | Business logic | FastAPI | HOW — RAG retrieval, resolution synthesis with guardrails, feedback auto-indexing |
 | Semantic store | Qdrant Cloud | Unstructured truth — policies, historical cases, semantic cache |
 | Structured store | SQLite | Relational truth — transactions, logs, feedback, audit trail |
@@ -49,63 +49,55 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a **sin
 
 ## n8n Explicit Orchestration
 
-The workflow contains **54 nodes (43 executable + 11 sticky notes) across 5 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named node with a specific purpose — native n8n nodes for deterministic logic, HTTP Request nodes for external calls.
-
-**Two entry points** share the same validation → analysis → routing flow:
+The workflow contains **42 nodes (37 executable + 5 sticky notes) across 4 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named node with a specific purpose — native n8n nodes for deterministic logic, HTTP Request nodes for external calls.
 
 ```
-§1 — ENTRY (4 nodes, 2 triggers)
+§1 — ENTRY + CACHE (6 nodes)
    [Webhook — Entrada]              ← HTTP POST trigger (API/curl)
-   [Form Trigger — Formulario]      ← Native n8n form (browser UI)
-       ↓ (both connect to)
    [Validar Formato — IF]           ← IF node: validates TXN-XXXXX format
-       ↓
-   [Validar Formato TXN]            ← Set node: normalizes fields from webhook OR form
+   [Validar Formato TXN]            ← Set node: normalizes fields
+   [Despertar API]                  ← HTTP GET /health (wakes cold-start)
+   [Verificar Caché]                ← HTTP GET /api/cache/lookup
+   [¿Cache Hit?]                    ← IF node: cached → respond immediately
 
-§2 — CONTEXT ASSEMBLY (11 nodes — 5 HTTP calls + 2 Set evaluations + 1 native Set + Merge)
+§2 — CONTEXT ASSEMBLY (11 nodes)
    [Obtener Transacción]         GET  /api/transactions/{id}
    [Obtener Logs]                GET  /api/logs/{tx_id}
    [Buscar Políticas]            GET  /api/policies/search     ← RAG: Qdrant semantic
-   [Buscar Casos Similares]      GET  /api/cases/similar        ← RAG: Qdrant semantic
-   [Riesgo del Comercio]         GET  /api/merchants/{name}/risk  ← raw stats
-   [Evaluar Riesgo Comercio]     ← Set node: computes is_suspended, is_high_risk, is_strategic flags
-   [Historial del Cliente]       GET  /api/clients/{id}/history  ← raw history
-   [Evaluar Historial Cliente]   ← Set node: computes is_recidivist, has_geo_anomaly, is_vip flags
-   [Verificar SLA]               ← Set node (native): date math → within_sla, sla_limit_days, policy_reference
-   [Merge — Contexto Paralelo]   ← Merge node: waits for all 6 parallel branches (indices 0–5)
+   [Buscar Casos Similares]      GET  /api/cases/similar       ← RAG: Qdrant semantic
+   [Riesgo del Comercio]         GET  /api/merchants/{name}/risk
+   [Evaluar Riesgo Comercio]     ← Set node: is_suspended, is_high_risk, is_strategic
+   [Historial del Cliente]       GET  /api/clients/{id}/history
+   [Evaluar Historial Cliente]   ← Set node: is_recidivist, has_geo_anomaly, is_vip
+   [Verificar SLA]               ← Set node: date math → within_sla, sla_limit_days
+   [Merge — Contexto Paralelo]   ← Merge node: waits for 6 parallel branches
 
-§3 — AI ANALYSIS (8 nodes — includes guardrail visibility + judge gate)
-   [Compilar Contexto]            ← Code node: merges all branch outputs into unified context
-       ↓
-   [Sintetizar Resolución]        POST /api/analyze/resolve  ← LLM: RAG + synthesis + guardrails
-       ↓
-   [Verificar Guardrails]         ← Code node: defense-in-depth visibility on canvas
-       ↓
-   [Juez de Calidad]              POST /api/analyze/judge  ← LLM-as-Judge
-       ↓
+§3 — AI ANALYSIS (8 nodes)
+   [Compilar Contexto]            ← Code node: merges all branch outputs
+   [Sintetizar Resolución]        POST /api/analyze/resolve  ← LLM + RAG + guardrails
+   [Verificar Guardrails]         ← Code node: defense-in-depth visibility
+   [Juez de Calidad]              POST /api/analyze/judge    ← LLM-as-Judge
    [Extraer Evaluación — Juez]    ← Set node: JSON.parse → judge_evaluation
-       ↓
-   [¿Juez Aprueba? (≥7.0)]       ← IF node: score >= 7.0 pass / < 7.0 fail
-       ↓ (false)
+   [¿Juez Aprueba? (≥7.0)]       ← IF node: score ≥ 7.0 pass / < 7.0 fail
    [Marcar — Calidad Baja]        ← Set node: adds LOW_QUALITY flag
-       ↓ (both branches merge)
    [Preparar Informe]             ← Code node: builds ReportRequest payload
 
-§4 — RISK ROUTING (Switch + 4 branches × 2 nodes each)
+§4 — RISK ROUTING + RESPONSE (8 nodes unified)
    [Switch — Nivel de Riesgo]
-      BLOCKER → [Generar Reporte] → [Responder — BLOCKER]
-      HIGH    → [Notificar Analista] → [Wait — Aprobación HITL] → [Procesar Respuesta HITL]
-             → [Registrar Feedback HITL] → [Generar Reporte] → [Responder — HIGH]
-      MEDIUM  → [Generar Reporte] → [Responder — MEDIUM]
-      LOW     → [Generar Reporte] → [Responder — LOW]
+      BLOCKER / MEDIUM / LOW → [Generar Reporte] → [Responder — Reporte]
+      HIGH → [Notificar Analista] → [Wait — Aprobación HITL]
+           → [Procesar Respuesta HITL] → [Registrar Feedback HITL]
+           → [Generar Reporte — HITL] → [Responder — Reporte]
+   All errors → [Stop and Error] → Error Handler workflow
 
-§5 — ERROR HANDLING (separate workflow: CIRI — Error Handler)
-   [Error Trigger]               ← Captures unhandled errors from the main workflow
-       ↓
-   [Extraer Info de Error]       ← Set node: error_message, failed_node, execution_url, timestamp
+§E — ERROR HANDLING (separate workflow: CIRI — Error Handler)
+   [Error Trigger]               ← Captures errors propagated via Stop and Error
+   [Extraer Info de Error]       ← Set node: error_message, failed_node, timestamp
 ```
 
 **HITL Wait node** uses native n8n form submission — when an analyst visits the approval URL, they see a styled form with "Decisión" (APPROVE/REJECT dropdown) and "Notas del Analista" (textarea), not a raw JSON POST.
+
+**Unified response path:** All branches converge to a single `[Responder — Reporte]` node. Cache hits go through `[Formatear Caché]` before reaching the same responder. Errors use `stopAndError` nodes that propagate to the Error Handler workflow — no `respondToWebhook` nodes on error paths.
 
 **Why explicit instead of AI Agent?** An AI Agent node decides autonomously which tools to call and in what order. That creates a black box — no audit trail, non-deterministic sequencing, impossible to debug when it skips a step. The explicit workflow guarantees that every investigation always executes the same 7 context-gathering steps in the same order, every time.
 
@@ -115,78 +107,70 @@ The workflow contains **54 nodes (43 executable + 11 sticky notes) across 5 sect
 
 ```mermaid
 flowchart TD
-    WEBHOOK([Webhook\nPOST /webhook/chargeback-agent]) --> VALIDATE
-    FORM([Form Trigger\nFormulario nativo n8n]) --> VALIDATE
+    WEBHOOK([Webhook]) --> VALIDATE
 
-    subgraph N8N ["n8n — Explicit Orchestrator (54 nodes: 43 exec + 11 sticky)"]
-        VALIDATE[Validar Formato TXN\nIF + Set nodes]
-        GET_TX[GET /api/transactions/:id]
-        GET_LOGS[GET /api/logs/:tx_id]
-        SEARCH_POL[GET /api/policies/search]
-        SEARCH_CASES[GET /api/cases/similar]
-        MERCHANT[GET /api/merchants/:name/risk\nraw stats]
-        EVAL_M[Evaluar Riesgo Comercio\nSet node · flags]
-        CLIENT[GET /api/clients/:id/history\nraw history]
-        EVAL_C[Evaluar Historial Cliente\nSet node · flags]
-        SLA[Verificar SLA\nSet node · date math]
-        MERGE[Merge — Contexto Paralelo\nwaits for indices 0–5]
-        COMPILE[Compilar Contexto\nCode node]
-        RESOLVE[POST /api/analyze/resolve\nRAG + LLM + guardrails]
-        GUARDRAILS[Verificar Guardrails\nCode node · defense in depth]
-        JUDGE[POST /api/analyze/judge\nLLM-as-Judge via FastAPI]
-        EXTRACT[Extraer Evaluación — Juez\nSet node · JSON.parse]
-        JUDGE_GATE{"¿Juez Aprueba?\nscore ≥ 7.0"}
-        LOW_Q[Marcar — Calidad Baja\nSet node · flag]
-        PREPARE[Preparar Informe\nCode node]
-        SWITCH{Switch\nrisk_level}
-        REPORT_B[POST /api/reports/html → Responder BLOCKER]
-        REPORT_H[HITL form → POST /api/reports/html → Responder HIGH]
-        REPORT_M[POST /api/reports/html → Responder MEDIUM]
-        REPORT_L[POST /api/reports/html → Responder LOW]
+    subgraph S1 [" "]
+        VALIDATE{Validar formato}
+        VALIDATE -->|valid| SET_TXN[Extraer campos]
+        VALIDATE -->|invalid| ERR_TXN[Stop and Error]
     end
 
-    subgraph FASTAPI ["FastAPI — Business Logic"]
-        direction TB
-        SERVICES[Services\nResolutionService · FeedbackService]
-        RAG_LAYER[RAG\nQdrantRetriever · QueryBuilder · RAGUpdater]
-        DOMAIN[Domain\nenums · constants · models · parsing]
-        LLM_CLIENT[LLM Client\nAnthropicClient · Protocol]
-        PROMPTS[Prompts\nv1_policy_eval · v1_resolution · v1_judge]
+    SET_TXN --> WAKE[Despertar API] --> CACHE_CHECK[Verificar Caché]
+    CACHE_CHECK --> CACHE_IF{Hit?}
+    CACHE_IF -->|yes| FMT_CACHE[Formatear Caché] --> RESPOND
+    CACHE_IF -->|no| GET_TX
+
+    subgraph S2 [" "]
+        GET_TX[Transacción]
+        GET_TX -->|error| ERR_API[Stop and Error]
+        GET_TX --> GET_LOGS[Logs] & SEARCH_POL[Políticas] & SEARCH_CASES[Casos similares] & MERCHANT[Comercio] & CLIENT[Cliente] & SLA[SLA]
+        MERCHANT --> EVAL_M[Evaluar riesgo]
+        CLIENT --> EVAL_C[Evaluar historial]
+        GET_LOGS & SEARCH_POL & SEARCH_CASES & EVAL_M & EVAL_C & SLA --> MERGE[Merge]
     end
 
-    subgraph VECTOR ["Qdrant Cloud"]
-        Q_POL[(policies\n17 docs · 1024 dims)]
-        Q_CASES[(historical_cases\n60+ docs · grows automatically)]
-        Q_CACHE[(_semantic_cache\nthreshold 0.92)]
+    subgraph S3 [" "]
+        COMPILE[Compilar contexto]
+        COMPILE --> RESOLVE[Resolución LLM]
+        RESOLVE -->|error| ERR_LLM[Stop and Error]
+        RESOLVE --> GUARDRAILS[Guardrails]
+        GUARDRAILS --> JUDGE[Juez LLM]
+        JUDGE -->|error| ERR_LLM
+        JUDGE --> EXTRACT[Extraer score]
+        EXTRACT --> JUDGE_IF{Score ≥ 7?}
+        JUDGE_IF -->|yes| PREPARE[Preparar informe]
+        JUDGE_IF -->|no| LOW_Q[Marcar baja calidad] --> PREPARE
     end
 
-    subgraph DB ["SQLite"]
-        DB_TX[(transactions · 100)]
-        DB_LOGS[(logs · 150+)]
-        DB_FEEDBACK[(feedback · audit trail)]
+    subgraph S4 [" "]
+        SWITCH{Nivel de riesgo}
+        SWITCH -->|BLOCKER| REPORT[Generar Reporte]
+        SWITCH -->|MEDIUM| REPORT
+        SWITCH -->|LOW| REPORT
+        SWITCH -->|HIGH| NOTIFY[Notificar analista]
+        NOTIFY --> WAIT[Wait HITL]
+        WAIT --> PROCESS[Procesar respuesta]
+        PROCESS --> FEEDBACK[Registrar feedback]
+        FEEDBACK --> REPORT_HITL[Generar Reporte HITL]
+        REPORT -->|error| ERR_RPT[Stop and Error]
+        REPORT_HITL -->|error| ERR_RPT
+        REPORT --> RESPOND([Responder])
+        REPORT_HITL --> RESPOND
     end
 
-    VALIDATE --> GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & MERCHANT & CLIENT & SLA
-    MERCHANT --> EVAL_M
-    CLIENT --> EVAL_C
-    GET_TX & GET_LOGS & SEARCH_POL & SEARCH_CASES & EVAL_M & EVAL_C & SLA --> MERGE
-    MERGE --> COMPILE --> RESOLVE --> GUARDRAILS --> JUDGE --> EXTRACT --> JUDGE_GATE
-    JUDGE_GATE -->|"≥ 7.0"| PREPARE
-    JUDGE_GATE -->|"< 7.0"| LOW_Q --> PREPARE
+    MERGE --> COMPILE
     PREPARE --> SWITCH
-    SWITCH --> REPORT_B & REPORT_H & REPORT_M & REPORT_L
 
-    SEARCH_POL --> Q_POL
-    SEARCH_CASES --> Q_CASES
-    RESOLVE --> Q_CACHE
+    SEARCH_POL -.-> Q_POL[(policies)]
+    SEARCH_CASES -.-> Q_CASES[(cases)]
+    RESOLVE -.-> Q_CACHE[(_cache)]
+    GET_TX -.-> DB_TX[(transactions)]
+    GET_LOGS -.-> DB_LOGS[(logs)]
 
-    GET_TX --> DB_TX
-    GET_LOGS --> DB_LOGS
-
-    style N8N fill:#f0f8ff,stroke:#4a90d9
-    style FASTAPI fill:#f0fff0,stroke:#4a9d4a
-    style VECTOR fill:#fff8f0,stroke:#d9904a
-    style DB fill:#fff0f8,stroke:#d94a90
+    style S1 fill:none,stroke:none
+    style S2 fill:none,stroke:none
+    style S3 fill:none,stroke:none
+    style S4 fill:none,stroke:none
 ```
 
 ---
@@ -254,17 +238,15 @@ Langfuse traces every LLM call with: model, token count, latency, prompt version
 
 ## Data Flow Description
 
-### Phase 1: Entry (two ingestion methods)
+### Phase 1: Entry and cache check
 
-A chargeback investigation starts from one of two entry points:
-1. **Webhook** — `POST /webhook/chargeback-agent` with JSON body (`transaction_id`, `motivo`, `cliente_vip`)
-2. **Form Trigger** — native n8n form at `/form/chargeback-form` with styled fields (Transaction ID, Motivo, Cliente VIP dropdown)
+A chargeback investigation starts from a **Webhook** — `POST /webhook/chargeback-agent` with JSON body (`transaction_id`, `motivo`, `cliente_vip`).
 
-Both connect to the same `[Validar Formato — IF]` node, which validates the `TXN-XXXXX` format before any downstream call. The `[Validar Formato TXN]` Set node normalizes field names from both sources (webhook uses `body.transaction_id`, form uses `Transaction ID`).
+`[Validar Formato — IF]` validates the `TXN-XXXXX` format. Invalid requests go directly to a `stopAndError` node. Valid requests pass through `[Despertar API]` (wakes cold-start services), then `[Verificar Caché]` checks the idempotency cache. On cache hit, `[Formatear Caché]` sends the stored HTML directly to `[Responder — Reporte]`, skipping the entire pipeline.
 
-### Phase 2: Context assembly (§2 — 5 HTTP calls + native n8n nodes)
+### Phase 2: Context assembly (§2 — 6 HTTP calls + native n8n nodes)
 
-n8n fires 5 HTTP calls and uses 3 native Set nodes to gather all evidence:
+n8n fires 6 HTTP calls and uses 3 native Set nodes to gather all evidence:
 
 1. `GET /api/transactions/{id}` — structured data from SQLite (amount, merchant, country, fraud_score, client_vip)
 2. `GET /api/logs/{tx_id}` — all event logs for the transaction (INFO/WARN/ERROR severity)
@@ -302,11 +284,11 @@ These are the same checks that FastAPI enforces — n8n provides canvas visibili
 `[Preparar Informe]` builds the `ReportRequest` payload. The Switch node routes by `resolution.risk_level`:
 
 - **BLOCKER** — auto-reject. Crypto payment or fraud score ≤ 30 with active blocker policy. Report generated immediately.
-- **HIGH** — elevated risk. VIP client or high-value transaction. Report includes HITL form for analyst review.
+- **HIGH** — elevated risk. VIP client or high-value transaction. Analyst notified → Wait HITL → feedback recorded → report generated.
 - **MEDIUM** — standard risk. Report with full reasoning and recommended action.
 - **LOW** — low risk. Expedited report with auto-approval recommendation.
 
-All four branches call the same `POST /api/reports/html` endpoint with the same `ReportRequest` shape. The HTML template renders conditionally based on `risk_level` and `verdict`.
+BLOCKER, MEDIUM, and LOW converge to a single `[Generar Reporte]` node. HIGH uses `[Generar Reporte — HITL]` (references the HITL response). Both connect to the unified `[Responder — Reporte]` node. Errors on any report generation go to `[Stop and Error]` and propagate to the Error Handler workflow.
 
 ### Phase 5: Auto-improvement
 
@@ -322,7 +304,7 @@ When an analyst submits feedback via `POST /api/feedback`, `FeedbackService` sav
 
 **Context:** The system needs an orchestration layer that provides a visual, auditable flow for non-technical stakeholders and guarantees deterministic execution order for every chargeback investigation.
 
-**Decision:** Use n8n with 54 nodes (43 executable + 11 sticky notes) — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge, Wait, Form Trigger) handle all deterministic logic. HTTP Request nodes are reserved for external calls, always paired with a Set node immediately after to make the external contract explicit. Both the synthesis LLM (`/api/analyze/resolve`) and the Judge (`/api/analyze/judge`) are called via FastAPI — all LLM interactions are centralized with consistent prompt versioning, error handling, and Langfuse observability. Two entry points (Webhook + Form Trigger) share the same downstream flow. A separate Error Trigger workflow captures unhandled errors.
+**Decision:** Use n8n with 42 nodes (37 executable + 5 sticky notes) — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge, Wait) handle all deterministic logic. HTTP Request nodes are reserved for external calls. Both the synthesis LLM (`/api/analyze/resolve`) and the Judge (`/api/analyze/judge`) are called via FastAPI — all LLM interactions are centralized with consistent prompt versioning, error handling, and Langfuse observability. A unified `Responder — Reporte` node serves all response paths. Errors propagate to a separate Error Handler workflow via `stopAndError` nodes.
 
 **Consequences:**
 - Every investigation executes the exact same steps in the same order, every time
