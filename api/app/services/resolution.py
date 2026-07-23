@@ -191,6 +191,13 @@ class ResolutionService:
             resolution["risk_level"] = RiskLevel.BLOCKER
             resolution["requires_hitl"] = False
 
+        if resolution.get("risk_level") == RiskLevel.BLOCKER and not has_blocker:
+            warnings.append(
+                "GUARDRAIL: risk_level=BLOCKER sin veredictos BLOCKER reales — auto-corregido a HIGH (posible alucinacion)"
+            )
+            resolution["risk_level"] = RiskLevel.HIGH
+            resolution["requires_hitl"] = True
+
         comp = resolution.get("compensation_amount_usd", 0)
         tx_amount = transaction.get("amount_usd", 0)
         if comp > tx_amount * GUARDRAIL_MAX_COMPENSATION_RATIO and tx_amount > 0:

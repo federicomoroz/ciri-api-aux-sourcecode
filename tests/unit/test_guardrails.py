@@ -51,6 +51,51 @@ class TestGuardrailApproveWithBlocker:
         assert len(warnings) == 0
 
 
+class TestGuardrailBlockerWithoutBlockerVerdicts:
+    """Guardrail 4: risk_level=BLOCKER without actual BLOCKER verdicts → auto-correct to HIGH."""
+
+    def test_blocker_risk_without_blocker_verdicts_corrected_to_high(self):
+        resolution = {
+            "recommended_action": "REJECT",
+            "risk_level": "BLOCKER",
+            "requires_hitl": False,
+            "policy_verdicts": [
+                {"policy_code": "POL-CB-005", "verdict": "FAIL", "reasoning": "Requiere aprobacion"},
+                {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio alto"},
+            ],
+        }
+        tx = {"amount_usd": 500.0}
+        warnings = ResolutionService._validate_resolution(resolution, tx)
+
+        assert any("risk_level=BLOCKER sin veredictos BLOCKER" in w for w in warnings)
+        assert resolution["risk_level"] == "HIGH"
+        assert resolution["requires_hitl"] is True
+
+    def test_blocker_risk_with_blocker_verdicts_no_correction(self):
+        resolution = {
+            "recommended_action": "REJECT",
+            "risk_level": "BLOCKER",
+            "policy_verdicts": [
+                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+            ],
+        }
+        tx = {"amount_usd": 500.0}
+        warnings = ResolutionService._validate_resolution(resolution, tx)
+        assert not any("risk_level=BLOCKER sin veredictos" in w for w in warnings)
+
+    def test_high_risk_without_blocker_verdicts_no_correction(self):
+        resolution = {
+            "recommended_action": "PENDING_HITL",
+            "risk_level": "HIGH",
+            "policy_verdicts": [
+                {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+            ],
+        }
+        tx = {"amount_usd": 500.0}
+        warnings = ResolutionService._validate_resolution(resolution, tx)
+        assert not any("risk_level=BLOCKER" in w for w in warnings)
+
+
 class TestGuardrailCompensation:
     """Guardrail 2: compensation > 110% of transaction amount."""
 
