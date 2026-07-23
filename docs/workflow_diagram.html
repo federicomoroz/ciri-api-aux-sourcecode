@@ -3,751 +3,916 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CIRI — Workflow Architecture</title>
-<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<title>CIRI — Architecture Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:     #080808;
-  --bg2:    #0d0d0d;
-  --bg3:    #111411;
-  --green:  #15ff00;
-  --lime:   #39ff14;
-  --dim:    #0a8f00;
-  --border: #122012;
-  --amber:  #ffb700;
-  --cyan:   #00fff7;
-  --red:    #ff4444;
-  --purple: #bf7fff;
-  --blue:   #4da6ff;
-  --s1: #39ff14;
-  --s2: #4da6ff;
-  --s3: #bf7fff;
-  --s4: #ffb700;
+  --bg: #09090b;
+  --surface: #131316;
+  --surface2: #1a1a1f;
+  --border: #27272a;
+  --border-subtle: #1e1e22;
+  --fg: #e4e4e7;
+  --dim: #71717a;
+  --muted: #52525b;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --sky: #38bdf8;
+  --radius: 8px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   background: var(--bg);
-  color: var(--green);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 0.82rem;
+  color: var(--fg);
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  font-size: 14px;
   line-height: 1.6;
-  min-height: 100vh;
-}
-
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent, transparent 3px,
-    rgba(0,0,0,0.04) 3px,
-    rgba(0,0,0,0.04) 4px
-  );
-  pointer-events: none;
-  z-index: 999;
+  -webkit-font-smoothing: antialiased;
 }
 
 .page {
-  max-width: 1380px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 44px 52px 80px;
+  padding: 56px 40px 72px;
 }
 
-/* ── HEADER ── */
-.header {
-  border-bottom: 1px solid var(--dim);
-  padding-bottom: 22px;
-  margin-bottom: 32px;
-}
-
-.title {
-  font-family: 'VT323', monospace;
-  font-size: 2.6rem;
-  color: var(--lime);
-  text-shadow: 0 0 10px var(--green);
-  letter-spacing: 4px;
-}
-
-.subtitle {
-  color: var(--dim);
-  font-size: 0.72rem;
-  letter-spacing: 2px;
-  margin-top: 4px;
-}
-
-.pills {
-  display: flex;
-  gap: 16px;
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
-
-.pill {
-  border: 1px solid;
-  padding: 2px 10px;
-  font-size: 0.67rem;
-  letter-spacing: 1.5px;
-}
-
-/* ── LEGEND ── */
-.legend {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  flex-wrap: wrap;
-  border: 1px solid var(--border);
-  padding: 10px 18px;
-  background: rgba(21,255,0,0.015);
-  margin-bottom: 24px;
-  font-size: 0.7rem;
-  color: var(--dim);
-  letter-spacing: 0.5px;
-}
-
-.legend-sep { color: var(--border); }
-
-.dot {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 1px;
-  margin-right: 6px;
-  vertical-align: middle;
-}
-
-.badge {
-  display: inline-block;
-  border: 1px solid;
-  padding: 0px 7px;
-  font-size: 0.65rem;
-  letter-spacing: 1px;
-  margin-right: 4px;
-  vertical-align: middle;
-}
-
-/* ── MAIN GRID ── */
-.grid {
-  display: grid;
-  grid-template-columns: 270px 1fr 180px;
-  border: 1px solid var(--border);
-  background: var(--border); /* acts as grid lines */
-  gap: 1px;
-}
-
-.cell {
-  background: var(--bg);
-  padding: 7px 14px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 36px;
-}
-
-/* Column headers */
-.ch {
-  padding: 9px 14px;
-  font-family: 'VT323', monospace;
-  font-size: 1.05rem;
-  letter-spacing: 2px;
+/* ── HERO ── */
+.hero {
   text-align: center;
-  justify-content: center;
-  background: var(--bg2);
+  padding: 48px 0 56px;
+  position: relative;
 }
 
-.ch-n8n   { color: var(--lime); }
-.ch-api   { color: var(--cyan); }
-.ch-data  { color: var(--amber); }
-
-/* Section header rows */
-.sh {
-  padding: 8px 14px;
-  background: var(--bg2);
-  font-family: 'VT323', monospace;
-  font-size: 0.98rem;
-  letter-spacing: 1px;
-  align-items: center;
-  gap: 10px;
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  height: 300px;
+  background: radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 70%);
+  pointer-events: none;
 }
 
-.sh-desc {
-  background: var(--bg2);
+.hero-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.hero-title {
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: #fff;
+  line-height: 1.15;
+}
+
+.hero-title span {
+  background: linear-gradient(135deg, var(--accent2), var(--sky));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-sub {
   color: var(--dim);
-  font-size: 0.69rem;
-  letter-spacing: 0.5px;
-  font-style: italic;
+  font-size: 1rem;
+  margin-top: 12px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
 }
 
-/* Colored left border on section rows */
-.s1 { border-left: 3px solid var(--s1); }
-.s2 { border-left: 3px solid var(--s2); }
-.s3 { border-left: 3px solid var(--s3); }
-.s4 { border-left: 3px solid var(--s4); }
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-top: 32px;
+}
 
-/* Node row cells */
-.n8n-cell  { background: var(--bg); }
-.api-cell  { background: var(--bg); }
-.data-cell { background: var(--bg); }
+.stat {
+  text-align: center;
+}
 
-/* tint on section rows */
-.tint-s1 { background: rgba(57,255,20,0.025); }
-.tint-s2 { background: rgba(77,166,255,0.025); }
-.tint-s3 { background: rgba(191,127,255,0.025); }
-.tint-s4 { background: rgba(255,183,0,0.025); }
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+}
 
-/* Top separator above each section */
-.top-s1 { border-top: 2px solid var(--s1); }
-.top-s2 { border-top: 2px solid var(--s2); }
-.top-s3 { border-top: 2px solid var(--s3); }
-.top-s4 { border-top: 2px solid var(--s4); }
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--dim);
+  margin-top: 2px;
+}
 
-.node-name { font-size: 0.78rem; }
-.arrow     { color: var(--dim); font-size: 0.8rem; flex-shrink: 0; }
+/* ── PRINCIPLE STRIP ── */
+.principles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 48px;
+}
+
+.principle {
+  background: var(--surface);
+  padding: 20px 24px;
+  text-align: center;
+}
+
+.principle-icon {
+  font-size: 1.3rem;
+  margin-bottom: 8px;
+}
+
+.principle-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.principle-desc {
+  font-size: 0.75rem;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ── SECTION ── */
+.section {
+  margin-bottom: 12px;
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.section-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.section-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.section-info {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+
+.rows {
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 250px 1fr 90px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.15s;
+}
+
+.row:last-child { border-bottom: none; }
+.row:hover { background: rgba(99,102,241,0.03); }
+
+.col {
+  padding: 9px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-name {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.col-api {
+  border-left: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+
+.col-store {
+  border-left: 1px solid var(--border-subtle);
+  justify-content: center;
+}
 
 .method {
   flex-shrink: 0;
-  font-size: 0.63rem;
-  padding: 1px 6px;
-  border: 1px solid;
-  letter-spacing: 1px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
 }
 
-.m-get    { color: var(--lime);   border-color: var(--lime); }
-.m-post   { color: var(--amber);  border-color: var(--amber); }
-.m-code   { color: var(--purple); border-color: var(--purple); }
-.m-switch { color: var(--cyan);   border-color: var(--cyan); }
-.m-resp   { color: var(--dim);    border-color: var(--dim); }
+.m-get  { color: var(--green); background: rgba(52,211,153,0.1); }
+.m-post { color: var(--amber); background: rgba(251,191,36,0.1); }
+.m-n8n  { color: var(--accent2); background: rgba(129,140,248,0.08); }
 
 .ep {
-  color: var(--cyan);
-  font-size: 0.76rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--fg);
 }
 
 .ep-note {
   margin-left: auto;
-  color: var(--dim);
-  font-size: 0.67rem;
+  color: var(--muted);
+  font-size: 0.7rem;
   text-align: right;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.store {
+.store-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.st-sqlite { color: var(--green); }
+.st-qdrant { color: var(--sky); }
+.st-llm    { color: var(--amber); }
+.st-n8n    { color: var(--muted); }
+
+/* Risk badges */
+.risk {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.65rem;
+  font-weight: 600;
   padding: 2px 8px;
-  border: 1px solid;
-  display: inline-block;
-  white-space: nowrap;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
 }
 
-.s-sqlite { color: var(--green);  border-color: var(--dim); }
-.s-qdrant { color: var(--blue);   border-color: var(--blue);   background: rgba(77,166,255,0.07); }
-.s-llm    { color: var(--amber);  border-color: var(--amber);  background: rgba(255,183,0,0.07); }
-.s-logic  { color: var(--dim);    border-color: var(--border); }
-.s-html   { color: var(--lime);   border-color: var(--lime);   background: rgba(57,255,20,0.06); }
-.s-hitl   { color: var(--amber);  border-color: var(--amber);  background: rgba(255,183,0,0.07); }
+.r-blocker { color: var(--rose);  background: rgba(251,113,133,0.1); }
+.r-high    { color: var(--amber); background: rgba(251,191,36,0.1); }
+.r-medium  { color: var(--sky);   background: rgba(56,189,248,0.1); }
+.r-low     { color: var(--green); background: rgba(52,211,153,0.1); }
 
-/* Colored branch rows in §4 */
-.blocker-row { background: rgba(255,68,68,0.04) !important; }
-.high-row    { background: rgba(255,183,0,0.04) !important; }
-.medium-row  { background: rgba(77,166,255,0.04) !important; }
-.low-row     { background: rgba(57,255,20,0.04)  !important; }
+.indent { padding-left: 36px !important; }
 
-/* ── BOTTOM GRID ── */
-.info-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  margin-top: 32px;
+.row-muted { background: var(--surface) !important; }
+.row-muted:hover { background: var(--surface) !important; }
+
+/* ── CONNECTOR ── */
+.connector {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
-.info-box {
+/* ── ERROR SECTION ── */
+.error-section {
+  margin-top: 12px;
   border: 1px solid var(--border);
-  padding: 16px 18px;
-  background: rgba(21,255,0,0.015);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.info-title {
-  font-family: 'VT323', monospace;
-  font-size: 1rem;
-  letter-spacing: 2px;
-  margin-bottom: 10px;
-  padding-bottom: 7px;
+.error-head {
+  padding: 10px 20px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--dim);
   border-bottom: 1px solid var(--border);
 }
 
-.info-box ul { list-style: none; }
-
-.info-box li {
-  padding: 2px 0;
-  font-size: 0.72rem;
-  color: var(--dim);
-  display: flex;
-  gap: 7px;
+.error-head strong {
+  color: var(--fg);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
 }
 
-.info-box li::before { content: '›'; color: var(--lime); flex-shrink: 0; }
+.error-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border-subtle);
+}
 
-/* ── FEEDBACK LOOP ── */
-.feedback-strip {
+.error-item {
+  background: var(--bg);
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+
+.error-item strong {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--rose);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+/* ── FEEDBACK ── */
+.feedback {
   margin-top: 32px;
+  padding: 18px 24px;
   border: 1px solid var(--border);
-  padding: 14px 20px;
-  background: rgba(191,127,255,0.03);
+  border-radius: var(--radius);
+  background: var(--surface);
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.fb-label {
-  font-family: 'VT323', monospace;
-  font-size: 1rem;
-  letter-spacing: 2px;
-  color: var(--purple);
-  flex-shrink: 0;
-}
-
-.fb-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: var(--dim);
 }
 
-.fb-arrow { color: var(--border); }
+.fb-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--accent2);
+}
+
+.fb-arrow { color: var(--muted); }
+.fb-highlight { color: var(--fg); }
+
+/* ── INFO GRID ── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.info-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  background: var(--surface);
+}
+
+.info-card-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: #fff;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-card ul { list-style: none; }
+
+.info-card li {
+  padding: 3px 0;
+  font-size: 0.75rem;
+  color: var(--dim);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.info-card li::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
 
 /* ── FOOTER ── */
 .footer {
-  margin-top: 44px;
-  padding-top: 14px;
+  margin-top: 48px;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
-  color: var(--dim);
-  font-size: 0.67rem;
-  letter-spacing: 1px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
-.blink { animation: blink 1s step-end infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.footer a {
+  color: var(--accent2);
+  text-decoration: none;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .page { padding: 24px 16px; }
+  .hero-title { font-size: 1.6rem; }
+  .hero-stats { gap: 20px; }
+  .stat-value { font-size: 1.1rem; }
+  .principles { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 180px 1fr 70px; }
+  .info-grid { grid-template-columns: 1fr; }
+  .error-list { grid-template-columns: repeat(2, 1fr); }
+  .ep-note { display: none; }
+}
+
+/* ── LOAD ANIMATIONS ── */
+.hero {
+  animation: heroIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.principles {
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.section, .error-section, .feedback, .info-grid {
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Stagger sections */
+.section:nth-of-type(1) { animation-delay: 0.3s; }
+.section:nth-of-type(2) { animation-delay: 0.4s; }
+.section:nth-of-type(3) { animation-delay: 0.5s; }
+.section:nth-of-type(4) { animation-delay: 0.6s; }
+.error-section          { animation-delay: 0.7s; }
+.feedback               { animation-delay: 0.75s; }
+.info-grid              { animation-delay: 0.8s; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Row stagger within sections */
+.row {
+  animation: rowSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.row:nth-child(1)  { animation-delay: 0.4s; }
+.row:nth-child(2)  { animation-delay: 0.44s; }
+.row:nth-child(3)  { animation-delay: 0.48s; }
+.row:nth-child(4)  { animation-delay: 0.52s; }
+.row:nth-child(5)  { animation-delay: 0.56s; }
+.row:nth-child(6)  { animation-delay: 0.60s; }
+.row:nth-child(7)  { animation-delay: 0.64s; }
+.row:nth-child(8)  { animation-delay: 0.68s; }
+.row:nth-child(9)  { animation-delay: 0.72s; }
+.row:nth-child(10) { animation-delay: 0.76s; }
+.row:nth-child(11) { animation-delay: 0.80s; }
+
+@keyframes rowSlide {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Stat counters */
+.stat-value {
+  animation: countPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.stat:nth-child(1) .stat-value { animation-delay: 0.5s; }
+.stat:nth-child(2) .stat-value { animation-delay: 0.6s; }
+.stat:nth-child(3) .stat-value { animation-delay: 0.7s; }
+.stat:nth-child(4) .stat-value { animation-delay: 0.8s; }
+
+@keyframes countPop {
+  from { opacity: 0; transform: scale(0.5); }
+  60%  { transform: scale(1.1); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Principle cards */
+.principle {
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.principle:nth-child(1) { animation-delay: 0.25s; }
+.principle:nth-child(2) { animation-delay: 0.35s; }
+.principle:nth-child(3) { animation-delay: 0.45s; }
+
+/* Info cards */
+.info-card {
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.info-card:nth-child(1) { animation-delay: 0.85s; }
+.info-card:nth-child(2) { animation-delay: 0.9s; }
+.info-card:nth-child(3) { animation-delay: 0.95s; }
+
+/* Section dot pulse */
+.section-dot {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50%      { box-shadow: 0 0 0 4px transparent; }
+}
+
+/* Connector fade */
+.connector {
+  animation: fadeUp 0.3s ease 0.5s both;
+}
+
+/* Footer slide */
+.footer {
+  animation: fadeUp 0.5s ease 1s both;
+}
 </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="title">CIRI CHARGEBACK AGENT</div>
-    <div class="subtitle">WORKFLOW ARCHITECTURE · n8n ORQUESTADOR EXPLÍCITO + FastAPI EJECUCIÓN + Qdrant Cloud RAG</div>
-    <div class="pills">
-      <span class="pill" style="color:var(--lime);border-color:var(--lime)">EXPLICIT ORCHESTRATION</span>
-      <span class="pill" style="color:var(--cyan);border-color:var(--cyan)">NO AI AGENT BLACK BOX</span>
-      <span class="pill" style="color:var(--amber);border-color:var(--amber)">LLM-AUGMENTED TOOLS</span>
-      <span class="pill" style="color:var(--purple);border-color:var(--purple)">RAG · SQLite · Semantic Cache</span>
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-label">Architecture Overview</div>
+    <div class="hero-title">CIRI <span>Chargeback Agent</span></div>
+    <div class="hero-sub">
+      Orquestación explícita con n8n. Sin AI Agent black box.
+      Cada paso es un nodo visible, auditable, determinístico.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:20px;flex-wrap:wrap">
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">n8n</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">FastAPI</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Claude Haiku 4.5</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Qdrant Cloud</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Voyage AI</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Langfuse</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">SQLite</span>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-value">42</div>
+        <div class="stat-label">nodos n8n</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">10</div>
+        <div class="stat-label">API endpoints</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">2</div>
+        <div class="stat-label">llamadas LLM</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">203</div>
+        <div class="stat-label">tests</div>
+      </div>
     </div>
   </div>
 
-  <!-- LEGEND -->
-  <div class="legend">
-    <span><span class="dot" style="background:var(--s1)"></span>§1 Entrada</span>
-    <span><span class="dot" style="background:var(--s2)"></span>§2 Contexto (7 tools)</span>
-    <span><span class="dot" style="background:var(--s3)"></span>§3 Análisis IA</span>
-    <span><span class="dot" style="background:var(--s4)"></span>§4 Routing</span>
-    <span class="legend-sep">│</span>
-    <span><span class="badge s-sqlite">SQLite</span>lookup exacto</span>
-    <span><span class="badge s-qdrant">Qdrant</span>RAG semántico</span>
-    <span><span class="badge s-llm">Anthropic</span>LLM Claude</span>
-  </div>
-
-  <!-- MAIN DIAGRAM -->
-  <div class="grid">
-
-    <!-- COLUMN HEADERS -->
-    <div class="cell ch ch-n8n">n8n — ORQUESTADOR</div>
-    <div class="cell ch ch-api">FastAPI — EJECUCIÓN</div>
-    <div class="cell ch ch-data">DATA</div>
-
-    <!-- ════════════════ SECCIÓN 1 ════════════════ -->
-    <div class="cell sh s1 tint-s1 top-s1">
-      <span class="dot" style="background:var(--s1)"></span>
-      <span style="color:var(--s1)">§1 — ENTRADA Y VALIDACIÓN</span>
-    </div>
-    <div class="cell sh-desc tint-s1 top-s1">
-      Webhook expone POST /webhook/chargeback-agent · validación de formato TXN-XXXXX
-    </div>
-    <div class="cell tint-s1 top-s1"></div>
-
-    <!-- Webhook -->
-    <div class="cell s1">
-      <span class="arrow">▸</span>
-      <span class="node-name">Webhook — Entrada</span>
-    </div>
-    <div class="cell">
-      <span class="method m-post">POST</span>
-      <span class="ep">/webhook/chargeback-agent</span>
-      <span class="ep-note">trigger externo · JSON body</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">entrada</span>
-    </div>
-
-    <!-- Validar TXN -->
-    <div class="cell s1">
-      <span class="arrow">▸</span>
-      <span class="node-name">Validar Formato TXN</span>
-    </div>
-    <div class="cell">
-      <span class="method m-code">CODE</span>
-      <span style="color:var(--dim);font-size:0.73rem">regex /^TXN-\d{5}$/ · extrae motivo + cliente_vip</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">local</span>
-    </div>
-
-    <!-- ════════════════ SECCIÓN 2 ════════════════ -->
-    <div class="cell sh s2 tint-s2 top-s2">
-      <span class="dot" style="background:var(--s2)"></span>
-      <span style="color:var(--s2)">§2 — RECOPILACIÓN DE CONTEXTO</span>
-    </div>
-    <div class="cell sh-desc tint-s2 top-s2">
-      7 llamadas HTTP determinísticas a FastAPI · sin LLM · cada nodo accede a resultados anteriores con $('NombreNodo').item.json
-    </div>
-    <div class="cell tint-s2 top-s2"></div>
-
-    <!-- Obtener Transacción -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Obtener Transacción</span>
-    </div>
-    <div class="cell">
-      <span class="method m-get">GET</span>
-      <span class="ep">/api/transactions/{id}</span>
-      <span class="ep-note">merchant · amount · channel · country · fraud_score</span>
-    </div>
-    <div class="cell">
-      <span class="store s-sqlite">SQLite</span>
-    </div>
-
-    <!-- Obtener Logs -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Obtener Logs</span>
-    </div>
-    <div class="cell">
-      <span class="method m-get">GET</span>
-      <span class="ep">/api/logs/{tx_id}</span>
-      <span class="ep-note">todos los eventos del sistema para la transacción</span>
-    </div>
-    <div class="cell">
-      <span class="store s-sqlite">SQLite</span>
-    </div>
-
-    <!-- Buscar Políticas -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Buscar Políticas</span>
-    </div>
-    <div class="cell">
-      <span class="method m-get">GET</span>
-      <span class="ep">/api/policies/search</span>
-      <span class="ep-note">RAG semántico · top-17 · threshold 0.0 · LLM filtra</span>
-    </div>
-    <div class="cell">
-      <span class="store s-qdrant">Qdrant</span>
-    </div>
-
-    <!-- Buscar Casos Similares -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Buscar Casos Similares</span>
-    </div>
-    <div class="cell">
-      <span class="method m-get">GET</span>
-      <span class="ep">/api/cases/similar</span>
-      <span class="ep-note">RAG semántico · top-5 · threshold 0.40 · precedentes</span>
-    </div>
-    <div class="cell">
-      <span class="store s-qdrant">Qdrant</span>
-    </div>
-
-    <!-- Riesgo del Comercio -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Riesgo del Comercio</span>
-    </div>
-    <div class="cell">
-      <span class="method m-get">GET</span>
-      <span class="ep">/api/merchants/{name}/risk</span>
-      <span class="ep-note">ratio contracargos · flags suspended/high · volumen</span>
-    </div>
-    <div class="cell">
-      <span class="store s-sqlite">SQLite</span>
-    </div>
-
-    <!-- Historial del Cliente -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Historial del Cliente</span>
-    </div>
-    <div class="cell">
-      <span class="method m-get">GET</span>
-      <span class="ep">/api/clients/{id}/history</span>
-      <span class="ep-note">casos previos · reincidencia · anomalías geográficas</span>
-    </div>
-    <div class="cell">
-      <span class="store s-sqlite">SQLite</span>
-    </div>
-
-    <!-- Verificar SLA -->
-    <div class="cell s2">
-      <span class="arrow">▸</span>
-      <span class="node-name">Verificar SLA</span>
-    </div>
-    <div class="cell">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/sla/check</span>
-      <span class="ep-note">LATAM 10d · no-LATAM 15d · VIP 5d · within_sla bool</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">lógica</span>
-    </div>
-
-    <!-- ════════════════ SECCIÓN 3 ════════════════ -->
-    <div class="cell sh s3 tint-s3 top-s3">
-      <span class="dot" style="background:var(--s3)"></span>
-      <span style="color:var(--s3)">§3 — ANÁLISIS CON IA</span>
-    </div>
-    <div class="cell sh-desc tint-s3 top-s3">
-      LLM evalúa el contexto compilado de §2 · Claude claude-haiku-4-5 · prompt versionado · LLM-as-Judge 5 criterios
-    </div>
-    <div class="cell tint-s3 top-s3"></div>
-
-    <!-- Compilar Contexto -->
-    <div class="cell s3">
-      <span class="arrow">▸</span>
-      <span class="node-name">Compilar Contexto</span>
-    </div>
-    <div class="cell">
-      <span class="method m-code">CODE</span>
-      <span style="color:var(--dim);font-size:0.73rem">fusiona los 7 resultados de §2 en un objeto unificado + agent_analysis string</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">local</span>
-    </div>
-
-    <!-- Sintetizar Resolución -->
-    <div class="cell s3">
-      <span class="arrow">▸</span>
-      <span class="node-name">Sintetizar Resolución</span>
-    </div>
-    <div class="cell">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/analyze/resolve</span>
-      <span class="ep-note">→ recommended_action · risk_level · confidence · guardrail_warnings</span>
-    </div>
-    <div class="cell">
-      <span class="store s-llm">Anthropic</span>
-    </div>
-
-    <!-- Juez de Calidad -->
-    <div class="cell s3">
-      <span class="arrow">▸</span>
-      <span class="node-name">Juez de Calidad</span>
-    </div>
-    <div class="cell">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/analyze/judge</span>
-      <span class="ep-note">LLM-as-Judge · score 1–10 · consistencia · evidencia · sesgos</span>
-    </div>
-    <div class="cell">
-      <span class="store s-llm">Anthropic</span>
-    </div>
-
-    <!-- Preparar Informe -->
-    <div class="cell s3">
-      <span class="arrow">▸</span>
-      <span class="node-name">Preparar Informe</span>
-    </div>
-    <div class="cell">
-      <span class="method m-code">CODE</span>
-      <span style="color:var(--dim);font-size:0.73rem">construye ReportRequest: tx + resolution + judge + merchant + client + logs + policies</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">local</span>
-    </div>
-
-    <!-- ════════════════ SECCIÓN 4 ════════════════ -->
-    <div class="cell sh s4 tint-s4 top-s4">
-      <span class="dot" style="background:var(--s4)"></span>
-      <span style="color:var(--s4)">§4 — ENRUTAMIENTO POR RIESGO</span>
-    </div>
-    <div class="cell sh-desc tint-s4 top-s4">
-      Switch por resolution.risk_level → 4 ramas · mismo endpoint /api/reports/html para todas · Jinja2 genera HTML diferenciado
-    </div>
-    <div class="cell tint-s4 top-s4"></div>
-
-    <!-- Switch -->
-    <div class="cell s4">
-      <span class="arrow">▸</span>
-      <span class="node-name">Switch — Nivel de Riesgo</span>
-    </div>
-    <div class="cell">
-      <span class="method m-switch">SWITCH</span>
-      <span style="color:var(--dim);font-size:0.73rem">$json.resolution.risk_level ∈ {BLOCKER, HIGH, MEDIUM, LOW}</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">routing</span>
-    </div>
-
-    <!-- BLOCKER branch -->
-    <div class="cell s4 blocker-row">
-      <span class="arrow" style="color:var(--red)">▸</span>
-      <span class="node-name" style="color:var(--red)">BLOCKER → Generar + Responder</span>
-    </div>
-    <div class="cell blocker-row">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/reports/html</span>
-      <span class="ep-note" style="color:var(--red)">crypto · fraud_score&lt;30 · rechazado automático</span>
-    </div>
-    <div class="cell blocker-row">
-      <span class="store" style="color:var(--red);border-color:var(--red)">HTML</span>
-    </div>
-
-    <!-- HIGH branch -->
-    <div class="cell s4 high-row">
-      <span class="arrow" style="color:var(--amber)">▸</span>
-      <span class="node-name" style="color:var(--amber)">HIGH → Generar + Responder</span>
-    </div>
-    <div class="cell high-row">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/reports/html</span>
-      <span class="ep-note" style="color:var(--amber)">reporte con formulario HITL embebido · POST /api/feedback</span>
-    </div>
-    <div class="cell high-row">
-      <span class="store s-hitl">HITL</span>
-    </div>
-
-    <!-- MEDIUM branch -->
-    <div class="cell s4 medium-row">
-      <span class="arrow" style="color:var(--blue)">▸</span>
-      <span class="node-name" style="color:var(--blue)">MEDIUM → Generar + Responder</span>
-    </div>
-    <div class="cell medium-row">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/reports/html</span>
-      <span class="ep-note" style="color:var(--blue)">alerta de revisión · analista decide fuera de n8n</span>
-    </div>
-    <div class="cell medium-row">
-      <span class="store" style="color:var(--blue);border-color:var(--blue)">HTML</span>
-    </div>
-
-    <!-- LOW branch -->
-    <div class="cell s4 low-row">
-      <span class="arrow" style="color:var(--lime)">▸</span>
-      <span class="node-name" style="color:var(--lime)">LOW → Generar + Responder</span>
-    </div>
-    <div class="cell low-row">
-      <span class="method m-post">POST</span>
-      <span class="ep">/api/reports/html</span>
-      <span class="ep-note" style="color:var(--lime)">aprobación automática · bajo riesgo confirmado</span>
-    </div>
-    <div class="cell low-row">
-      <span class="store s-html">HTML</span>
-    </div>
-
-    <!-- Respond webhook -->
-    <div class="cell s4">
-      <span class="arrow">▸</span>
-      <span class="node-name" style="color:var(--dim)">Responder — {nivel}</span>
-    </div>
-    <div class="cell">
-      <span class="method m-resp">200</span>
-      <span style="color:var(--dim);font-size:0.73rem">Content-Type: text/html · responde al trigger original del webhook</span>
-    </div>
-    <div class="cell">
-      <span class="store s-logic">↩ cliente</span>
-    </div>
-
-  </div><!-- /grid -->
-
-  <!-- FEEDBACK LOOP STRIP -->
-  <div class="feedback-strip">
-    <span class="fb-label">⟳ MEJORA CONTINUA</span>
-    <span class="fb-arrow">│</span>
-    <div class="fb-step">
-      <span style="color:var(--lime)">Analista aprueba/rechaza</span>
-    </div>
-    <span class="fb-arrow">→</span>
-    <div class="fb-step">
-      <span class="method m-post" style="font-size:0.63rem">POST</span>
-      <span style="color:var(--cyan)">/api/feedback</span>
-    </div>
-    <span class="fb-arrow">→</span>
-    <div class="fb-step">
-      <span>Judge evalúa resolución</span>
-    </div>
-    <span class="fb-arrow">→</span>
-    <div class="fb-step">
-      <span style="color:var(--purple)">score ≥ 8.0</span>
-    </div>
-    <span class="fb-arrow">→</span>
-    <div class="fb-step">
-      <span>Auto-indexa caso en</span>
-      <span class="store s-qdrant" style="font-size:0.63rem">Qdrant</span>
-      <span>como nuevo precedente</span>
-    </div>
-    <span class="fb-arrow">→</span>
-    <div class="fb-step" style="color:var(--lime)">
-      El sistema aprende de cada decisión
+  <!-- PRINCIPLES -->
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-icon">&#9632;</div>
+      <div class="principle-title">n8n orquesta, FastAPI ejecuta</div>
+      <div class="principle-desc">n8n decide qué y cuándo. FastAPI tiene toda la lógica de negocio. Nodos n8n nunca contienen business logic.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">&#9650;</div>
+      <div class="principle-title">RAG + SQL unidos en contexto</div>
+      <div class="principle-desc">Qdrant + Voyage AI para contexto semántico. SQLite para hechos exactos. Ambos alimentan a Claude en cada resolución.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">&#9679;</div>
+      <div class="principle-title">Observable de punta a punta</div>
+      <div class="principle-desc">Langfuse traza cada llamada LLM con tokens, latencia y judge scores. El sistema aprende solo: score ≥ 8.0 → auto-indexa.</div>
     </div>
   </div>
 
-  <!-- INFO BOXES -->
-  <div class="info-row">
-    <div class="info-box">
-      <div class="info-title" style="color:var(--blue)">DECISIONES DE DISEÑO</div>
+  <!-- §1 — ENTRADA + CACHÉ -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--green)"></div>
+      <div class="section-name">§1 Entrada + Caché</div>
+      <div class="section-info">6 nodos — validación, wake-up, idempotencia</div>
+    </div>
+    <div class="rows">
+      <div class="row">
+        <div class="col"><span class="col-name">Webhook — Entrada</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/webhook/chargeback-agent</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">trigger</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Validar Formato — IF</span></div>
+        <div class="col col-api"><span class="method m-n8n">IF</span><span>regex TXN-XXXXX — invalid → Stop and Error</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Validar Formato TXN</span></div>
+        <div class="col col-api"><span class="method m-n8n">SET</span><span>extrae transaction_id, motivo, cliente_vip</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Despertar API</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/health</span><span class="ep-note">wake cold-start</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">API</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Verificar Caché</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/cache/lookup</span><span class="ep-note">idempotencia</span></div>
+        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">¿Cache Hit?</span></div>
+        <div class="col col-api"><span class="method m-n8n">IF</span><span>hit → Formatear Caché → Responder (skip §2–§4)</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">↓</div>
+
+  <!-- §2 — CONTEXTO -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--sky)"></div>
+      <div class="section-name">§2 Contexto paralelo</div>
+      <div class="section-info">11 nodos — 6 queries → Merge</div>
+    </div>
+    <div class="rows">
+      <div class="row">
+        <div class="col"><span class="col-name">Obtener Transacción</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/transactions/{id}</span><span class="ep-note">merchant, amount, fraud_score</span></div>
+        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Obtener Logs</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/logs/{tx_id}</span><span class="ep-note">eventos del sistema</span></div>
+        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Buscar Políticas</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/policies/search</span><span class="ep-note">top-17, threshold 0.0</span></div>
+        <div class="col col-store"><span class="store-tag st-qdrant">Qdrant</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Buscar Casos Similares</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/cases/similar</span><span class="ep-note">top-5, threshold 0.40</span></div>
+        <div class="col col-store"><span class="store-tag st-qdrant">Qdrant</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Riesgo del Comercio</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/merchants/{name}/risk</span><span class="ep-note">cb_ratio, flags</span></div>
+        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Evaluar Riesgo Comercio</span></div>
+        <div class="col col-api"><span class="method m-n8n">SET</span><span>is_suspended, is_high_risk, is_strategic</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Historial del Cliente</span></div>
+        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/clients/{id}/history</span><span class="ep-note">casos previos</span></div>
+        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Evaluar Historial Cliente</span></div>
+        <div class="col col-api"><span class="method m-n8n">SET</span><span>is_recidivist, has_geo_anomaly, is_vip</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Verificar SLA</span></div>
+        <div class="col col-api"><span class="method m-n8n">SET</span><span>LATAM 10d / no-LATAM 15d / VIP 5d</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Merge — Contexto Paralelo</span></div>
+        <div class="col col-api"><span class="method m-n8n">MERGE</span><span>espera 6 ramas paralelas (indices 0–5)</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">↓</div>
+
+  <!-- §3 — ANÁLISIS IA -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--accent2)"></div>
+      <div class="section-name">§3 Análisis con IA</div>
+      <div class="section-info">8 nodos — Resolución + Guardrails + Judge</div>
+    </div>
+    <div class="rows">
+      <div class="row">
+        <div class="col"><span class="col-name">Compilar Contexto</span></div>
+        <div class="col col-api"><span class="method m-n8n">CODE</span><span>fusiona resultados de §2 en objeto unificado</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Sintetizar Resolución</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/analyze/resolve</span><span class="ep-note">action, risk, confidence</span></div>
+        <div class="col col-store"><span class="store-tag st-llm">Claude</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Verificar Guardrails</span></div>
+        <div class="col col-api"><span class="method m-n8n">CODE</span><span>APPROVE + BLOCKER = hallucination flag</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Juez de Calidad</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/analyze/judge</span><span class="ep-note">score 1–10, 5 criterios</span></div>
+        <div class="col col-store"><span class="store-tag st-llm">Claude</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Extraer Evaluación</span></div>
+        <div class="col col-api"><span class="method m-n8n">SET</span><span>JSON.parse → judge_evaluation</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">¿Juez Aprueba? (≥7.0)</span></div>
+        <div class="col col-api"><span class="method m-n8n">IF</span><span>≥ 7.0 → ok / &lt; 7.0 → Marcar Calidad Baja</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="col-name">Preparar Informe</span></div>
+        <div class="col col-api"><span class="method m-n8n">CODE</span><span>construye ReportRequest payload</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="connector">↓</div>
+
+  <!-- §4 — ROUTING -->
+  <div class="section">
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--amber)"></div>
+      <div class="section-name">§4 Routing + Respuesta</div>
+      <div class="section-info">8 nodos — Switch por risk_level, Responder unificado</div>
+    </div>
+    <div class="rows">
+      <div class="row">
+        <div class="col"><span class="col-name">Switch — Nivel de Riesgo</span></div>
+        <div class="col col-api"><span class="method m-n8n">SWITCH</span><span>resolution.risk_level → BLOCKER | HIGH | MEDIUM | LOW</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">routing</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="risk r-blocker">BLOCKER</span><span class="col-name">Generar Reporte</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">auto-reject</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="risk r-medium">MEDIUM</span><span class="col-name">Generar Reporte</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">nodo unificado</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="risk r-low">LOW</span><span class="col-name">Generar Reporte</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">nodo unificado</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
+      </div>
+      <div class="row">
+        <div class="col"><span class="risk r-high">HIGH</span><span class="col-name">Notificar Analista</span></div>
+        <div class="col col-api"><span class="method m-n8n">SET</span><span>resume_url para Wait HITL</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col indent"><span class="col-name">Wait — Aprobación HITL</span></div>
+        <div class="col col-api"><span class="method m-n8n">WAIT</span><span>form: APPROVE / REJECT + Notas</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">pausa</span></div>
+      </div>
+      <div class="row">
+        <div class="col indent"><span class="col-name">Procesar Respuesta</span></div>
+        <div class="col col-api"><span class="method m-n8n">CODE</span><span>merge decisión + contexto original</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+      </div>
+      <div class="row">
+        <div class="col indent"><span class="col-name">Registrar Feedback</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/feedback</span><span class="ep-note">auto-index si ≥ 8.0</span></div>
+        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+      </div>
+      <div class="row">
+        <div class="col indent"><span class="col-name">Generar Reporte — HITL</span></div>
+        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">incluye decisión HITL</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
+      </div>
+      <div class="row row-muted">
+        <div class="col"><span class="col-name" style="color:var(--dim)">Responder — Reporte</span></div>
+        <div class="col col-api"><span style="color:var(--dim)">text/html — responde al webhook original</span></div>
+        <div class="col col-store"><span class="store-tag st-n8n">↩</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ERROR HANDLING -->
+  <div class="error-section">
+    <div class="error-head">
+      <strong>Error handling</strong>
+      <span>4 Stop and Error → Error Handler workflow</span>
+    </div>
+    <div class="error-list">
+      <div class="error-item">
+        <strong>TXN</strong>
+        Formato inválido
+      </div>
+      <div class="error-item">
+        <strong>API</strong>
+        No disponible (3 reintentos)
+      </div>
+      <div class="error-item">
+        <strong>LLM</strong>
+        Fallo en análisis
+      </div>
+      <div class="error-item">
+        <strong>Reporte</strong>
+        Generación fallida
+      </div>
+    </div>
+  </div>
+
+  <!-- FEEDBACK -->
+  <div class="feedback">
+    <span class="fb-title">Mejora continua</span>
+    <span class="fb-arrow">—</span>
+    <span class="fb-highlight">Analista aprueba/rechaza</span>
+    <span class="fb-arrow">→</span>
+    <span>POST /api/feedback</span>
+    <span class="fb-arrow">→</span>
+    <span>Judge evalúa</span>
+    <span class="fb-arrow">→</span>
+    <span class="fb-highlight">score ≥ 8.0</span>
+    <span class="fb-arrow">→</span>
+    <span>auto-indexa en Qdrant como nuevo precedente</span>
+  </div>
+
+  <!-- INFO GRID -->
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-card-title">Decisiones de diseño</div>
       <ul>
-        <li>n8n orquesta · FastAPI ejecuta · lógica nunca en n8n</li>
-        <li>QueryBuilder determinístico · sin LLM para queries RAG</li>
-        <li>Políticas como datos en Qdrant · editables vía API sin redeploy</li>
-        <li>Guardrail: APPROVE + BLOCKER activo → flag alucinación</li>
-        <li>Caché semántico threshold 0.92 · reduce costo LLM</li>
-        <li>Prompts versionados (v1_*) · trazabilidad de cambios</li>
+        <li>n8n orquesta, FastAPI ejecuta</li>
+        <li>QueryBuilder determinístico, sin LLM para queries</li>
+        <li>Políticas editables vía API, sin redeploy</li>
+        <li>Guardrail: APPROVE + BLOCKER → hallucination</li>
+        <li>Caché semántico, threshold 0.92</li>
+        <li>Prompts versionados (v1_*)</li>
       </ul>
     </div>
-    <div class="info-box">
-      <div class="info-title" style="color:var(--purple)">RAG PIPELINE</div>
+    <div class="info-card">
+      <div class="info-card-title">RAG pipeline</div>
       <ul>
-        <li>Modelo: paraphrase-multilingual-MiniLM-L12-v2</li>
-        <li>384 dims · ONNX Runtime (fastembed) · ~80MB RAM</li>
-        <li>Inicialización lazy · modelo carga en primer request</li>
-        <li>Políticas: top-17 · threshold 0.0 · LLM filtra relevancia</li>
-        <li>Casos similares: top-5 · threshold 0.40 · semántico</li>
-        <li>SQLite + Qdrant unidos en contexto del LLM (hechos + semántica)</li>
+        <li>Embeddings: Voyage AI (voyage-multilingual-2)</li>
+        <li>1024 dims, multilingual, Voyage AI API</li>
+        <li>Políticas: top-17, threshold 0.0</li>
+        <li>Casos similares: top-5, threshold 0.40</li>
+        <li>SQLite + Qdrant unidos en contexto LLM</li>
+        <li>Auto-indexing: score ≥ 8.0 → nuevo precedente</li>
       </ul>
     </div>
-    <div class="info-box">
-      <div class="info-title" style="color:var(--amber)">DEPLOYMENT</div>
+    <div class="info-card">
+      <div class="info-card-title">Deploy + Observabilidad</div>
       <ul>
-        <li>API: Render.com · Docker · python:3.11-slim</li>
-        <li>Vectores: Qdrant Cloud · sa-east-1 · 17 políticas + 60 casos</li>
-        <li>Orquestación: n8n Cloud · workflow activo · 23 nodos</li>
-        <li>LLM: Anthropic claude-haiku-4-5-20251001</li>
-        <li>Observabilidad: Langfuse (opcional) · NoOpTracer en tests</li>
-        <li>Tests: 50/50 · pytest · SQLite in-memory · mocks LLM</li>
+        <li>API: Render.com, Docker</li>
+        <li>Qdrant Cloud, sa-east-1</li>
+        <li>n8n Cloud, 42 nodos</li>
+        <li>LLM: Claude Haiku 4.5 (Anthropic)</li>
+        <li>Langfuse: tokens, latencia, judge scores</li>
+        <li>203 tests, pytest, mocks LLM</li>
       </ul>
     </div>
   </div>
 
   <!-- FOOTER -->
   <div class="footer">
-    <span>CIRI CHARGEBACK AGENT · v2.0 · EXPLICIT WORKFLOW ORCHESTRATION WITH LLM-AUGMENTED TOOLS</span>
-    <span>https://ciri-chargeback-agent.onrender.com <span class="blink">█</span></span>
+    <span>Diseñado e implementado por <strong style="color:var(--fg)">Federico Palatnik Moroz</strong></span>
+    <span><a href="https://ciri-chargeback-agent.onrender.com" target="_blank">ciri-chargeback-agent.onrender.com</a></span>
   </div>
 
 </div>

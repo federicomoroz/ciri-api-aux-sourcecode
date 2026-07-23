@@ -161,11 +161,13 @@ flowchart TD
     MERGE --> COMPILE
     PREPARE --> SWITCH
 
-    SEARCH_POL -.-> Q_POL[(policies)]
-    SEARCH_CASES -.-> Q_CASES[(cases)]
+    SEARCH_POL -.->|Voyage AI| Q_POL[(policies)]
+    SEARCH_CASES -.->|Voyage AI| Q_CASES[(cases)]
     RESOLVE -.-> Q_CACHE[(_cache)]
     GET_TX -.-> DB_TX[(transactions)]
     GET_LOGS -.-> DB_LOGS[(logs)]
+    RESOLVE -.->|trace| LANGFUSE([Langfuse])
+    JUDGE -.->|trace + score| LANGFUSE
 
     style S1 fill:none,stroke:none
     style S2 fill:none,stroke:none
