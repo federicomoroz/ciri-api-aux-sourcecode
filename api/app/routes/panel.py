@@ -6,6 +6,7 @@ GET  /api/panel/n8n-status     — liveness check for n8n (used by panel UI badg
 POST /api/panel/analyze        — runs analysis via n8n (or direct pipeline fallback)
 """
 
+import json
 import logging
 
 import httpx
@@ -24,6 +25,8 @@ from ..dependencies import (
     get_settings,
 )
 from ..domain.constants import (
+    LLM_PRICING,
+    LLM_PRICING_PER_MTOK,
     N8N_HEALTHZ_PATH,
     N8N_PING_TIMEOUT_S,
     N8N_TIMEOUT_S,
@@ -108,7 +111,10 @@ async def panel_analyze(
 
     # ── Fallback: direct FastAPI pipeline ────────────────────────────────────
     try:
-        return await _direct_pipeline(req, db, retriever, analyzer, resolution_svc, report_gen)
+        return await _direct_pipeline(
+            req, db, retriever, analyzer, resolution_svc, report_gen,
+            model_name=settings.llm_model,
+        )
     except Exception as exc:
         logger.error("Direct pipeline failed for %s: %s", req.transaction_id, exc, exc_info=True)
         error_html = (
@@ -130,6 +136,7 @@ async def _direct_pipeline(
     analyzer: Analyzer,
     resolution_svc: ResolutionService,
     report_gen: ReportGenerator,
+    model_name: str = "",
 ) -> HTMLResponse:
     """
     Run the full chargeback analysis pipeline without n8n.
@@ -216,4 +223,27 @@ async def _direct_pipeline(
     }
 
     html = report_gen.render(report_data)
-    return HTMLResponse(content=html, status_code=200)
+    response = HTMLResponse(content=html, status_code=200)
+
+    # Aggregate LLM usage from resolve (2 calls) + judge (1 call)
+    resolve_usage = resolution.get("_usage", {})
+    judge_usage = judge.get("_usage", {})
+    total_in = resolve_usage.get("input_tokens", 0) + judge_usage.get("input_tokens", 0)
+    total_out = resolve_usage.get("output_tokens", 0) + judge_usage.get("output_tokens", 0)
+    total_calls = resolve_usage.get("call_count", 0) + judge_usage.get("call_count", 0)
+
+    cost_usd = 0.0
+    for key, (in_rate, out_rate) in LLM_PRICING.items():
+        if key in model_name.lower():
+            cost_usd = total_in * in_rate / LLM_PRICING_PER_MTOK + total_out * out_rate / LLM_PRICING_PER_MTOK
+            break
+
+    response.headers["X-Usage-JSON"] = json.dumps({
+        "input_tokens": total_in,
+        "output_tokens": total_out,
+        "total_tokens": total_in + total_out,
+        "call_count": total_calls,
+        "cost_usd": round(cost_usd, 6),
+        "model": model_name,
+    })
+    return response

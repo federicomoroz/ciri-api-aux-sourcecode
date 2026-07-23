@@ -1,5 +1,7 @@
 import pytest
 
+from api.app.llm.client import LLMResult
+
 
 class MockLLMClient:
     """Test double for LLM calls. Returns pre-configured responses matched by keyword in system prompt."""
@@ -8,12 +10,16 @@ class MockLLMClient:
         self.responses = responses or {}
         self.calls: list[dict] = []
 
-    def complete(self, system: str, user: str, **kwargs) -> str:
+    def complete(self, system: str, user: str, **kwargs) -> LLMResult:
         self.calls.append({"system": system, "user": user})
         for keyword, response in self.responses.items():
             if keyword.lower() in system.lower():
-                return response
-        return '{"error": "no mock response configured for this system prompt"}'
+                return LLMResult(text=response, input_tokens=100, output_tokens=50)
+        return LLMResult(
+            text='{"error": "no mock response configured for this system prompt"}',
+            input_tokens=10,
+            output_tokens=10,
+        )
 
 
 # ---- Sample data fixtures ----

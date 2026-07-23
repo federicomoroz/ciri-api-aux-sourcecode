@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, call
 
 import pytest
 
+from api.app.llm.client import LLMResult
 from api.app.domain.constants import (
     FALLBACK_TX_ID,
     FEEDBACK_CASE_ID_PREFIX,
@@ -40,13 +41,19 @@ def mock_llm_resolve():
     llm = MagicMock()
     llm.complete.side_effect = [
         # First call: policy eval
-        '[{"policy_code":"POL-EXC-003","verdict":"BLOCKER","reasoning":"Cripto","requires_human_review":false}]',
+        LLMResult(
+            text='[{"policy_code":"POL-EXC-003","verdict":"BLOCKER","reasoning":"Cripto","requires_human_review":false}]',
+            input_tokens=500, output_tokens=100,
+        ),
         # Second call: resolution synthesis
-        '{"transaction_id":"TXN-00051","recommended_action":"REJECT","confidence":0.99,'
-        '"justification":"BLOCKER cripto","policy_verdicts":[],'
-        '"precedent_summary":"","log_summary":"","risk_level":"BLOCKER",'
-        '"compensation_applicable":false,"compensation_amount_usd":0.0,'
-        '"next_steps":["Notificar"],"requires_hitl":false,"hitl_reason":null}',
+        LLMResult(
+            text='{"transaction_id":"TXN-00051","recommended_action":"REJECT","confidence":0.99,'
+            '"justification":"BLOCKER cripto","policy_verdicts":[],'
+            '"precedent_summary":"","log_summary":"","risk_level":"BLOCKER",'
+            '"compensation_applicable":false,"compensation_amount_usd":0.0,'
+            '"next_steps":["Notificar"],"requires_hitl":false,"hitl_reason":null}',
+            input_tokens=1200, output_tokens=300,
+        ),
     ]
     return llm
 
@@ -55,11 +62,12 @@ def mock_llm_resolve():
 def mock_llm_judge():
     """MockLLM that returns valid judge evaluation JSON."""
     llm = MagicMock()
-    llm.complete.return_value = (
-        '{"overall_score":9.2,"criteria":{"policy_consistency":10.0,'
+    llm.complete.return_value = LLMResult(
+        text='{"overall_score":9.2,"criteria":{"policy_consistency":10.0,'
         '"justification_quality":9.0,"precedent_usage":8.0,'
         '"risk_assessment":9.5,"actionability":9.5},'
-        '"approved":true,"strengths":["Correcto"],"weaknesses":[]}'
+        '"approved":true,"strengths":["Correcto"],"weaknesses":[]}',
+        input_tokens=800, output_tokens=200,
     )
     return llm
 
@@ -171,11 +179,12 @@ class TestResolutionServiceJudge:
     def test_judge_computes_approved_from_threshold(self, mock_tracer):
         """judge() should compute approved from JUDGE_APPROVAL_THRESHOLD when not in response."""
         llm = MagicMock()
-        llm.complete.return_value = (
-            '{"overall_score":6.5,"criteria":{"policy_consistency":7.0,'
+        llm.complete.return_value = LLMResult(
+            text='{"overall_score":6.5,"criteria":{"policy_consistency":7.0,'
             '"justification_quality":6.0,"precedent_usage":6.0,'
             '"risk_assessment":7.0,"actionability":6.5},'
-            '"strengths":[],"weaknesses":[]}'
+            '"strengths":[],"weaknesses":[]}',
+            input_tokens=600, output_tokens=150,
         )
         service = ResolutionService(llm, mock_tracer)
         result = service.judge(

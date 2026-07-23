@@ -66,6 +66,7 @@ app.add_middleware(
     ],
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-Usage-JSON"],
 )
 
 @app.exception_handler(Exception)

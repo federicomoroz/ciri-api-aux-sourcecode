@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
+from api.app.llm.client import LLMResult
 from api.app.main import app
 from api.app.data.db import Database
 
@@ -175,11 +176,12 @@ def test_judge_low_score_not_approved(test_client_routes):
 
     # Override LLM to return low score
     app.state.llm = MagicMock()
-    app.state.llm.complete.return_value = (
-        '{"overall_score":5.5,"criteria":{"policy_consistency":6.0,'
+    app.state.llm.complete.return_value = LLMResult(
+        text='{"overall_score":5.5,"criteria":{"policy_consistency":6.0,'
         '"justification_quality":5.0,"precedent_usage":5.0,'
         '"risk_assessment":6.0,"actionability":5.5},'
-        '"strengths":[],"weaknesses":["Justificacion debil"]}'
+        '"strengths":[],"weaknesses":["Justificacion debil"]}',
+        input_tokens=600, output_tokens=150,
     )
     mock_tracer = MagicMock()
     mock_tracer.trace.return_value = "trace-low"

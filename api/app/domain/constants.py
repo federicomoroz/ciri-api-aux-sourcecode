@@ -113,6 +113,15 @@ LLM_DEFAULT_MAX_TOKENS: int = 4096
 LLM_DEFAULT_MAX_RETRIES: int = 2
 LLM_DEFAULT_TEMPERATURE: float = 0.3
 
+# ── LLM Pricing (USD per 1M tokens) ─────────────────────────────────────────
+LLM_PRICING: dict[str, tuple[float, float]] = {
+    # model_substring: (input_cost, output_cost) per 1M tokens
+    "haiku": (0.80, 4.00),
+    "sonnet": (3.00, 15.00),
+    "opus": (15.00, 75.00),
+}
+LLM_PRICING_PER_MTOK: int = 1_000_000
+
 # ── Judge ────────────────────────────────────────────────────────────────────
 JUDGE_APPROVAL_THRESHOLD: float = 7.0    # overall_score >= N → approved
 JUDGE_NEEDS_REVIEW_THRESHOLD: float = 5.0  # overall_score < N → needs_review flag

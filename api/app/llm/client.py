@@ -7,6 +7,7 @@ All external API calls are wrapped with error handling and logging.
 
 import logging
 import time
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import anthropic
@@ -24,6 +25,15 @@ from ..observability.tracer import Tracer
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class LLMResult:
+    """Result from an LLM completion call, including token usage."""
+
+    text: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
 @runtime_checkable
 class LLMClient(Protocol):
     def complete(
@@ -33,8 +43,8 @@ class LLMClient(Protocol):
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
         temperature: float = LLM_DEFAULT_TEMPERATURE,
         trace_id: str | None = None,
-    ) -> str:
-        """Send system + user prompt, return text response."""
+    ) -> LLMResult:
+        """Send system + user prompt, return text response with token usage."""
         ...
 
 
@@ -51,7 +61,7 @@ class AnthropicClient:
         max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
         temperature: float = LLM_DEFAULT_TEMPERATURE,
         trace_id: str | None = None,
-    ) -> str:
+    ) -> LLMResult:
         start = time.time()
         try:
             response = self.client.messages.create(
@@ -87,4 +97,8 @@ class AnthropicClient:
             "LLM call completed: model=%s tokens_in=%d tokens_out=%d latency=%.0fms",
             self.model, response.usage.input_tokens, response.usage.output_tokens, latency_ms,
         )
-        return text
+        return LLMResult(
+            text=text,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+        )

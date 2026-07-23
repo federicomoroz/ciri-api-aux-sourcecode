@@ -26,7 +26,7 @@ from ..domain.constants import (
 )
 from ..domain.enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 from ..domain.models import JudgeEvaluationOutput, PolicyVerdictOutput, ResolutionOutput
-from ..llm.client import LLMClient
+from ..llm.client import LLMClient, LLMResult
 from ..llm import prompts
 from ..llm.parsing import validate_llm_output
 from ..observability.tracer import Tracer
@@ -63,9 +63,9 @@ class ResolutionService:
             metadata={"merchant": tx_data.get("merchant", ""), "amount_usd": tx_data.get("amount_usd", 0)},
         )
 
-        policy_verdicts = self._eval_policies(tx_data, policies, trace_id)
+        policy_verdicts, eval_result = self._eval_policies(tx_data, policies, trace_id)
         log_summary_text = self._summarize_logs(logs)
-        resolution = self._synthesize_resolution(
+        resolution, synth_result = self._synthesize_resolution(
             tx_data, policy_verdicts, similar_cases, log_summary_text,
             merchant_risk, client_history, motivo, cliente_vip, logs, trace_id,
         )
@@ -74,9 +74,14 @@ class ResolutionService:
             resolution["policy_verdicts"] = policy_verdicts
 
         warnings = self._validate_resolution(resolution, tx_data)
-        return {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id}
+        usage = {
+            "input_tokens": eval_result.input_tokens + synth_result.input_tokens,
+            "output_tokens": eval_result.output_tokens + synth_result.output_tokens,
+            "call_count": 2,
+        }
+        return {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id, "_usage": usage}
 
-    def _eval_policies(self, tx_data: dict, policies: list[dict], trace_id: str) -> list[dict]:
+    def _eval_policies(self, tx_data: dict, policies: list[dict], trace_id: str) -> tuple[list[dict], LLMResult]:
         """Step 1: LLM policy evaluation. Raises on failure."""
         policies_formatted = format_policies_for_prompt(policies)
         sys_eval, usr_eval = prompts.v1_policy_eval.render(
@@ -84,7 +89,9 @@ class ResolutionService:
             policies_text=policies_formatted,
             policy_count=len(policies),
         )
-        return validate_llm_output(self.llm.complete(sys_eval, usr_eval, trace_id=trace_id), PolicyVerdictOutput, [])
+        result = self.llm.complete(sys_eval, usr_eval, trace_id=trace_id)
+        verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])
+        return verdicts, result
 
     def _synthesize_resolution(
         self,
@@ -98,7 +105,7 @@ class ResolutionService:
         cliente_vip: bool,
         logs: list[dict],
         trace_id: str,
-    ) -> dict:
+    ) -> tuple[dict, LLMResult]:
         """Step 4: LLM resolution synthesis. Raises on failure."""
         cases_formatted = format_cases_for_prompt(similar_cases)
         sys_res, usr_res = prompts.v1_resolution.render(
@@ -113,7 +120,9 @@ class ResolutionService:
             precedent_count=len(similar_cases),
             log_count=len(logs),
         )
-        return validate_llm_output(self.llm.complete(sys_res, usr_res, trace_id=trace_id), ResolutionOutput, {})
+        result = self.llm.complete(sys_res, usr_res, trace_id=trace_id)
+        resolution = validate_llm_output(result.text, ResolutionOutput, {})
+        return resolution, result
 
     def judge(self, resolution: dict, full_context: dict) -> dict:
         """LLM-as-Judge: evaluate resolution quality across 5 criteria.
@@ -132,7 +141,8 @@ class ResolutionService:
             full_context=full_context,
             resolution=resolution,
         )
-        result = validate_llm_output(self.llm.complete(system, user, trace_id=trace_id), JudgeEvaluationOutput, {})
+        llm_result = self.llm.complete(system, user, trace_id=trace_id)
+        result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})
 
         if "overall_score" not in result and "criteria" in result:
             scores = list(result["criteria"].values())
@@ -143,6 +153,11 @@ class ResolutionService:
         if result.get("overall_score"):
             self.tracer.score(trace_id, "judge_score", result["overall_score"])
 
+        result["_usage"] = {
+            "input_tokens": llm_result.input_tokens,
+            "output_tokens": llm_result.output_tokens,
+            "call_count": 1,
+        }
         return result
 
     @staticmethod

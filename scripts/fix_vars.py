@@ -13,8 +13,8 @@ URL_FIXES = {
         "={{ $vars.API_BASE_URL + '/api/logs/'"
         " + $('Validar Formato TXN').first().json.transaction_id }}"
     ),
-    "Buscar Políticas": "{{ $vars.API_BASE_URL }}/api/policies/search",
-    "Buscar Casos Similares": "{{ $vars.API_BASE_URL }}/api/cases/similar",
+    "Buscar Políticas": "={{ $vars.API_BASE_URL }}/api/policies/search",
+    "Buscar Casos Similares": "={{ $vars.API_BASE_URL }}/api/cases/similar",
     "Riesgo del Comercio": (
         "={{ $vars.API_BASE_URL + '/api/merchants/'"
         " + encodeURIComponent($('Obtener Transacción').first().json.merchant)"
@@ -25,14 +25,14 @@ URL_FIXES = {
         " + $('Obtener Transacción').first().json.client_id"
         " + '/history' }}"
     ),
-    "Sintetizar Resolución": "{{ $vars.API_BASE_URL }}/api/analyze/resolve",
-    "Juez de Calidad": "{{ $vars.API_BASE_URL }}/api/analyze/judge",
-    "Generar Reporte — BLOCKER": "{{ $vars.API_BASE_URL }}/api/reports/html",
-    "Generar Reporte — HIGH": "{{ $vars.API_BASE_URL }}/api/reports/html",
-    "Generar Reporte — MEDIUM": "{{ $vars.API_BASE_URL }}/api/reports/html",
-    "Generar Reporte — LOW": "{{ $vars.API_BASE_URL }}/api/reports/html",
-    "Registrar Feedback HITL": "{{ $vars.API_BASE_URL }}/api/feedback",
-    "Despertar API": "{{ $vars.API_BASE_URL }}/health",
+    "Sintetizar Resolución": "={{ $vars.API_BASE_URL }}/api/analyze/resolve",
+    "Juez de Calidad": "={{ $vars.API_BASE_URL }}/api/analyze/judge",
+    "Generar Reporte — BLOCKER": "={{ $vars.API_BASE_URL }}/api/reports/html",
+    "Generar Reporte — HIGH": "={{ $vars.API_BASE_URL }}/api/reports/html",
+    "Generar Reporte — MEDIUM": "={{ $vars.API_BASE_URL }}/api/reports/html",
+    "Generar Reporte — LOW": "={{ $vars.API_BASE_URL }}/api/reports/html",
+    "Registrar Feedback HITL": "={{ $vars.API_BASE_URL }}/api/feedback",
+    "Despertar API": "={{ $vars.API_BASE_URL }}/health",
     "Verificar Caché": (
         "={{ $vars.API_BASE_URL + '/api/cache/lookup?transaction_id='"
         " + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id)"

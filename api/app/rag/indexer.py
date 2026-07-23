@@ -13,7 +13,13 @@ import logging
 import uuid
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
+from qdrant_client.models import (
+    Distance,
+    PayloadSchemaType,
+    PointIdsList,
+    PointStruct,
+    VectorParams,
+)
 from ..domain.constants import EMBEDDING_DIM
 from .embedder import FastEmbedder
 
@@ -88,6 +94,24 @@ class QdrantIndexer:
             except Exception as e:
                 logger.error("Failed to ensure Qdrant collection %s: %s", name, e)
                 raise
+
+        self._ensure_payload_indexes()
+
+    def _ensure_payload_indexes(self) -> None:
+        """Create payload indexes required by retriever filters."""
+        indexes = [
+            (self.cases_collection, "payment_method", PayloadSchemaType.KEYWORD),
+        ]
+        for collection, field, schema in indexes:
+            try:
+                self.client.create_payload_index(
+                    collection_name=collection,
+                    field_name=field,
+                    field_schema=schema,
+                )
+                logger.info("Payload index created: %s.%s (%s)", collection, field, schema)
+            except Exception:
+                logger.debug("Payload index %s.%s already exists or failed", collection, field)
 
     def index_policies(self, policies: list[dict]) -> int:
         """Index all policies as Markdown documents. Returns count indexed."""

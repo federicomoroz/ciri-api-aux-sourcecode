@@ -245,7 +245,7 @@
     },
     {
       "parameters": {
-        "url": "{{ $vars.API_BASE_URL }}/api/policies/search",
+        "url": "={{ $vars.API_BASE_URL }}/api/policies/search",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -292,7 +292,7 @@
     },
     {
       "parameters": {
-        "url": "{{ $vars.API_BASE_URL }}/api/cases/similar",
+        "url": "={{ $vars.API_BASE_URL }}/api/cases/similar",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -523,7 +523,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/analyze/resolve",
+        "url": "={{ $vars.API_BASE_URL }}/api/analyze/resolve",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -592,7 +592,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/analyze/judge",
+        "url": "={{ $vars.API_BASE_URL }}/api/analyze/judge",
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {
@@ -786,7 +786,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
+        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1012,7 +1012,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/feedback",
+        "url": "={{ $vars.API_BASE_URL }}/api/feedback",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1061,7 +1061,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
+        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1171,7 +1171,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
+        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1281,7 +1281,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
+        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1390,7 +1390,7 @@
     },
     {
       "parameters": {
-        "url": "{{ $vars.API_BASE_URL }}/health",
+        "url": "={{ $vars.API_BASE_URL }}/health",
         "options": {
           "timeout": 90000
         }
