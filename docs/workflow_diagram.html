@@ -949,17 +949,17 @@ body {
     <div class="tech-pills">
       <span class="pill">n8n</span>
       <span class="pill">FastAPI</span>
-      <span class="pill">Claude Sonnet 4.6</span>
+      <span class="pill">Claude Haiku + Sonnet</span>
       <span class="pill">Qdrant Cloud</span>
       <span class="pill">Voyage AI</span>
       <span class="pill">Langfuse</span>
       <span class="pill">SQLite</span>
     </div>
     <div class="hero-stats">
-      <div class="stat"><div class="stat-value">38</div><div class="stat-label">nodos n8n</div></div>
+      <div class="stat"><div class="stat-value">54</div><div class="stat-label">nodos n8n</div></div>
       <div class="stat"><div class="stat-value">14</div><div class="stat-label">API endpoints</div></div>
-      <div class="stat"><div class="stat-value">2</div><div class="stat-label">llamadas LLM</div></div>
-      <div class="stat"><div class="stat-value">212</div><div class="stat-label">tests</div></div>
+      <div class="stat"><div class="stat-value">3</div><div class="stat-label">llamadas LLM</div></div>
+      <div class="stat"><div class="stat-value">244</div><div class="stat-label">tests</div></div>
     </div>
   </div>
 
@@ -972,13 +972,13 @@ body {
     </div>
     <div class="principle">
       <div class="principle-icon">&#9650;</div>
-      <div class="principle-title">RAG + SQL unidos en contexto</div>
-      <div class="principle-desc">Qdrant + Voyage AI para contexto semántico. SQLite para hechos exactos. Ambos alimentan a Claude en cada resolución.</div>
+      <div class="principle-title">El código decide, el LLM explica</div>
+      <div class="principle-desc">6/11 campos de la resolución son determinísticos (Python). El LLM justifica la decisión con evidencia, nunca la toma. Guardrails post-LLM corrigen alucinaciones.</div>
     </div>
     <div class="principle">
       <div class="principle-icon">&#9679;</div>
-      <div class="principle-title">Observable de punta a punta</div>
-      <div class="principle-desc">Langfuse traza cada llamada LLM con tokens, latencia y judge scores. El sistema aprende solo: score ≥ 8.0 → auto-indexa.</div>
+      <div class="principle-title">RAG + SQL + auto-mejora</div>
+      <div class="principle-desc">Qdrant (semántico) + SQLite (exacto) alimentan a Haiku + Sonnet. Score ≥ 8.0 → auto-indexa como nuevo precedente. Langfuse traza todo.</div>
     </div>
   </div>
 
@@ -1003,16 +1003,24 @@ body {
       </div>
       <div class="section-body" style="border-color:rgba(52,211,153,0.2)">
 
-        <!-- Row 1: Webhook → Validate → Extract -->
+        <!-- Row 1: Triggers → Validate → Extract -->
         <div class="flow-row">
-          <div class="node trigger">
-            <span class="method m-post">POST</span>
-            Webhook — Entrada
-            <span class="ep">/webhook/chargeback-agent</span>
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+            <div class="node trigger">
+              <span class="method m-post">POST</span>
+              Webhook
+              <span class="ep">/webhook/chargeback-agent</span>
+            </div>
+            <div style="font-size:0.6rem;color:var(--muted)">o</div>
+            <div class="node trigger">
+              Form Trigger
+              <span class="ep" style="font-size:0.65rem">formulario nativo n8n</span>
+            </div>
           </div>
           <div class="arrow arrow-right"></div>
-          <div class="node decision">
-            Validar Formato — IF
+          <div class="node">
+            <span class="badge badge-n8n">CODE</span>
+            Validar + Normalizar
             <span class="ep" style="font-size:0.65rem">regex TXN-XXXXX</span>
           </div>
           <div class="arrow arrow-right"></div>
@@ -1074,7 +1082,7 @@ body {
     <!-- ═══ §2 — CONTEXTO PARALELO ═══ -->
     <div class="flow-section">
       <div class="section-tag" style="background:rgba(56,189,248,0.08);color:var(--s2);border:1px solid rgba(56,189,248,0.2);border-bottom:none">
-        §2 Contexto paralelo <span class="tag-info">11 nodos — 6 queries en paralelo → Merge</span>
+        §2 Contexto paralelo <span class="tag-info">7 queries HTTP en paralelo → Merge</span>
       </div>
       <div class="section-body" style="border-color:rgba(56,189,248,0.2)">
 
@@ -1143,7 +1151,8 @@ body {
               <div style="width:2px;height:8px;background:var(--border)"></div>
               <div class="branch-node" style="font-size:0.7rem;padding:6px">
                 Verificar SLA
-                <span class="badge badge-n8n">SET</span>
+                <span class="ep">/api/sla/check</span>
+                <span class="badge badge-sqlite">POST</span>
               </div>
             </div>
           </div>
@@ -1174,7 +1183,7 @@ body {
     <!-- ═══ §3 — ANÁLISIS CON IA ═══ -->
     <div class="flow-section">
       <div class="section-tag" style="background:rgba(129,140,248,0.08);color:var(--s3);border:1px solid rgba(129,140,248,0.2);border-bottom:none">
-        §3 Análisis con IA <span class="tag-info">8 nodos — Resolución + Guardrails + Judge</span>
+        §3 Análisis con IA <span class="tag-info">Haiku (eval) + Sonnet (síntesis + judge) + Guardrails</span>
       </div>
       <div class="section-body" style="border-color:rgba(129,140,248,0.2)">
 
@@ -1188,14 +1197,17 @@ body {
 
           <div class="arrow-down" style="margin:0 auto"></div>
 
-          <!-- Resolve (LLM) -->
+          <!-- Resolve (LLM — 2 calls inside) -->
           <div class="node llm-node">
             <span class="method m-post">POST</span>
             Sintetizar Resolución
             <span class="ep">/api/analyze/resolve</span>
-            <span class="badge badge-llm">Claude</span>
           </div>
-          <div class="flow-note">action, risk_level, confidence, policy_verdicts</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin:6px 0">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:3px 8px;border-radius:3px;color:var(--amber);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.15)">Call 1: Haiku — Policy Eval</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:3px 8px;border-radius:3px;color:var(--accent2);background:rgba(129,140,248,0.1);border:1px solid rgba(129,140,248,0.15)">Call 2: Sonnet — Síntesis</span>
+          </div>
+          <div class="flow-note">6 campos determinísticos + justificación narrativa</div>
 
           <div class="arrow-down" style="margin:0 auto"></div>
 
@@ -1203,8 +1215,9 @@ body {
           <div class="node" style="border-color:var(--rose);border-style:dashed">
             <span class="badge badge-n8n">CODE</span>
             Verificar Guardrails
-            <span class="ep" style="font-size:0.65rem;color:var(--rose)">APPROVE + BLOCKER = hallucination</span>
+            <span class="ep" style="font-size:0.65rem;color:var(--rose)">5 validaciones post-LLM</span>
           </div>
+          <div class="flow-note" style="color:var(--rose)">APPROVE+BLOCKER, BLOCKER whitelist, compensación, overconfidence, risk override</div>
 
           <div class="arrow-down" style="margin:0 auto"></div>
 
@@ -1213,9 +1226,11 @@ body {
             <span class="method m-post">POST</span>
             Juez de Calidad
             <span class="ep">/api/analyze/judge</span>
-            <span class="badge badge-llm">Claude</span>
           </div>
-          <div class="flow-note">score 1–10, 5 criterios, trazado en Langfuse</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin:6px 0">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:3px 8px;border-radius:3px;color:var(--accent2);background:rgba(129,140,248,0.1);border:1px solid rgba(129,140,248,0.15)">Call 3: Sonnet — Judge v2.0</span>
+          </div>
+          <div class="flow-note">score 1–10, 5 criterios con rúbricas, avg 9.1/10</div>
 
           <div class="arrow-down" style="margin:0 auto"></div>
 
@@ -1371,20 +1386,20 @@ body {
       <div class="info-card-title">Decisiones de diseño</div>
       <ul>
         <li>n8n orquesta, FastAPI ejecuta</li>
-        <li>QueryBuilder determinístico, sin LLM para queries</li>
-        <li>Políticas editables vía API, sin redeploy</li>
-        <li>Guardrail: APPROVE + BLOCKER → hallucination</li>
-        <li>Caché semántico, threshold 0.92</li>
-        <li>Prompts versionados (v1_*)</li>
+        <li>"El código decide, el LLM explica" — 6/11 campos determinísticos</li>
+        <li>Modelo dual: Haiku (eval) + Sonnet (síntesis + judge)</li>
+        <li>5 guardrails post-LLM + BLOCKER whitelist</li>
+        <li>Políticas editables vía API CRUD, sin redeploy</li>
+        <li>Caché semántico (0.92) + caché de idempotencia</li>
       </ul>
     </div>
     <div class="info-card">
       <div class="info-card-title">RAG pipeline</div>
       <ul>
-        <li>Embeddings: Voyage AI (voyage-multilingual-2)</li>
-        <li>1024 dims, multilingual, Voyage AI API</li>
-        <li>Políticas: top-17, threshold 0.0</li>
-        <li>Casos similares: top-5, threshold 0.40</li>
+        <li>Embeddings: Voyage AI (voyage-multilingual-2, 1024d)</li>
+        <li>3 colecciones: policies, historical_cases, _semantic_cache</li>
+        <li>QueryBuilder determinístico, sin LLM para queries</li>
+        <li>Precedent summary con [MOTIVO SIMILAR] + [MISMO MERCHANT]</li>
         <li>SQLite + Qdrant unidos en contexto LLM</li>
         <li>Auto-indexing: score ≥ 8.0 → nuevo precedente</li>
       </ul>
@@ -1392,12 +1407,12 @@ body {
     <div class="info-card">
       <div class="info-card-title">Deploy + Observabilidad</div>
       <ul>
-        <li>API: Render.com, Docker</li>
-        <li>Qdrant Cloud, sa-east-1</li>
-        <li>n8n Cloud, 38 nodos</li>
-        <li>LLM: Claude Sonnet 4.6 (Anthropic)</li>
-        <li>Langfuse: tokens, latencia, judge scores</li>
-        <li>212 tests, pytest, mocks LLM</li>
+        <li>API: Render.com (free tier), Docker</li>
+        <li>Qdrant Cloud (free tier), Voyage AI (free tier)</li>
+        <li>n8n Cloud (trial), 54 nodos</li>
+        <li>LLM: Claude Haiku + Sonnet (Anthropic)</li>
+        <li>Langfuse: tokens, latencia, judge scores (avg 9.1)</li>
+        <li>244 tests, pytest, mocks LLM</li>
       </ul>
     </div>
   </div>

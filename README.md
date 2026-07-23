@@ -16,6 +16,35 @@ Agente inteligente de resolución de contracargos construido para la evaluación
 
 ---
 
+## Probar sin setup local
+
+La forma más rápida de probar el sistema completo:
+
+### Opción 1 — Panel web (sin n8n)
+
+Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel), seleccionar una transacción y hacer clic en "Analizar". El panel ejecuta el pipeline completo (RAG + LLM + guardrails + judge) directamente.
+
+### Opción 2 — Workflow n8n (orquestación completa)
+
+1. Importar `n8n/workflow_ciri_agent.json` en cualquier cuenta de n8n (Cloud o self-hosted)
+2. Ir a **Settings → Variables** y crear una variable:
+   - **Name:** `API_BASE_URL`
+   - **Value:** `https://ciri-chargeback-agent.onrender.com`
+3. Activar el workflow
+4. Enviar un request al webhook:
+
+```bash
+curl -X POST https://<tu-instancia-n8n>/webhook/chargeback-agent \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'
+```
+
+No se necesitan API keys de Anthropic, Voyage ni Qdrant — todo corre en el backend ya desplegado en Render.
+
+> **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para manejar el cold start de Render automáticamente.
+
+---
+
 ## Arquitectura
 
 ```
