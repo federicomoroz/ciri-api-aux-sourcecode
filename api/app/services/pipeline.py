@@ -106,7 +106,7 @@ class PipelineService:
             "merchant_risk": merchant_risk,
             "client_profile": client_history,
             "logs": logs,
-            "policies_evaluated": policies,
+            "policies_evaluated": resolution.get("policy_verdicts", []),
             "similar_cases": similar_cases,
             "hitl_decision": None,
             "cache_hit": False,
