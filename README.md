@@ -1,38 +1,58 @@
 # CIRI Chargeback Agent
 
+![Python](https://img.shields.io/badge/python-3.11+-blue)
+![Tests](https://img.shields.io/badge/tests-203%20passed-brightgreen)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
+![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
+![Claude](https://img.shields.io/badge/Claude-Sonnet%204-blueviolet)
+![Qdrant](https://img.shields.io/badge/Qdrant-vector%20DB-dc382c)
+
 Intelligent chargeback resolution agent built for the CIRI (Continuous Improvement & Risk Intelligence) technical evaluation. The system investigates chargeback cases end-to-end: it retrieves applicable policies via RAG, evaluates them against the transaction, synthesizes a resolution, and self-improves through a Judge-gated feedback loop.
+
+> **Live Demo:** [Test Panel on Render](https://ciri-chargeback-agent.onrender.com/panel) — interactive UI to run chargeback investigations without local setup.
 
 ---
 
 ## Architecture
 
-```
-                        ┌─────────────────────────────────────┐
-                        │   n8n Explicit Orchestrator (~28     │
-                        │   nodes) — WHAT and WHEN             │
-                        │   HTTP Request + Set + Switch + Wait │
-                        └──────────────┬──────────────────────┘
-                                       │ REST
-                        ┌──────────────▼──────────────────────┐
-                        │         FastAPI  (port 8000)         │
-                        │     Business Logic: HOW              │
-                        │  services/ → analysis/ → rag/ → llm/│
-                        │  Thin routes (~20 lines each)        │
-                        └──────┬──────────────┬───────────────┘
-                               │              │
-              ┌────────────────▼──┐    ┌──────▼──────────────┐
-              │   Qdrant (6333)   │    │   SQLite (.db file)  │
-              │  Semantic truth   │    │  Structured truth     │
-              │  - policies       │    │  - transactions       │
-              │  - hist. cases    │    │  - cases / logs       │
-              │  - _sem_cache     │    │  - policies / feedback│
-              └───────────────────┘    └─────────────────────┘
-                               │
-              ┌────────────────▼──────────────────────────────┐
-              │   Claude (Haiku by default) via Anthropic API  │
-              │   4 prompts: policy_eval, resolution,          │
-              │   judge, log_analysis (all versioned v1_*)     │
-              └───────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Orchestration
+        N[n8n ~28 explicit nodes]
+    end
+
+    subgraph "FastAPI :8000"
+        R[Routes — thin HTTP handlers]
+        S[Services — resolve + judge + feedback]
+        A[Analyzer — SLA, risk flags, patterns]
+        RAG[RAG — retriever + indexer + formatter]
+        LLM[LLM — prompts v1_* + parsing]
+    end
+
+    subgraph Storage
+        Q[(Qdrant Cloud)]
+        DB[(SQLite)]
+    end
+
+    subgraph "External APIs"
+        C[Claude — Anthropic API]
+        V[Voyage AI — embeddings]
+    end
+
+    N -->|REST calls| R
+    R --> S
+    S --> A
+    S --> RAG
+    S --> LLM
+    RAG --> Q
+    RAG --> V
+    LLM --> C
+    S --> DB
+    R --> DB
+
+    Q --- P[policies]
+    Q --- HC[historical_cases]
+    Q --- SC[_semantic_cache]
 ```
 
 **Key principle:** n8n is the explicit orchestrator — every step is a named, visible node. No AI Agent black box. All domain logic, guardrails, and RAG live in FastAPI services. n8n nodes never contain business logic.
@@ -218,7 +238,8 @@ python -m pytest tests/unit/test_analysis.py -v
 python -m pytest tests/ --cov=api.app --cov-report=term-missing
 ```
 
-Test structure:
+203 tests across 11 test files (unit + integration):
+
 ```
 tests/
   conftest.py                        # MockLLMClient, sample data, in-memory SQLite
@@ -226,30 +247,35 @@ tests/
     test_data_loader.py              # Excel → SQLite data loading
     test_rag_retriever.py            # QueryBuilder enrichment rules
     test_analysis.py                 # SLA, error patterns, merchant risk, client flags
+    test_guardrails.py               # Post-LLM guardrail validation
+    test_guardrails_edge.py          # Edge cases: boundaries, combined warnings
+    test_db.py                       # Database layer: CRUD, stats, cache
+    test_indexer.py                  # QdrantIndexer with mocked client
+    test_formatter.py                # RAG formatter output verification
+    test_report_generator.py         # Jinja2 HTML rendering + XSS prevention
   integration/
     test_full_flow.py                # Full resolve → judge → feedback → report cycle
     test_policies_crud.py            # Policy CRUD + Qdrant re-indexing
+    test_routes.py                   # Route-level integration: SLA, cache, health
 ```
 
 ---
 
 ## Design Decisions
 
-### 1. n8n as explicit orchestrator (not AI Agent)
+9 documented decisions with Context, Rationale, Trade-offs, and Production considerations. See [`docs/decisions.md`](docs/decisions.md) for the complete analysis. Key highlights:
 
-n8n handles sequencing via named nodes — HTTP Request, Set, Switch, Merge, Wait. Every investigation executes the same ~28 steps in the same order: context assembly (7 parallel calls), AI resolution, Judge evaluation, risk-based routing. There is no AI Agent node, no LLM-based tool calling, no black box.
-
-### 2. Policies are data, not code
-
-The 17 policies are stored as Markdown documents in Qdrant and as rows in SQLite. An analyst can create, update, or delete a policy via the REST API and it takes effect immediately — Qdrant is re-indexed on every write. No code change, no redeploy, no restart required.
-
-### 3. Deterministic QueryBuilder for RAG
-
-The query sent to Qdrant is built by rule-based logic, not by an LLM. A Cripto payment always appends "criptomonedas no reversible blocker"; a fraud_score below 30 appends "alto riesgo"; a non-LATAM country appends "plazo extendido". This makes retrieval reproducible, free (no token cost), and debuggable.
-
-### 4. Service layer architecture
-
-Routes are thin HTTP handlers (~20 lines). All orchestration lives in `services/` (`ResolutionService`, `FeedbackService`). Business logic (SLA, risk flags, patterns) is in `analysis/analyzer.py`. Data access is in `data/db.py`. Domain definitions (models, enums, constants) have zero external dependencies.
+| # | Decision | Why |
+|---|----------|-----|
+| 1 | n8n explicit orchestration (not AI Agent) | Full auditability for regulated fintech — every step visible |
+| 2 | Policies as data, not code | Zero-downtime updates via REST API, LLM evaluates dynamically |
+| 3 | Deterministic QueryBuilder | Free, reproducible, debuggable RAG queries — no LLM needed |
+| 4 | Service layer architecture | Routes thin (~20 lines), testable layers, swappable implementations |
+| 5 | Voyage AI embeddings (1024d) | Top-3 Spanish multilingual on MTEB, generous free tier |
+| 6 | SQLite over Postgres | Self-contained for evaluation, clean migration path |
+| 7 | Post-LLM guardrails | Catches APPROVE+BLOCKER hallucinations, compensation caps |
+| 8 | Judge through FastAPI | Consistent prompt versioning and Langfuse observability |
+| 9 | Semantic cache in Qdrant | ~20% LLM cost reduction for recurring patterns |
 
 ---
 
@@ -303,6 +329,7 @@ quest_ML/
   tests/
   docs/
     architecture.md
+    decisions.md
     prompts.md
     rag_explanation.md
     mejora_continua.md
@@ -330,6 +357,7 @@ See [`docs/demo_scenarios.md`](docs/demo_scenarios.md) for 3 end-to-end scenario
 | Document | Description |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | System architecture, n8n flow, ADRs |
+| [`docs/decisions.md`](docs/decisions.md) | 9 technical decisions with rationale and trade-offs |
 | [`docs/prompts.md`](docs/prompts.md) | All 4 versioned prompts with I/O specs |
 | [`docs/rag_explanation.md`](docs/rag_explanation.md) | RAG strategy, collections, QueryBuilder |
 | [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge gate, guardrails |

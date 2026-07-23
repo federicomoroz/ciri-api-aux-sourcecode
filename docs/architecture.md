@@ -40,10 +40,10 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a **sin
 | Semantic store | Qdrant Cloud | Unstructured truth — policies, historical cases, semantic cache |
 | Structured store | SQLite | Relational truth — transactions, logs, feedback, audit trail |
 | LLM (resolve) | Claude via FastAPI | Policy evaluation + synthesis with guardrails and semantic cache |
-| LLM (judge) | Claude via Anthropic API directo | Quality scoring 1–10 — called directly from n8n HTTP Request node |
+| LLM (judge) | Claude via FastAPI | Quality scoring 1–10 — called from n8n via `POST /api/analyze/judge` |
 | Observability | Langfuse | Token cost, latency, resolve scores, cache hit rate |
 
-**Core principle:** n8n knows WHAT and WHEN; uses native nodes (Set, IF, Switch, Merge) for deterministic logic. FastAPI handles RAG, LLM synthesis with guardrails, and feedback. The Judge (Claude) is called directly from n8n — visible as an HTTP Request node, no proxy layer.
+**Core principle:** n8n knows WHAT and WHEN; uses native nodes (Set, IF, Switch, Merge) for deterministic logic. FastAPI handles RAG, LLM synthesis with guardrails, feedback, and the Judge evaluation. All LLM calls are routed through FastAPI for consistent observability and prompt versioning.
 
 ---
 
@@ -266,7 +266,7 @@ All 6 parallel branches converge at `[Merge — Contexto Paralelo]` (Merge node,
 4. Applies post-LLM guardrails: APPROVE + BLOCKER active → force REJECT (hallucination guard)
 5. Returns Resolution with any guardrail warnings appended
 
-`[Juez de Calidad]` calls **Anthropic API directly** from n8n (`POST https://api.anthropic.com/v1/messages`), using `$env.CB_ANTHROPIC_API_KEY`. The v1_judge system prompt is inlined in the HTTP Request body. The adjacent `[Extraer Evaluación — Juez]` Set node immediately parses the Anthropic response (`JSON.parse($json.content[0].text)`) — making the external contract visually explicit on the canvas. Returns `overall_score` 1.0–10.0 across 5 criteria: factual accuracy, policy compliance, reasoning quality, risk classification, recommendation clarity.
+`[Juez de Calidad]` calls `POST /api/analyze/judge` via FastAPI. The `v1_judge` prompt is version-controlled in `llm/prompts/v1_judge.py` and executed through the same `AnthropicClient` as all other LLM calls, ensuring consistent observability via Langfuse. The adjacent `[Extraer Evaluación — Juez]` Set node parses the FastAPI JSON response. Returns `overall_score` 1.0–10.0 across 5 criteria: factual accuracy, policy compliance, reasoning quality, risk classification, recommendation clarity.
 
 ### Phase 4: Risk routing (§4)
 
@@ -293,7 +293,7 @@ When an analyst submits feedback via `POST /api/feedback`, `FeedbackService` sav
 
 **Context:** The system needs an orchestration layer that provides a visual, auditable flow for non-technical stakeholders and guarantees deterministic execution order for every chargeback investigation.
 
-**Decision:** Use n8n with ~28 explicit named nodes — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge, Wait) handle all deterministic logic. HTTP Request nodes are reserved for external calls, always paired with a Set node immediately after to make the external contract explicit. The synthesis LLM is called via FastAPI (`/api/analyze/resolve`); the Judge (Claude) is called directly from n8n via HTTP Request to Anthropic API — guaranteeing the model is Claude, not n8n's built-in LLM node.
+**Decision:** Use n8n with ~28 explicit named nodes — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge, Wait) handle all deterministic logic. HTTP Request nodes are reserved for external calls, always paired with a Set node immediately after to make the external contract explicit. Both the synthesis LLM (`/api/analyze/resolve`) and the Judge (`/api/analyze/judge`) are called via FastAPI — all LLM interactions are centralized with consistent prompt versioning, error handling, and Langfuse observability.
 
 **Consequences:**
 - Every investigation executes the exact same steps in the same order, every time
