@@ -954,8 +954,8 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        64920,
-        22800
+        65100,
+        23200
       ]
     },
     {
@@ -1033,7 +1033,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        64520,
+        66100,
         22200
       ],
       "settings": {
@@ -1064,7 +1064,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        64920,
+        66600,
         22200
       ]
     },
@@ -1136,7 +1136,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        65000,
+        65100,
         22700
       ],
       "settings": {
@@ -1145,6 +1145,19 @@
         "waitBetweenTries": 5000
       },
       "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Restaurar el payload del reporte desde Procesar Respuesta HITL\n// (Registrar Feedback reemplaza $json con su respuesta API)\nreturn [$('Procesar Respuesta HITL').first()];"
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Restaurar Payload HITL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        65600,
+        22700
+      ]
     }
   ],
   "pinData": {},
@@ -1582,11 +1595,6 @@
       "main": [
         [
           {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Registrar Feedback HITL",
             "type": "main",
             "index": 0
@@ -1596,8 +1604,31 @@
     },
     "Registrar Feedback HITL": {
       "main": [
-        [],
-        []
+        [
+          {
+            "node": "Restaurar Payload HITL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Propagar → Error Handler — Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restaurar Payload HITL": {
+      "main": [
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
