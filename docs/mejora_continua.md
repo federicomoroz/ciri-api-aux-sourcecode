@@ -262,7 +262,6 @@ api/app/llm/prompts/
   v1_policy_eval.py       ← current production version
   v1_resolution.py
   v1_judge.py
-  v1_log_analysis.py
 ```
 
 Each file begins with a version header comment:
@@ -352,3 +351,20 @@ CB_LANGFUSE_HOST=https://cloud.langfuse.com
 ```
 
 When `CB_LANGFUSE_ENABLED=false` (default), all tracer calls are no-ops — the `LangfuseTracer` wrapper returns empty objects that absorb method calls without error.
+
+---
+
+## Estimación de Costos LLM
+
+Per investigation (1 chargeback case):
+
+| Llamada | Modelo | Tokens aprox. | Costo estimado |
+|---------|--------|---------------|----------------|
+| v1_policy_eval | Claude Haiku | ~2K in + ~500 out | ~$0.002 |
+| v1_resolution | Claude Haiku | ~3K in + ~800 out | ~$0.003 |
+| v1_judge (n8n) | Claude Haiku | ~2K in + ~400 out | ~$0.002 |
+| **Total por caso** | | | **~$0.007** |
+
+- Semantic cache (threshold 0.92) reduce ~20% de llamadas para merchants recurrentes
+- Estimación mensual para 1,000 casos: ~$5-7 USD con Haiku, ~$30-40 con Sonnet
+- Langfuse dashboard permite monitorear costo real por traza y por prompt

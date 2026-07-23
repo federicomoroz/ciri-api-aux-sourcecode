@@ -335,3 +335,25 @@ def test_resolve_response_schema(test_client_full_flow):
     }
     for field in expected_fields:
         assert field in data, f"Missing field: {field}"
+
+
+def test_analytics_dashboard(test_client_full_flow):
+    """GET /api/analytics/dashboard should return aggregated metrics."""
+    client = test_client_full_flow
+    resp = client.get("/api/analytics/dashboard")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_transactions" in data
+    assert "total_cases" in data
+    assert "avg_judge_score" in data
+    assert "top_merchants_by_chargebacks" in data
+    assert "transactions_by_country" in data
+    assert data["total_transactions"] > 0
+
+
+def test_error_response_has_request_id(test_client_full_flow):
+    """Even non-200 responses should include X-Request-ID header."""
+    client = test_client_full_flow
+    resp = client.get("/api/transactions/TXN-99999")
+    assert resp.status_code == 404
+    assert "X-Request-ID" in resp.headers

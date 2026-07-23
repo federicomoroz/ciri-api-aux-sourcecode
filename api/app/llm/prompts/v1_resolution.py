@@ -39,6 +39,26 @@ Formato JSON de respuesta:
   "next_steps": ["Paso 1 concreto", "Paso 2 concreto"],
   "requires_hitl": false,
   "hitl_reason": null
+}
+
+EJEMPLO:
+Dado: TXN con Cripto, fraud_score=12, POL-EXC-003=BLOCKER, POL-FRD-001=FAIL, sin precedentes similares, sin logs criticos.
+
+Respuesta correcta:
+{
+  "transaction_id": "TXN-00099",
+  "recommended_action": "REJECT",
+  "confidence": 0.98,
+  "justification": "Rechazo obligatorio: POL-EXC-003 BLOCKER (Cripto irreversible) y POL-FRD-001 FAIL (score=12/100 < umbral 30). Sin precedentes similares que justifiquen excepcion.",
+  "policy_verdicts": [],
+  "precedent_summary": "Sin precedentes similares encontrados.",
+  "log_summary": "Sin anomalias criticas en logs.",
+  "risk_level": "BLOCKER",
+  "compensation_applicable": false,
+  "compensation_amount_usd": 0.0,
+  "next_steps": ["Notificar rechazo al cliente citando POL-EXC-003", "Registrar caso como precedente de cripto rechazado", "Escalar a compliance si el cliente disputa"],
+  "requires_hitl": false,
+  "hitl_reason": null
 }"""
 
 USER_TEMPLATE = """## TRANSACCION

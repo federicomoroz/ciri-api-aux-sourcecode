@@ -201,6 +201,47 @@ class Database:
             conn.commit()
             return cursor.lastrowid
 
+    # --- Analytics ---
+
+    def get_dashboard_stats(self) -> dict:
+        """Aggregated metrics for the analytics dashboard."""
+        with self._conn() as conn:
+            tx_count = conn.execute("SELECT COUNT(*) as cnt FROM transactions").fetchone()["cnt"]
+            case_count = conn.execute("SELECT COUNT(*) as cnt FROM cases").fetchone()["cnt"]
+            feedback_count = conn.execute("SELECT COUNT(*) as cnt FROM feedback").fetchone()["cnt"]
+
+            avg_row = conn.execute("SELECT AVG(judge_score) as avg FROM feedback").fetchone()
+            avg_judge_score = round(avg_row["avg"], 2) if avg_row["avg"] else 0.0
+
+            auto_indexed = conn.execute(
+                "SELECT COUNT(*) as cnt FROM feedback WHERE judge_score >= ?", (8.0,)
+            ).fetchone()["cnt"]
+
+            top_merchants = conn.execute(
+                "SELECT t.merchant, COUNT(*) as cb_count "
+                "FROM cases c JOIN transactions t ON c.transaction_id = t.id "
+                "GROUP BY t.merchant ORDER BY cb_count DESC LIMIT 5"
+            ).fetchall()
+
+            by_country = conn.execute(
+                "SELECT country, COUNT(*) as cnt FROM transactions GROUP BY country ORDER BY cnt DESC"
+            ).fetchall()
+
+            by_payment = conn.execute(
+                "SELECT payment_method, COUNT(*) as cnt FROM transactions GROUP BY payment_method ORDER BY cnt DESC"
+            ).fetchall()
+
+        return {
+            "total_transactions": tx_count,
+            "total_cases": case_count,
+            "total_feedback": feedback_count,
+            "avg_judge_score": avg_judge_score,
+            "auto_indexed_count": auto_indexed,
+            "top_merchants_by_chargebacks": self._rows_to_list(top_merchants),
+            "transactions_by_country": self._rows_to_list(by_country),
+            "transactions_by_payment_method": self._rows_to_list(by_payment),
+        }
+
     # --- Report Cache (idempotency) ---
 
     def ensure_report_cache_table(self) -> None:

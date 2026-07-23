@@ -11,6 +11,7 @@ Design decisions:
 import logging
 
 from qdrant_client import QdrantClient
+from qdrant_client.models import FieldCondition, Filter, MatchValue
 from .embedder import FastEmbedder
 
 from ..domain.constants import (
@@ -19,6 +20,8 @@ from ..domain.constants import (
     LATAM_COUNTRIES,
     POLICIES_TOP_K,
     POLICIES_SCORE_THRESHOLD,
+    RERANK_COUNTRY_BOOST,
+    RERANK_PAYMENT_METHOD_BOOST,
     SIMILAR_CASES_TOP_K,
     SIMILAR_CASES_SCORE_THRESHOLD,
 )
@@ -129,16 +132,24 @@ class QdrantRetriever:
         top_k: int = SIMILAR_CASES_TOP_K,
         score_threshold: float = SIMILAR_CASES_SCORE_THRESHOLD,
     ) -> list[dict]:
-        """Semantic search over historical_cases collection."""
+        """Hybrid search: vector similarity + metadata filtering + reranking."""
         query = QueryBuilder.for_similar_cases(
             merchant, amount, payment_method, country, fraud_score, motivo
         )
         vector = self._embed(query)
 
+        # Soft filter: prefer results with same payment_method (should = boost, not exclude)
+        query_filter = Filter(
+            should=[
+                FieldCondition(key="payment_method", match=MatchValue(value=payment_method)),
+            ]
+        )
+
         try:
             results = self.client.query_points(
                 collection_name=self.cases_collection,
                 query=vector,
+                query_filter=query_filter,
                 limit=top_k,
                 score_threshold=score_threshold,
                 with_payload=True,
@@ -147,7 +158,21 @@ class QdrantRetriever:
             logger.error("Qdrant case search failed: %s", e)
             raise
 
+        results = self._rerank(results, payment_method, country)
+
         return [
             {**r.payload, "score": round(r.score, 4), "_query": query}
             for r in results
         ]
+
+    @staticmethod
+    def _rerank(results: list, payment_method: str, country: str) -> list:
+        """Boost results sharing payment_method or country with the query transaction."""
+        for r in results:
+            boost = 0.0
+            if r.payload.get("payment_method") == payment_method:
+                boost += RERANK_PAYMENT_METHOD_BOOST
+            if r.payload.get("country") == country:
+                boost += RERANK_COUNTRY_BOOST
+            r.score = min(r.score + boost, 1.0)
+        return sorted(results, key=lambda r: r.score, reverse=True)

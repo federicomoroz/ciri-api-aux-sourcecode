@@ -1,13 +1,24 @@
+import logging
 import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+# Structured JSON logging — parseable by log aggregators (ELK, Datadog, CloudWatch)
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+
+logger = logging.getLogger(__name__)
 
 from .dependencies import lifespan
 from .routes import (
     analyze,
+    analytics,
     cache,
     cases,
     clients,
@@ -57,6 +68,17 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Return structured JSON error with request_id instead of raw stack trace."""
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.error("Unhandled error [request_id=%s]: %s", request_id, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error", "request_id": request_id},
+    )
+
+
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
     """Redirect root to the test panel."""
@@ -74,5 +96,6 @@ app.include_router(merchants.router)
 app.include_router(sla.router)
 app.include_router(analyze.router)
 app.include_router(feedback.router)
+app.include_router(analytics.router)
 app.include_router(reports.router)
 app.include_router(panel.router)

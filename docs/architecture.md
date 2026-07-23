@@ -382,3 +382,20 @@ Available to the next resolution request. No code change. No deploy. No downtime
 - For cases: `top_k=5, threshold=0.40` — only semantically meaningful precedents
 
 **Alternatives rejected:** LLM-generated queries — adds latency and cost to every request, non-deterministic, harder to debug.
+
+---
+
+## Consideraciones de Seguridad
+
+| Aspecto | Implementación |
+|---------|---------------|
+| API Keys | Variables de entorno con prefijo `CB_`, nunca en código fuente |
+| CORS | Restringido a orígenes conocidos (`localhost:5678`, `:3000`, `:8000`) |
+| Métodos HTTP | Solo `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS` — sin wildcards |
+| Headers | `Content-Type`, `Authorization`, `X-Request-ID` únicamente |
+| XSS en reportes | Jinja2 con `autoescape=True` por defecto |
+| SQL Injection | Queries parametrizadas (`?` placeholders) en todo `db.py` |
+| PII en Qdrant | Solo datos de negocio indexados (merchant, monto, país). Sin nombres ni documentos personales |
+| Prompt injection | LLM output validado contra Pydantic models (`validate_llm_output`); guardrails post-LLM detectan contradicciones |
+| Request correlation | `X-Request-ID` en middleware para auditoría y trazabilidad |
+| Error handling | Global exception handler retorna JSON estructurado, sin stack traces al cliente |

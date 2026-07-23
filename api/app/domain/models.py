@@ -178,3 +178,15 @@ class HealthResponse(BaseModel):
     sqlite: str
     qdrant: str
     collections: dict[str, int] = {}
+
+
+class DashboardResponse(BaseModel):
+    """Response from GET /api/analytics/dashboard."""
+    total_transactions: int
+    total_cases: int
+    total_feedback: int
+    avg_judge_score: float
+    auto_indexed_count: int
+    top_merchants_by_chargebacks: list[dict]
+    transactions_by_country: list[dict]
+    transactions_by_payment_method: list[dict]

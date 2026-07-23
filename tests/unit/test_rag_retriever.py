@@ -1,10 +1,12 @@
 """
-Unit tests for the RAG retriever's query builder.
+Unit tests for the RAG retriever's query builder and reranking.
 These tests are pure Python — no Qdrant required.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from api.app.rag.retriever import QueryBuilder
+from api.app.rag.retriever import QdrantRetriever, QueryBuilder
 
 
 class TestQueryBuilder:
@@ -119,3 +121,47 @@ class TestQueryBuilder:
         assert "cripto" in q.lower()
         assert "alto riesgo" in q.lower() or "fraude" in q.lower()
         assert "latam" in q.lower() or "internacional" in q.lower()
+
+
+class TestReranking:
+    """Tests for the _rerank() method — score boosting by metadata match."""
+
+    def _make_result(self, score: float, payment_method: str, country: str):
+        """Create a mock Qdrant result with score and payload."""
+        r = MagicMock()
+        r.score = score
+        r.payload = {"payment_method": payment_method, "country": country}
+        return r
+
+    def test_rerank_boosts_matching_payment_method(self):
+        results = [
+            self._make_result(0.80, "Credito Visa", "ARG"),
+            self._make_result(0.78, "Cripto", "MEX"),
+        ]
+        reranked = QdrantRetriever._rerank(results, "Cripto", "COL")
+        # Cripto match gets +0.05 boost → 0.83, should be first
+        assert reranked[0].payload["payment_method"] == "Cripto"
+        assert reranked[0].score == pytest.approx(0.83, abs=0.01)
+
+    def test_rerank_boosts_matching_country(self):
+        results = [
+            self._make_result(0.75, "Credito Visa", "COL"),
+            self._make_result(0.76, "Debito MC", "ARG"),
+        ]
+        reranked = QdrantRetriever._rerank(results, "Debito Visa", "COL")
+        # COL match gets +0.03 → 0.78, should be first
+        assert reranked[0].payload["country"] == "COL"
+
+    def test_rerank_both_match_highest_boost(self):
+        results = [
+            self._make_result(0.70, "Cripto", "COL"),
+            self._make_result(0.77, "Credito Visa", "ARG"),
+        ]
+        reranked = QdrantRetriever._rerank(results, "Cripto", "COL")
+        # Cripto+COL = +0.08 → 0.78, beats 0.77
+        assert reranked[0].payload["payment_method"] == "Cripto"
+
+    def test_rerank_caps_at_one(self):
+        results = [self._make_result(0.99, "Cripto", "COL")]
+        reranked = QdrantRetriever._rerank(results, "Cripto", "COL")
+        assert reranked[0].score == 1.0

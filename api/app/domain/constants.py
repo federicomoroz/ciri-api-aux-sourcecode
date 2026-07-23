@@ -163,5 +163,9 @@ HEALTH_OK: str = "ok"
 HEALTH_HEALTHY: str = "healthy"
 HEALTH_DEGRADED: str = "degraded"
 
+# ── Reranking ────────────────────────────────────────────────────────────
+RERANK_PAYMENT_METHOD_BOOST: float = 0.05  # score boost for matching payment method
+RERANK_COUNTRY_BOOST: float = 0.03         # score boost for matching country
+
 # ── Conversion ───────────────────────────────────────────────────────────────
 SECONDS_TO_MS: int = 1000

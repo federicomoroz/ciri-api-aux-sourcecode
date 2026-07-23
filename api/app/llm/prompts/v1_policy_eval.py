@@ -31,6 +31,17 @@ Formato de respuesta (array JSON):
     "reasoning": "Explicacion concisa citando datos especificos de la transaccion",
     "requires_human_review": false
   }
+]
+
+EJEMPLO:
+Transaccion: {"id":"TXN-00099","payment_method":"Cripto","fraud_score":12,"amount_usd":500.00,"country":"COL","channel":"APP","merchant":"Binance"}
+Politica: POL-EXC-003 — Criptomonedas: BLOCKER para todo contracargo con metodo de pago Cripto.
+Politica: POL-FRD-001 — Score minimo: fraud_score < 30 → FAIL.
+
+Respuesta correcta:
+[
+  {"policy_code":"POL-EXC-003","verdict":"BLOCKER","reasoning":"Metodo de pago es Cripto (irreversible). BLOCKER automatico segun POL-EXC-003.","requires_human_review":false},
+  {"policy_code":"POL-FRD-001","verdict":"FAIL","reasoning":"fraud_score=12, inferior al umbral minimo de 30. score=12/100.","requires_human_review":false}
 ]"""
 
 USER_TEMPLATE = """## TRANSACCION
