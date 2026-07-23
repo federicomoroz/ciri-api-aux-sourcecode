@@ -307,3 +307,44 @@ class TestDetermineOutcome:
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
         assert outcome["recommended_action"] == "APPROVE"
+
+
+class TestSanitizeVerdicts:
+    """Downgrade invalid BLOCKER verdicts to FAIL."""
+
+    def test_non_whitelisted_blocker_downgraded_to_fail(self):
+        verdicts = [
+            {"policy_code": "POL-CB-004", "verdict": "BLOCKER", "reasoning": "Suspended"},
+        ]
+        result = ResolutionService._sanitize_verdicts(verdicts)
+
+        assert result[0]["verdict"] == "FAIL"
+        assert result[0]["requires_human_review"] is True
+
+    def test_whitelisted_blocker_preserved(self):
+        verdicts = [
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+        ]
+        result = ResolutionService._sanitize_verdicts(verdicts)
+
+        assert result[0]["verdict"] == "BLOCKER"
+
+    def test_fail_verdicts_unchanged(self):
+        verdicts = [
+            {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio alto"},
+        ]
+        result = ResolutionService._sanitize_verdicts(verdicts)
+
+        assert result[0]["verdict"] == "FAIL"
+
+    def test_mixed_verdicts_only_invalid_blockers_downgraded(self):
+        verdicts = [
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+            {"policy_code": "POL-CB-004", "verdict": "BLOCKER", "reasoning": "Suspended"},
+            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+        ]
+        result = ResolutionService._sanitize_verdicts(verdicts)
+
+        assert result[0]["verdict"] == "BLOCKER"  # POL-EXC-003 preserved
+        assert result[1]["verdict"] == "FAIL"      # POL-CB-004 downgraded
+        assert result[2]["verdict"] == "FAIL"      # unchanged

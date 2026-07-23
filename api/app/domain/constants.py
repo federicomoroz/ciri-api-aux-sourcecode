@@ -128,6 +128,11 @@ GUARDRAIL_MIN_FAILS_FOR_WARNING: int = 2         # min policy failures to trigge
 RISK_FRAUD_SEVERE: int = 15    # fraud_score < N → risk HIGH (even with 1 FAIL)
 RISK_HIGH_MIN_FAILS: int = 2   # fail_count >= N → risk HIGH
 
+# Only these policies can legitimately produce BLOCKER verdicts.
+# All other BLOCKER verdicts are downgraded to FAIL + requires_human_review.
+# POL-EXC-003 = crypto (irreversible payment method — cannot proceed).
+BLOCKER_POLICY_CODES: frozenset[str] = frozenset({"POL-EXC-003"})
+
 # ── RAG ─────────────────────────────────────────────────────────────────────
 SIMILAR_CASES_SCORE_THRESHOLD: float = 0.40  # min cosine similarity for case results
 SIMILAR_CASES_TOP_K: int = 5

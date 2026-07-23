@@ -10,6 +10,7 @@ import logging
 
 from ..analysis.analyzer import Analyzer
 from ..domain.constants import (
+    BLOCKER_POLICY_CODES,
     FRAUD_SCORE_DEFAULT,
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     GUARDRAIL_MAX_COMPENSATION_RATIO,
@@ -112,7 +113,28 @@ class ResolutionService:
         )
         result = self.llm.complete(sys_eval, usr_eval, trace_id=trace_id)
         verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])
+        verdicts = self._sanitize_verdicts(verdicts)
         return verdicts, result
+
+    @staticmethod
+    def _sanitize_verdicts(verdicts: list[dict]) -> list[dict]:
+        """Downgrade invalid BLOCKER verdicts to FAIL.
+
+        Only policies in BLOCKER_POLICY_CODES can produce legitimate BLOCKERs.
+        Other BLOCKERs are LLM over-escalation (e.g. merchant suspension ≠ BLOCKER).
+        """
+        for v in verdicts:
+            if (
+                v.get("verdict") == VerdictType.BLOCKER
+                and v.get("policy_code") not in BLOCKER_POLICY_CODES
+            ):
+                logger.warning(
+                    "BLOCKER downgraded to FAIL for %s (not in BLOCKER_POLICY_CODES)",
+                    v.get("policy_code"),
+                )
+                v["verdict"] = VerdictType.FAIL
+                v["requires_human_review"] = True
+        return verdicts
 
     def _synthesize_resolution(
         self,

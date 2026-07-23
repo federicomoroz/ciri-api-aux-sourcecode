@@ -11,7 +11,7 @@ Tu tarea: evaluar si una transaccion cumple o viola cada politica listada.
 Veredictos posibles para cada politica:
 - PASS: la transaccion cumple esta politica
 - FAIL: la transaccion viola esta politica
-- BLOCKER: violacion critica — el contracargo NO puede proceder bajo NINGUNA circunstancia
+- BLOCKER: RESERVADO EXCLUSIVAMENTE para casos donde la transaccion es TECNICAMENTE IRREVERSIBLE (ej: cripto). Un comercio suspendido o un cliente riesgoso NO son BLOCKER — son FAIL con requires_human_review=true
 - WARNING: riesgo potencial que requiere atencion pero no bloquea el proceso
 - NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion
 
