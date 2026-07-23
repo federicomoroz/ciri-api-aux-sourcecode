@@ -13,7 +13,7 @@ from .domain.constants import (
 class Settings(BaseSettings):
     # LLM
     anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-4-6"
+    llm_model: str = "claude-haiku-4-5-20251001"
     llm_temperature: float = LLM_DEFAULT_TEMPERATURE
     llm_max_tokens: int = LLM_DEFAULT_MAX_TOKENS
     llm_max_retries: int = LLM_DEFAULT_MAX_RETRIES

@@ -1,6 +1,7 @@
 import logging
 import uuid
 
+import anthropic
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -72,6 +73,22 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
     expose_headers=["X-Request-ID", "X-Usage-JSON"],
 )
+
+@app.exception_handler(anthropic.APIError)
+async def anthropic_error_handler(request: Request, exc: anthropic.APIError):
+    """Surface Anthropic API errors (credit exhaustion, rate limits) with actionable detail."""
+    request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
+    logger.error("Anthropic API error [request_id=%s]: %s %s", request_id, type(exc).__name__, exc)
+    status = exc.status_code if hasattr(exc, "status_code") else 502
+    return JSONResponse(
+        status_code=status,
+        content={
+            "error": f"LLM provider error: {type(exc).__name__}",
+            "detail": str(exc),
+            "request_id": request_id,
+        },
+    )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

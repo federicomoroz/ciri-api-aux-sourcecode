@@ -152,7 +152,8 @@ The system's Human-in-the-Loop escalation path. When fraud_score=4 is high-risk 
 curl -s http://localhost:8000/api/transactions/TXN-00042 | jq .
 
 # Step 2: Check client history (VIP status influences resolution)
-curl -s http://localhost:8000/api/transactions/TXN-00042/client-history | jq .
+# Returns: total_transactions, total_chargebacks, flags (recidivist, geo_anomaly), countries, payment methods
+curl -s http://localhost:8000/api/clients/CLI-0042/history | jq .
 
 # Step 3: Check merchant risk profile
 curl -s http://localhost:8000/api/merchants/TechStore+AR/risk | jq .

@@ -19,7 +19,7 @@ The feedback loop closes the gap between automated resolution and human expertis
 │     RAG (policies + precedents) → LLM → Resolution JSON                   │
 │                                                                             │
 │  3. JUDGE EVALUATES                                                         │
-│     n8n HTTP Request → Anthropic API → overall_score (1.0–10.0)           │
+│     n8n HTTP Request → FastAPI /api/analyze/judge → overall_score (1–10)  │
 │           │                                                                 │
 │           ├── score >= 7.0 ──────────────────────────────────┐             │
 │           │                                                   │             │
@@ -132,7 +132,7 @@ Auto-indexed cases become permanent precedents that influence future resolutions
 
 The Judge's `policy_consistency` criterion detects the most dangerous hallucination: recommending `APPROVE` when a `BLOCKER` verdict was produced. If the Judge sees this, it assigns `policy_consistency = 1.0` and the `overall_score` drops below 7.0, routing to HITL. The guardrail in `/api/analyze/resolve` catches this before the Judge even runs (see Guardrails section).
 
-**Judge call path:** The Judge (v1_judge prompt) is called directly from n8n via HTTP Request to `https://api.anthropic.com/v1/messages`, not via a FastAPI proxy. This ensures the model is Claude (not n8n's built-in LLM node) and makes the external API call visible as a named node in the canvas. The `[Extraer Evaluación — Juez]` Set node immediately parses `content[0].text` into `judge_evaluation` — making the contract explicit.
+**Judge call path:** The Judge (v1_judge prompt) is called via FastAPI (`POST /api/analyze/judge`), where the prompt is version-controlled in `v1_judge.py` and executed through the same `AnthropicClient` as all other LLM calls. This ensures consistent observability via Langfuse, unified error handling, and prompt versioning. The `[Extraer Evaluación — Juez]` Set node parses the FastAPI JSON response into `judge_evaluation`.
 
 ---
 
@@ -266,7 +266,7 @@ api/app/llm/prompts/
 
 Each file begins with a version header comment:
 ```python
-# PROMPT VERSION: v1.0 | DATE: 2025-01 | CHANGES: initial release
+# PROMPT VERSION: v1.1 | DATE: 2025-07 | CHANGES: analytical precedent usage, contradiction resolution
 ```
 
 ### Version promotion workflow
@@ -302,7 +302,7 @@ Langfuse is configured via `CB_LANGFUSE_ENABLED=true` and credentials in `.env`.
 | Token count (input/output) | `usage.input_tokens`, `usage.output_tokens` | Every LLM call |
 | Latency per call | Span duration | Every LLM call |
 | Token cost (estimated) | `usage.total_cost` | Every LLM call |
-| Judge overall score | Custom score `judge_score` | n8n execution log (judge called directly from n8n) |
+| Judge overall score | Custom score `judge_score` | POST /api/analyze/judge (via FastAPI) |
 | Analyst feedback score | Custom score `analyst_feedback_judge_score` | POST /api/feedback/ |
 | Cache hit | Span attribute `cache_hit: true/false` | Before LLM calls |
 | Error rate | Failed spans | Every LLM call |
@@ -310,7 +310,7 @@ Langfuse is configured via `CB_LANGFUSE_ENABLED=true` and credentials in `.env`.
 ### Dashboard use cases
 
 **Cost tracking:**
-Langfuse aggregates token usage by model, route, and time period. Haiku at ~$0.001/1K tokens makes this affordable, but the dashboard reveals if any prompt is consuming disproportionate tokens (e.g., a very long log summary being passed to v1_resolution).
+Langfuse aggregates token usage by model, route, and time period. The dashboard reveals if any prompt is consuming disproportionate tokens (e.g., a very long log summary being passed to v1_resolution).
 
 **Judge score trends:**
 Tracking `judge_score` over time shows whether resolution quality is improving as new precedents are indexed. A declining trend signals that recently auto-indexed cases may be low-quality.
@@ -331,13 +331,12 @@ Trace: POST /api/analyze/resolve [TXN-00051]
   ├── Span: qdrant_cache_check [hit=false, latency=12ms]
   ├── Span: v1_policy_eval [tokens=1847, latency=890ms]
   ├── Span: v1_resolution [tokens=3204, latency=1340ms]
-  ├── Span: guardrails [warnings=1: APPROVE+BLOCKER corrected]
-  └── Score: judge_score = 0.0 (judge runs separately in n8n)
+  └── Span: guardrails [warnings=1: APPROVE+BLOCKER corrected]
 
-n8n execution log: [Juez de Calidad] node [TXN-00051]
-  → POST https://api.anthropic.com/v1/messages (claude-haiku-4-5)
-  → [Extraer Evaluación — Juez]: JSON.parse(content[0].text)
-  → judge_evaluation.overall_score = 9.2
+Trace: POST /api/analyze/judge [TXN-00051]
+  ├── Span: v1_judge [tokens=2400, latency=1100ms]
+  ├── Score: judge_score = 9.2
+  └── Score: judge_score → attached to resolve trace
 ```
 
 ### Enabling observability
@@ -360,11 +359,12 @@ Per investigation (1 chargeback case):
 
 | Llamada | Modelo | Tokens aprox. | Costo estimado |
 |---------|--------|---------------|----------------|
-| v1_policy_eval | Claude Haiku | ~2K in + ~500 out | ~$0.002 |
-| v1_resolution | Claude Haiku | ~3K in + ~800 out | ~$0.003 |
-| v1_judge (n8n) | Claude Haiku | ~2K in + ~400 out | ~$0.002 |
-| **Total por caso** | | | **~$0.007** |
+| v1_policy_eval | Claude Sonnet 4.6 | ~2K in + ~500 out | ~$0.014 |
+| v1_resolution | Claude Sonnet 4.6 | ~3K in + ~800 out | ~$0.021 |
+| v1_judge | Claude Sonnet 4.6 | ~2K in + ~400 out | ~$0.012 |
+| **Total por caso** | | | **~$0.047** |
 
 - Semantic cache (threshold 0.92) reduce ~20% de llamadas para merchants recurrentes
-- Estimación mensual para 1,000 casos: ~$5-7 USD con Haiku, ~$30-40 con Sonnet
+- Estimación mensual para 1,000 casos: ~$35-47 USD con Sonnet
 - Langfuse dashboard permite monitorear costo real por traza y por prompt
+- Para reducir costos en producción, considerar Haiku (~$0.007/caso) para casos simples

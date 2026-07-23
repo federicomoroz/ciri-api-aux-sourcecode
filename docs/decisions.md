@@ -8,7 +8,7 @@ This document explains the **why** behind each major technical decision. Each en
 
 **Context:** The system needs an orchestration layer for chargeback investigations. n8n offers an AI Agent node that gives the LLM control over which tools to call and in what order. The alternative is explicit orchestration with named nodes.
 
-**Decision:** Use ~28 explicit n8n nodes (HTTP Request, Set, Switch, Wait) — no AI Agent node, no LLM-based tool calling in the workflow.
+**Decision:** Use 38 explicit n8n nodes (33 executable + 5 sticky notes) with HTTP Request, Set, Switch, Wait — no AI Agent node, no LLM-based tool calling in the workflow.
 
 **Rationale:** Chargeback investigations in a fintech require full auditability. A regulator or compliance officer must be able to see exactly what happened, in what order, for every case. An AI Agent is a black box — the LLM decides the flow at runtime, making it non-deterministic and impossible to audit reliably. With explicit nodes, every investigation runs the same steps in the same order: 7 context calls → policy evaluation → resolution synthesis → Judge → risk routing. The flow is visible on the n8n canvas, version-controlled as JSON, and reproducible.
 

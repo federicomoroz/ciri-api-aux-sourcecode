@@ -69,7 +69,7 @@ Indexing 100 transactions in Qdrant would be wasteful: "TXN-00051" is not semant
 
 ### Event Logs
 
-**Not in Qdrant.** Logs are structured records with `{timestamp, severity, event, service, code, detail}`. They are retrieved via `GET /api/transactions/{id}/logs` (exact match on transaction ID) and then passed to the `v1_log_analysis` prompt as structured text. The LLM performs semantic analysis on the raw logs — there is no need to pre-index them for similarity search.
+**Not in Qdrant.** Logs are structured records with `{timestamp, severity, event, service, code, detail}`. They are retrieved via `GET /api/logs/{tx_id}` (exact match on transaction ID). Log analysis is **deterministic** — `Analyzer.detect_error_patterns()` extracts named patterns (SYSTEMATIC_MERCHANT_TIMEOUT, CONNECTIVITY_ISSUE, etc.) and `Analyzer.count_severities()` produces severity counts. A text summary of critical logs is passed to the `v1_resolution` prompt as context. There is no need to pre-index logs for similarity search.
 
 Indexing logs in Qdrant would complicate the pipeline without benefit: you always retrieve logs for a specific transaction, never ask "find me logs similar to this log entry".
 
@@ -171,6 +171,7 @@ Indexing logs in Qdrant would complicate the pipeline without benefit: you alway
 | Free tier | Voyage AI offers a generous free tier — no cost for development and testing. |
 | Lazy loading | Client initialized on first `encode()` call via double-checked locking. Zero RAM at startup. |
 | Thread-safe | `FastEmbedder` uses `threading.Lock` for safe concurrent access. |
+| Configurable | API key passed via constructor (`api_key` param) or `CB_VOYAGE_API_KEY` env var. |
 
 **Configuration:**
 ```env
