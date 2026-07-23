@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # n8n
     n8n_base_url: str = "http://n8n:5678"
-    n8n_form_path: str = "/form/bed032b5-a4d4-4544-985f-f720465fcd27"
+    n8n_form_path: str = ""
 
     # Server
     host: str = "0.0.0.0"
