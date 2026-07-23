@@ -276,14 +276,16 @@ class ResolutionService:
                 line += f". Relevancia: mismo patron de {label}"
                 # Deterministic outcome note — map resolution to implication.
                 res_lower = resolution.lower()
-                if "sin resolucion" in res_lower or "cerrado" in res_lower:
-                    line += f". Nota: precedente con mismo patron no fue resuelto — caso actual requiere resolucion definitiva"
+                if "sin resolucion" in res_lower or "pendiente" in res_lower:
+                    line += f". Nota: caso similar permanece sin resolver — sugiere que este tipo de caso requiere investigacion adicional antes de decidir"
+                elif "cerrado" in res_lower:
+                    line += f". Nota: caso similar fue cerrado sin resolucion explicita"
                 elif "aprobado" in res_lower or "a favor" in res_lower:
-                    line += f". Nota: precedente fue aprobado"
+                    line += f". Nota: precedente fue aprobado — patron favorable al cliente para este tipo de caso"
                 elif "rechazado" in res_lower or "denegado" in res_lower:
-                    line += f". Nota: precedente fue rechazado"
+                    line += f". Nota: precedente fue rechazado — patron desfavorable al cliente para este tipo de caso"
                 elif "parcial" in res_lower:
-                    line += f". Nota: precedente resuelto con reembolso parcial"
+                    line += f". Nota: precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso"
             parts.append(line)
 
         # Deterministic pattern analysis across ALL precedents.
