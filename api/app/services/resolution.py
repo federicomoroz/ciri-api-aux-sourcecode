@@ -125,6 +125,7 @@ class ResolutionService:
         Raises on LLM failure — callers must handle errors explicitly.
         """
         tx_id = full_context.get("transaction", {}).get("id", FALLBACK_TX_ID)
+        resolve_trace_id = resolution.get("trace_id", "")
         trace_id = self.tracer.trace(
             TRACE_JUDGE,
             input={"transaction_id": tx_id, "action": resolution.get("recommended_action")},
@@ -145,8 +146,11 @@ class ResolutionService:
         if "approved" not in result:
             result["approved"] = result.get("overall_score", 0) >= JUDGE_APPROVAL_THRESHOLD
 
-        if result.get("overall_score"):
+        if result.get("overall_score") is not None:
             self.tracer.score(trace_id, "judge_score", result["overall_score"])
+            # Also attach score to the resolve trace so panel stats can find it
+            if resolve_trace_id:
+                self.tracer.score(resolve_trace_id, "judge_score", result["overall_score"])
 
         result["_usage"] = {
             "input_tokens": llm_result.input_tokens,
