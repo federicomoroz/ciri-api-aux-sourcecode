@@ -90,6 +90,11 @@ class QdrantRetriever:
     def _embed(self, text: str) -> list[float]:
         return self.embedder.encode([text], show_progress_bar=False)[0].tolist()
 
+    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Embed multiple texts in a single Voyage AI API call."""
+        vectors = self.embedder.encode(texts, show_progress_bar=False)
+        return [v.tolist() for v in vectors]
+
     def search_policies(
         self,
         motivo: str | None = None,
@@ -165,6 +170,77 @@ class QdrantRetriever:
             {**r.payload, "score": round(r.score, 4), "_query": query}
             for r in results
         ]
+
+    def search_policies_and_cases(
+        self,
+        *,
+        motivo: str | None = None,
+        channel: str = "",
+        payment_method: str = "",
+        fraud_score: int = FRAUD_SCORE_DEFAULT,
+        country: str = "",
+        merchant: str = "",
+        amount: float = 0.0,
+    ) -> tuple[list[dict], list[dict]]:
+        """Batch search: 1 Voyage API call for both queries, then 2 Qdrant searches.
+
+        Saves one Voyage AI API round-trip compared to calling
+        search_policies() + search_similar_cases() separately.
+        """
+        policy_query = QueryBuilder.for_policies(
+            motivo, channel, payment_method, fraud_score, country,
+        )
+        case_query = QueryBuilder.for_similar_cases(
+            merchant, amount, payment_method, country, fraud_score, motivo,
+        )
+
+        # 1 API call instead of 2
+        policy_vec, case_vec = self._embed_batch([policy_query, case_query])
+
+        # --- Qdrant: policies ---
+        try:
+            policy_results = self.client.query_points(
+                collection_name=self.policies_collection,
+                query=policy_vec,
+                limit=POLICIES_TOP_K,
+                score_threshold=POLICIES_SCORE_THRESHOLD,
+                with_payload=True,
+            ).points
+        except Exception as e:
+            logger.error("Qdrant policy search failed: %s", e)
+            raise
+
+        policies = [
+            {**r.payload, "score": round(r.score, 4), "_query": policy_query}
+            for r in policy_results
+        ]
+
+        # --- Qdrant: similar cases ---
+        case_filter = Filter(
+            should=[
+                FieldCondition(key="payment_method", match=MatchValue(value=payment_method)),
+            ]
+        )
+        try:
+            case_results = self.client.query_points(
+                collection_name=self.cases_collection,
+                query=case_vec,
+                query_filter=case_filter,
+                limit=SIMILAR_CASES_TOP_K,
+                score_threshold=SIMILAR_CASES_SCORE_THRESHOLD,
+                with_payload=True,
+            ).points
+        except Exception as e:
+            logger.error("Qdrant case search failed: %s", e)
+            raise
+
+        case_results = self._rerank(case_results, payment_method, country)
+        cases = [
+            {**r.payload, "score": round(r.score, 4), "_query": case_query}
+            for r in case_results
+        ]
+
+        return policies, cases
 
     @staticmethod
     def _rerank(results: list, payment_method: str, country: str) -> list:

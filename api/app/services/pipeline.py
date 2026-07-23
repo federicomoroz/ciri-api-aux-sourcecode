@@ -6,6 +6,7 @@ Extracts the 9-step orchestration from routes/panel.py into a proper service.
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..analysis.analyzer import Analyzer
 from ..data.db import Database
@@ -44,33 +45,36 @@ class PipelineService:
         if not tx:
             raise ValueError(f"Transaction {txn_id} not found in database.")
 
-        # Step 2 — get_logs
-        logs = self.db.get_logs_for_transaction(txn_id)
+        # Steps 2-6 — parallel context gathering
+        # All steps depend only on tx + req, not on each other.
+        # Policies + cases use batched embedding (1 Voyage API call instead of 2).
+        payment_method = tx.get("payment_method", "")
+        country = tx.get("country", "")
+        fraud_score = int(tx.get("fraud_score", 0))
 
-        # Step 3 — search_policies
-        policies = self.retriever.search_policies(
-            motivo=req.motivo,
-            channel=tx.get("channel", ""),
-            payment_method=tx.get("payment_method", ""),
-            fraud_score=int(tx.get("fraud_score", 0)),
-            country=tx.get("country", ""),
-        )
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            f_logs = executor.submit(self.db.get_logs_for_transaction, txn_id)
+            f_rag = executor.submit(
+                self.retriever.search_policies_and_cases,
+                motivo=req.motivo,
+                channel=tx.get("channel", ""),
+                payment_method=payment_method,
+                fraud_score=fraud_score,
+                country=country,
+                merchant=tx.get("merchant", ""),
+                amount=float(tx.get("amount_usd", 0)),
+            )
+            f_merchant = executor.submit(
+                self.analyzer.merchant_risk_profile, tx.get("merchant", ""),
+            )
+            f_client = executor.submit(
+                self.db.get_client_history, tx.get("client_id", ""),
+            )
 
-        # Step 4 — find_similar_cases
-        similar_cases = self.retriever.search_similar_cases(
-            merchant=tx.get("merchant", ""),
-            amount=float(tx.get("amount_usd", 0)),
-            payment_method=tx.get("payment_method", ""),
-            country=tx.get("country", ""),
-            fraud_score=int(tx.get("fraud_score", 0)),
-            motivo=req.motivo,
-        )
-
-        # Step 5 — merchant_risk
-        merchant_risk = self.analyzer.merchant_risk_profile(tx.get("merchant", ""))
-
-        # Step 6 — client history
-        client_history = self.db.get_client_history(tx.get("client_id", ""))
+        logs = f_logs.result()
+        policies, similar_cases = f_rag.result()
+        merchant_risk = f_merchant.result()
+        client_history = f_client.result()
 
         # Steps 7+8 — resolve + judge
         resolution = self.resolution_svc.resolve(
