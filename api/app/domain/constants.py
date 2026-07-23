@@ -123,6 +123,11 @@ GUARDRAIL_MAX_COMPENSATION_RATIO: float = 1.1   # comp > amount × N → warning
 GUARDRAIL_MAX_CONFIDENCE: float = 0.95           # confidence > N with fails → warning
 GUARDRAIL_MIN_FAILS_FOR_WARNING: int = 2         # min policy failures to trigger warning
 
+# ── Deterministic Outcome ──────────────────────────────────────────────────
+# Risk/action are computed from policy verdicts, not left to LLM discretion.
+RISK_FRAUD_SEVERE: int = 15    # fraud_score < N → risk HIGH (even with 1 FAIL)
+RISK_HIGH_MIN_FAILS: int = 2   # fail_count >= N → risk HIGH
+
 # ── RAG ─────────────────────────────────────────────────────────────────────
 SIMILAR_CASES_SCORE_THRESHOLD: float = 0.40  # min cosine similarity for case results
 SIMILAR_CASES_TOP_K: int = 5

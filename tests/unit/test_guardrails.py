@@ -1,4 +1,4 @@
-"""Unit tests for ResolutionService._validate_resolution guardrails."""
+"""Unit tests for ResolutionService guardrails and deterministic outcome."""
 
 import pytest
 from api.app.services.resolution import ResolutionService
@@ -183,3 +183,102 @@ class TestGuardrailExcessiveConfidence:
         tx = {"amount_usd": 100.0}
         warnings = ResolutionService._validate_resolution(resolution, tx)
         assert not any("Confianza excesiva" in w for w in warnings)
+
+
+class TestDetermineOutcome:
+    """Deterministic outcome: code decides action/risk from policy verdicts."""
+
+    def test_blocker_verdict_returns_reject(self):
+        verdicts = [
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+        ]
+        tx = {"fraud_score": 8}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "REJECT"
+        assert outcome["risk_level"] == "BLOCKER"
+        assert outcome["requires_hitl"] is False
+        assert outcome["hitl_reason"] is None
+
+    def test_multiple_fails_returns_pending_hitl_high(self):
+        verdicts = [
+            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+            {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio alto"},
+        ]
+        tx = {"fraud_score": 25}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "PENDING_HITL"
+        assert outcome["risk_level"] == "HIGH"
+        assert outcome["requires_hitl"] is True
+        assert "2 violacion" in outcome["hitl_reason"]
+
+    def test_single_fail_returns_pending_hitl_medium(self):
+        verdicts = [
+            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+        ]
+        tx = {"fraud_score": 25}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "PENDING_HITL"
+        assert outcome["risk_level"] == "MEDIUM"
+        assert outcome["requires_hitl"] is True
+
+    def test_single_fail_with_low_fraud_score_returns_high(self):
+        verdicts = [
+            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+        ]
+        tx = {"fraud_score": 8}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "PENDING_HITL"
+        assert outcome["risk_level"] == "HIGH"
+
+    def test_all_pass_returns_approve_low(self):
+        verdicts = [
+            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+            {"policy_code": "POL-CB-001", "verdict": "PASS", "reasoning": "Doc ok"},
+        ]
+        tx = {"fraud_score": 85}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "APPROVE"
+        assert outcome["risk_level"] == "LOW"
+        assert outcome["requires_hitl"] is False
+        assert outcome["hitl_reason"] is None
+
+    def test_all_pass_medium_fraud_score_returns_approve_medium(self):
+        """fraud_score between 15-30 with no FAILs → APPROVE but risk MEDIUM."""
+        verdicts = [
+            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+        ]
+        tx = {"fraud_score": 20}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "APPROVE"
+        assert outcome["risk_level"] == "MEDIUM"
+
+    def test_no_fraud_score_uses_default(self):
+        """Missing fraud_score defaults to 50 (safe)."""
+        verdicts = [
+            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+        ]
+        tx = {}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "APPROVE"
+        assert outcome["risk_level"] == "LOW"
+
+    def test_warning_verdicts_treated_as_pass(self):
+        """WARNING verdicts don't count as failures."""
+        verdicts = [
+            {"policy_code": "POL-SLA-002", "verdict": "WARNING", "reasoning": "SLA close"},
+            {"policy_code": "POL-CB-001", "verdict": "PASS", "reasoning": "Doc ok"},
+        ]
+        tx = {"fraud_score": 50}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "APPROVE"
+        assert outcome["risk_level"] == "LOW"

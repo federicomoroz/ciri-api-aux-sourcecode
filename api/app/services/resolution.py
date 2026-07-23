@@ -10,11 +10,15 @@ import logging
 
 from ..analysis.analyzer import Analyzer
 from ..domain.constants import (
+    FRAUD_SCORE_DEFAULT,
+    FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     GUARDRAIL_MAX_COMPENSATION_RATIO,
     GUARDRAIL_MAX_CONFIDENCE,
     GUARDRAIL_MIN_FAILS_FOR_WARNING,
     JUDGE_APPROVAL_THRESHOLD,
     LLM_MAX_CRITICAL_LOGS,
+    RISK_FRAUD_SEVERE,
+    RISK_HIGH_MIN_FAILS,
     TRACE_RESOLVE,
     TRACE_JUDGE,
     FALLBACK_TX_ID,
@@ -60,13 +64,23 @@ class ResolutionService:
 
         policy_verdicts, eval_result = self._eval_policies(tx_data, policies, trace_id)
         log_summary_text = self._summarize_logs(logs)
+
+        # Deterministic outcome — code decides, LLM explains.
+        outcome = self._determine_outcome(policy_verdicts, tx_data)
+
         resolution, synth_result = self._synthesize_resolution(
             tx_data, policy_verdicts, similar_cases, log_summary_text,
             merchant_risk, client_history, motivo, cliente_vip, logs, trace_id,
+            determined_outcome=outcome,
         )
 
-        if "policy_verdicts" not in resolution or not resolution["policy_verdicts"]:
-            resolution["policy_verdicts"] = policy_verdicts
+        # Override LLM decisions with deterministic values (always).
+        resolution["policy_verdicts"] = policy_verdicts
+        resolution["recommended_action"] = outcome["recommended_action"]
+        resolution["risk_level"] = outcome["risk_level"]
+        resolution["requires_hitl"] = outcome["requires_hitl"]
+        if outcome["hitl_reason"]:
+            resolution["hitl_reason"] = outcome["hitl_reason"]
 
         warnings = self._validate_resolution(resolution, tx_data)
         usage = {
@@ -100,6 +114,7 @@ class ResolutionService:
         cliente_vip: bool,
         logs: list[dict],
         trace_id: str,
+        determined_outcome: dict | None = None,
     ) -> tuple[dict, LLMResult]:
         """Step 4: LLM resolution synthesis. Raises on failure."""
         cases_formatted = format_cases_for_prompt(similar_cases)
@@ -114,6 +129,7 @@ class ResolutionService:
             cliente_vip=cliente_vip,
             precedent_count=len(similar_cases),
             log_count=len(logs),
+            determined_outcome=determined_outcome,
         )
         result = self.llm.complete(sys_res, usr_res, trace_id=trace_id)
         resolution = validate_llm_output(result.text, ResolutionOutput, {})
@@ -181,6 +197,57 @@ class ResolutionService:
             for log in critical[:LLM_MAX_CRITICAL_LOGS]:
                 text += f"- [{log['severity']}] {log['event']}: {log['detail']}\n"
         return text
+
+    @staticmethod
+    def _determine_outcome(policy_verdicts: list[dict], tx_data: dict) -> dict:
+        """Deterministic action/risk from policy verdicts. No LLM involved.
+
+        Rules (mirror prompt documentation):
+        - Any BLOCKER verdict → REJECT + risk BLOCKER
+        - Any FAIL (no BLOCKER) → PENDING_HITL + risk HIGH or MEDIUM
+        - All PASS/WARNING → APPROVE + risk LOW or MEDIUM
+        """
+        has_blocker = any(
+            v.get("verdict") == VerdictType.BLOCKER for v in policy_verdicts
+        )
+        fail_count = sum(
+            1 for v in policy_verdicts
+            if v.get("verdict") in (VerdictType.FAIL, VerdictType.BLOCKER)
+        )
+        fraud_score = int(tx_data.get("fraud_score", FRAUD_SCORE_DEFAULT))
+
+        # ── Risk level ──
+        if has_blocker:
+            risk_level = RiskLevel.BLOCKER
+        elif fail_count >= RISK_HIGH_MIN_FAILS or fraud_score < RISK_FRAUD_SEVERE:
+            risk_level = RiskLevel.HIGH
+        elif fail_count >= 1 or fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
+            risk_level = RiskLevel.MEDIUM
+        else:
+            risk_level = RiskLevel.LOW
+
+        # ── Action ──
+        if has_blocker:
+            action = ResolutionOutcome.REJECT
+            requires_hitl = False
+            hitl_reason = None
+        elif fail_count > 0:
+            action = ResolutionOutcome.PENDING_HITL
+            requires_hitl = True
+            hitl_reason = (
+                f"{fail_count} violacion(es) de politica — requiere revision de analista"
+            )
+        else:
+            action = ResolutionOutcome.APPROVE
+            requires_hitl = False
+            hitl_reason = None
+
+        return {
+            "recommended_action": action,
+            "risk_level": risk_level,
+            "requires_hitl": requires_hitl,
+            "hitl_reason": hitl_reason,
+        }
 
     @staticmethod
     def _validate_resolution(resolution: dict, transaction: dict) -> list[str]:
