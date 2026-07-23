@@ -4,8 +4,8 @@
     {
       "parameters": {
         "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo visible. Sin AI Agent black box. n8n decide el flujo; FastAPI ejecuta la lógica de negocio.",
-        "height": 80,
-        "width": 7400,
+        "height": 84,
+        "width": 7560,
         "color": 4
       },
       "id": "5a5055f6-b155-4d08-bfc3-f36e1f50ca7f",
@@ -13,15 +13,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        58900,
-        21200
+        58840,
+        21080
       ]
     },
     {
       "parameters": {
-        "content": "## 🟢 §1 — ENTRADA Y VALIDACIÓN\n\n**IF node** valida formato TXN-XXXXX.\n- ✅ True → **Set node** extrae campos limpios\n- ❌ False → responde 400 sin continuar\n\nError explícito desde el primer nodo.",
-        "height": 1700,
-        "width": 960,
+        "content": "## 🟢 §1 — Entrada y Validación\n\n**Qué hace:**\n• Webhook recibe `transaction_id` + `motivo`\n• IF valida formato TXN-XXXXX (regex)\n• ✅ True → Set extrae campos limpios\n• ❌ False → HTTP 400 al caller\n\n**Error handling:**\n• respondToWebhook (400)\n• → Stop and Error → Error Handler\n\n**Output:** Campos validados para §2",
+        "height": 1800,
+        "width": 1080,
         "color": 5
       },
       "id": "9dc82bdd-056e-49c9-9ecd-05fa837b08df",
@@ -29,15 +29,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        58900,
-        21320
+        58840,
+        21200
       ]
     },
     {
       "parameters": {
-        "content": "## 🔵 §2 — CONTEXTO PARALELO\n\nDespués de obtener la transacción, **6 ramas corren en paralelo**. El nodo **Merge** espera a que todas terminen.\n\n**Nodos nativos de n8n (sin FastAPI):**\n- ✅ **Evaluar Riesgo Comercio** (Set): computa `flags` e `is_strategic` de los datos crudos del comercio.\n- ✅ **Evaluar Historial Cliente** (Set): computa `flags` de riesgo del cliente.\n- ✅ **Verificar SLA** (Set): calcula días transcurridos y límite SLA según país y VIP — sin HTTP call.\n\nReducción de latencia: de ~6× a ~1× el tiempo de un call.",
-        "height": 1900,
-        "width": 1800,
+        "content": "## 🔵 §2 — Contexto Paralelo\n\n**Qué hace:**\n• Caché de idempotencia (hit → 2s vs 113s)\n• Obtiene transacción de SQLite\n• 6 queries en paralelo → Merge\n\n**Queries paralelas:**\n• Logs de eventos (SQLite)\n• Políticas aplicables (Qdrant RAG)\n• Casos similares (Qdrant RAG)\n• Riesgo del comercio → flags\n• Historial del cliente → flags\n• SLA: LATAM 10d / no-LATAM 15d / VIP 5d\n\n**Output:** Contexto completo para LLM",
+        "height": 1940,
+        "width": 1820,
         "color": 3
       },
       "id": "b3ee8425-a18f-4454-b11f-4307a9582543",
@@ -45,56 +45,40 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        59880,
-        21320
+        59960,
+        21200
       ]
     },
     {
       "parameters": {
-        "content": "## 🟣 §3 — ANÁLISIS CON IA\n\n**Compilar Contexto**: fusiona los 6 resultados del Merge en un objeto unificado.\n\n**Sintetizar Resolución** → FastAPI (LLM con guardrails + caché semántico) evalúa políticas + casos + logs → devuelve `recommended_action`, `risk_level`, `confidence`, `guardrail_warnings`.\n\n**Juez de Calidad** → **Claude directo vía Anthropic API** (HTTP Request nativo). Sin pasar por FastAPI: n8n envía el contexto completo + resolución propuesta, Claude devuelve JSON de evaluación.\n\n**Extraer Evaluación** (Set): parsea la respuesta de Anthropic y expone `judge_evaluation` como objeto n8n.",
-        "height": 1700,
-        "width": 1920,
-        "color": 6
+        "content": "## 🟣 §3 — Análisis con IA\n\n**Qué hace:**\n• Compila contexto de §2 en prompt\n• Claude sintetiza resolución (T=0.3)\n• Guardrails: APPROVE + BLOCKER = hallucination\n• LLM-as-Judge evalúa calidad (5 criterios)\n\n**Quality gate:**\n• Score ≥ 7.0 → aprobado\n• Score < 7.0 → marca calidad baja\n\n**Output:** Resolución + score del juez",
+        "height": 1800,
+        "width": 1880,
+        "color": 2
       },
       "id": "9636afc4-fc42-4c2b-ae53-487c0421f234",
       "name": "Sticky Note — Sección 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        61780,
-        21320
+        61820,
+        21200
       ]
     },
     {
       "parameters": {
-        "content": "## 🔀 §4 — ENRUTAMIENTO POR RIESGO\n\n**Switch** por `resolution.risk_level`:\n- **BLOCKER** → rechazo automático inmediato\n- **HIGH** → flujo HITL (ver abajo)\n- **MEDIUM** → alerta de revisión\n- **LOW** → aprobación automática\n\nTodos los reportes: `POST /api/reports/html`",
-        "height": 2300,
-        "width": 2600,
-        "color": 2
+        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER → auto-rechazo inmediato\n• HIGH → Wait HITL → feedback → reporte\n• MEDIUM → reporte directo\n• LOW → reporte directo\n\n**HITL (Human-in-the-Loop):**\n• Wait node pausa ejecución\n• Analista aprueba o rechaza\n• Feedback + auto-index si score ≥ 8.0\n\n**Error handling:**\n• Cada Generar Reporte tiene error output\n• → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
+        "height": 2400,
+        "width": 2660,
+        "color": 6
       },
       "id": "cfc28e90-c1cb-4d45-a206-2750274ffba4",
       "name": "Sticky Note — Sección 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        63700,
-        21320
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## 🔶 RAMA HIGH — HITL (Human-in-the-Loop)\n\n1. **Notificar Analista** prepara el payload con `$execution.resumeUrl`\n   *(en prod: conectar nodo Gmail o Slack antes del Wait)*\n2. **Wait** pausa la ejecución hasta recibir aprobación\n3. Analista POST `{ decision, notes }` al `resumeUrl`\n4. **Procesar HITL** incorpora la decisión al contexto\n5. **Registrar Feedback** → POST /api/feedback (auto-indexa si score ≥ 8.0)\n6. Genera y responde el reporte final",
-        "height": 220,
-        "width": 516,
-        "color": 7
-      },
-      "id": "05e9d1fd-f29a-4616-a044-fc0c72ad5706",
-      "name": "Sticky Note — HITL",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        64420,
-        21600
+        63740,
+        21200
       ]
     },
     {
@@ -1463,21 +1447,6 @@
     },
     {
       "parameters": {
-        "content": "## ⚠️ Manejo de Errores\n\n**Patrón:** respondToWebhook → Stop and Error\n\n1. Responde al caller con JSON de error + HTTP status\n2. **Stop and Error** marca la ejecución como fallida\n3. n8n dispara el **Error Handler** workflow automáticamente\n\n**4 nodos de error:**\n- TXN Inválida (400)\n- API No Disponible (503)\n- Análisis Fallido (500)\n- Reporte Fallido (500)\n\n⚙️ Configurar en: Settings → Error Workflow → CIRI Error Handler",
-        "height": 420,
-        "width": 380
-      },
-      "id": "4f582a07-1d94-4b34-9e14-0a998e0c956b",
-      "name": "Sticky Note — Manejo de Errores",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        59540,
-        22720
-      ]
-    },
-    {
-      "parameters": {
         "method": "GET",
         "url": "={{ $vars.API_BASE_URL + '/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').first().json.cliente_vip || false) }}",
         "options": {
@@ -1558,22 +1527,6 @@
     },
     {
       "parameters": {
-        "content": "## 🔄 Idempotencia\n\n**Verificar Caché** consulta SQLite antes de ejecutar el pipeline.\nSi el mismo `(transaction_id, cliente_vip)` fue analizado antes:\n- **HIT** → responde HTML cacheado en ~200ms (header `X-Cache: HIT`)\n- **MISS** → ejecuta pipeline completo. El reporte se cachea automáticamente al generarse.\n\nEvita re-ejecutar 2 llamadas LLM (~25s) para requests duplicados.",
-        "height": 240,
-        "width": 400,
-        "color": 5
-      },
-      "id": "6e508264-977a-4162-bd75-a142b3a95554",
-      "name": "Sticky Note — Idempotencia",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        60180,
-        21400
-      ]
-    },
-    {
-      "parameters": {
         "jsCode": "// Verificar Guardrails post-LLM — visibilidad en el canvas\nconst resolution = $input.first().json;\nconst warnings = resolution.guardrail_warnings || [];\nconst verdicts = resolution.policy_verdicts || [];\n\nconst hasBLOCKER = verdicts.some(v => v.verdict === 'BLOCKER');\nconst isAPPROVE = resolution.recommended_action === 'APPROVE';\nconst compExcesiva = (resolution.compensation_amount_usd || 0) > (resolution.transaction_amount_usd || 99999) * 1.1;\nconst failCount = verdicts.filter(v => ['FAIL','BLOCKER'].includes(v.verdict)).length;\nconst overConfident = (resolution.confidence || 0) > 0.95 && failCount >= 2;\n\nconst guardrailStatus = {\n  approve_with_blocker: isAPPROVE && hasBLOCKER,\n  compensation_excesiva: compExcesiva,\n  overconfident: overConfident,\n  total_warnings: warnings.length,\n  warnings: warnings,\n  status: warnings.length > 0 ? 'GUARDRAILS ACTIVADOS' : 'Sin alertas'\n};\n\nreturn [{ json: { ...resolution, _guardrail_check: guardrailStatus } }];"
       },
       "id": "02f762f4-c8be-47bf-b4ba-7506a0dc5063",
@@ -1644,38 +1597,6 @@
     },
     {
       "parameters": {
-        "content": "## 🛡️ GUARDRAILS POST-LLM\n\nVerificación nativa en n8n (Code):\n1. APPROVE con BLOCKER → auto-REJECT\n2. Compensación > 110% del monto\n3. Confianza > 0.95 con ≥2 fallas\n\nDefensa en profundidad: FastAPI + n8n.",
-        "height": 220,
-        "width": 340,
-        "color": 7
-      },
-      "id": "52192b00-10ca-43ed-9fab-d39727d64daa",
-      "name": "Sticky Note — Guardrails",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        62420,
-        21700
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## ⚖️ EVALUACIÓN DEL JUEZ\n\nIF nativo: score ≥ 7.0 = aprobado.\nScore < 7.0 → flag 'LOW_QUALITY'\nvisible en el reporte.",
-        "height": 160,
-        "width": 300,
-        "color": 6
-      },
-      "id": "6d4fcc6d-07e7-49ef-857f-57cc016c4f85",
-      "name": "Sticky Note — Juez Score",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        63380,
-        21700
-      ]
-    },
-    {
-      "parameters": {
         "errorMessage": "={{Formato de transaction_id inválido. Solicitud rechazada con HTTP 400.}}"
       },
       "id": "2e7c0e1f-7df9-40ff-898f-e9fe61a63873",
@@ -1683,7 +1604,7 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        59960,
+        59840,
         22800
       ]
     },
