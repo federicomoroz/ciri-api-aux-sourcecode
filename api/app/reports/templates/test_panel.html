@@ -1380,8 +1380,8 @@
   <!-- n8n entry point links -->
   <div class="n8n-links" id="n8n-links-bar">
     Webhook: <a id="n8n-webhook-link" href="#" target="_blank">prod</a> · <a id="n8n-webhook-test-link" href="#" target="_blank">test</a>
-    <span class="n8n-sep">|</span>
-    Form: <a id="n8n-form-link" href="#" target="_blank">prod</a> · <a id="n8n-form-test-link" href="#" target="_blank">test</a>
+    <span id="n8n-form-section"><span class="n8n-sep">|</span>
+    Form: <a id="n8n-form-link" href="#" target="_blank">prod</a> · <a id="n8n-form-test-link" href="#" target="_blank">test</a></span>
   </div>
 
   <!-- ═══════════════════════════════════════════
@@ -2335,11 +2335,19 @@ async function checkHealth() {
     setChip('hc-n8n', data.available ? 'ok' : 'warn',
       data.available ? 'n8n \u2713' : 'n8n \u2717 (fallback)');
 
-    // Populate n8n links (set href only, keep short labels)
-    if (data.webhook_url) $('n8n-webhook-link').href = data.webhook_url;
-    if (data.webhook_test_url) $('n8n-webhook-test-link').href = data.webhook_test_url;
-    if (data.form_url) $('n8n-form-link').href = data.form_url;
-    if (data.form_test_url) $('n8n-form-test-link').href = data.form_test_url;
+    // Populate n8n links (href + tooltip with full URL)
+    function setLink(id, url) {
+      const el = $(id);
+      if (el && url) { el.href = url; el.title = url; }
+    }
+    setLink('n8n-webhook-link', data.webhook_url);
+    setLink('n8n-webhook-test-link', data.webhook_test_url);
+    setLink('n8n-form-link', data.form_url);
+    setLink('n8n-form-test-link', data.form_test_url);
+    // Hide form section if not configured
+    if (!data.form_url) {
+      $('n8n-form-section').style.display = 'none';
+    }
   } catch {
     setChip('hc-n8n', 'warn', 'n8n \u2717 (fallback)');
   }
