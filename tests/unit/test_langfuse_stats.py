@@ -58,8 +58,9 @@ class TestLangfuseStatsEnabled:
         traces_resp.data = [mock_trace]
         mock_tracer.langfuse.fetch_traces.return_value = traces_resp
 
-        # Observations (generations)
+        # Observations (generations) — bulk fetch, must include trace_id
         mock_obs = MagicMock()
+        mock_obs.trace_id = "trace-001"
         mock_obs.usage = MagicMock()
         mock_obs.usage.input = 500
         mock_obs.usage.output = 200
@@ -69,8 +70,9 @@ class TestLangfuseStatsEnabled:
         obs_resp.data = [mock_obs]
         mock_tracer.langfuse.fetch_observations.return_value = obs_resp
 
-        # Scores
+        # Scores — bulk fetch, must include trace_id
         mock_score = MagicMock()
+        mock_score.trace_id = "trace-001"
         mock_score.value = 8.5
 
         scores_resp = MagicMock()
