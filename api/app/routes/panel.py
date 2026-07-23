@@ -107,7 +107,18 @@ async def panel_analyze(
         logger.warning("panel: n8n unreachable (%s) — falling back to direct pipeline", exc)
 
     # ── Fallback: direct FastAPI pipeline ────────────────────────────────────
-    return await _direct_pipeline(req, db, retriever, analyzer, resolution_svc, report_gen)
+    try:
+        return await _direct_pipeline(req, db, retriever, analyzer, resolution_svc, report_gen)
+    except Exception as exc:
+        logger.error("Direct pipeline failed for %s: %s", req.transaction_id, exc, exc_info=True)
+        error_html = (
+            f"<html><body style='font-family:monospace;padding:2em'>"
+            f"<h2>Pipeline Error</h2>"
+            f"<p><b>Transaction:</b> {req.transaction_id}</p>"
+            f"<p><b>Error:</b> {type(exc).__name__}: {exc}</p>"
+            f"</body></html>"
+        )
+        return HTMLResponse(content=error_html, status_code=200)
 
 
 # ─── Direct pipeline fallback ─────────────────────────────────────────────────
