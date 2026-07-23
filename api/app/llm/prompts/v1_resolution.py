@@ -39,11 +39,12 @@ SECUENCIA OPERATIVA EN NEXT_STEPS:
 - TIMING: indicar dependencias (ej: "Antes de notificar al cliente, escalar...").
 - RESPONSABLE: si requiere aprobacion de supervisor, indicarlo.
 - NO uses frases vagas como "revisar" o "evaluar" sin especificar que y para que.
+- DATOS FALTANTES: Si logs esta vacio (logs=[]), NO propongas pasos que dependan de revisar logs. Indica explicitamente que la ausencia de logs limita la validacion tecnica. Lo mismo para cualquier seccion vacia.
 
-USO ANALITICO DE PRECEDENTES:
-- Identifica PATRONES: casos similares, ¿se resolvieron a favor del cliente o comercio?
-- Extrae APRENDIZAJES: ¿que implican los precedentes para este caso?
-- Contrasta DIFERENCIAS con el caso actual.
+USO ANALITICO DE PRECEDENTES (NO listes — ANALIZA):
+- NO menciones porcentajes de similitud (58%, 60%) — son scores internos del sistema, irrelevantes para el analisis.
+- Para cada precedente que cites, responde: (1) que paso en ese caso, (2) que implica para el caso ACTUAL.
+- Si un precedente tiene el mismo motivo o patron (ej: cargo doble, timeout), explica como ese caso informa la estrategia de validacion aqui.
 - Si no hay precedentes relevantes, indica como afecta la certeza.
 
 RESOLUCION DE CONTRADICCIONES:

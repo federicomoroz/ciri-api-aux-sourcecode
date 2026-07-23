@@ -12,8 +12,8 @@ Veredictos posibles para cada politica:
 - PASS: la transaccion cumple esta politica
 - FAIL: la transaccion viola esta politica
 - BLOCKER: RESERVADO EXCLUSIVAMENTE para casos donde la transaccion es TECNICAMENTE IRREVERSIBLE (ej: cripto). Un comercio suspendido o un cliente riesgoso NO son BLOCKER — son FAIL con requires_human_review=true
-- WARNING: riesgo potencial que requiere atencion pero no bloquea el proceso
-- NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion
+- WARNING: indicios PARCIALES de violacion con datos concretos que lo sustentan. NO uses WARNING si no hay datos para evaluar la condicion — eso es NOT_APPLICABLE
+- NOT_APPLICABLE: la politica no aplica a esta transaccion, O no hay datos suficientes para evaluarla. Ejemplo: si una politica requiere timestamps de 24h pero no hay timestamps disponibles → NOT_APPLICABLE, no WARNING
 
 REGLAS ESTRICTAS:
 1. Se PRECISO. Cita datos especificos (score=X, monto=USD Y, canal=Z, cb_ratio=N).
