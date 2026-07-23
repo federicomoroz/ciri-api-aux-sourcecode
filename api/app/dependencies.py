@@ -72,6 +72,16 @@ async def lifespan(app: FastAPI):
         tracer=tracer,
         max_retries=settings.llm_max_retries,
     )
+    llm_resolution = (
+        AnthropicClient(
+            api_key=settings.anthropic_api_key,
+            model=settings.llm_model_resolution,
+            tracer=tracer,
+            max_retries=settings.llm_max_retries,
+        )
+        if settings.llm_model_resolution
+        else llm
+    )
 
     # --- Phase 3: RAG setup ---
     indexer = QdrantIndexer(
@@ -112,7 +122,7 @@ async def lifespan(app: FastAPI):
 
     # Service layer
     analyzer = Analyzer(db)
-    resolution_service = ResolutionService(llm, tracer)
+    resolution_service = ResolutionService(llm, tracer, llm_resolution=llm_resolution)
     feedback_service = FeedbackService(db, updater, tracer)
     report_generator = ReportGenerator()
     pipeline_service = PipelineService(db, retriever, analyzer, resolution_service, report_generator)

@@ -36,8 +36,9 @@ logger = logging.getLogger(__name__)
 
 
 class ResolutionService:
-    def __init__(self, llm: LLMClient, tracer: Tracer):
+    def __init__(self, llm: LLMClient, tracer: Tracer, llm_resolution: LLMClient | None = None):
         self.llm = llm
+        self.llm_resolution = llm_resolution or llm
         self.tracer = tracer
 
     def resolve(
@@ -168,7 +169,7 @@ class ResolutionService:
             log_count=len(logs),
             determined_outcome=determined_outcome,
         )
-        result = self.llm.complete(sys_res, usr_res, trace_id=trace_id)
+        result = self.llm_resolution.complete(sys_res, usr_res, trace_id=trace_id)
         resolution = validate_llm_output(result.text, ResolutionOutput, {})
         return resolution, result
 
