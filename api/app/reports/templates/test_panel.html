@@ -1128,6 +1128,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
       padding: 4px 20px;
       background: var(--surface-alt);
       border-bottom: 1px solid var(--border);
@@ -1378,9 +1379,9 @@
 
   <!-- n8n entry point links -->
   <div class="n8n-links" id="n8n-links-bar">
-    Webhook: <a id="n8n-webhook-link" href="#" target="_blank">—</a>
+    Webhook: <a id="n8n-webhook-link" href="#" target="_blank">prod</a> · <a id="n8n-webhook-test-link" href="#" target="_blank">test</a>
     <span class="n8n-sep">|</span>
-    Form: <a id="n8n-form-link" href="#" target="_blank">—</a>
+    Form: <a id="n8n-form-link" href="#" target="_blank">prod</a> · <a id="n8n-form-test-link" href="#" target="_blank">test</a>
   </div>
 
   <!-- ═══════════════════════════════════════════
@@ -2328,16 +2329,26 @@ async function checkHealth() {
     setChip('hc-n8n', data.available ? 'ok' : 'warn',
       data.available ? 'n8n \u2713' : 'n8n \u2717 (fallback)');
 
-    // Populate n8n links
+    // Populate n8n links (prod + test for webhooks and forms)
     if (data.webhook_url) {
       const wl = $('n8n-webhook-link');
       wl.href = data.webhook_url;
       wl.textContent = data.webhook_url;
     }
+    if (data.webhook_test_url) {
+      const wtl = $('n8n-webhook-test-link');
+      wtl.href = data.webhook_test_url;
+      wtl.textContent = data.webhook_test_url;
+    }
     if (data.form_url) {
       const fl = $('n8n-form-link');
       fl.href = data.form_url;
       fl.textContent = data.form_url;
+    }
+    if (data.form_test_url) {
+      const ftl = $('n8n-form-test-link');
+      ftl.href = data.form_test_url;
+      ftl.textContent = data.form_test_url;
     }
   } catch {
     setChip('hc-n8n', 'warn', 'n8n \u2717 (fallback)');

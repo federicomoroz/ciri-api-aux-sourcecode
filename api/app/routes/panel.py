@@ -60,6 +60,12 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
     """Quick liveness check for n8n — used by the panel UI to show a status badge."""
     url = settings.n8n_base_url.rstrip("/") + N8N_HEALTHZ_PATH
     base = settings.n8n_base_url.rstrip("/")
+    # Derive test form URL from production form path: /form/UUID → /form-test/UUID
+    form_path = settings.n8n_form_path
+    if not form_path.startswith("/"):
+        form_path = "/" + form_path
+    form_test_path = form_path.replace("/form/", "/form-test/", 1)
+
     try:
         async with httpx.AsyncClient(timeout=N8N_PING_TIMEOUT_S) as client:
             r = await client.get(url)
@@ -68,7 +74,8 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
             "url": base,
             "webhook_url": base + N8N_WEBHOOK_PATH,
             "webhook_test_url": base + N8N_WEBHOOK_TEST_PATH,
-            "form_url": base + settings.n8n_form_path,
+            "form_url": base + form_path,
+            "form_test_url": base + form_test_path,
         }
     except httpx.HTTPError as e:
         logger.debug("n8n ping failed: %s", e)
@@ -77,7 +84,8 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
             "url": base,
             "webhook_url": base + N8N_WEBHOOK_PATH,
             "webhook_test_url": base + N8N_WEBHOOK_TEST_PATH,
-            "form_url": base + settings.n8n_form_path,
+            "form_url": base + form_path,
+            "form_test_url": base + form_test_path,
         }
 
 
