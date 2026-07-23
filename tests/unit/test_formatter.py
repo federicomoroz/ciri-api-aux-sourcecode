@@ -2,7 +2,7 @@
 Unit tests for rag/formatter.py — prompt formatting for policies and cases.
 """
 
-from api.app.rag.formatter import format_cases_for_prompt, format_policies_for_prompt, _motivo_matches
+from api.app.rag.formatter import format_cases_for_prompt, format_policies_for_prompt, _motivo_matches, motivo_match_label
 
 
 class TestFormatPoliciesForPrompt:

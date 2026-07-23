@@ -8,28 +8,33 @@ Extracted from QdrantRetriever to keep retrieval and presentation concerns separ
 from ..domain.constants import DISPLAY_FALLBACK, SIMILAR_CASES_SCORE_THRESHOLD
 
 # Synonym groups for mechanical motivo matching.
-# Each group is a set of keywords — if the current motivo AND a precedent's
-# motivo/observations both contain a keyword from the SAME group, it's a match.
-_MOTIVO_SYNONYM_GROUPS: list[set[str]] = [
-    {"duplicado", "duplicada", "doble", "doble cobro", "doble cargo", "cargo doble"},
-    {"no reconoce", "no reconocida", "no autorizado", "no autorizada", "fraude"},
-    {"no recibido", "no entregado", "no entrega", "falta entrega", "no llego"},
-    {"defecto", "defectuoso", "calidad", "dañado", "roto"},
-    {"monto incorrecto", "monto erroneo", "cobro incorrecto"},
-    {"cancelado", "cancelacion", "post-cancelacion", "post cancelacion"},
+# Each group is a (label, keywords) tuple — label is used in the summary
+# to explain WHY the case matched (e.g., "Relevancia: mismo patrón de cargo duplicado").
+_MOTIVO_SYNONYM_GROUPS: list[tuple[str, set[str]]] = [
+    ("cargo duplicado", {"duplicado", "duplicada", "doble", "doble cobro", "doble cargo", "cargo doble"}),
+    ("fraude / no reconocido", {"no reconoce", "no reconocida", "no autorizado", "no autorizada", "fraude"}),
+    ("producto no recibido", {"no recibido", "no entregado", "no entrega", "falta entrega", "no llego"}),
+    ("producto defectuoso", {"defecto", "defectuoso", "calidad", "dañado", "roto"}),
+    ("monto incorrecto", {"monto incorrecto", "monto erroneo", "cobro incorrecto"}),
+    ("cancelacion", {"cancelado", "cancelacion", "post-cancelacion", "post cancelacion"}),
 ]
 
 
 def _motivo_matches(motivo_a: str, motivo_b: str) -> bool:
     """Check if two motivos share a synonym group keyword. Pure string matching."""
+    return motivo_match_label(motivo_a, motivo_b) is not None
+
+
+def motivo_match_label(motivo_a: str, motivo_b: str) -> str | None:
+    """Return the synonym group label if motivos match, else None."""
     a = motivo_a.lower()
     b = motivo_b.lower()
-    for group in _MOTIVO_SYNONYM_GROUPS:
-        a_match = any(kw in a for kw in group)
-        b_match = any(kw in b for kw in group)
+    for label, keywords in _MOTIVO_SYNONYM_GROUPS:
+        a_match = any(kw in a for kw in keywords)
+        b_match = any(kw in b for kw in keywords)
         if a_match and b_match:
-            return True
-    return False
+            return label
+    return None
 
 
 def format_policies_for_prompt(policies: list[dict]) -> str:

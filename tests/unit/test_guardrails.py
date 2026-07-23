@@ -371,6 +371,8 @@ class TestBuildPrecedentSummary:
         assert result.index("CB-002") < result.index("CB-001")
         # Observations included for match
         assert "Timeout en gateway" in result
+        # Relevance label included
+        assert "Relevancia: mismo patron de cargo duplicado" in result
 
     def test_observations_matched(self):
         """Match via observations, not just motivo field."""
@@ -382,6 +384,7 @@ class TestBuildPrecedentSummary:
         result = ResolutionService._build_precedent_summary(cases, "Cargo duplicado")
         assert "[MOTIVO SIMILAR]" in result
         assert "cargo doble por timeout" in result
+        assert "Relevancia: mismo patron de cargo duplicado" in result
 
     def test_no_motivo_no_tags(self):
         cases = [

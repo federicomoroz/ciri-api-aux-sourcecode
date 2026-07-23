@@ -31,8 +31,11 @@ REGLAS ESTRICTAS:
 10. ESTADO DEL CASO: Si la transaccion tiene status "Resuelta" o "Cerrada", escribe "Auditoria de caso cerrado" al inicio de justification.
 
 CONCISION (CRITICO):
-- justification: MAXIMO 150 palabras. Lista los hechos que sustentan la decision. No interpretes.
-- precedent_summary: MAXIMO 80 palabras.
+- justification: MAXIMO 150 palabras. Estructura OBLIGATORIA:
+  (1) Copia risk_reason de DECISION DETERMINADA como primera oracion.
+  (2) Lista las politicas FAIL/BLOCKER con sus datos.
+  (3) Si hay precedentes [MOTIVO SIMILAR], menciona su case_id y outcome.
+- precedent_summary: Copia EXACTAMENTE el valor de DECISION DETERMINADA.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 1-2 oraciones.
 
 PRECEDENT_SUMMARY (PRE-GENERADO POR SISTEMA):
@@ -41,12 +44,15 @@ PRECEDENT_SUMMARY (PRE-GENERADO POR SISTEMA):
 
 NEXT_STEPS (LISTA MECANICA):
 - Genera pasos basados UNICAMENTE en los veredictos de politica y la decision determinada.
-- Cada paso sigue este formato: "[Accion] + [dato especifico] + [responsable si aplica]"
-- Para cada politica FAIL: un paso "Verificar [nombre politica] — [dato que fallo]"
+- Cada paso sigue este formato: "[Verbo] + [dato especifico de la politica] + [responsable si aplica]"
 - Si requires_hitl=true: primer paso siempre es "Escalar a supervisor/analista para revision"
+- Para cada politica FAIL: un paso citando el requisito especifico de la politica.
+  Ejemplo: si POL-CB-003 FAIL dice "comercio tiene 10 dias habiles para defensa", el paso es "Solicitar defensa del comercio — plazo 10 dias habiles segun POL-CB-003"
+  Ejemplo: si POL-FRD-003 FAIL dice "monto > USD 3000 requiere aprobacion", el paso es "Verificar aprobacion para monto USD X segun POL-FRD-003"
 - Si compensation_applicable=true: incluir paso "Aplicar compensacion segun POL-SLA-004"
+- Si hay precedente [MOTIVO SIMILAR] con observaciones relevantes, incluir paso: "Verificar [patron del precedente] en sistema de pagos"
 - DATOS FALTANTES: Si logs=[] (0 eventos), NO propongas "revisar logs". Escribe "Logs no disponibles — validacion tecnica limitada."
-- NO uses frases como "evaluar", "considerar", "analizar". Usa: "verificar", "confirmar", "solicitar", "notificar".
+- NO uses "evaluar", "considerar", "analizar". Usa: "verificar", "confirmar", "solicitar", "notificar".
 
 Formato JSON de respuesta:
 {
@@ -73,13 +79,13 @@ Respuesta correcta (extraccion mecanica, sin interpretacion):
   "transaction_id": "TXN-00042",
   "recommended_action": "PENDING_HITL",
   "confidence": 0.72,
-  "justification": "PENDING_HITL por POL-FRD-001 FAIL (fraud_score=4, umbral 30). Cliente VIP, SLA 5d (POL-EXC-002 PASS). POL-CB-001 PASS.",
-  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon",
+  "justification": "HIGH por: 1 violacion de politica, fraud_score=4 (umbral severo: 15). POL-FRD-001 FAIL (fraud_score=4, umbral 30). POL-EXC-002 PASS (cliente VIP, SLA 5d). CB-0020 [MOTIVO SIMILAR]: aprobado en 2d.",
+  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay. Relevancia: mismo patron de fraude / no reconocido | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon",
   "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
   "risk_level": "HIGH",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
-  "next_steps": ["Escalar a supervisor para revision (requires_hitl=true)", "Verificar POL-FRD-001 — fraud_score=4, umbral 30", "Solicitar prueba de entrega al comercio", "Notificar al cliente VIP despues de resolucion"],
+  "next_steps": ["Escalar a supervisor para revision (requires_hitl=true)", "Verificar POL-FRD-001 — fraud_score=4 vs umbral 30, requiere validacion", "Solicitar prueba de entrega al comercio — plazo segun POL-CB-003", "Notificar al cliente VIP despues de resolucion"],
   "requires_hitl": true,
   "hitl_reason": "fraud_score=4 con cliente VIP — requiere validacion de supervisor"
 }"""

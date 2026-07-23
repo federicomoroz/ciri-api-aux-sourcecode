@@ -30,7 +30,7 @@ from ..llm.client import LLMClient, LLMResult
 from ..llm import prompts
 from ..llm.parsing import validate_llm_output
 from ..observability.tracer import Tracer
-from ..rag.formatter import format_cases_for_prompt, format_policies_for_prompt, _motivo_matches
+from ..rag.formatter import format_cases_for_prompt, format_policies_for_prompt, motivo_match_label
 
 logger = logging.getLogger(__name__)
 
@@ -250,14 +250,15 @@ class ResolutionService:
         annotated = []
         for c in similar_cases:
             case_text = f"{c.get('motivo', '')} {c.get('observations', '')}"
-            is_match = bool(current_motivo) and _motivo_matches(current_motivo, case_text)
-            annotated.append((c, is_match))
+            label = motivo_match_label(current_motivo, case_text) if current_motivo else None
+            annotated.append((c, label))
 
-        annotated.sort(key=lambda x: (not x[1],))
+        # Matches first (label is not None), then rest.
+        annotated.sort(key=lambda x: (x[1] is None,))
 
         parts = []
-        for c, is_match in annotated:
-            tag = " [MOTIVO SIMILAR]" if is_match else ""
+        for c, label in annotated:
+            tag = " [MOTIVO SIMILAR]" if label else ""
             case_id = c.get("case_id", "?")
             motivo = c.get("motivo", "?")
             resolution = c.get("resolution", "?")
@@ -268,8 +269,10 @@ class ResolutionService:
             line = f"{case_id}{tag}: {motivo}, {resolution} en {days}d"
             if merchant:
                 line += f", merchant={merchant}"
-            if is_match and obs:
+            if label and obs:
                 line += f". Obs: {obs}"
+            if label:
+                line += f". Relevancia: mismo patron de {label}"
             parts.append(line)
 
         return " | ".join(parts)
