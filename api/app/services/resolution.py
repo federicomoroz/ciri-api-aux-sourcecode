@@ -201,7 +201,7 @@ class ResolutionService:
             full_context=full_context,
             resolution=judge_resolution,
         )
-        llm_result = self.llm.complete(system, user, trace_id=trace_id)
+        llm_result = self.llm_resolution.complete(system, user, trace_id=trace_id)
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})
 
         if "overall_score" not in result and "criteria" in result:
