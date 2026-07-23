@@ -16,7 +16,11 @@ Veredictos posibles para cada politica:
 - NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion. Ejemplo: POL-EXC-002 VIP cuando el cliente NO es VIP
 
 REGLAS ESTRICTAS:
-1. Se PRECISO con operadores de comparacion. "mas de 3" = >3 (NO >=3). "al menos 3" = >=3. Si el valor IGUALA el umbral pero no lo supera, es WARNING (umbral critico), no FAIL. Cita datos: score=X, monto=USD Y, cb_count=N vs umbral=M.
+1. Se PRECISO con umbrales y conteos:
+   - "mas de 3" = >3 (NO >=3). "al menos 3" = >=3. Si el valor IGUALA el umbral pero no lo supera, es WARNING.
+   - Cita datos: score=X, monto=USD Y, cb_count=N vs umbral=M.
+   - CONTEO: total_chargebacks en HISTORIAL DEL CLIENTE = conteo PREVIO (sin incluir el caso actual). Reporta solo el valor del historial, no sumes el caso actual. Ejemplo: "total_chargebacks=2 (previos), umbral >3, no supera umbral".
+   - Evalua SOLO contra el criterio EXPLICITO de la politica. No inventes criterios alternativos (ej: no uses "CB rate" o "patron de reincidencia" si la politica dice "mas de N chargebacks").
 2. POL-EXC-003 aplica SIEMPRE como BLOCKER cuando el metodo de pago es "Cripto".
 3. POL-FRD-001 aplica como FAIL o BLOCKER cuando el score antifraude es inferior al umbral.
 4. Un BLOCKER significa que la resolucion final DEBE rechazar el contracargo.

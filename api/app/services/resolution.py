@@ -273,6 +273,16 @@ class ResolutionService:
                 line += f". Obs: {obs}"
             if label:
                 line += f". Relevancia: mismo patron de {label}"
+                # Deterministic outcome note — map resolution to implication.
+                res_lower = resolution.lower()
+                if "sin resolucion" in res_lower or "cerrado" in res_lower:
+                    line += f". Nota: precedente sin resolucion previa — requiere validacion adicional"
+                elif "aprobado" in res_lower or "a favor" in res_lower:
+                    line += f". Nota: precedente fue aprobado"
+                elif "rechazado" in res_lower or "denegado" in res_lower:
+                    line += f". Nota: precedente fue rechazado"
+                elif "parcial" in res_lower:
+                    line += f". Nota: precedente resuelto con reembolso parcial"
             parts.append(line)
 
         return " | ".join(parts)

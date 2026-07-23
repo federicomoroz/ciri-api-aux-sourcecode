@@ -51,6 +51,8 @@ NEXT_STEPS (LISTA MECANICA):
   Ejemplo: si POL-FRD-003 FAIL dice "monto > USD 3000 requiere aprobacion", el paso es "Verificar aprobacion para monto USD X segun POL-FRD-003"
 - Si compensation_applicable=true: incluir paso "Aplicar compensacion segun POL-SLA-004"
 - Si hay precedente [MOTIVO SIMILAR] con observaciones relevantes, incluir paso: "Verificar [patron del precedente] en sistema de pagos"
+- Para cada politica WARNING con datos faltantes (ej: timestamps, documentacion): incluir paso "Solicitar [dato faltante] para confirmar/descartar [POL-XXX-NNN]"
+  Ejemplo: POL-FRD-002 WARNING por falta de timestamps → "Solicitar timestamps de transacciones para confirmar ventana de 24h segun POL-FRD-002"
 - DATOS FALTANTES: Si logs=[] (0 eventos), NO propongas "revisar logs". Escribe "Logs no disponibles — validacion tecnica limitada."
 - NO uses "evaluar", "considerar", "analizar". Usa: "verificar", "confirmar", "solicitar", "notificar".
 
