@@ -1,4 +1,4 @@
-# PROMPT VERSION: v1.0 | DATE: 2025-01 | CHANGES: initial release
+# PROMPT VERSION: v1.1 | DATE: 2025-07 | CHANGES: add merchant_risk + client_history context
 # PURPOSE: Evaluate a transaction against all retrieved policies
 # OUTPUT: JSON array of PolicyVerdict objects
 
@@ -13,28 +13,31 @@ Veredictos posibles para cada politica:
 - FAIL: la transaccion viola esta politica
 - BLOCKER: violacion critica — el contracargo NO puede proceder bajo NINGUNA circunstancia
 - WARNING: riesgo potencial que requiere atencion pero no bloquea el proceso
-- NOT_APPLICABLE: la politica no es relevante para esta transaccion especifica
+- NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion
 
 REGLAS ESTRICTAS:
-1. Se PRECISO. Cita datos especificos de la transaccion (score=X, monto=USD Y, canal=Z).
+1. Se PRECISO. Cita datos especificos (score=X, monto=USD Y, canal=Z, cb_ratio=N).
 2. POL-EXC-003 aplica SIEMPRE como BLOCKER cuando el metodo de pago es "Cripto".
 3. POL-FRD-001 aplica como FAIL o BLOCKER cuando el score antifraude es inferior al umbral.
 4. Un BLOCKER significa que la resolucion final DEBE rechazar el contracargo.
 5. Evalua TODAS las politicas proporcionadas. No omitas ninguna.
-6. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
+6. USA TODOS LOS DATOS DISPONIBLES: transaccion, perfil de riesgo del comercio e historial del cliente. Si una politica requiere datos del comercio (cb_ratio, flags) o del cliente (total_chargebacks, countries), verificalos en las secciones correspondientes.
+7. NOT_APPLICABLE se usa SOLO cuando la politica genuinamente no aplica (ej: POL-EXC-002 VIP cuando el cliente NO es VIP). Si los datos existen para evaluar la politica, evaluala como PASS, FAIL o WARNING — no uses NOT_APPLICABLE.
+8. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
 
 Formato de respuesta (array JSON):
 [
   {
     "policy_code": "POL-XXX-NNN",
     "verdict": "PASS|FAIL|BLOCKER|WARNING|NOT_APPLICABLE",
-    "reasoning": "Explicacion concisa citando datos especificos de la transaccion",
+    "reasoning": "Explicacion concisa citando datos especificos",
     "requires_human_review": false
   }
 ]
 
 EJEMPLO:
 Transaccion: {"id":"TXN-00099","payment_method":"Cripto","fraud_score":12,"amount_usd":500.00,"country":"COL","channel":"APP","merchant":"Binance"}
+Comercio: {"cb_ratio": 0.03, "flags": ["high_cb_ratio"], "total_transactions": 200}
 Politica: POL-EXC-003 — Criptomonedas: BLOCKER para todo contracargo con metodo de pago Cripto.
 Politica: POL-FRD-001 — Score minimo: fraud_score < 30 → FAIL.
 
@@ -47,16 +50,30 @@ Respuesta correcta:
 USER_TEMPLATE = """## TRANSACCION
 {transaction_json}
 
+## PERFIL DE RIESGO DEL COMERCIO
+{merchant_risk}
+
+## HISTORIAL DEL CLIENTE
+{client_history}
+
 ## POLITICAS A EVALUAR (recuperadas por RAG — {policy_count} politicas)
 {policies_text}
 
-Evalua cada politica y devuelve el array JSON."""
+Evalua cada politica usando TODOS los datos disponibles y devuelve el array JSON."""
 
 
-def render(transaction: dict, policies_text: str, policy_count: int) -> tuple[str, str]:
+def render(
+    transaction: dict,
+    policies_text: str,
+    policy_count: int,
+    merchant_risk: dict | None = None,
+    client_history: dict | None = None,
+) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt)."""
     user = USER_TEMPLATE.format(
         transaction_json=json.dumps(transaction, indent=2, ensure_ascii=False),
+        merchant_risk=json.dumps(merchant_risk or {}, indent=2, ensure_ascii=False),
+        client_history=json.dumps(client_history or {}, indent=2, ensure_ascii=False),
         policies_text=policies_text,
         policy_count=policy_count,
     )

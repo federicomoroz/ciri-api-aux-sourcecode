@@ -62,7 +62,10 @@ class ResolutionService:
             metadata={"merchant": tx_data.get("merchant", ""), "amount_usd": tx_data.get("amount_usd", 0)},
         )
 
-        policy_verdicts, eval_result = self._eval_policies(tx_data, policies, trace_id)
+        policy_verdicts, eval_result = self._eval_policies(
+            tx_data, policies, trace_id,
+            merchant_risk=merchant_risk, client_history=client_history,
+        )
         log_summary_text = self._summarize_logs(logs)
 
         # Deterministic outcome — code decides, LLM explains.
@@ -90,13 +93,22 @@ class ResolutionService:
         }
         return {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id, "_usage": usage}
 
-    def _eval_policies(self, tx_data: dict, policies: list[dict], trace_id: str) -> tuple[list[dict], LLMResult]:
+    def _eval_policies(
+        self,
+        tx_data: dict,
+        policies: list[dict],
+        trace_id: str,
+        merchant_risk: dict | None = None,
+        client_history: dict | None = None,
+    ) -> tuple[list[dict], LLMResult]:
         """Step 1: LLM policy evaluation. Raises on failure."""
         policies_formatted = format_policies_for_prompt(policies)
         sys_eval, usr_eval = prompts.v1_policy_eval.render(
             transaction=tx_data,
             policies_text=policies_formatted,
             policy_count=len(policies),
+            merchant_risk=merchant_risk or {},
+            client_history=client_history or {},
         )
         result = self.llm.complete(sys_eval, usr_eval, trace_id=trace_id)
         verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])
