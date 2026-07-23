@@ -22,6 +22,7 @@ REGLAS ESTRICTAS:
    - Transaccion: UNICAMENTE campos de "TRANSACCION".
    - Si un dato no existe en su seccion, escribe "No disponible" — NUNCA inventes.
    - NUNCA copies datos de PRECEDENTES a la transaccion actual.
+   - CONTEO: total_chargebacks en HISTORIAL DEL CLIENTE = conteo PREVIO al caso actual. Si lo citas, escribe "N chargebacks previos (sin contar el actual)".
 5. compensation_applicable es true SOLO si se incumplio el SLA (POL-SLA-004).
 6. compensation_amount_usd maxima es USD 15 segun POL-SLA-004.
 7. next_steps: entre 2 y 5 pasos. Formato: "[verbo] + [dato] + [responsable]".
@@ -34,13 +35,14 @@ CONCISION (CRITICO):
 - precedent_summary: MAXIMO 80 palabras.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 1-2 oraciones.
 
-PRECEDENT_SUMMARY (EXTRACCION MECANICA — NO analices):
-- Para cada precedente, copia estos campos: case_id, motivo, outcome (aprobado/rechazado), resolution_days.
+PRECEDENT_SUMMARY (EXTRACCION MECANICA):
+- Para cada precedente, copia: case_id, motivo, outcome (aprobado/rechazado), resolution_days.
+- COMPARACION DE MOTIVO (mecanica): compara el motivo de cada precedente con el motivo del caso actual. Si coinciden o son similares (ej: ambos "cargo duplicado", o "cargo doble por timeout" vs "cargo duplicado"), marca ese precedente con [MOTIVO SIMILAR] y listalo PRIMERO. Incluye su outcome y resolution_days — estos datos son relevantes.
 - Si el precedente tiene el mismo merchant o payment_method, mencionalo.
-- NO interpretes que "implica" un precedente. NO escribas "esto sugiere", "esto indica", "aprendizaje".
+- NO interpretes. NO escribas "esto sugiere", "esto indica", "aprendizaje", "implica", "informa".
 - NO menciones porcentajes de similitud — son scores internos.
-- Si no hay precedentes: escribe "Sin precedentes relevantes."
-- Formato: "CB-XXXX: [motivo], [outcome] en [N]d. CB-YYYY: [motivo], [outcome] en [N]d."
+- Si no hay precedentes: "Sin precedentes relevantes."
+- Formato: "CB-XXXX [MOTIVO SIMILAR]: motivo, outcome en Nd. CB-YYYY: motivo, outcome en Nd."
 
 NEXT_STEPS (LISTA MECANICA):
 - Genera pasos basados UNICAMENTE en los veredictos de politica y la decision determinada.
@@ -77,7 +79,7 @@ Respuesta correcta (extraccion mecanica, sin interpretacion):
   "recommended_action": "PENDING_HITL",
   "confidence": 0.72,
   "justification": "PENDING_HITL por POL-FRD-001 FAIL (fraud_score=4, umbral 30). Cliente VIP, SLA 5d (POL-EXC-002 PASS). POL-CB-001 PASS.",
-  "precedent_summary": "CB-0020: cargo no reconocido, aprobado en 2d. CB-0033: fraude tarjeta, aprobado en 3d. Ambos mismo merchant.",
+  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, mismo merchant. CB-0033: fraude tarjeta, aprobado en 3d.",
   "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
   "risk_level": "HIGH",
   "compensation_applicable": false,
