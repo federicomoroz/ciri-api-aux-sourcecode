@@ -295,7 +295,15 @@ class ResolutionService:
         total_all = len(annotated)
         matching = [(c, label) for c, label in annotated if label is not None]
 
-        pattern = f"Patron: de {total_all} precedentes, {approved_all} aprobados, {rejected_all} rechazados"
+        # Strategic pattern implication.
+        if approved_all > rejected_all:
+            trend = "tendencia favorable al cliente"
+        elif rejected_all > approved_all:
+            trend = "tendencia desfavorable al cliente"
+        else:
+            trend = "sin tendencia clara"
+
+        pattern = f"Patron: de {total_all} precedentes, {approved_all} aprobados, {rejected_all} rechazados — {trend}"
         if matching:
             approved_match = sum(
                 1 for c, _ in matching

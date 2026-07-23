@@ -38,8 +38,9 @@ JUSTIFICATION (CRITICO — campo analitico):
       - Si un precedente [MOTIVO SIMILAR] fue aprobado: "CB-XXXX fue aprobado en Nd, lo que sugiere que casos de [motivo] tienden a resolverse a favor del cliente"
       - Si un precedente [MOTIVO SIMILAR] no fue resuelto: "CB-XXXX permanece sin resolucion, lo que indica que este tipo de caso requiere mayor investigacion antes de decidir"
       - Si varios precedentes comparten un patron (ej: mismo merchant, fraud_scores similares): identifica ese patron y su implicacion para el caso actual.
-      - Cita el "Patron" de la DECISION DETERMINADA (ej: "3/5 precedentes fueron aprobados").
-  (4) Conclusion: conecta las evidencias con la decision determinada en 1 oracion.
+      - Cita el "Patron" y la "tendencia" de la DECISION DETERMINADA (ej: "3/5 precedentes aprobados — tendencia favorable").
+  (4) ESTRATEGIA: Conecta el patron de precedentes con la decision actual. Ejemplo: "Dado que 3/5 precedentes fueron aprobados y CB-0038 quedo sin resolver por error tecnico, la tendencia favorece al cliente una vez resuelta la investigacion pendiente."
+  (5) Conclusion: conecta las evidencias con la decision determinada en 1 oracion.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 2-3 oraciones.
 
 PRECEDENT_SUMMARY (PRE-GENERADO POR SISTEMA):
@@ -56,7 +57,7 @@ NEXT_STEPS (LISTA CONCRETA):
 - Si compensation_applicable=true: incluir paso "Aplicar compensacion segun POL-SLA-004"
 - Si hay precedente [MOTIVO SIMILAR]: incluir paso que conecte el aprendizaje del precedente con una accion concreta.
   Ejemplo: si CB-0038 de cargo duplicado no fue resuelto → "Verificar con procesador de pagos si existe cargo duplicado real — precedente CB-0038 sugiere investigacion pendiente"
-- Para cada politica WARNING con datos faltantes: incluir paso "Solicitar [dato faltante] para confirmar/descartar [POL-XXX-NNN]"
+- Para cada politica WARNING con datos faltantes: incluir paso "Solicitar [dato faltante] para confirmar/descartar [POL-XXX-NNN]" y ACLARAR si el dato faltante es BLOQUEANTE para la decision o es complementario. Ejemplo: "Solicitar timestamps para confirmar POL-FRD-002 — dato complementario, no bloquea la decision PENDING_HITL actual pero es necesario para resolucion definitiva"
 - Si requires_hitl=true y compensation_applicable=false y POL-SLA-004 fue evaluada como FAIL o WARNING: incluir paso final "Resolver revision HITL dentro del plazo SLA restante — si tiempo total de resolucion (incluyendo espera HITL) excede plazo, la empresa debe compensar segun POL-SLA-004"
 - COHERENCIA OBLIGATORIA: Si compensation_applicable=false, NO menciones compensacion en next_steps (seria contradictorio). Solo incluye pasos de compensacion si compensation_applicable=true.
 - DATOS FALTANTES: Si logs=[] (0 eventos), NO propongas "revisar logs". Escribe "Logs no disponibles — validacion tecnica limitada."
@@ -88,7 +89,7 @@ Respuesta correcta:
   "transaction_id": "TXN-00042",
   "recommended_action": "PENDING_HITL",
   "confidence": 0.72,
-  "justification": "Riesgo HIGH por 1 violacion de politica (POL-FRD-001). El riesgo no proviene de fraude sofisticado sino de un fraud_score=4 que incumple el umbral minimo de 30 segun POL-FRD-001. POL-EXC-002 PASS confirma trato VIP con SLA de 5 dias. CB-0020 [MOTIVO SIMILAR] fue aprobado en 2 dias, lo que sugiere que casos de fraude/no reconocido con este perfil tienden a resolverse a favor del cliente. CB-0033 tambien fue aprobado (3d), reforzando el patron: 2/2 precedentes aprobados. Sin embargo, el fraud_score bajo requiere validacion antes de seguir el patron de precedentes. Decision PENDING_HITL es correcta dado que el patron de aprobacion existe pero el score requiere confirmacion.",
+  "justification": "Riesgo HIGH por 1 violacion de politica (POL-FRD-001). El riesgo no proviene de fraude sofisticado sino de un fraud_score=4 que incumple el umbral minimo de 30 segun POL-FRD-001. POL-EXC-002 PASS confirma trato VIP con SLA de 5 dias. CB-0020 [MOTIVO SIMILAR] fue aprobado en 2 dias, lo que sugiere que casos de fraude/no reconocido con este perfil tienden a resolverse a favor del cliente. CB-0033 tambien fue aprobado (3d), reforzando el patron: 2/2 precedentes aprobados — tendencia favorable al cliente. Dado este patron favorable, la decision PENDING_HITL permite confirmar el fraud_score antes de seguir la tendencia de aprobacion. Si se valida que el score bajo es anomalia, el patron de precedentes favorece la aprobacion.",
   "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay. Relevancia: mismo patron de fraude / no reconocido | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon | Patron: de 2 precedentes, 2 aprobados, 0 rechazados. Motivo similar: 1/2, 1 aprobados",
   "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
   "risk_level": "HIGH",
