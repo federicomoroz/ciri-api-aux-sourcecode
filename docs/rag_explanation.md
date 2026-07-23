@@ -21,7 +21,7 @@ Las transacciones realizadas con criptomonedas son irreversibles por naturaleza.
 **Referencia:** Reg. Fintech 2024/03
 ```
 
-The Markdown format preserves hierarchy and emphasis, which the sentence transformer model encodes into the embedding.
+The Markdown format preserves hierarchy and emphasis, which the embedding model encodes into the vector representation.
 
 **Point ID strategy:** Deterministic `uuid5(NAMESPACE_DNS, policy_code)` — the same code always produces the same point ID. This makes `upsert` idempotent: re-indexing a policy after editing does not create duplicates.
 
@@ -85,7 +85,7 @@ Indexing logs in Qdrant would complicate the pipeline without benefit: you alway
 
 | Parameter | Value |
 |---|---|
-| Vector size | 384 |
+| Vector size | 1024 |
 | Distance metric | Cosine |
 | Total points | 17 (static, grows only via POST /api/policies/) |
 | Retrieval `top_k` | 17 |
@@ -111,7 +111,7 @@ Indexing logs in Qdrant would complicate the pipeline without benefit: you alway
 
 | Parameter | Value |
 |---|---|
-| Vector size | 384 |
+| Vector size | 1024 |
 | Distance metric | Cosine |
 | Starting points | 60 |
 | Retrieval `top_k` | 5 |
@@ -144,7 +144,7 @@ Indexing logs in Qdrant would complicate the pipeline without benefit: you alway
 
 | Parameter | Value |
 |---|---|
-| Vector size | 384 |
+| Vector size | 1024 |
 | Distance metric | Cosine |
 | Total points | Grows unbounded |
 | Retrieval `top_k` | 1 |
@@ -157,24 +157,32 @@ Indexing logs in Qdrant would complicate the pipeline without benefit: you alway
 
 ## Embedding Model
 
-**Model:** `paraphrase-multilingual-MiniLM-L12-v2` (sentence-transformers)
+**Model:** `voyage-multilingual-2` (Voyage AI API)
 
-**Dimensions:** 384
+**Dimensions:** 1024
 
 **Why this model:**
 
 | Criterion | Rationale |
 |---|---|
 | Multilingual | Dataset, policies, and logs are in Spanish. The model handles Spanish natively without translation overhead. |
-| Compact (384 dims) | Fast to embed and search; fits comfortably in Qdrant on a single node. |
-| Paraphrase-tuned | Explicitly trained for semantic similarity, not just keyword overlap. "Cargo no reconocido" and "compra desconocida" will produce similar embeddings. |
-| Offline | Runs locally via `sentence-transformers`; no external API calls for embedding. |
-| Startup load | Loaded once at FastAPI startup via `lifespan()` and injected via dependency injection. |
+| High quality (1024 dims) | Superior semantic similarity for paraphrase detection. "Cargo no reconocido" and "compra desconocida" produce highly similar embeddings. |
+| Paraphrase-tuned | Explicitly trained for semantic similarity, not just keyword overlap. |
+| Free tier | Voyage AI offers a generous free tier — no cost for development and testing. |
+| Lazy loading | Client initialized on first `encode()` call via double-checked locking. Zero RAM at startup. |
+| Thread-safe | `FastEmbedder` uses `threading.Lock` for safe concurrent access. |
+
+**Configuration:**
+```env
+CB_VOYAGE_API_KEY=pa-...          # Required — get a free key at https://dash.voyageai.com/
+CB_EMBEDDING_MODEL=voyage-multilingual-2
+CB_EMBEDDING_DIM=1024
+```
 
 **Alternatives considered:**
 
-- `text-embedding-3-small` (OpenAI): requires API calls, adds latency and cost per embedding, not available offline
-- `multilingual-e5-large`: better quality but 1024 dims (2.5x memory), slower
+- `paraphrase-multilingual-MiniLM-L12-v2` (sentence-transformers): 384 dims, runs locally but lower quality and requires ONNX runtime in Docker
+- `text-embedding-3-small` (OpenAI): requires paid API, vendor lock-in with LLM provider
 - `all-MiniLM-L6-v2`: English-only, poor Spanish performance
 
 ---

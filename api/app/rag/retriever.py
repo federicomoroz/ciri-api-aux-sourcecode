@@ -9,23 +9,20 @@ Design decisions:
 """
 
 import logging
-import uuid
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct
 from .embedder import FastEmbedder
 
 from ..domain.constants import (
     FRAUD_SCORE_DEFAULT,
+    FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     LATAM_COUNTRIES,
     POLICIES_TOP_K,
     POLICIES_SCORE_THRESHOLD,
     SIMILAR_CASES_TOP_K,
     SIMILAR_CASES_SCORE_THRESHOLD,
-    SEMANTIC_CACHE_THRESHOLD,
 )
 from ..domain.enums import Channel, PaymentMethod
-from .formatter import format_cases_for_prompt, format_policies_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +44,7 @@ class QueryBuilder:
         parts = [base]
         if payment_method == PaymentMethod.CRYPTO:
             parts.append("criptomonedas no reversible blocker")
-        if fraud_score < 30:
+        if fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
             parts.append("transaccion de alto riesgo fraude score bajo")
         if country not in LATAM_COUNTRIES:
             parts.append("internacional fuera LATAM plazo extendido")
@@ -85,7 +82,6 @@ class QdrantRetriever:
         self.policies_collection = policies_collection
         self.cases_collection = cases_collection
         self.cache_collection = cache_collection
-        self.query_builder = QueryBuilder()
 
     def _embed(self, text: str) -> list[float]:
         return self.embedder.encode([text], show_progress_bar=False)[0].tolist()
@@ -102,16 +98,20 @@ class QdrantRetriever:
     ) -> list[dict]:
         """Semantic search over policies collection.
         Returns ALL policies (small corpus; LLM will filter relevance)."""
-        query = self.query_builder.for_policies(motivo, channel, payment_method, fraud_score, country)
+        query = QueryBuilder.for_policies(motivo, channel, payment_method, fraud_score, country)
         vector = self._embed(query)
 
-        results = self.client.query_points(
-            collection_name=self.policies_collection,
-            query=vector,
-            limit=top_k,
-            score_threshold=score_threshold,
-            with_payload=True,
-        ).points
+        try:
+            results = self.client.query_points(
+                collection_name=self.policies_collection,
+                query=vector,
+                limit=top_k,
+                score_threshold=score_threshold,
+                with_payload=True,
+            ).points
+        except Exception as e:
+            logger.error("Qdrant policy search failed: %s", e)
+            raise
 
         return [
             {**r.payload, "score": round(r.score, 4), "_query": query}
@@ -130,61 +130,24 @@ class QdrantRetriever:
         score_threshold: float = SIMILAR_CASES_SCORE_THRESHOLD,
     ) -> list[dict]:
         """Semantic search over historical_cases collection."""
-        query = self.query_builder.for_similar_cases(
+        query = QueryBuilder.for_similar_cases(
             merchant, amount, payment_method, country, fraud_score, motivo
         )
         vector = self._embed(query)
 
-        results = self.client.query_points(
-            collection_name=self.cases_collection,
-            query=vector,
-            limit=top_k,
-            score_threshold=score_threshold,
-            with_payload=True,
-        ).points
+        try:
+            results = self.client.query_points(
+                collection_name=self.cases_collection,
+                query=vector,
+                limit=top_k,
+                score_threshold=score_threshold,
+                with_payload=True,
+            ).points
+        except Exception as e:
+            logger.error("Qdrant case search failed: %s", e)
+            raise
 
         return [
             {**r.payload, "score": round(r.score, 4), "_query": query}
             for r in results
         ]
-
-    def check_semantic_cache(self, query: str, threshold: float = SEMANTIC_CACHE_THRESHOLD) -> dict | None:
-        """Search cache for near-identical queries. Returns cached response or None."""
-        try:
-            vector = self._embed(query)
-            results = self.client.query_points(
-                collection_name=self.cache_collection,
-                query=vector,
-                limit=1,
-                score_threshold=threshold,
-                with_payload=True,
-            ).points
-            if results:
-                return results[0].payload.get("response")
-        except Exception as e:
-            logger.warning("Semantic cache lookup failed: %s", e)
-        return None
-
-    def store_in_cache(self, query: str, response: dict) -> None:
-        """Store a query+response in the semantic cache."""
-        try:
-            vector = self._embed(query)
-            point_id = str(uuid.uuid4())
-            self.client.upsert(
-                collection_name=self.cache_collection,
-                points=[PointStruct(
-                    id=point_id,
-                    vector=vector,
-                    payload={"query": query, "response": response},
-                )],
-            )
-        except Exception as e:
-            logger.warning("Semantic cache store failed: %s", e)
-
-    def format_policies_for_prompt(self, policies: list[dict]) -> str:
-        """Delegate to module-level formatter."""
-        return format_policies_for_prompt(policies)
-
-    def format_cases_for_prompt(self, cases: list[dict]) -> str:
-        """Delegate to module-level formatter."""
-        return format_cases_for_prompt(cases)

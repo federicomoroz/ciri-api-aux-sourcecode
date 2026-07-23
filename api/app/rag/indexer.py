@@ -3,18 +3,21 @@ Qdrant indexer for policies and historical cases.
 
 Collections:
 - policies: 17+ policy documents (Markdown, dynamic via CRUD API)
-- historical_cases: 60+ case documents (auto-grows when Judge score >= 8.0)
-- _semantic_cache: cached analysis results (threshold 0.92)
+- historical_cases: 60+ case documents (auto-grows when Judge score >= threshold)
+- _semantic_cache: cached analysis results
 
 Point IDs: deterministic uuid5 from document code/id to allow upserts.
 """
 
+import logging
 import uuid
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
 from ..domain.constants import EMBEDDING_DIM
 from .embedder import FastEmbedder
+
+logger = logging.getLogger(__name__)
 
 
 def _make_id(text: str) -> str:
@@ -68,17 +71,23 @@ class QdrantIndexer:
     def ensure_collections(self) -> None:
         """Create (or recreate if dim changed) the 3 Qdrant collections."""
         for name in [self.policies_collection, self.cases_collection, self.cache_collection]:
-            if self.client.collection_exists(name):
-                info = self.client.get_collection(name)
-                existing_dim = info.config.params.vectors.size
-                if existing_dim != EMBEDDING_DIM:
-                    self.client.delete_collection(name)
-                else:
-                    continue
-            self.client.create_collection(
-                collection_name=name,
-                vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
-            )
+            try:
+                if self.client.collection_exists(name):
+                    info = self.client.get_collection(name)
+                    existing_dim = info.config.params.vectors.size
+                    if existing_dim != EMBEDDING_DIM:
+                        logger.info("Collection %s dim mismatch (%d != %d), recreating", name, existing_dim, EMBEDDING_DIM)
+                        self.client.delete_collection(name)
+                    else:
+                        continue
+                self.client.create_collection(
+                    collection_name=name,
+                    vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
+                )
+                logger.info("Created Qdrant collection: %s (dim=%d)", name, EMBEDDING_DIM)
+            except Exception as e:
+                logger.error("Failed to ensure Qdrant collection %s: %s", name, e)
+                raise
 
     def index_policies(self, policies: list[dict]) -> int:
         """Index all policies as Markdown documents. Returns count indexed."""
@@ -101,7 +110,12 @@ class QdrantIndexer:
             ))
 
         if points:
-            self.client.upsert(collection_name=self.policies_collection, points=points)
+            try:
+                self.client.upsert(collection_name=self.policies_collection, points=points)
+                logger.info("Indexed %d policies in Qdrant", len(points))
+            except Exception as e:
+                logger.error("Failed to index policies in Qdrant: %s", e)
+                raise
         return len(points)
 
     def index_historical_cases(
@@ -130,7 +144,12 @@ class QdrantIndexer:
             ))
 
         if points:
-            self.client.upsert(collection_name=self.cases_collection, points=points)
+            try:
+                self.client.upsert(collection_name=self.cases_collection, points=points)
+                logger.info("Indexed %d historical cases in Qdrant", len(points))
+            except Exception as e:
+                logger.error("Failed to index cases in Qdrant: %s", e)
+                raise
         return len(points)
 
     def index_single_case(self, case: dict, tx: dict) -> None:
@@ -150,7 +169,12 @@ class QdrantIndexer:
                 "_text": text,
             },
         )
-        self.client.upsert(collection_name=self.cases_collection, points=[point])
+        try:
+            self.client.upsert(collection_name=self.cases_collection, points=[point])
+            logger.info("Indexed single case %s in Qdrant", case["case_id"])
+        except Exception as e:
+            logger.error("Failed to index case %s: %s", case["case_id"], e)
+            raise
 
     def index_single_policy(self, policy: dict) -> None:
         """Index or re-index one policy."""
@@ -168,11 +192,21 @@ class QdrantIndexer:
                 "markdown": text,
             },
         )
-        self.client.upsert(collection_name=self.policies_collection, points=[point])
+        try:
+            self.client.upsert(collection_name=self.policies_collection, points=[point])
+            logger.info("Indexed policy %s in Qdrant", policy["code"])
+        except Exception as e:
+            logger.error("Failed to index policy %s: %s", policy["code"], e)
+            raise
 
     def delete_policy(self, code: str) -> None:
         """Remove a policy point from Qdrant."""
-        self.client.delete(
-            collection_name=self.policies_collection,
-            points_selector=PointIdsList(points=[_make_id(code)]),
-        )
+        try:
+            self.client.delete(
+                collection_name=self.policies_collection,
+                points_selector=PointIdsList(points=[_make_id(code)]),
+            )
+            logger.info("Deleted policy %s from Qdrant", code)
+        except Exception as e:
+            logger.error("Failed to delete policy %s from Qdrant: %s", code, e)
+            raise

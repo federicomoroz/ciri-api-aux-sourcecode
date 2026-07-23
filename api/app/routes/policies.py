@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..data.db import Database
 from ..dependencies import get_db, get_retriever, get_updater
+from ..domain.constants import FRAUD_SCORE_DEFAULT
 from ..domain.models import PolicyCreate, PolicyUpdate
+from ..rag.formatter import format_policies_for_prompt
 from ..rag.retriever import QdrantRetriever
 from ..rag.updater import RAGUpdater
 
@@ -27,10 +27,10 @@ def search_policies(
         motivo=motivo,
         channel=channel or "",
         payment_method=payment_method or "",
-        fraud_score=fraud_score or 50,
+        fraud_score=fraud_score or FRAUD_SCORE_DEFAULT,
         country=country or "",
     )
-    formatted = retriever.format_policies_for_prompt(results)
+    formatted = format_policies_for_prompt(results)
     return {
         "query_used": results[0].get("_query", q) if results else q,
         "results": results,
@@ -60,18 +60,8 @@ def create_policy(
     db: Database = Depends(get_db),
     updater: RAGUpdater = Depends(get_updater),
 ) -> dict:
-    """Create new policy → save to SQLite + index in Qdrant immediately."""
-    now = datetime.now(timezone.utc).isoformat()
-    policy_dict = {
-        "code": policy.code,
-        "name": policy.name,
-        "category": policy.category,
-        "description": policy.description,
-        "reference": policy.reference,
-        "created_at": now,
-        "updated_at": now,
-    }
-    db.upsert_policy(policy_dict)
+    """Create new policy -> save to SQLite + index in Qdrant immediately."""
+    policy_dict = db.create_policy_record(policy.model_dump())
     updater.on_policy_created(policy_dict)
     return db.get_policy(policy.code)
 
@@ -83,24 +73,13 @@ def update_policy(
     db: Database = Depends(get_db),
     updater: RAGUpdater = Depends(get_updater),
 ) -> dict:
-    """Update policy → save to SQLite + re-index in Qdrant immediately.
+    """Update policy -> save to SQLite + re-index in Qdrant immediately.
     No redeploy needed — policies are DATA, not CODE."""
     existing = db.get_policy(code)
     if not existing:
         raise HTTPException(status_code=404, detail=f"Policy {code} not found")
 
-    updated = {**existing}
-    if policy.name is not None:
-        updated["name"] = policy.name
-    if policy.category is not None:
-        updated["category"] = policy.category
-    if policy.description is not None:
-        updated["description"] = policy.description
-    if policy.reference is not None:
-        updated["reference"] = policy.reference
-    updated["updated_at"] = datetime.now(timezone.utc).isoformat()
-
-    db.upsert_policy(updated)
+    updated = db.merge_policy_update(existing, policy.model_dump(exclude_unset=True))
     updater.on_policy_updated(updated)
     return db.get_policy(code)
 

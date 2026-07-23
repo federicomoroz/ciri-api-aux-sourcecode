@@ -1525,7 +1525,7 @@ const STEPS = [
   { label: 'Identificando transaccion...',              detail: 'GET /api/transactions/{id} → SQLite',                       icon: 'db',    delay: 0   },
   { label: 'Recuperando logs de eventos...',            detail: 'GET /api/logs/{tx_id} → historial completo',                icon: 'log',   delay: 3200 },
   { label: 'Buscando politicas aplicables en RAG...',   detail: 'GET /api/policies/search → Qdrant vector search',           icon: 'rag',   delay: 6400 },
-  { label: 'Recuperando casos precedentes similares...', detail: 'GET /api/cases/similar → embeddings paraphrase-MiniLM',   icon: 'cases', delay: 9600 },
+  { label: 'Recuperando casos precedentes similares...', detail: 'GET /api/cases/similar → Voyage AI embeddings',   icon: 'cases', delay: 9600 },
   { label: 'Evaluando perfil de riesgo del comercio...', detail: 'GET /api/merchants/{name}/risk → CB ratio + flags',        icon: 'merch', delay: 12800 },
   { label: 'Verificando SLA...',                        detail: 'POST /api/sla/check → LATAM 10d / no-LATAM 15d',           icon: 'sla',   delay: 16000 },
   { label: 'Sintetizando resolucion con LLM...',        detail: 'POST /api/analyze/resolve → Claude Sonnet 4.6 · T=0.3',   icon: 'llm',   delay: 19200 },

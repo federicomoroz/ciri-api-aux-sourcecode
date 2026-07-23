@@ -7,13 +7,10 @@ POST /api/panel/analyze        — runs analysis via n8n (or direct pipeline fal
 """
 
 import logging
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
-from jinja2 import Environment, FileSystemLoader
-from pydantic import BaseModel
 
 from ..analysis.analyzer import Analyzer
 from ..config import Settings
@@ -26,6 +23,13 @@ from ..dependencies import (
     get_retriever,
     get_settings,
 )
+from ..domain.constants import (
+    N8N_HEALTHZ_PATH,
+    N8N_PING_TIMEOUT_S,
+    N8N_TIMEOUT_S,
+    N8N_WEBHOOK_PATH,
+)
+from ..domain.models import AnalyzeRequest
 from ..rag.retriever import QdrantRetriever
 from ..reports.generator import ReportGenerator
 from ..services.resolution import ResolutionService
@@ -34,36 +38,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["panel"])
 
-# ─── Template for the test panel UI ──────────────────────────────────────────
-
-_TEMPLATES_DIR = Path(__file__).parent.parent / "reports" / "templates"
-_panel_env = Environment(
-    loader=FileSystemLoader(str(_TEMPLATES_DIR)),
-    autoescape=False,   # panel HTML is fully static, no user data injected
-)
-
 
 @router.get("/panel", response_class=HTMLResponse, include_in_schema=False)
-def serve_panel() -> str:
+def serve_panel(
+    report_gen: ReportGenerator = Depends(get_report_generator),
+) -> HTMLResponse:
     """Serve the interactive test panel page."""
-    tmpl = _panel_env.get_template("test_panel.html")
+    tmpl = report_gen.env.get_template("test_panel.html")
     return HTMLResponse(content=tmpl.render(), status_code=200)
 
 
-# ─── Analyze request model ────────────────────────────────────────────────────
-
-class PanelAnalyzeRequest(BaseModel):
-    transaction_id: str
-    motivo: str
-    cliente_vip: bool = False
-
-
 # ─── Panel analyze endpoint ───────────────────────────────────────────────────
-
-N8N_WEBHOOK_PATH  = "/webhook/chargeback-agent"
-N8N_HEALTHZ_PATH  = "/healthz"
-N8N_TIMEOUT_S     = 120.0
-N8N_PING_TIMEOUT  = 3.0
 
 
 @router.get("/api/panel/n8n-status")
@@ -71,16 +56,17 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
     """Quick liveness check for n8n — used by the panel UI to show a status badge."""
     url = settings.n8n_base_url.rstrip("/") + N8N_HEALTHZ_PATH
     try:
-        async with httpx.AsyncClient(timeout=N8N_PING_TIMEOUT) as client:
+        async with httpx.AsyncClient(timeout=N8N_PING_TIMEOUT_S) as client:
             r = await client.get(url)
         return {"available": r.status_code < 500, "url": settings.n8n_base_url}
-    except Exception:
+    except httpx.HTTPError as e:
+        logger.debug("n8n ping failed: %s", e)
         return {"available": False, "url": settings.n8n_base_url}
 
 
 @router.post("/api/panel/analyze", response_class=HTMLResponse)
 async def panel_analyze(
-    req: PanelAnalyzeRequest,
+    req: AnalyzeRequest,
     db: Database                      = Depends(get_db),
     retriever: QdrantRetriever        = Depends(get_retriever),
     analyzer: Analyzer                = Depends(get_analyzer),
@@ -127,7 +113,7 @@ async def panel_analyze(
 # ─── Direct pipeline fallback ─────────────────────────────────────────────────
 
 async def _direct_pipeline(
-    req: PanelAnalyzeRequest,
+    req: AnalyzeRequest,
     db: Database,
     retriever: QdrantRetriever,
     analyzer: Analyzer,
@@ -220,26 +206,3 @@ async def _direct_pipeline(
 
     html = report_gen.render(report_data)
     return HTMLResponse(content=html, status_code=200)
-
-
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-
-def _wrap_plain(text: str, txn_id: str, source: str) -> str:
-    """Wrap a plain-text response in minimal styled HTML for the iframe."""
-    safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Respuesta — {txn_id}</title>
-  <style>
-    body {{ font-family: monospace; background:#0d1321; color:#e8eaf0;
-            padding:32px; white-space:pre-wrap; word-break:break-all; }}
-    h2 {{ color:#7b859e; font-size:13px; letter-spacing:2px; margin-bottom:20px; }}
-  </style>
-</head>
-<body>
-<h2>{source.upper()} · {txn_id}</h2>
-{safe}
-</body>
-</html>"""

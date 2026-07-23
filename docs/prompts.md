@@ -10,7 +10,7 @@ Prompts are stored as versioned Python modules under `api/app/llm/prompts/`. Eac
 
 | Version | Date | Summary |
 |---|---|---|
-| v1.0 | 2025-01 | Initial release — 4 prompts for full resolution pipeline |
+| v1.0 | 2025-01 | Initial release — 3 LLM prompts + deterministic log analysis for full resolution pipeline |
 
 ---
 
@@ -302,44 +302,24 @@ Supervisor de calidad de resoluciones (resolution quality supervisor) at a Latin
 
 ---
 
-## Prompt 4: v1_log_analysis
+## Log Analysis (deterministic — no LLM prompt)
 
-**File:** `api/app/llm/prompts/v1_log_analysis.py`
+**Implementation:** `api/app/analysis/analyzer.py` → `Analyzer.count_severities()` + `Analyzer.detect_error_patterns()`
+**Pipeline integration:** `ResolutionService._summarize_logs()` in `api/app/services/resolution.py`
 
 ### Purpose
 
-Perform semantic analysis of payment processing event logs to detect anomaly patterns, identify the probable root cause of the chargeback, and surface risk indicators. Called via `POST /api/logs/analyze` as an optional step in the investigation pipeline.
+Analyze payment processing event logs to count severities and detect anomaly patterns. Unlike the other three prompts, log analysis is **deterministic** — it does not use an LLM call. The structured nature of log events (severity, event name, service) makes rule-based pattern matching more reliable, faster, and cheaper than LLM analysis.
 
-### Role
+### How it works
 
-Analista de sistemas de pago especializado en deteccion de anomalias (payment systems analyst specializing in anomaly detection).
+1. `Analyzer.count_severities(logs)` produces `{"ERROR": N, "WARN": N, "INFO": N}`
+2. `Analyzer.detect_error_patterns(logs)` scans for 9 known anomaly patterns by event name
+3. `ResolutionService._summarize_logs()` combines both outputs into a text summary that is passed to the `v1_resolution` prompt as the `log_summary` parameter
 
-### Input Specification
+The LLM (v1_resolution) receives the pre-computed summary and interprets it alongside other evidence — it never processes raw logs directly.
 
-| Parameter | Type | Description |
-|---|---|---|
-| `transaction_id` | `str` | Transaction ID for context |
-| `logs` | `list[dict]` | List of log events: `{timestamp, severity, event, service, code, detail}` |
-
-The `render()` function formats the logs as structured text lines before passing to the LLM:
-```
-[2024-01-15T10:23:01] [ERROR] FRAUD_ALERT               | fraud-service       | HTTP 403 | Score 8/100 umbral minimo 15
-[2024-01-15T10:23:02] [ERROR] AUTH_DECLINED              | auth-gateway        | HTTP 401 | Transaccion bloqueada por politica antifraude
-```
-
-### Output Specification
-
-```json
-{
-  "anomalies_detected": ["Short description of each anomaly detected"],
-  "error_count": {"ERROR": 0, "WARN": 0, "INFO": 0},
-  "possible_root_cause": "Root cause hypothesis",
-  "risk_indicators": ["Risk indicator 1", "Risk indicator 2"],
-  "recommendation": "Concrete action suggested based on logs"
-}
-```
-
-### 9 Anomaly Patterns Detected
+### 9 Anomaly Patterns Detected (deterministic)
 
 | Pattern | Description | Related policy |
 |---|---|---|
@@ -354,9 +334,9 @@ The `render()` function formats the logs as structured text lines before passing
 | `AUTH_DECLINED` multiple | Repeated failed authorization attempts | POL-FRD-001 |
 | `ERROR` sequence | Systemic processing failure | — |
 
-### Changelog
+### Design rationale
 
-- **v1.0** (2025-01): Initial release. 9 anomaly patterns. Structured log formatting before LLM call.
+Log events have structured fields (`severity`, `event`, `service`, `code`) that map directly to known anomaly types. Using pattern matching instead of an LLM call eliminates one API round-trip per investigation (~300ms + token cost) with zero accuracy loss.
 
 ---
 
@@ -372,7 +352,7 @@ Every prompt lives in a dedicated file with a version comment at line 1. This en
 
 ### Why Spanish-language prompts
 
-The dataset, policies, and log messages are in Spanish. Using Spanish prompts eliminates translation overhead and reduces the risk of semantic drift when the LLM translates concepts internally. The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`) is explicitly multilingual and handles Spanish natively.
+The dataset, policies, and log messages are in Spanish. Using Spanish prompts eliminates translation overhead and reduces the risk of semantic drift when the LLM translates concepts internally. The embedding model (`voyage-multilingual-2` via Voyage AI) is explicitly multilingual and handles Spanish natively.
 
 ### Temperature setting
 

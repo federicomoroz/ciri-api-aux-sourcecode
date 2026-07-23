@@ -11,10 +11,13 @@ Dataset quirks:
 - Policies "Politica" column: "POL-XXX-NNN — Description" (em-dash)
 """
 
+import logging
 import sqlite3
 from datetime import datetime, timezone
 
 import openpyxl
+
+logger = logging.getLogger(__name__)
 
 
 def _find_sheet(wb: openpyxl.Workbook, keyword: str) -> str:

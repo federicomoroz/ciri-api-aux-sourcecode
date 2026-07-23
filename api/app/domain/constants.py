@@ -34,6 +34,7 @@ __all__ = [
     # LLM
     "LLM_TRUNCATION_LENGTH",
     "LLM_DEFAULT_MAX_TOKENS",
+    "LLM_DEFAULT_MAX_RETRIES",
     "LLM_DEFAULT_TEMPERATURE",
     # Judge
     "JUDGE_APPROVAL_THRESHOLD",
@@ -41,6 +42,7 @@ __all__ = [
     "JUDGE_AUTO_INDEX_THRESHOLD",
     # RAG / Retrieval
     "FRAUD_SCORE_DEFAULT",
+    "FRAUD_SCORE_HIGH_RISK_THRESHOLD",
     # Pattern detection
     "MERCHANT_TIMEOUT_PATTERN_MIN_COUNT",
     # LLM context limits
@@ -49,6 +51,32 @@ __all__ = [
     "FEEDBACK_MOTIVO_MAX_CHARS",
     "FEEDBACK_AUTO_RESOLUTION_DAYS",
     "FEEDBACK_AUTO_ANALYST_TAG",
+    # n8n integration
+    "N8N_WEBHOOK_PATH",
+    "N8N_HEALTHZ_PATH",
+    "N8N_TIMEOUT_S",
+    "N8N_PING_TIMEOUT_S",
+    # Trace / observability names
+    "TRACE_RESOLVE",
+    "TRACE_JUDGE",
+    "TRACE_LLM_CALL",
+    "TRACE_FEEDBACK",
+    "TRACE_FEEDBACK_SCORE",
+    # Feedback response
+    "FEEDBACK_STATUS_RECORDED",
+    "FEEDBACK_CASE_ID_PREFIX",
+    # Fallback values
+    "FALLBACK_TX_ID",
+    # SLA types
+    "SLA_TYPE_VIP",
+    "SLA_TYPE_EXTENDED",
+    "SLA_TYPE_STANDARD",
+    # Health status
+    "HEALTH_OK",
+    "HEALTH_HEALTHY",
+    "HEALTH_DEGRADED",
+    # Conversion
+    "SECONDS_TO_MS",
 ]
 
 # ── SLA Limits ──────────────────────────────────────────────────────────────
@@ -82,6 +110,7 @@ EMBEDDING_DIM: int = 1024                    # voyage-multilingual-2 (Voyage AI 
 # ── LLM ─────────────────────────────────────────────────────────────────────
 LLM_TRUNCATION_LENGTH: int = 200    # chars to log to tracer (not to LLM)
 LLM_DEFAULT_MAX_TOKENS: int = 4096
+LLM_DEFAULT_MAX_RETRIES: int = 2
 LLM_DEFAULT_TEMPERATURE: float = 0.3
 
 # ── Judge ────────────────────────────────────────────────────────────────────
@@ -91,6 +120,7 @@ JUDGE_AUTO_INDEX_THRESHOLD: float = 8.0  # judge_score >= N → auto-index as pr
 
 # ── RAG / Retrieval ───────────────────────────────────────────────────────────
 FRAUD_SCORE_DEFAULT: int = 50  # default fraud score when not provided
+FRAUD_SCORE_HIGH_RISK_THRESHOLD: int = 30  # score < N → high risk query enrichment
 
 # ── Pattern detection ─────────────────────────────────────────────────────────
 MERCHANT_TIMEOUT_PATTERN_MIN_COUNT: int = 2  # MERCHANT_NO_RESPONSE events >= N → pattern
@@ -102,3 +132,36 @@ LLM_MAX_CRITICAL_LOGS: int = 5  # max ERROR/WARN logs forwarded to LLM in summar
 FEEDBACK_MOTIVO_MAX_CHARS: int = 200     # max chars for motivo in auto-indexed cases
 FEEDBACK_AUTO_RESOLUTION_DAYS: int = 1  # default resolution_days for auto-indexed cases
 FEEDBACK_AUTO_ANALYST_TAG: str = "auto-index"  # analyst field for auto-indexed cases
+
+# ── n8n Integration ──────────────────────────────────────────────────────────
+N8N_WEBHOOK_PATH: str = "/webhook/chargeback-agent"
+N8N_HEALTHZ_PATH: str = "/healthz"
+N8N_TIMEOUT_S: float = 120.0
+N8N_PING_TIMEOUT_S: float = 3.0
+
+# ── Trace / Observability Names ──────────────────────────────────────────────
+TRACE_RESOLVE: str = "resolve_chargeback"
+TRACE_JUDGE: str = "judge_resolution"
+TRACE_LLM_CALL: str = "llm_call"
+TRACE_FEEDBACK: str = "analyst_feedback"
+TRACE_FEEDBACK_SCORE: str = "analyst_feedback_judge_score"
+
+# ── Feedback Response ────────────────────────────────────────────────────────
+FEEDBACK_STATUS_RECORDED: str = "recorded"
+FEEDBACK_CASE_ID_PREFIX: str = "FB"
+
+# ── Fallback Values ──────────────────────────────────────────────────────────
+FALLBACK_TX_ID: str = "unknown"
+
+# ── SLA Types ────────────────────────────────────────────────────────────────
+SLA_TYPE_VIP: str = "vip"
+SLA_TYPE_EXTENDED: str = "extended"
+SLA_TYPE_STANDARD: str = "standard"
+
+# ── Health Status ────────────────────────────────────────────────────────────
+HEALTH_OK: str = "ok"
+HEALTH_HEALTHY: str = "healthy"
+HEALTH_DEGRADED: str = "degraded"
+
+# ── Conversion ───────────────────────────────────────────────────────────────
+SECONDS_TO_MS: int = 1000

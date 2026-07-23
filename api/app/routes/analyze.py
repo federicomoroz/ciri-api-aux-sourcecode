@@ -7,17 +7,17 @@ Thin HTTP handlers — all orchestration logic lives in ResolutionService.
 from fastapi import APIRouter, Depends
 
 from ..dependencies import get_resolution_service
-from ..domain.models import JudgeRequest, ResolveRequest
+from ..domain.models import JudgeRequest, JudgeResponse, ResolveRequest, ResolveResponse
 from ..services.resolution import ResolutionService
 
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
 
 
-@router.post("/resolve")
+@router.post("/resolve", status_code=200)
 def resolve(
     req: ResolveRequest,
     service: ResolutionService = Depends(get_resolution_service),
-) -> dict:
+) -> ResolveResponse:
     """Full resolution pipeline: policy eval → log summary → resolution synthesis → guardrails."""
     return service.resolve(
         tx_data=req.tx_data,
@@ -31,11 +31,11 @@ def resolve(
     )
 
 
-@router.post("/judge")
+@router.post("/judge", status_code=200)
 def judge(
     req: JudgeRequest,
     service: ResolutionService = Depends(get_resolution_service),
-) -> dict:
+) -> JudgeResponse:
     """LLM-as-Judge: evaluate resolution quality across 5 criteria."""
     return service.judge(
         resolution=req.resolution,

@@ -44,7 +44,7 @@ curl -s "http://localhost:8000/api/cases/similar?merchant=CryptoVault+SA&amount_
   | jq '.results[] | {case_id, resolution, fraud_score}'
 
 # Step 4: Full resolution via n8n webhook (primary path)
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00051"}' | jq .
 
@@ -158,7 +158,7 @@ curl -s http://localhost:8000/api/transactions/TXN-00042/client-history | jq .
 curl -s http://localhost:8000/api/merchants/TechStore+AR/risk | jq .
 
 # Step 4: Trigger investigation via n8n
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00042"}' | jq .
 
@@ -302,7 +302,7 @@ curl -s "http://localhost:8000/api/policies/search?payment_method=Debito+Visa&fr
   | jq '{query: .query_used, retrieved_policies: [.results[] | .code]}'
 
 # Step 4: Run full investigation via n8n
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00089"}' | jq .
 
@@ -435,19 +435,19 @@ echo "Report saved to /tmp/report_TXN-00089.html"
 # Quick demo runner
 
 echo "=== Scenario 1: TXN-00051 (Cripto BLOCKER) ==="
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00051"}' | jq '{action: .recommended_action, risk: .risk_level}'
 
 echo ""
 echo "=== Scenario 2: TXN-00042 (Credito Visa HITL) ==="
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00042"}' | jq '{action: .recommended_action, hitl: .requires_hitl}'
 
 echo ""
 echo "=== Scenario 3: TXN-00089 (Debito Visa USA WARNING) ==="
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00089"}' | jq '{
     action: .recommended_action,

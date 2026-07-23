@@ -11,17 +11,6 @@ class PaymentMethod(StrEnum):
     VIRTUAL_ACCOUNT = "Cuenta Virtual"
 
 
-class Country(StrEnum):
-    ARG = "ARG"
-    BRA = "BRA"
-    CHL = "CHL"
-    COL = "COL"
-    MEX = "MEX"
-    PER = "PER"
-    URY = "URY"
-    USA = "USA"
-
-
 LATAM_COUNTRIES: set[str] = {"ARG", "BRA", "CHL", "COL", "MEX", "PER", "URY"}
 
 
@@ -33,16 +22,6 @@ class Channel(StrEnum):
     WEB = "Web"
 
 
-class Device(StrEnum):
-    CHROME_WIN = "Chrome/Win"
-    DESKTOP_LINUX = "Desktop/Linux"
-    FIREFOX_MAC = "Firefox/Mac"
-    HUAWEI_P50 = "Huawei P50"
-    SAMSUNG_S23 = "Samsung S23"
-    IPAD = "iPad"
-    IPHONE_14 = "iPhone 14"
-
-
 class TransactionStatus(StrEnum):
     APROBADA = "Aprobada"
     CONTRACARGO_INICIADO = "Contracargo iniciado"
@@ -50,34 +29,6 @@ class TransactionStatus(StrEnum):
     PENDIENTE_REVISION = "Pendiente revision"
     RECHAZADA = "Rechazada"
     RESUELTA = "Resuelta"
-
-
-class CaseMotivo(StrEnum):
-    CANCELACION_NO_PROCESADA = "Cancelacion no procesada"
-    CARGO_DUPLICADO = "Cargo duplicado"
-    CARGO_POST_CANCELACION = "Cargo post-cancelacion"
-    DEFECTO_PRODUCTO = "Defecto de producto"
-    FRAUDE_TARJETA_ROBADA = "Fraude con tarjeta robada"
-    MONTO_INCORRECTO = "Monto incorrecto"
-    NO_RECONOCE = "No reconoce la compra"
-    PRODUCTO_NO_RECIBIDO = "Producto no recibido"
-    SERVICIO_NO_PRESTADO = "Servicio no prestado"
-    SUSCRIPCION_NO_AUTORIZADA = "Suscripcion no autorizada"
-
-
-class CaseResolution(StrEnum):
-    FAVOR_CLIENTE = "A favor del cliente"
-    FAVOR_COMERCIO = "A favor del comercio"
-    CERRADO_SIN_RESOLUCION = "Caso cerrado sin resolucion"
-    EN_ESCALACION = "En escalacion"
-    REEMBOLSO_PARCIAL = "Reembolso parcial"
-
-
-class PolicyCategory(StrEnum):
-    FRAUDE = "FRAUDE"
-    CHARGEBACK = "CHARGEBACK"
-    SLA = "SLA"
-    EXCEPCION = "EXCEPCIÓN"
 
 
 class Severity(StrEnum):
@@ -106,6 +57,27 @@ class ResolutionOutcome(StrEnum):
     REJECT = "REJECT"
     ESCALATE = "ESCALATE"
     PENDING_HITL = "PENDING_HITL"
+
+
+class MerchantFlag(StrEnum):
+    SUSPENDED_MERCHANT = "suspended_merchant"
+    HIGH_CB_RATIO = "high_cb_ratio"
+
+
+class ClientFlag(StrEnum):
+    RECIDIVIST = "recidivist"
+    GEO_ANOMALY = "geo_anomaly"
+
+
+class ErrorPattern(StrEnum):
+    SYSTEMATIC_MERCHANT_TIMEOUT = "systematic_merchant_timeout"
+    CONNECTIVITY_ISSUE = "connectivity_issue"
+    BLOCKED_FOR_FRAUD = "blocked_for_fraud"
+    DUPLICATE_CHARGE = "duplicate_charge"
+    SLA_VIOLATION = "sla_violation"
+    INTEGRATION_FAILURE = "integration_failure"
+    SESSION_INTERRUPTED_PAYMENT = "session_interrupted_payment"
+    GEOGRAPHIC_ANOMALY = "geographic_anomaly"
 
 
 class LogEventType(StrEnum):

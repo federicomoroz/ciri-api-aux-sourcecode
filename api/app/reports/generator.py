@@ -1,7 +1,14 @@
+"""
+HTML report generator using Jinja2 templates.
+"""
+
+import logging
 import os
 from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader
+
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:

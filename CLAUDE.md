@@ -112,6 +112,8 @@ Each "Generar Reporte" node is identical — same endpoint, same payload shape (
 | `POST /api/analyze/judge` | LLM-as-Judge (score 1-10) |
 | `POST /api/feedback` | Auto-improvement loop |
 | `POST /api/reports/html` | Jinja2 → HTML report |
+| `GET /api/cache/lookup` | Idempotency cache (SQLite exact-match) |
+| `GET /panel` | Interactive test panel (n8n or fallback) |
 | `GET /health` | Service health check |
 
 ### Qdrant collections
@@ -124,7 +126,7 @@ Each "Generar Reporte" node is identical — same endpoint, same payload shape (
 
 **What is NOT indexed in Qdrant**: Transactions (exact ID lookup only) and Logs (retrieved complete by transaction_id — no useful similarity).
 
-Embeddings: `paraphrase-multilingual-MiniLM-L12-v2` (384 dims, local, Spanish, no API cost).
+Embeddings: `voyage-multilingual-2` (1024 dims, Voyage AI API, multilingual).
 
 ### Dataset quirks
 
@@ -168,7 +170,7 @@ quest_ML/
 ├── docker-compose.yml
 ├── .env.example
 ├── n8n/
-│   └── chargeback_agent_flow.json    # DELIVERABLE: ~18 nodes
+│   └── workflow_ciri_agent.json      # DELIVERABLE: 22 nodes, explicit orchestrator
 ├── scripts/
 │   └── seed_data.py                  # Excel → SQLite + Qdrant
 ├── api/
@@ -177,24 +179,30 @@ quest_ML/
 │   └── app/
 │       ├── main.py                   # FastAPI app + startup indexing
 │       ├── config.py                 # pydantic-settings (CB_ prefix)
-│       ├── dependencies.py           # DI: qdrant_client, db_conn, llm_client
+│       ├── dependencies.py           # DI via FastAPI lifespan, all services in app.state
 │       ├── domain/
-│       │   ├── models.py             # ALL Pydantic models (Transaction, Policy, Resolution, etc.)
-│       │   └── enums.py              # StrEnums: Channel, Country, RiskLevel, VerdictType...
+│       │   ├── constants.py          # All business thresholds (SLA, RAG, LLM, guardrails)
+│       │   ├── models.py             # Pydantic request models (ResolveRequest, ReportRequest, etc.)
+│       │   └── enums.py              # StrEnums: Severity, RiskLevel, VerdictType, LogEventType...
 │       ├── data/
 │       │   ├── loader.py             # Excel → SQLite (handles row 1 skip + emoji sheets)
 │       │   └── db.py                 # get_transaction, get_logs, get_client_history
+│       ├── services/
+│       │   ├── resolution.py         # ResolutionService: resolve + judge + guardrails
+│       │   └── feedback.py           # FeedbackService: feedback + auto-indexing
 │       ├── rag/
 │       │   ├── indexer.py            # Policies + cases → Qdrant on startup
-│       │   ├── retriever.py          # Query builder + Qdrant search + formatter
+│       │   ├── retriever.py          # Query builder + Qdrant search
+│       │   ├── formatter.py          # format_policies/cases_for_prompt
+│       │   ├── embedder.py           # Voyage AI embedding wrapper
 │       │   └── updater.py            # Re-index on policy edit or case resolution
 │       ├── llm/
 │       │   ├── client.py             # Protocol LLMClient + AnthropicClient impl
+│       │   ├── parsing.py            # parse_json_safely (LLM output extraction)
 │       │   └── prompts/
 │       │       ├── v1_policy_eval.py   # Versioned prompt: policy compliance
 │       │       ├── v1_resolution.py    # Versioned prompt: synthesis → Resolution JSON
-│       │       ├── v1_judge.py         # Versioned prompt: LLM-as-Judge (5 criteria)
-│       │       └── v1_log_analysis.py  # Versioned prompt: anomaly detection in logs
+│       │       └── v1_judge.py         # Versioned prompt: LLM-as-Judge (5 criteria)
 │       ├── analysis/
 │       │   └── analyzer.py           # merchant_risk, client_flags, detect_error_patterns, check_sla
 │       ├── reports/
@@ -209,7 +217,9 @@ quest_ML/
 │   ├── unit/
 │   │   ├── test_data_loader.py
 │   │   ├── test_rag_retriever.py
-│   │   └── test_analysis.py
+│   │   ├── test_analysis.py
+│   │   ├── test_parsing.py
+│   │   └── test_guardrails.py
 │   └── integration/
 │       ├── test_full_flow.py
 │       └── test_policies_crud.py

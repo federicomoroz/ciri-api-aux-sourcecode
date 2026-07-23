@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import get_retriever
+from ..domain.constants import SIMILAR_CASES_TOP_K
+from ..rag.formatter import format_cases_for_prompt
 from ..rag.retriever import QdrantRetriever
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
@@ -14,7 +16,7 @@ def find_similar_cases(
     country: str = Query(...),
     fraud_score: int = Query(...),
     motivo: str | None = None,
-    top_k: int = 5,
+    top_k: int = SIMILAR_CASES_TOP_K,
     retriever: QdrantRetriever = Depends(get_retriever),
 ) -> dict:
     """Semantic search over 'historical_cases' collection.
@@ -28,7 +30,7 @@ def find_similar_cases(
         motivo=motivo,
         top_k=top_k,
     )
-    formatted = retriever.format_cases_for_prompt(results)
+    formatted = format_cases_for_prompt(results)
     return {
         "query_used": results[0].get("_query", "") if results else "",
         "results": results,

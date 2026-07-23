@@ -7,7 +7,7 @@ from ..domain.models import SLACheckRequest
 router = APIRouter(prefix="/api/sla", tags=["sla"])
 
 
-@router.post("/check")
+@router.post("/check", status_code=200)
 def check_sla(req: SLACheckRequest, analyzer: Analyzer = Depends(get_analyzer)) -> dict:
     """Check SLA compliance for a case.
     Used by n8n AI Agent as 'check_sla' tool."""

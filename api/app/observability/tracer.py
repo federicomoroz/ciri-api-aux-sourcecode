@@ -11,6 +11,8 @@ NoOpTracer: used in tests and when langfuse_enabled=False.
 import logging
 from typing import Protocol, runtime_checkable
 
+from ..domain.constants import SECONDS_TO_MS
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +54,7 @@ class LangfuseTracer:
             )
             self._enabled = True
         except ImportError:
+            logger.warning("langfuse package not installed; observability disabled")
             self._enabled = False
 
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
@@ -84,7 +87,7 @@ class LangfuseTracer:
                 input=input,
                 output=output,
                 usage={"input": tokens_in, "output": tokens_out},
-                latency=latency_ms / 1000,
+                latency=latency_ms / SECONDS_TO_MS,
                 trace_id=trace_id,
             )
         except Exception as e:
@@ -105,7 +108,17 @@ class NoOpTracer:
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
         return ""
 
-    def generation(self, *args, **kwargs) -> None:
+    def generation(
+        self,
+        name: str,
+        model: str,
+        input: str,
+        output: str,
+        tokens_in: int,
+        tokens_out: int,
+        latency_ms: float,
+        trace_id: str | None = None,
+    ) -> None:
         pass
 
     def score(self, trace_id: str, name: str, value: float) -> None:

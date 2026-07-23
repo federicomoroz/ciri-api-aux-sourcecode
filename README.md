@@ -8,17 +8,16 @@ Intelligent chargeback resolution agent built for the CIRI (Continuous Improveme
 
 ```
                         ┌─────────────────────────────────────┐
-                        │          n8n AI Agent (~19 nodes)    │
-                        │    Orchestrator: WHAT and WHEN       │
-                        │  (HTTP Tool Calls  →  FastAPI tools) │
+                        │   n8n Explicit Orchestrator (~28     │
+                        │   nodes) — WHAT and WHEN             │
+                        │   HTTP Request + Set + Switch + Wait │
                         └──────────────┬──────────────────────┘
                                        │ REST
                         ┌──────────────▼──────────────────────┐
                         │         FastAPI  (port 8000)         │
                         │     Business Logic: HOW              │
-                        │  /api/transactions  /api/policies    │
-                        │  /api/analyze/resolve  /api/judge    │
-                        │  /api/feedback  /api/reports         │
+                        │  services/ → analysis/ → rag/ → llm/│
+                        │  Thin routes (~20 lines each)        │
                         └──────┬──────────────┬───────────────┘
                                │              │
               ┌────────────────▼──┐    ┌──────▼──────────────┐
@@ -36,7 +35,7 @@ Intelligent chargeback resolution agent built for the CIRI (Continuous Improveme
               └───────────────────────────────────────────────┘
 ```
 
-**Key principle:** n8n is a thin orchestration shell (WHAT/WHEN). All domain logic, guardrails, and RAG live in FastAPI (HOW). No business logic in n8n IF nodes.
+**Key principle:** n8n is the explicit orchestrator — every step is a named, visible node. No AI Agent black box. All domain logic, guardrails, and RAG live in FastAPI services. n8n nodes never contain business logic.
 
 ---
 
@@ -47,6 +46,7 @@ Intelligent chargeback resolution agent built for the CIRI (Continuous Improveme
 | Docker + Docker Compose | >= 24.x | Runs Qdrant, FastAPI, n8n |
 | Python | 3.11+ | Only needed outside Docker |
 | Anthropic API Key | — | Claude Haiku (default model) |
+| Voyage AI API Key | — | Free tier at https://dash.voyageai.com/ |
 | Langfuse account | — | Optional; for observability |
 
 ---
@@ -59,7 +59,7 @@ Intelligent chargeback resolution agent built for the CIRI (Continuous Improveme
 git clone <repo-url>
 cd quest_ML
 cp .env.example .env
-# Edit .env — set CB_ANTHROPIC_API_KEY at minimum
+# Edit .env — set CB_ANTHROPIC_API_KEY and CB_VOYAGE_API_KEY at minimum
 ```
 
 ### 2. Start all services
@@ -85,21 +85,25 @@ This loads 100 transactions, 60 historical cases, 17 policies, and 150 logs into
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"ok","qdrant":"ok","sqlite":"ok","embedding_model":"paraphrase-multilingual-MiniLM-L12-v2"}
+# {"status":"healthy","sqlite":"ok","qdrant":"ok","collections":{"policies":17,"historical_cases":60,"_semantic_cache":0}}
 ```
 
-### 5. Run a demo analysis
+### 5. Import n8n workflow
+
+Navigate to http://localhost:5678, import `n8n/workflow_ciri_agent.json`, and activate the workflow.
+
+### 6. Run a demo analysis
 
 ```bash
-# Resolve chargeback for transaction TXN-00051 (Cripto — expect REJECT)
-curl -s -X POST http://localhost:5678/webhook/chargeback \
+# Via n8n webhook (explicit orchestration — 22+ nodes)
+curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
-  -d '{"transaction_id": "TXN-00051"}' | jq .
+  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' \
+  -o report_blocker.html
+
+# Or via direct FastAPI panel (works without n8n)
+# http://localhost:8000/panel
 ```
-
-### 6. Open n8n
-
-Navigate to http://localhost:5678, import `n8n/chargeback_agent_flow.json`, and activate the workflow.
 
 ---
 
@@ -119,8 +123,8 @@ All endpoints are prefixed with `/api/`. Full interactive docs: http://localhost
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/transactions/{id}` | Get transaction by ID |
-| `GET` | `/api/transactions/{id}/logs` | Get all event logs for a transaction |
-| `GET` | `/api/transactions/{id}/client-history` | Chargeback history for the client |
+| `GET` | `/api/logs/{tx_id}` | Get all event logs for a transaction |
+| `GET` | `/api/clients/{id}/history` | Chargeback history for the client |
 
 ### Policies (CRUD + semantic search)
 
@@ -139,20 +143,15 @@ All endpoints are prefixed with `/api/`. Full interactive docs: http://localhost
 |---|---|---|
 | `GET` | `/api/cases/similar` | Semantic search for similar historical cases |
 | `GET` | `/api/merchants/{name}/risk` | Merchant risk profile |
-| `GET` | `/api/sla/{id}` | SLA status for a transaction |
+| `POST` | `/api/sla/check` | SLA compliance check |
 
-### Feedback and reports
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/feedback/` | Submit analyst feedback; triggers auto-indexing if judge_score >= 8.0 |
-| `GET` | `/api/reports/{id}` | HTML resolution report (Jinja2) |
-
-### Logs
+### Feedback, reports, and cache
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/logs/analyze` | LLM semantic analysis of event logs |
+| `POST` | `/api/feedback` | Submit analyst feedback; auto-indexes if judge_score >= 8.0 |
+| `POST` | `/api/reports/html` | Generate HTML resolution report (Jinja2) |
+| `GET` | `/api/cache/lookup` | Idempotency cache check (SQLite exact-match) |
 
 ---
 
@@ -163,6 +162,7 @@ All settings are read from `.env` with the `CB_` prefix (powered by pydantic-set
 ```env
 # Required
 CB_ANTHROPIC_API_KEY=sk-ant-...
+CB_VOYAGE_API_KEY=pa-...
 
 # LLM (optional — defaults shown)
 CB_LLM_MODEL=claude-haiku-4-5-20251001
@@ -176,8 +176,8 @@ CB_QDRANT_CASES_COLLECTION=historical_cases
 CB_QDRANT_CACHE_COLLECTION=_semantic_cache
 
 # Embeddings (optional)
-CB_EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
-CB_EMBEDDING_DIM=384
+CB_EMBEDDING_MODEL=voyage-multilingual-2
+CB_EMBEDDING_DIM=1024
 
 # SQLite (optional)
 CB_SQLITE_PATH=data/chargeback.db
@@ -202,42 +202,42 @@ CB_LANGFUSE_HOST=https://cloud.langfuse.com
 ## Testing
 
 ```bash
-# All tests
-docker-compose exec api pytest tests/ -v
+# All tests (from project root, outside Docker)
+python -m pytest tests/ -v --tb=short
 
 # Unit tests only (no external services)
-docker-compose exec api pytest tests/unit/ -v
+python -m pytest tests/unit/ -v
 
-# Integration tests (requires running Qdrant + SQLite)
-docker-compose exec api pytest tests/integration/ -v
+# Integration tests
+python -m pytest tests/integration/ -v
 
 # Single test file
-docker-compose exec api pytest tests/unit/test_query_builder.py -v
+python -m pytest tests/unit/test_analysis.py -v
 
 # With coverage
-docker-compose exec api pytest tests/ --cov=app --cov-report=term-missing
+python -m pytest tests/ --cov=api.app --cov-report=term-missing
 ```
 
 Test structure:
 ```
 tests/
-  conftest.py          # shared fixtures, in-memory SQLite, mock Qdrant
+  conftest.py                        # MockLLMClient, sample data, in-memory SQLite
   unit/
-    test_query_builder.py    # deterministic query enrichment
-    test_guardrails.py       # APPROVE+BLOCKER correction, compensation cap
-    test_policy_eval.py      # policy verdict parsing
+    test_data_loader.py              # Excel → SQLite data loading
+    test_rag_retriever.py            # QueryBuilder enrichment rules
+    test_analysis.py                 # SLA, error patterns, merchant risk, client flags
   integration/
-    test_resolve_pipeline.py # full resolve → judge → feedback cycle
-    test_rag_update.py       # policy CRUD triggers Qdrant re-index
+    test_full_flow.py                # Full resolve → judge → feedback → report cycle
+    test_policies_crud.py            # Policy CRUD + Qdrant re-indexing
 ```
 
 ---
 
 ## Design Decisions
 
-### 1. n8n as thin orchestrator, FastAPI as logic layer
+### 1. n8n as explicit orchestrator (not AI Agent)
 
-n8n handles scheduling, webhook entry points, and tool-call sequencing. It does not contain any chargeback domain logic. Every business decision (policy evaluation, guardrails, risk assessment) lives in FastAPI endpoints. This makes the logic independently testable and deployable without touching n8n.
+n8n handles sequencing via named nodes — HTTP Request, Set, Switch, Merge, Wait. Every investigation executes the same ~28 steps in the same order: context assembly (7 parallel calls), AI resolution, Judge evaluation, risk-based routing. There is no AI Agent node, no LLM-based tool calling, no black box.
 
 ### 2. Policies are data, not code
 
@@ -247,6 +247,10 @@ The 17 policies are stored as Markdown documents in Qdrant and as rows in SQLite
 
 The query sent to Qdrant is built by rule-based logic, not by an LLM. A Cripto payment always appends "criptomonedas no reversible blocker"; a fraud_score below 30 appends "alto riesgo"; a non-LATAM country appends "plazo extendido". This makes retrieval reproducible, free (no token cost), and debuggable.
 
+### 4. Service layer architecture
+
+Routes are thin HTTP handlers (~20 lines). All orchestration lives in `services/` (`ResolutionService`, `FeedbackService`). Business logic (SLA, risk flags, patterns) is in `analysis/analyzer.py`. Data access is in `data/db.py`. Domain definitions (models, enums, constants) have zero external dependencies.
+
 ---
 
 ## Project Structure
@@ -255,34 +259,78 @@ The query sent to Qdrant is built by rule-based logic, not by an LLM. A Cripto p
 quest_ML/
   api/
     app/
-      config.py          # pydantic-settings (CB_ prefix)
-      main.py            # FastAPI app, CORS, router registration
-      dependencies.py    # lifespan, DI providers
+      config.py             # pydantic-settings (CB_ prefix)
+      main.py               # FastAPI app, CORS, router registration
+      dependencies.py       # lifespan DI, all services initialized once
       domain/
-        models.py        # Pydantic request/response models
-        enums.py         # PaymentMethod, VerdictType, etc.
+        models.py           # Pydantic models with Field validators
+        enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
+        constants.py        # 27+ centralized thresholds and limits
+      services/
+        resolution.py       # ResolutionService: resolve + judge + guardrails
+        feedback.py         # FeedbackService: feedback + auto-indexing
       rag/
-        indexer.py       # QdrantIndexer (batch + single point)
-        retriever.py     # QdrantRetriever + QueryBuilder
-        updater.py       # RAGUpdater (hooks for CRUD + feedback)
+        indexer.py          # QdrantIndexer (batch + single point, uuid5 IDs)
+        retriever.py        # QdrantRetriever + QueryBuilder (deterministic)
+        updater.py          # RAGUpdater (hooks for CRUD + feedback)
+        formatter.py        # Shared formatters for LLM context
+        embedder.py         # Voyage AI embedder (lazy, thread-safe)
       llm/
-        client.py        # AnthropicClient wrapper
+        client.py           # Protocol LLMClient + AnthropicClient
+        parsing.py          # parse_json_safely (LLM response parsing)
         prompts/
           v1_policy_eval.py
           v1_resolution.py
           v1_judge.py
           v1_log_analysis.py
-      routes/            # One file per domain (analyze, policies, etc.)
-      reports/           # Jinja2 HTML report templates
-      analysis/          # Log analysis helpers
-      observability/     # Langfuse tracer wrapper
+      analysis/
+        analyzer.py         # SLA, error patterns, merchant risk, client flags
+      routes/               # Thin handlers (~20 lines each)
+      reports/
+        generator.py        # Jinja2 → HTML
+        templates/
+          case_report.html  # 9 sections + conditional HITL form
+          test_panel.html   # Interactive test panel
+      observability/
+        tracer.py           # LangfuseTracer + NoOpTracer (Protocol)
       data/
-        db.py            # SQLite access layer
-      seed_data.py       # Initial data loader
+        db.py               # SQLite access (pure data, no business logic)
+        loader.py           # Excel → SQLite (handles row 1 skip + emoji sheets)
   n8n/
-    chargeback_agent_flow.json   # n8n workflow export
+    workflow_ciri_agent.json  # Explicit orchestration workflow (~28 nodes)
+  scripts/
+    seed_data.py              # Excel → SQLite + Qdrant seeding
   tests/
   docs/
+    architecture.md
+    prompts.md
+    rag_explanation.md
+    mejora_continua.md
+    demo_scenarios.md
   docker-compose.yml
   .env.example
 ```
+
+---
+
+## Demo Scenarios
+
+See [`docs/demo_scenarios.md`](docs/demo_scenarios.md) for 3 end-to-end scenarios:
+
+| TXN | Scenario | Expected |
+|---|---|---|
+| TXN-00051 | Cripto + fraud_score=8 | BLOCKER → auto-REJECT |
+| TXN-00042 | Credit Visa + score=4 + VIP | HIGH → HITL (analyst review) |
+| TXN-00089 | Debit Visa + USA | WARNING (extended SLA) |
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System architecture, n8n flow, ADRs |
+| [`docs/prompts.md`](docs/prompts.md) | All 4 versioned prompts with I/O specs |
+| [`docs/rag_explanation.md`](docs/rag_explanation.md) | RAG strategy, collections, QueryBuilder |
+| [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge gate, guardrails |
+| [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | 3 demo scenarios with curl commands |

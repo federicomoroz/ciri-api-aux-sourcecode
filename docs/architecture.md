@@ -18,7 +18,7 @@
 
 **Explicit Workflow Orchestration with LLM-augmented tools** — sometimes called an *Agentic Pipeline*.
 
-This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — 22 named nodes, always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
+This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — ~28 named nodes, always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
 
 | | AI Agent clásico | Este sistema |
 |---|---|---|
@@ -131,11 +131,11 @@ flowchart TD
         RAG_LAYER[RAG\nQdrantRetriever · QueryBuilder · RAGUpdater]
         DOMAIN[Domain\nenums · constants · models · parsing]
         LLM_CLIENT[LLM Client\nAnthropicClient · Protocol]
-        PROMPTS[Prompts\nv1_resolution · v1_log_analysis]
+        PROMPTS[Prompts\nv1_policy_eval · v1_resolution · v1_judge]
     end
 
     subgraph VECTOR ["Qdrant Cloud"]
-        Q_POL[(policies\n17 docs · 384 dims)]
+        Q_POL[(policies\n17 docs · 1024 dims)]
         Q_CASES[(historical_cases\n60+ docs · grows automatically)]
         Q_CACHE[(_semantic_cache\nthreshold 0.92)]
     end

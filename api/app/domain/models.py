@@ -1,97 +1,18 @@
-from datetime import datetime, timezone
-from pydantic import BaseModel, Field
+"""
+Pydantic models for API request/response validation.
 
-from .enums import RiskLevel, ResolutionOutcome, Severity, VerdictType
+Only models actively used by routes are defined here.
+Data structures for LLM I/O (Resolution, PolicyVerdict, etc.) are documented
+in docs/prompts.md and flow as plain dicts through the pipeline.
+"""
 
+from pydantic import BaseModel, ConfigDict, Field
 
-class Transaction(BaseModel):
-    id: str
-    client_id: str
-    merchant: str
-    amount_usd: float
-    date: str
-    payment_method: str
-    country: str
-    channel: str
-    device: str
-    fraud_score: int
-    status: str
-    notes: str | None = None
-
-
-class HistoricalCase(BaseModel):
-    case_id: str
-    transaction_id: str
-    motivo: str
-    resolution: str
-    resolution_days: int
-    analyst: str
-    observations: str | None = None
-    open_date: str
-    close_date: str
-
-
-class Policy(BaseModel):
-    code: str
-    name: str
-    category: str
-    description: str
-    reference: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class LogEvent(BaseModel):
-    timestamp: str
-    transaction_id: str
-    event: str
-    service: str
-    code: str
-    detail: str
-    severity: Severity
-
-
-class PolicyVerdict(BaseModel):
-    policy_code: str
-    verdict: VerdictType
-    reasoning: str
-    requires_human_review: bool = False
-
-
-class Resolution(BaseModel):
-    transaction_id: str
-    recommended_action: ResolutionOutcome
-    confidence: float
-    justification: str
-    policy_verdicts: list[PolicyVerdict]
-    precedent_summary: str
-    log_summary: str
-    risk_level: RiskLevel
-    compensation_applicable: bool = False
-    compensation_amount_usd: float = 0.0
-    next_steps: list[str] = []
-    requires_hitl: bool = False
-    hitl_reason: str | None = None
-
-
-class JudgeEvaluation(BaseModel):
-    overall_score: float
-    criteria: dict[str, float]
-    approved: bool
-    strengths: list[str]
-    weaknesses: list[str]
-
-
-class AnalyzeRequest(BaseModel):
-    transaction_id: str
-    motivo: str | None = None
-    fecha_reclamo: str | None = None
-    cliente_vip: bool = False
-    docs_completa: bool = False
+from .enums import ResolutionOutcome, RiskLevel, VerdictType
 
 
 class ResolveRequest(BaseModel):
-    transaction_id: str
+    transaction_id: str = Field(min_length=1)
     agent_analysis: str
     tx_data: dict
     policies: list[dict]
@@ -109,11 +30,11 @@ class JudgeRequest(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
-    transaction_id: str
-    analyst_decision: str
+    transaction_id: str = Field(min_length=1)
+    analyst_decision: str = Field(min_length=1)
     analyst_notes: str
-    final_outcome: str
-    judge_score: float
+    final_outcome: str = Field(min_length=1)
+    judge_score: float = Field(ge=0.0, le=10.0)
     resolution: dict | None = None
 
 
@@ -123,42 +44,12 @@ class SLACheckRequest(BaseModel):
     cliente_vip: bool = False
 
 
-class SLACheckResponse(BaseModel):
-    within_sla: bool
-    days_elapsed: int
-    sla_limit_days: int
-    sla_type: str
-    policy_reference: str
-    compensation_applicable: bool = False
-
-
-class MerchantRiskProfile(BaseModel):
-    merchant: str
-    total_transactions: int
-    total_chargebacks: int
-    cb_ratio: float
-    total_volume_usd: float
-    avg_transaction_usd: float
-    flags: list[str]
-    is_strategic: bool
-
-
-class ClientProfile(BaseModel):
-    client_id: str
-    total_transactions: int
-    total_chargebacks: int
-    rejected_transactions: int
-    countries_used: list[str]
-    payment_methods_used: list[str]
-    flags: list[str]
-
-
 class PolicyCreate(BaseModel):
-    code: str
-    name: str
-    category: str
-    description: str
-    reference: str
+    code: str = Field(min_length=1, pattern=r"^POL-[A-Z]{2,4}-\d{3}$")
+    name: str = Field(min_length=1)
+    category: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    reference: str = Field(min_length=1)
 
 
 class PolicyUpdate(BaseModel):
@@ -166,7 +57,6 @@ class PolicyUpdate(BaseModel):
     category: str | None = None
     description: str | None = None
     reference: str | None = None
-
 
 
 class ReportRequest(BaseModel):
@@ -184,3 +74,107 @@ class ReportRequest(BaseModel):
     guardrail_warnings: list[str] = []
     motivo: str | None = None
     cliente_vip: bool = False
+
+
+class AnalyzeRequest(BaseModel):
+    """Used by the test panel for direct pipeline analysis."""
+    transaction_id: str = Field(min_length=1)
+    motivo: str = Field(min_length=1)
+    cliente_vip: bool = False
+
+
+# ---- LLM Output Validation Models ----
+# These validate the structure of JSON returned by LLM calls.
+# extra="ignore" tolerates unexpected fields from the LLM.
+# All fields have defaults so partial responses don't crash.
+
+
+class PolicyVerdictOutput(BaseModel):
+    """Validated LLM output from v1_policy_eval."""
+    model_config = ConfigDict(extra="ignore")
+
+    policy_code: str
+    verdict: VerdictType
+    reasoning: str = ""
+    requires_human_review: bool = False
+
+
+class ResolutionOutput(BaseModel):
+    """Validated LLM output from v1_resolution."""
+    model_config = ConfigDict(extra="ignore")
+
+    transaction_id: str = ""
+    recommended_action: ResolutionOutcome
+    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+    justification: str = ""
+    policy_verdicts: list[dict] = []
+    precedent_summary: str = ""
+    log_summary: str = ""
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+    compensation_applicable: bool = False
+    compensation_amount_usd: float = Field(ge=0.0, default=0.0)
+    next_steps: list[str] = []
+    requires_hitl: bool = False
+    hitl_reason: str | None = None
+
+
+class JudgeEvaluationOutput(BaseModel):
+    """Validated LLM output from v1_judge."""
+    model_config = ConfigDict(extra="ignore")
+
+    overall_score: float = Field(ge=0.0, le=10.0, default=0.0)
+    criteria: dict[str, float] = {}
+    approved: bool = False
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+
+
+# ---- API Response Models ----
+# Typed responses for OpenAPI documentation and contract validation.
+
+
+class ResolveResponse(BaseModel):
+    """Response from POST /api/analyze/resolve."""
+    model_config = ConfigDict(extra="allow")
+
+    transaction_id: str = ""
+    recommended_action: str
+    confidence: float
+    justification: str = ""
+    risk_level: str
+    policy_verdicts: list[dict] = []
+    precedent_summary: str = ""
+    log_summary: str = ""
+    compensation_applicable: bool = False
+    compensation_amount_usd: float = 0.0
+    next_steps: list[str] = []
+    requires_hitl: bool = False
+    hitl_reason: str | None = None
+    guardrail_warnings: list[str] = []
+    trace_id: str = ""
+
+
+class JudgeResponse(BaseModel):
+    """Response from POST /api/analyze/judge."""
+    overall_score: float
+    criteria: dict[str, float] = {}
+    approved: bool
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+
+
+class FeedbackResponse(BaseModel):
+    """Response from POST /api/feedback."""
+    status: str
+    feedback_id: int
+    auto_indexed: bool
+    needs_review: bool
+    judge_score: float
+
+
+class HealthResponse(BaseModel):
+    """Response from GET /health."""
+    status: str
+    sqlite: str
+    qdrant: str
+    collections: dict[str, int] = {}

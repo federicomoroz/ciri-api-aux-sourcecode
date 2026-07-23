@@ -18,7 +18,7 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
 
     mock_qdrant = MagicMock()
     mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = [[0.1] * 384]
+    mock_embedder.encode.return_value = [[0.1] * 1024]
 
     from api.app.rag.retriever import QdrantRetriever
     from api.app.analysis.analyzer import Analyzer
@@ -47,9 +47,6 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
         },
     ]
     retriever.search_similar_cases.return_value = []
-    retriever.format_policies_for_prompt.return_value = "POL-EXC-003: BLOCKER cripto\nPOL-FRD-001: Score bajo"
-    retriever.format_cases_for_prompt.return_value = "(Sin precedentes)"
-    retriever.check_semantic_cache.return_value = None
 
     analyzer = Analyzer(db)
     report_gen = ReportGenerator()
@@ -71,6 +68,14 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
     app.state.report_generator = report_gen
     app.state.settings = MagicMock()
     app.state.settings.semantic_cache_enabled = False
+    app.state.settings.qdrant_policies_collection = "policies"
+    app.state.settings.qdrant_cases_collection = "historical_cases"
+    app.state.settings.qdrant_cache_collection = "_semantic_cache"
+
+    # Configure mock Qdrant for health check
+    mock_collection_info = MagicMock()
+    mock_collection_info.points_count = 0
+    mock_qdrant.get_collection.return_value = mock_collection_info
     app.state.embedder = mock_embedder
     app.state.resolution_service = resolution_service
     app.state.feedback_service = feedback_service
@@ -262,3 +267,71 @@ def test_html_report_generation(test_client_full_flow):
     assert "TXN-00051" in html
     assert "BLOCKER" in html
     assert "Airbnb" in html
+
+
+def test_health_endpoint(test_client_full_flow):
+    """GET /health should return status and component health."""
+    client = test_client_full_flow
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "status" in data
+    assert "sqlite" in data
+    assert "qdrant" in data
+
+
+def test_cache_lookup_disabled(test_client_full_flow):
+    """GET /api/cache/lookup should return cached=False when cache is disabled."""
+    client = test_client_full_flow
+    resp = client.get("/api/cache/lookup", params={
+        "transaction_id": "TXN-00051",
+        "cliente_vip": False,
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["cached"] is False
+
+
+def test_resolve_response_has_request_id_header(test_client_full_flow):
+    """Response should include X-Request-ID header from RequestIDMiddleware."""
+    client = test_client_full_flow
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert "X-Request-ID" in resp.headers
+    # UUID format: 8-4-4-4-12 hex chars
+    request_id = resp.headers["X-Request-ID"]
+    assert len(request_id) == 36
+    assert request_id.count("-") == 4
+
+
+def test_resolve_response_schema(test_client_full_flow):
+    """POST /api/analyze/resolve response should match ResolveResponse model fields."""
+    client = test_client_full_flow
+    payload = {
+        "transaction_id": "TXN-00051",
+        "agent_analysis": "Cripto con score 8 — BLOCKER",
+        "tx_data": {
+            "id": "TXN-00051", "payment_method": "Cripto",
+            "fraud_score": 8, "amount_usd": 2095.90,
+            "country": "COL", "merchant": "Airbnb", "channel": "POS",
+        },
+        "policies": [
+            {"code": "POL-EXC-003", "description": "BLOCKER cripto", "category": "EXCEPCION", "name": "Cripto", "reference": ""},
+        ],
+        "similar_cases": [],
+        "logs": [],
+        "merchant_risk": {"cb_ratio": 0.02, "flags": ["high_cb_ratio"]},
+        "client_history": {"total_chargebacks": 1, "flags": []},
+        "motivo": "No reconoce la compra",
+        "cliente_vip": False,
+    }
+    resp = client.post("/api/analyze/resolve", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    # All ResolveResponse fields should be present
+    expected_fields = {
+        "recommended_action", "confidence", "risk_level",
+        "policy_verdicts", "guardrail_warnings", "trace_id",
+    }
+    for field in expected_fields:
+        assert field in data, f"Missing field: {field}"

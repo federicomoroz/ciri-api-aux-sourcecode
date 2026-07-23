@@ -16,7 +16,7 @@ def test_client(in_memory_db_path):
     """FastAPI test client with mocked RAG components."""
     mock_qdrant = MagicMock()
     mock_embedder = MagicMock()
-    mock_embedder.encode.return_value = [[0.1] * 384]
+    mock_embedder.encode.return_value = [[0.1] * 1024]
     mock_llm = MagicMock()
     mock_tracer = MagicMock()
     mock_tracer.trace.return_value = ""

@@ -80,11 +80,11 @@ def seed():
 
     print("\n" + "=" * 60)
     print("✓ Seed completed successfully!")
-    print(f"  policies:17 | historical_cases:60 | transactions:100 | logs:150")
+    print(f"  policies:{len(data['policies'])} | historical_cases:{len(data['cases'])} | transactions:{len(data['transactions'])} | logs:{len(data['logs'])}")
     print("\nNext steps:")
     print("  1. Start the API:    docker-compose up api")
     print("  2. Check health:     curl http://localhost:8000/health")
-    print("  3. Import n8n flow:  http://localhost:5678 → Import → n8n/chargeback_agent_flow.json")
+    print("  3. Import n8n flow:  http://localhost:5678 → Import → n8n/workflow_ciri_agent.json")
     print("=" * 60)
 
 

@@ -4,7 +4,8 @@ Deterministic analysis functions. No LLM calls here.
 These produce structured data used by the LLM resolution prompt.
 """
 
-from datetime import date, datetime
+import logging
+from datetime import datetime, timezone
 
 from ..data.db import Database
 from ..domain.constants import (
@@ -13,13 +14,18 @@ from ..domain.constants import (
     SLA_VIP_DAYS,
     SLA_STANDARD_DAYS,
     SLA_EXTENDED_DAYS,
+    SLA_TYPE_VIP,
+    SLA_TYPE_EXTENDED,
+    SLA_TYPE_STANDARD,
     CLIENT_RECIDIVIST_THRESHOLD,
     CLIENT_GEO_ANOMALY_THRESHOLD,
     MERCHANT_SUSPENDED_CB_RATIO,
     MERCHANT_HIGH_CB_RATIO,
     MERCHANT_STRATEGIC_VOLUME,
 )
-from ..domain.enums import LogEventType
+from ..domain.enums import ClientFlag, ErrorPattern, LogEventType, MerchantFlag, Severity
+
+logger = logging.getLogger(__name__)
 
 
 class Analyzer:
@@ -32,9 +38,9 @@ class Analyzer:
         cb_ratio = stats["cb_ratio"]
         flags = []
         if cb_ratio > MERCHANT_SUSPENDED_CB_RATIO:
-            flags.append("suspended_merchant")
+            flags.append(MerchantFlag.SUSPENDED_MERCHANT)
         elif cb_ratio > MERCHANT_HIGH_CB_RATIO:
-            flags.append("high_cb_ratio")
+            flags.append(MerchantFlag.HIGH_CB_RATIO)
         return {
             **stats,
             "flags": flags,
@@ -46,17 +52,21 @@ class Analyzer:
         history = self.db.get_client_history(client_id)
         flags = []
         if history["total_chargebacks"] > CLIENT_RECIDIVIST_THRESHOLD:
-            flags.append("recidivist")
+            flags.append(ClientFlag.RECIDIVIST)
         if len(history["countries_used"]) > CLIENT_GEO_ANOMALY_THRESHOLD:
-            flags.append("geo_anomaly")
+            flags.append(ClientFlag.GEO_ANOMALY)
         return {**history, "flags": flags}
 
     @staticmethod
     def count_severities(logs: list[dict]) -> dict[str, int]:
         """Count log entries by severity level."""
-        counts: dict[str, int] = {"ERROR": 0, "WARN": 0, "INFO": 0}
+        counts: dict[str, int] = {
+            Severity.ERROR: 0,
+            Severity.WARN: 0,
+            Severity.INFO: 0,
+        }
         for log in logs:
-            sev = log.get("severity", "INFO")
+            sev = log.get("severity", Severity.INFO)
             counts[sev] = counts.get(sev, 0) + 1
         return counts
 
@@ -72,7 +82,7 @@ class Analyzer:
         if not logs:
             return {
                 "patterns": [],
-                "severity_counts": {"ERROR": 0, "WARN": 0, "INFO": 0},
+                "severity_counts": {Severity.ERROR: 0, Severity.WARN: 0, Severity.INFO: 0},
                 "event_summary": {},
                 "critical_events": [],
             }
@@ -88,21 +98,21 @@ class Analyzer:
         events_set = set(event_counts)
 
         if event_counts.get(LogEventType.MERCHANT_NO_RESPONSE, 0) >= MERCHANT_TIMEOUT_PATTERN_MIN_COUNT:
-            patterns.append("systematic_merchant_timeout")
-        if "TIMEOUT_RETRY" in events_set:
-            patterns.append("connectivity_issue")
-        if "FRAUD_ALERT" in events_set and "AUTH_DECLINED" in events_set:
-            patterns.append("blocked_for_fraud")
-        if "DOUBLE_CHARGE_DETECT" in events_set:
-            patterns.append("duplicate_charge")
-        if "SLA_BREACH" in events_set:
-            patterns.append("sla_violation")
-        if "WEBHOOK_FAILED" in events_set:
-            patterns.append("integration_failure")
-        if "SESSION_EXPIRED" in events_set and "PAYMENT_INITIATED" in events_set:
-            patterns.append("session_interrupted_payment")
-        if "GEO_ANOMALY" in events_set:
-            patterns.append("geographic_anomaly")
+            patterns.append(ErrorPattern.SYSTEMATIC_MERCHANT_TIMEOUT)
+        if LogEventType.TIMEOUT_RETRY in events_set:
+            patterns.append(ErrorPattern.CONNECTIVITY_ISSUE)
+        if LogEventType.FRAUD_ALERT in events_set and LogEventType.AUTH_DECLINED in events_set:
+            patterns.append(ErrorPattern.BLOCKED_FOR_FRAUD)
+        if LogEventType.DOUBLE_CHARGE_DETECT in events_set:
+            patterns.append(ErrorPattern.DUPLICATE_CHARGE)
+        if LogEventType.SLA_BREACH in events_set:
+            patterns.append(ErrorPattern.SLA_VIOLATION)
+        if LogEventType.WEBHOOK_FAILED in events_set:
+            patterns.append(ErrorPattern.INTEGRATION_FAILURE)
+        if LogEventType.SESSION_EXPIRED in events_set and LogEventType.PAYMENT_INITIATED in events_set:
+            patterns.append(ErrorPattern.SESSION_INTERRUPTED_PAYMENT)
+        if LogEventType.GEO_ANOMALY in events_set:
+            patterns.append(ErrorPattern.GEOGRAPHIC_ANOMALY)
 
         critical_events = [
             {
@@ -113,7 +123,7 @@ class Analyzer:
                 "code": log.get("code", ""),
             }
             for log in logs
-            if log.get("severity") in ("ERROR", "WARN")
+            if log.get("severity") in (Severity.ERROR, Severity.WARN)
         ]
 
         return {
@@ -136,26 +146,28 @@ class Analyzer:
         - POL-SLA-002 (standard LATAM): 10 business days
         - POL-EXC-004 (non-LATAM merchants): 15 business days
 
-        If NOT within SLA → compensation_applicable = True (POL-SLA-004: max USD 15)
+        If NOT within SLA -> compensation_applicable = True (POL-SLA-004: max USD 15)
         """
         try:
             open_date = datetime.strptime(case_open_date[:10], "%Y-%m-%d").date()
         except (ValueError, TypeError):
-            open_date = date.today()
+            logger.warning("Invalid case_open_date '%s', defaulting to today", case_open_date)
+            open_date = datetime.now(timezone.utc).date()
 
-        days_elapsed = (date.today() - open_date).days
+        today = datetime.now(timezone.utc).date()
+        days_elapsed = (today - open_date).days
 
         if cliente_vip:
             sla_limit = SLA_VIP_DAYS
-            sla_type = "vip"
+            sla_type = SLA_TYPE_VIP
             policy_reference = f"POL-EXC-002 (clientes VIP: {SLA_VIP_DAYS} dias habiles)"
         elif country not in LATAM_COUNTRIES:
             sla_limit = SLA_EXTENDED_DAYS
-            sla_type = "extended"
+            sla_type = SLA_TYPE_EXTENDED
             policy_reference = f"POL-EXC-004 (comercios internacionales: {SLA_EXTENDED_DAYS} dias habiles)"
         else:
             sla_limit = SLA_STANDARD_DAYS
-            sla_type = "standard"
+            sla_type = SLA_TYPE_STANDARD
             policy_reference = f"POL-SLA-002 (resolucion estandar: {SLA_STANDARD_DAYS} dias habiles)"
 
         within_sla = days_elapsed <= sla_limit

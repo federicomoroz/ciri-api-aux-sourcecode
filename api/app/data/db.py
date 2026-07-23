@@ -1,8 +1,11 @@
+import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from ..domain.enums import TransactionStatus
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
@@ -58,13 +61,6 @@ class Database:
             return self._rows_to_list(rows)
 
     # --- Cases ---
-
-    def get_cases_for_transaction(self, tx_id: str) -> list[dict]:
-        with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM cases WHERE transaction_id = ?", (tx_id,)
-            ).fetchall()
-            return self._rows_to_list(rows)
 
     def get_all_cases(self) -> list[dict]:
         with self._conn() as conn:
@@ -147,6 +143,19 @@ class Database:
                 "SELECT * FROM policies WHERE code = ?", (code,)
             ).fetchone()
             return self._row_to_dict(row)
+
+    def create_policy_record(self, fields: dict) -> dict:
+        """Build a policy dict with timestamps and persist it. Returns the full dict."""
+        now = datetime.now(timezone.utc).isoformat()
+        policy = {**fields, "created_at": now, "updated_at": now}
+        self.upsert_policy(policy)
+        return policy
+
+    def merge_policy_update(self, existing: dict, updates: dict) -> dict:
+        """Merge partial updates into an existing policy and persist. Returns the merged dict."""
+        merged = {**existing, **updates, "updated_at": datetime.now(timezone.utc).isoformat()}
+        self.upsert_policy(merged)
+        return merged
 
     def upsert_policy(self, policy: dict) -> None:
         now = datetime.now(timezone.utc).isoformat()

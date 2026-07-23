@@ -410,7 +410,7 @@
     <!-- Footer -->
     <footer class="bg-gray-100 rounded-xl p-4 text-center text-xs text-gray-400">
         <p>Generado: <strong>{{ generated_at }}</strong> | Agente: CIRI Chargeback Agent v1.0</p>
-        <p class="mt-1">Prompts: v1_policy_eval, v1_resolution, v1_judge, v1_log_analysis | Embeddings: paraphrase-multilingual-MiniLM-L12-v2</p>
+        <p class="mt-1">Prompts: v1_policy_eval, v1_resolution, v1_judge | Embeddings: voyage-multilingual-2 (Voyage AI)</p>
         {% if judge_evaluation %}
         <p class="mt-1">Judge score: <strong>{{ "%.1f"|format(judge_evaluation.overall_score) }}/10</strong> | Cache hit: <strong>{{ "Sí" if cache_hit else "No" }}</strong></p>
         {% endif %}

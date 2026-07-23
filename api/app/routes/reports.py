@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
-@router.post("/html")
+@router.post("/html", status_code=200)
 def generate_html_report(
     req: ReportRequest,
     generator: ReportGenerator = Depends(get_report_generator),
@@ -24,11 +24,11 @@ def generate_html_report(
     """Generate an HTML report and auto-store in SQLite cache for idempotency."""
     html = generator.render(req.model_dump())
 
-    # Auto-cache: store HTML keyed by (transaction_id, motivo, cliente_vip)
+    # Auto-cache: store HTML keyed by (transaction_id, cliente_vip)
     tx_id = req.transaction.get("id", "")
     if settings.semantic_cache_enabled and tx_id:
         try:
-            key = _cache_key(tx_id, req.motivo, req.cliente_vip)
+            key = _cache_key(tx_id, req.cliente_vip)
             db.store_cached_report(key, html)
             logger.info("Report cached for %s", tx_id)
         except Exception as e:

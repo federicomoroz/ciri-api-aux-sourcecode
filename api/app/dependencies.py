@@ -19,8 +19,8 @@ from .analysis.analyzer import Analyzer
 from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
-from .llm.client import AnthropicClient, LLMClient
-from .observability.tracer import LangfuseTracer, NoOpTracer, Tracer
+from .llm.client import AnthropicClient
+from .observability.tracer import LangfuseTracer, NoOpTracer
 from .rag.indexer import QdrantIndexer
 from .rag.retriever import QdrantRetriever
 from .rag.updater import RAGUpdater
@@ -42,19 +42,19 @@ async def lifespan(app: FastAPI):
     db_path = settings.sqlite_path
     os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
     if not os.path.exists(db_path):
-        data = load_excel(settings.data_file_path)  # ~40MB spike
+        data = load_excel(settings.data_file_path)
         init_sqlite(db_path, data)
-        del data  # release immediately; GC can reclaim before next phase
+        del data
 
     db = Database(db_path)
     db.ensure_report_cache_table()
 
-    # --- Phase 2: Connect external services (minimal RAM) ---
+    # --- Phase 2: Connect external services ---
     qdrant = QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
     )
-    embedder = FastEmbedder(settings.embedding_model)  # lazy: 0MB until first encode()
+    embedder = FastEmbedder(settings.embedding_model)
     tracer = (
         LangfuseTracer(
             public_key=settings.langfuse_public_key,
@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
         api_key=settings.anthropic_api_key,
         model=settings.llm_model,
         tracer=tracer,
+        max_retries=settings.llm_max_retries,
     )
 
     # --- Phase 3: RAG setup ---
@@ -87,9 +88,7 @@ async def lifespan(app: FastAPI):
     )
     updater = RAGUpdater(indexer, db, judge_threshold=settings.judge_auto_index_threshold)
 
-    # --- Phase 4: Conditional indexing (check Qdrant FIRST, load data only if needed) ---
-    # Normal path: Qdrant Cloud pre-seeded via seed_data.py — skip entirely.
-    # Fallback: collections missing or empty → load data from SQLite and index.
+    # --- Phase 4: Conditional indexing ---
     indexer.ensure_collections()
     try:
         needs_policies = qdrant.get_collection(settings.qdrant_policies_collection).points_count == 0
@@ -107,16 +106,12 @@ async def lifespan(app: FastAPI):
             indexer.index_policies(policies)
         if needs_cases and cases:
             indexer.index_historical_cases(cases, txns)
-        del policies, cases, txns  # release before serving
-
-    # Analyzer
-    analyzer = Analyzer(db)
+        del policies, cases, txns
 
     # Service layer
+    analyzer = Analyzer(db)
     resolution_service = ResolutionService(llm, tracer)
     feedback_service = FeedbackService(db, updater, tracer)
-
-    # Report generator
     report_generator = ReportGenerator()
 
     # Store everything in app.state
@@ -139,7 +134,7 @@ async def lifespan(app: FastAPI):
     qdrant.close()
 
 
-# --- Dependency functions ---
+# --- Dependency functions (only those actually used by routes) ---
 
 def get_settings(request: Request) -> Settings:
     return request.app.state.settings
@@ -153,16 +148,8 @@ def get_qdrant(request: Request) -> QdrantClient:
     return request.app.state.qdrant
 
 
-def get_llm(request: Request) -> LLMClient:
-    return request.app.state.llm
-
-
 def get_retriever(request: Request) -> QdrantRetriever:
     return request.app.state.retriever
-
-
-def get_indexer(request: Request) -> QdrantIndexer:
-    return request.app.state.indexer
 
 
 def get_updater(request: Request) -> RAGUpdater:
@@ -171,10 +158,6 @@ def get_updater(request: Request) -> RAGUpdater:
 
 def get_analyzer(request: Request) -> Analyzer:
     return request.app.state.analyzer
-
-
-def get_tracer(request: Request) -> Tracer:
-    return request.app.state.tracer
 
 
 def get_report_generator(request: Request) -> ReportGenerator:

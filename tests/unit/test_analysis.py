@@ -113,6 +113,68 @@ class TestErrorPatterns:
         assert result["patterns"] == []
         assert result["severity_counts"] == {"ERROR": 0, "WARN": 0, "INFO": 0}
 
+    def test_duplicate_charge_pattern(self, analyzer):
+        """DOUBLE_CHARGE_DETECT should detect duplicate_charge."""
+        logs = [
+            {"severity": "ERROR", "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "duplicate_charge" in result["patterns"]
+
+    def test_sla_violation_pattern(self, analyzer):
+        """SLA_BREACH should detect sla_violation."""
+        logs = [
+            {"severity": "WARN", "event": "SLA_BREACH", "detail": "SLA exceeded", "timestamp": "2024-01-01", "code": "200"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "sla_violation" in result["patterns"]
+
+    def test_integration_failure_pattern(self, analyzer):
+        """WEBHOOK_FAILED should detect integration_failure."""
+        logs = [
+            {"severity": "ERROR", "event": "WEBHOOK_FAILED", "detail": "500 error", "timestamp": "2024-01-01", "code": "500"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "integration_failure" in result["patterns"]
+
+    def test_session_interrupted_payment_pattern(self, analyzer):
+        """SESSION_EXPIRED + PAYMENT_INITIATED should detect session_interrupted_payment."""
+        logs = [
+            {"severity": "INFO", "event": "PAYMENT_INITIATED", "detail": "starting", "timestamp": "2024-01-01 10:00:00", "code": "200"},
+            {"severity": "WARN", "event": "SESSION_EXPIRED", "detail": "session timeout", "timestamp": "2024-01-01 10:05:00", "code": "401"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "session_interrupted_payment" in result["patterns"]
+
+    def test_geographic_anomaly_pattern(self, analyzer):
+        """GEO_ANOMALY should detect geographic_anomaly."""
+        logs = [
+            {"severity": "WARN", "event": "GEO_ANOMALY", "detail": "unusual location", "timestamp": "2024-01-01", "code": "200"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "geographic_anomaly" in result["patterns"]
+
+    def test_connectivity_issue_pattern(self, analyzer):
+        """TIMEOUT_RETRY should detect connectivity_issue."""
+        logs = [
+            {"severity": "WARN", "event": "TIMEOUT_RETRY", "detail": "retrying", "timestamp": "2024-01-01", "code": "408"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "connectivity_issue" in result["patterns"]
+
+    def test_multiple_patterns_detected(self, analyzer):
+        """Multiple patterns in same log set should all be detected."""
+        logs = [
+            {"severity": "WARN", "event": "FRAUD_ALERT", "detail": "score low", "timestamp": "2024-01-01", "code": "200"},
+            {"severity": "ERROR", "event": "AUTH_DECLINED", "detail": "blocked", "timestamp": "2024-01-01", "code": "402"},
+            {"severity": "ERROR", "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
+            {"severity": "WARN", "event": "GEO_ANOMALY", "detail": "location", "timestamp": "2024-01-01", "code": "200"},
+        ]
+        result = analyzer.detect_error_patterns(logs)
+        assert "blocked_for_fraud" in result["patterns"]
+        assert "duplicate_charge" in result["patterns"]
+        assert "geographic_anomaly" in result["patterns"]
+
 
 class TestMerchantRisk:
 

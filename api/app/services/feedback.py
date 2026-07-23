@@ -4,15 +4,23 @@ Service layer for feedback submission and auto-indexing.
 Extracts orchestration logic from routes/feedback.py.
 """
 
+import logging
+
 from ..data.db import Database
 from ..domain.constants import (
     FEEDBACK_AUTO_ANALYST_TAG,
     FEEDBACK_AUTO_RESOLUTION_DAYS,
+    FEEDBACK_CASE_ID_PREFIX,
     FEEDBACK_MOTIVO_MAX_CHARS,
+    FEEDBACK_STATUS_RECORDED,
     JUDGE_NEEDS_REVIEW_THRESHOLD,
+    TRACE_FEEDBACK,
+    TRACE_FEEDBACK_SCORE,
 )
 from ..observability.tracer import Tracer
 from ..rag.updater import RAGUpdater
+
+logger = logging.getLogger(__name__)
 
 
 class FeedbackService:
@@ -38,11 +46,12 @@ class FeedbackService:
             "final_outcome": final_outcome,
             "judge_score": judge_score,
         })
+        logger.info("Feedback recorded: id=%d tx=%s decision=%s", feedback_id, transaction_id, analyst_decision)
 
         auto_indexed = False
         if resolution:
             case_dict = {
-                "case_id": f"FB-{feedback_id}",
+                "case_id": f"{FEEDBACK_CASE_ID_PREFIX}-{feedback_id}",
                 "transaction_id": transaction_id,
                 "motivo": resolution.get("justification", "")[:FEEDBACK_MOTIVO_MAX_CHARS],
                 "resolution": final_outcome,
@@ -57,15 +66,15 @@ class FeedbackService:
         needs_review = judge_score < JUDGE_NEEDS_REVIEW_THRESHOLD
 
         trace_id = self.tracer.trace(
-            "analyst_feedback",
+            TRACE_FEEDBACK,
             input={"transaction_id": transaction_id, "analyst_decision": analyst_decision},
             output={"feedback_id": feedback_id, "auto_indexed": auto_indexed, "needs_review": needs_review},
             metadata={"judge_score": judge_score},
         )
-        self.tracer.score(trace_id, "analyst_feedback_judge_score", judge_score)
+        self.tracer.score(trace_id, TRACE_FEEDBACK_SCORE, judge_score)
 
         return {
-            "status": "recorded",
+            "status": FEEDBACK_STATUS_RECORDED,
             "feedback_id": feedback_id,
             "auto_indexed": auto_indexed,
             "needs_review": needs_review,
