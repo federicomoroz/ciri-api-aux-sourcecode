@@ -133,9 +133,16 @@ class ResolutionService:
             metadata={"confidence": resolution.get("confidence")},
         )
 
+        # Strip internal metadata — Judge evaluates the corrected resolution, not the audit trail.
+        # guardrail_warnings mention original pre-correction values which confuse the Judge LLM.
+        judge_resolution = {
+            k: v for k, v in resolution.items()
+            if k not in ("guardrail_warnings", "_usage", "trace_id")
+        }
+
         system, user = prompts.v1_judge.render(
             full_context=full_context,
-            resolution=resolution,
+            resolution=judge_resolution,
         )
         llm_result = self.llm.complete(system, user, trace_id=trace_id)
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})
