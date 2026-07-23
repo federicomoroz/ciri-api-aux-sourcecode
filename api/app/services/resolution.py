@@ -276,7 +276,7 @@ class ResolutionService:
                 # Deterministic outcome note — map resolution to implication.
                 res_lower = resolution.lower()
                 if "sin resolucion" in res_lower or "cerrado" in res_lower:
-                    line += f". Nota: precedente sin resolucion previa — requiere validacion adicional"
+                    line += f". Nota: precedente con mismo patron no fue resuelto — caso actual requiere resolucion definitiva"
                 elif "aprobado" in res_lower or "a favor" in res_lower:
                     line += f". Nota: precedente fue aprobado"
                 elif "rechazado" in res_lower or "denegado" in res_lower:
@@ -320,10 +320,19 @@ class ResolutionService:
                 reasons.append(f"{fail_count} violaciones de politica")
             if fraud_score < RISK_FRAUD_SEVERE:
                 reasons.append(f"fraud_score={fraud_score} (umbral severo: {RISK_FRAUD_SEVERE})")
+            # Clarify when risk is from policy, not fraud.
+            if fraud_score >= FRAUD_SCORE_HIGH_RISK_THRESHOLD:
+                reasons.append(
+                    f"fraud_score={fraud_score} indica bajo riesgo de fraude — riesgo es de politica"
+                )
             risk_reason = f"HIGH por: {', '.join(reasons)}"
         elif fail_count >= 1 or fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
             risk_level = RiskLevel.MEDIUM
-            risk_reason = f"MEDIUM por: {fail_count} violacion(es), fraud_score={fraud_score}"
+            fraud_note = (
+                f" (fraud_score={fraud_score} seguro, riesgo es de politica)"
+                if fraud_score >= FRAUD_SCORE_HIGH_RISK_THRESHOLD else ""
+            )
+            risk_reason = f"MEDIUM por: {fail_count} violacion(es), fraud_score={fraud_score}{fraud_note}"
         else:
             risk_level = RiskLevel.LOW
             risk_reason = f"LOW: sin violaciones, fraud_score={fraud_score} (seguro)"
