@@ -30,7 +30,7 @@ from ..llm.client import LLMClient, LLMResult
 from ..llm import prompts
 from ..llm.parsing import validate_llm_output
 from ..observability.tracer import Tracer
-from ..rag.formatter import format_cases_for_prompt, format_policies_for_prompt
+from ..rag.formatter import format_cases_for_prompt, format_policies_for_prompt, _motivo_matches
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,8 @@ class ResolutionService:
 
         # Deterministic outcome — code decides, LLM explains.
         outcome = self._determine_outcome(policy_verdicts, tx_data)
+        precedent_summary = self._build_precedent_summary(similar_cases, motivo)
+        outcome["precedent_summary"] = precedent_summary
 
         resolution, synth_result = self._synthesize_resolution(
             tx_data, policy_verdicts, similar_cases, log_summary_text,
@@ -83,6 +85,7 @@ class ResolutionService:
         resolution["recommended_action"] = outcome["recommended_action"]
         resolution["risk_level"] = outcome["risk_level"]
         resolution["requires_hitl"] = outcome["requires_hitl"]
+        resolution["precedent_summary"] = precedent_summary
         if outcome["hitl_reason"]:
             resolution["hitl_reason"] = outcome["hitl_reason"]
 
@@ -231,6 +234,45 @@ class ResolutionService:
             for log in critical[:LLM_MAX_CRITICAL_LOGS]:
                 text += f"- [{log['severity']}] {log['event']}: {log['detail']}\n"
         return text
+
+    @staticmethod
+    def _build_precedent_summary(
+        similar_cases: list[dict], current_motivo: str | None,
+    ) -> str:
+        """Build precedent_summary deterministically. No LLM involved.
+
+        Extracts case_id, motivo, resolution, resolution_days from each case.
+        Tags [MOTIVO SIMILAR] using synonym matching and sorts matches first.
+        """
+        if not similar_cases:
+            return "Sin precedentes relevantes."
+
+        annotated = []
+        for c in similar_cases:
+            case_text = f"{c.get('motivo', '')} {c.get('observations', '')}"
+            is_match = bool(current_motivo) and _motivo_matches(current_motivo, case_text)
+            annotated.append((c, is_match))
+
+        annotated.sort(key=lambda x: (not x[1],))
+
+        parts = []
+        for c, is_match in annotated:
+            tag = " [MOTIVO SIMILAR]" if is_match else ""
+            case_id = c.get("case_id", "?")
+            motivo = c.get("motivo", "?")
+            resolution = c.get("resolution", "?")
+            days = c.get("resolution_days", "?")
+            merchant = c.get("merchant", "")
+            obs = c.get("observations", "")
+
+            line = f"{case_id}{tag}: {motivo}, {resolution} en {days}d"
+            if merchant:
+                line += f", merchant={merchant}"
+            if is_match and obs:
+                line += f". Obs: {obs}"
+            parts.append(line)
+
+        return " | ".join(parts)
 
     @staticmethod
     def _determine_outcome(policy_verdicts: list[dict], tx_data: dict) -> dict:

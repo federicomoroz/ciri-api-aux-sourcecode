@@ -348,3 +348,54 @@ class TestSanitizeVerdicts:
         assert result[0]["verdict"] == "BLOCKER"  # POL-EXC-003 preserved
         assert result[1]["verdict"] == "FAIL"      # POL-CB-004 downgraded
         assert result[2]["verdict"] == "FAIL"      # unchanged
+
+
+class TestBuildPrecedentSummary:
+    """Deterministic precedent summary generation."""
+
+    def test_empty_cases_returns_placeholder(self):
+        result = ResolutionService._build_precedent_summary([], "Cargo duplicado")
+        assert result == "Sin precedentes relevantes."
+
+    def test_matching_motivo_tagged_and_first(self):
+        cases = [
+            {"case_id": "CB-001", "motivo": "Defecto", "resolution": "Reembolso",
+             "resolution_days": 5, "merchant": "Amazon"},
+            {"case_id": "CB-002", "motivo": "Cargo doble", "resolution": "Aprobado",
+             "resolution_days": 3, "merchant": "Rappi",
+             "observations": "Timeout en gateway"},
+        ]
+        result = ResolutionService._build_precedent_summary(cases, "Cargo duplicado")
+        assert "[MOTIVO SIMILAR]" in result
+        # CB-002 should come first (match)
+        assert result.index("CB-002") < result.index("CB-001")
+        # Observations included for match
+        assert "Timeout en gateway" in result
+
+    def test_observations_matched(self):
+        """Match via observations, not just motivo field."""
+        cases = [
+            {"case_id": "CB-038", "motivo": "Monto incorrecto", "resolution": "Cerrado",
+             "resolution_days": 24, "merchant": "Rappi",
+             "observations": "Error en sistema de pagos — cargo doble por timeout"},
+        ]
+        result = ResolutionService._build_precedent_summary(cases, "Cargo duplicado")
+        assert "[MOTIVO SIMILAR]" in result
+        assert "cargo doble por timeout" in result
+
+    def test_no_motivo_no_tags(self):
+        cases = [
+            {"case_id": "CB-001", "motivo": "Fraude", "resolution": "Rechazado",
+             "resolution_days": 2, "merchant": "eBay"},
+        ]
+        result = ResolutionService._build_precedent_summary(cases, None)
+        assert "[MOTIVO SIMILAR]" not in result
+        assert "CB-001" in result
+
+    def test_includes_merchant(self):
+        cases = [
+            {"case_id": "CB-001", "motivo": "Fraude", "resolution": "Aprobado",
+             "resolution_days": 3, "merchant": "MercadoLibre"},
+        ]
+        result = ResolutionService._build_precedent_summary(cases, "Fraude")
+        assert "merchant=MercadoLibre" in result

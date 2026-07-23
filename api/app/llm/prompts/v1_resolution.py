@@ -35,20 +35,9 @@ CONCISION (CRITICO):
 - precedent_summary: MAXIMO 80 palabras.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 1-2 oraciones.
 
-PRECEDENT_SUMMARY (EXTRACCION MECANICA):
-- Para cada precedente, copia: case_id, motivo, outcome (aprobado/rechazado), resolution_days.
-- COMPARACION DE MOTIVO (mecanica): compara el motivo de cada precedente con el motivo del caso actual.
-  Sinonimos comunes (tratalos como MISMO MOTIVO):
-  * "cargo duplicado" = "cargo doble" = "doble cobro" = "cobro duplicado" = "cargo doble por timeout"
-  * "no reconoce" = "no autorizado" = "fraude" = "compra no reconocida"
-  * "producto no recibido" = "no entregado" = "falta entrega"
-  * "defecto" = "producto defectuoso" = "calidad"
-  Si coinciden, marca [MOTIVO SIMILAR] y listalo PRIMERO.
-- Para cada precedente [MOTIVO SIMILAR], agrega: "outcome: [aprobado/rechazado/parcial], resuelto en [N]d".
-- Si el precedente tiene el mismo merchant o payment_method, mencionalo.
-- NO interpretes. NO escribas "sugiere", "indica", "aprendizaje", "implica", "informa", "patron".
-- NO menciones porcentajes de similitud.
-- Si no hay precedentes: "Sin precedentes relevantes."
+PRECEDENT_SUMMARY (PRE-GENERADO POR SISTEMA):
+- El campo precedent_summary ya fue generado por el sistema. Copia EXACTAMENTE el valor de DECISION DETERMINADA.
+- NO modifiques, resumas ni interpretes el precedent_summary. Copialo tal cual.
 
 NEXT_STEPS (LISTA MECANICA):
 - Genera pasos basados UNICAMENTE en los veredictos de politica y la decision determinada.
@@ -85,7 +74,7 @@ Respuesta correcta (extraccion mecanica, sin interpretacion):
   "recommended_action": "PENDING_HITL",
   "confidence": 0.72,
   "justification": "PENDING_HITL por POL-FRD-001 FAIL (fraud_score=4, umbral 30). Cliente VIP, SLA 5d (POL-EXC-002 PASS). POL-CB-001 PASS.",
-  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, mismo merchant. CB-0033: fraude tarjeta, aprobado en 3d.",
+  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon",
   "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
   "risk_level": "HIGH",
   "compensation_applicable": false,
@@ -104,6 +93,7 @@ USER_TEMPLATE = """## TRANSACCION
 - risk_reason: {determined_risk_reason}
 - requires_hitl: {determined_hitl}
 {determined_hitl_reason}
+- precedent_summary: {determined_precedent_summary}
 
 ## EVALUACION DE POLITICAS (determinada por modulo separado — citar pero NO re-evaluar)
 {policy_verdicts}
@@ -161,5 +151,6 @@ def render(
         determined_risk_reason=outcome.get("risk_reason", ""),
         determined_hitl=outcome.get("requires_hitl", False),
         determined_hitl_reason=hitl_reason_line,
+        determined_precedent_summary=outcome.get("precedent_summary", "Sin precedentes relevantes."),
     )
     return SYSTEM, user
