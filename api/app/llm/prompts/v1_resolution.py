@@ -37,12 +37,18 @@ CONCISION (CRITICO):
 
 PRECEDENT_SUMMARY (EXTRACCION MECANICA):
 - Para cada precedente, copia: case_id, motivo, outcome (aprobado/rechazado), resolution_days.
-- COMPARACION DE MOTIVO (mecanica): compara el motivo de cada precedente con el motivo del caso actual. Si coinciden o son similares (ej: ambos "cargo duplicado", o "cargo doble por timeout" vs "cargo duplicado"), marca ese precedente con [MOTIVO SIMILAR] y listalo PRIMERO. Incluye su outcome y resolution_days — estos datos son relevantes.
+- COMPARACION DE MOTIVO (mecanica): compara el motivo de cada precedente con el motivo del caso actual.
+  Sinonimos comunes (tratalos como MISMO MOTIVO):
+  * "cargo duplicado" = "cargo doble" = "doble cobro" = "cobro duplicado" = "cargo doble por timeout"
+  * "no reconoce" = "no autorizado" = "fraude" = "compra no reconocida"
+  * "producto no recibido" = "no entregado" = "falta entrega"
+  * "defecto" = "producto defectuoso" = "calidad"
+  Si coinciden, marca [MOTIVO SIMILAR] y listalo PRIMERO.
+- Para cada precedente [MOTIVO SIMILAR], agrega: "outcome: [aprobado/rechazado/parcial], resuelto en [N]d".
 - Si el precedente tiene el mismo merchant o payment_method, mencionalo.
-- NO interpretes. NO escribas "esto sugiere", "esto indica", "aprendizaje", "implica", "informa".
-- NO menciones porcentajes de similitud — son scores internos.
+- NO interpretes. NO escribas "sugiere", "indica", "aprendizaje", "implica", "informa", "patron".
+- NO menciones porcentajes de similitud.
 - Si no hay precedentes: "Sin precedentes relevantes."
-- Formato: "CB-XXXX [MOTIVO SIMILAR]: motivo, outcome en Nd. CB-YYYY: motivo, outcome en Nd."
 
 NEXT_STEPS (LISTA MECANICA):
 - Genera pasos basados UNICAMENTE en los veredictos de politica y la decision determinada.
