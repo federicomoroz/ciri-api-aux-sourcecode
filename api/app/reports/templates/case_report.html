@@ -246,13 +246,13 @@
         <div class="text-center mb-6">
             {% set action = resolution.recommended_action | upper %}
             {% if action == 'REJECT' %}
-                <span class="inline-block bg-red-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">❌ RECHAZAR</span>
+                <span id="resolution-badge" class="inline-block bg-red-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">❌ RECHAZAR</span>
             {% elif action == 'APPROVE' %}
-                <span class="inline-block bg-green-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">✅ APROBAR</span>
+                <span id="resolution-badge" class="inline-block bg-green-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">✅ APROBAR</span>
             {% elif action == 'PENDING_HITL' %}
-                <span class="inline-block bg-yellow-500 text-black px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">👤 REVISIÓN HUMANA</span>
+                <span id="resolution-badge" class="inline-block bg-yellow-500 text-black px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">👤 REVISIÓN HUMANA</span>
             {% else %}
-                <span class="inline-block bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">📤 ESCALAR</span>
+                <span id="resolution-badge" class="inline-block bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg">📤 ESCALAR</span>
             {% endif %}
             <p class="text-gray-500 mt-2 text-sm">Confianza: <strong>{{ (resolution.confidence * 100) | int }}%</strong></p>
         </div>
@@ -411,6 +411,28 @@
                     if (resp.ok) {
                         btn.textContent = '\u2713 Decision registrada';
                         btn.className = 'bg-green-500 text-white font-bold px-6 py-3 rounded-xl shadow';
+
+                        // Update resolution badge to reflect analyst override
+                        const badge = document.getElementById('resolution-badge');
+                        if (badge) {
+                            if (data.analyst_decision === 'APPROVED') {
+                                badge.className = 'inline-block bg-green-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg';
+                                badge.innerHTML = '\u2705 APROBADA (HITL)';
+                            } else if (data.analyst_decision === 'REJECTED') {
+                                badge.className = 'inline-block bg-red-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg';
+                                badge.innerHTML = '\u274c RECHAZADA (HITL)';
+                            } else {
+                                badge.className = 'inline-block bg-blue-600 text-white px-8 py-3 rounded-2xl font-bold text-2xl shadow-lg';
+                                badge.innerHTML = '\u270f\ufe0f MODIFICADA (HITL)';
+                            }
+                        }
+
+                        // Hide the form, show confirmation
+                        e.target.style.display = 'none';
+                        const confirm = document.createElement('div');
+                        confirm.className = 'bg-green-100 border border-green-400 rounded-xl p-4 text-green-800 font-semibold text-center';
+                        confirm.textContent = '\u2713 Decision del analista registrada: ' + data.analyst_decision;
+                        e.target.parentElement.appendChild(confirm);
                     } else {
                         btn.textContent = 'Error — reintentar';
                         btn.className = 'bg-red-500 text-white font-bold px-6 py-3 rounded-xl shadow';
