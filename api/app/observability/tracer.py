@@ -56,6 +56,10 @@ class LangfuseTracer:
             logger.warning("langfuse package not installed; observability disabled")
             self._enabled = False
 
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
         if not self._enabled:
             return ""
@@ -106,6 +110,10 @@ class LangfuseTracer:
 
 class NoOpTracer:
     """No-op tracer for tests and when observability is disabled."""
+
+    @property
+    def enabled(self) -> bool:
+        return False
 
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
         return ""

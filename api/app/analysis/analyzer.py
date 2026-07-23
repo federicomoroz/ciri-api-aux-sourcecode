@@ -23,7 +23,7 @@ from ..domain.constants import (
     MERCHANT_HIGH_CB_RATIO,
     MERCHANT_STRATEGIC_VOLUME,
 )
-from ..domain.enums import ClientFlag, ErrorPattern, LogEventType, MerchantFlag, Severity
+from ..domain.enums import ClientFlag, ErrorPattern, LogEventType, MerchantFlag, Severity, TransactionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +48,32 @@ class Analyzer:
         }
 
     def client_flags(self, client_id: str) -> dict:
-        """Compute client history and risk flags."""
-        history = self.db.get_client_history(client_id)
+        """Compute client history aggregations and risk flags."""
+        raw = self.db.get_client_history(client_id)
+        txns = raw["transactions"]
+        cases = raw["cases"]
+
+        total_transactions = len(txns)
+        total_chargebacks = len(cases)
+        rejected = sum(1 for t in txns if t.get("status") == TransactionStatus.RECHAZADA)
+        countries = list({t["country"] for t in txns})
+        methods = list({t["payment_method"] for t in txns})
+
         flags = []
-        if history["total_chargebacks"] > CLIENT_RECIDIVIST_THRESHOLD:
+        if total_chargebacks > CLIENT_RECIDIVIST_THRESHOLD:
             flags.append(ClientFlag.RECIDIVIST)
-        if len(history["countries_used"]) > CLIENT_GEO_ANOMALY_THRESHOLD:
+        if len(countries) > CLIENT_GEO_ANOMALY_THRESHOLD:
             flags.append(ClientFlag.GEO_ANOMALY)
-        return {**history, "flags": flags}
+
+        return {
+            "client_id": client_id,
+            "total_transactions": total_transactions,
+            "total_chargebacks": total_chargebacks,
+            "rejected_transactions": rejected,
+            "countries_used": countries,
+            "payment_methods_used": methods,
+            "flags": flags,
+        }
 
     @staticmethod
     def count_severities(logs: list[dict]) -> dict[str, int]:

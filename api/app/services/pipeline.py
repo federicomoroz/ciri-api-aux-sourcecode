@@ -68,13 +68,13 @@ class PipelineService:
                 self.analyzer.merchant_risk_profile, tx.get("merchant", ""),
             )
             f_client = executor.submit(
-                self.db.get_client_history, tx.get("client_id", ""),
+                self.analyzer.client_flags, tx.get("client_id", ""),
             )
 
-        logs = f_logs.result()
-        policies, similar_cases = f_rag.result()
-        merchant_risk = f_merchant.result()
-        client_history = f_client.result()
+        logs = f_logs.result(timeout=60)
+        policies, similar_cases = f_rag.result(timeout=60)
+        merchant_risk = f_merchant.result(timeout=60)
+        client_history = f_client.result(timeout=60)
 
         # Steps 7+8 — resolve + judge
         resolution = self.resolution_svc.resolve(

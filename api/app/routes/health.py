@@ -28,7 +28,7 @@ def health(
     try:
         db.get_all_policies()
     except Exception as e:
-        sqlite_status = f"error: {e}"
+        sqlite_status = f"error: {type(e).__name__}: {e}"
         logger.error("SQLite health check failed: %s", e)
 
     try:
@@ -40,7 +40,7 @@ def health(
             info = qdrant.get_collection(name)
             collections[name] = info.points_count
     except Exception as e:
-        qdrant_status = f"error: {e}"
+        qdrant_status = f"error: {type(e).__name__}: {e}"
         logger.error("Qdrant health check failed: %s", e)
 
     overall = HEALTH_HEALTHY if sqlite_status == HEALTH_OK and qdrant_status == HEALTH_OK else HEALTH_DEGRADED

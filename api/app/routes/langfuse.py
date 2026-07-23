@@ -4,7 +4,11 @@ Langfuse observability stats route.
 GET /api/langfuse/stats — returns trace/token/cost/score stats for the test panel.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
+
+logger = logging.getLogger(__name__)
 
 from ..dependencies import get_langfuse_stats_service
 from ..domain.models import LangfuseStatsResponse

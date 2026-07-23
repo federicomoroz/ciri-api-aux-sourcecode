@@ -68,7 +68,10 @@ def _parse_sheet(wb: openpyxl.Workbook, keyword: str, columns: list[str]) -> lis
                 row_dict[date_field] = str(row_dict[date_field])
         # HTTP code must be string
         if "code" in row_dict and row_dict["code"] is not None:
-            row_dict["code"] = str(int(float(str(row_dict["code"])))) if row_dict["code"] != "" else "0"
+            try:
+                row_dict["code"] = str(int(float(str(row_dict["code"])))) if row_dict["code"] != "" else "0"
+            except (ValueError, TypeError):
+                row_dict["code"] = str(row_dict["code"])
 
         rows.append(row_dict)
     return rows

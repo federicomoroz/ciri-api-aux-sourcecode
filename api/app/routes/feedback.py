@@ -4,11 +4,7 @@ Feedback route — Axis 6: Auto-mejora.
 Thin HTTP handler — all orchestration logic lives in FeedbackService.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends
-
-logger = logging.getLogger(__name__)
 
 from ..dependencies import get_feedback_service
 from ..domain.models import FeedbackRequest, FeedbackResponse

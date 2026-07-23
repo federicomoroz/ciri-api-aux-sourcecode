@@ -14,12 +14,16 @@ import time
 from collections import defaultdict
 
 from ..domain.constants import (
+    LANGFUSE_OBSERVATION_TYPE,
     LANGFUSE_STATS_CACHE_TTL_S,
     LANGFUSE_STATS_DISPLAY_LIMIT,
+    LANGFUSE_STATS_FETCH_LIMIT,
     LANGFUSE_STATS_TRACE_LIMIT,
     LLM_PRICING,
+    LLM_PRICING_FALLBACK_KEY,
     LLM_PRICING_PER_MTOK,
 )
+from ..observability.tracer import Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +31,7 @@ logger = logging.getLogger(__name__)
 class LangfuseStatsService:
     """Query Langfuse for observability stats shown in the test panel."""
 
-    def __init__(self, tracer, model_name: str):
+    def __init__(self, tracer: Tracer, model_name: str):
         self._tracer = tracer
         self._model_name = model_name
         self._cache: dict | None = None
@@ -36,7 +40,7 @@ class LangfuseStatsService:
     @property
     def enabled(self) -> bool:
         from ..observability.tracer import LangfuseTracer
-        return isinstance(self._tracer, LangfuseTracer) and self._tracer._enabled
+        return isinstance(self._tracer, LangfuseTracer) and self._tracer.enabled
 
     def get_stats(self) -> dict:
         if not self.enabled:
@@ -72,7 +76,7 @@ class LangfuseStatsService:
         # --- 1 API call: fetch all recent observations (bulk, no per-trace) ---
         obs_by_trace: dict[str, list] = defaultdict(list)
         try:
-            obs_resp = langfuse.fetch_observations(type="GENERATION", limit=100)
+            obs_resp = langfuse.fetch_observations(type=LANGFUSE_OBSERVATION_TYPE, limit=LANGFUSE_STATS_FETCH_LIMIT)
             observations = obs_resp.data if hasattr(obs_resp, "data") else []
             for obs in observations:
                 tid = obs.trace_id if hasattr(obs, "trace_id") else obs.get("trace_id", "")
@@ -84,7 +88,7 @@ class LangfuseStatsService:
         # --- 1 API call: fetch all recent scores (bulk) ---
         scores_by_trace: dict[str, float] = {}
         try:
-            scores_resp = langfuse.fetch_scores(limit=100)
+            scores_resp = langfuse.fetch_scores(limit=LANGFUSE_STATS_FETCH_LIMIT)
             scores_list = scores_resp.data if hasattr(scores_resp, "data") else []
             for s in scores_list:
                 tid = s.trace_id if hasattr(s, "trace_id") else s.get("trace_id", "")
@@ -167,7 +171,7 @@ class LangfuseStatsService:
                     (input_tokens / LLM_PRICING_PER_MTOK) * input_price
                     + (output_tokens / LLM_PRICING_PER_MTOK) * output_price
                 )
-        fallback_in, fallback_out = LLM_PRICING["haiku"]
+        fallback_in, fallback_out = LLM_PRICING[LLM_PRICING_FALLBACK_KEY]
         return (
             (input_tokens / LLM_PRICING_PER_MTOK) * fallback_in
             + (output_tokens / LLM_PRICING_PER_MTOK) * fallback_out

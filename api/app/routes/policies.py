@@ -1,10 +1,6 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..data.db import Database
-
-logger = logging.getLogger(__name__)
 from ..dependencies import get_db, get_retriever, get_updater
 from ..domain.constants import FRAUD_SCORE_DEFAULT
 from ..domain.models import PolicyCreate, PolicyUpdate

@@ -11,6 +11,7 @@ Prompts are stored as versioned Python modules under `api/app/llm/prompts/`. Eac
 | Version | Date | Summary |
 |---|---|---|
 | v1.0 | 2025-01 | Initial release — 3 LLM prompts + deterministic log analysis for full resolution pipeline |
+| v1.1 | 2025-07 | v1_resolution: deeper precedent analysis, contradiction resolution, provisional determination flagging |
 
 ---
 
@@ -204,6 +205,29 @@ Analista senior de contracargos (senior chargeback analyst) at a Latin American 
 8. `confidence` must genuinely reflect certainty (0.0 = very uncertain, 1.0 = completely certain)
 9. Respond ONLY with valid JSON in Spanish
 
+### Analytical Precedent Usage (v1.1)
+
+The prompt includes explicit instructions for deep precedent analysis:
+
+| Instruction | Purpose |
+|---|---|
+| **Identify operational patterns** | Determine if similar cases (by merchant/method/motive) were resolved for/against the client, and why |
+| **Extract concrete learnings** | Articulate what each precedent implies for the current case, citing case IDs and outcomes |
+| **Contrast differences** | When a precedent has an opposite outcome, explain why the current case differs |
+| **Impact on confidence** | If no precedents exist, state how this affects recommendation certainty |
+
+### Contradiction Resolution (v1.1)
+
+When contradictory signals exist (e.g., high fraud_score = low fraud probability vs. motive = "doesn't recognize purchase" = possible fraud), the prompt requires:
+
+1. Explicitly identify the contradiction
+2. Explain what each signal means (e.g., "fraud_score=84 means the anti-fraud system considers this LOW risk")
+3. Propose what additional evidence would resolve the ambiguity
+
+### Provisional Determinations (v1.1)
+
+When a determination depends on subsequent verification (e.g., compensation pending SLA date audit), the prompt requires marking it as provisional in both the justification AND next_steps, preventing HITL analysts from assuming finality.
+
 ### Example Expected Output
 
 ```json
@@ -232,6 +256,7 @@ Analista senior de contracargos (senior chargeback analyst) at a Latin American 
 ### Changelog
 
 - **v1.0** (2025-01): Initial release. Includes 8 strict rules, 4-action vocabulary, SLA compensation cap at USD 15.
+- **v1.1** (2025-07): Added analytical precedent usage instructions (pattern extraction, learning articulation, difference contrasting). Added contradiction resolution protocol. Added provisional determination flagging. Improved example to demonstrate HITL case with precedent analysis.
 
 ---
 

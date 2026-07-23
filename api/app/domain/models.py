@@ -135,13 +135,13 @@ class JudgeEvaluationOutput(BaseModel):
 
 class ResolveResponse(BaseModel):
     """Response from POST /api/analyze/resolve."""
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     transaction_id: str = ""
-    recommended_action: str
+    recommended_action: ResolutionOutcome
     confidence: float
     justification: str = ""
-    risk_level: str
+    risk_level: RiskLevel
     policy_verdicts: list[dict] = []
     precedent_summary: str = ""
     log_summary: str = ""

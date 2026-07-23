@@ -110,8 +110,8 @@ class QdrantIndexer:
                     field_schema=schema,
                 )
                 logger.info("Payload index created: %s.%s (%s)", collection, field, schema)
-            except Exception:
-                logger.debug("Payload index %s.%s already exists or failed", collection, field)
+            except Exception as e:
+                logger.debug("Payload index %s.%s already exists or failed: %s", collection, field, e)
 
     def index_policies(self, policies: list[dict]) -> int:
         """Index all policies as Markdown documents. Returns count indexed."""

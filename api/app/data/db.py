@@ -1,14 +1,12 @@
 import logging
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-from ..domain.constants import DASHBOARD_TOP_N, JUDGE_AUTO_INDEX_THRESHOLD
-from ..domain.enums import TransactionStatus
+from ..domain.constants import DASHBOARD_TOP_N, JUDGE_AUTO_INDEX_THRESHOLD, SQLITE_TIMEOUT_S
 
 logger = logging.getLogger(__name__)
-
-SQLITE_TIMEOUT_S = 30
 
 
 class Database:
@@ -16,7 +14,7 @@ class Database:
         self.db_path = db_path
 
     @contextmanager
-    def _conn(self):
+    def _conn(self) -> Generator[sqlite3.Connection, None, None]:
         conn = sqlite3.connect(self.db_path, timeout=SQLITE_TIMEOUT_S)
         conn.row_factory = sqlite3.Row
         try:
@@ -27,10 +25,10 @@ class Database:
         finally:
             conn.close()
 
-    def _row_to_dict(self, row) -> dict | None:
+    def _row_to_dict(self, row: sqlite3.Row | None) -> dict | None:
         return dict(row) if row else None
 
-    def _rows_to_list(self, rows) -> list[dict]:
+    def _rows_to_list(self, rows: list[sqlite3.Row]) -> list[dict]:
         return [dict(r) for r in rows]
 
     # --- Transactions ---
@@ -76,6 +74,7 @@ class Database:
     # --- Client history ---
 
     def get_client_history(self, client_id: str) -> dict:
+        """Raw client data: transactions + cases. Business logic (flags) in Analyzer."""
         with self._conn() as conn:
             txns = conn.execute(
                 "SELECT * FROM transactions WHERE client_id = ?", (client_id,)
@@ -90,19 +89,10 @@ class Database:
             ).fetchall()
             cases = self._rows_to_list(cases)
 
-        total_transactions = len(txns)
-        total_chargebacks = len(cases)
-        rejected = sum(1 for t in txns if t.get("status") == TransactionStatus.RECHAZADA)
-        countries = list({t["country"] for t in txns})
-        methods = list({t["payment_method"] for t in txns})
-
         return {
             "client_id": client_id,
-            "total_transactions": total_transactions,
-            "total_chargebacks": total_chargebacks,
-            "rejected_transactions": rejected,
-            "countries_used": countries,
-            "payment_methods_used": methods,
+            "transactions": txns,
+            "cases": cases,
         }
 
     # --- Merchant stats ---
@@ -227,7 +217,8 @@ class Database:
             top_merchants = conn.execute(
                 "SELECT t.merchant, COUNT(*) as cb_count "
                 "FROM cases c JOIN transactions t ON c.transaction_id = t.id "
-                f"GROUP BY t.merchant ORDER BY cb_count DESC LIMIT {DASHBOARD_TOP_N}"
+                "GROUP BY t.merchant ORDER BY cb_count DESC LIMIT ?",
+                (DASHBOARD_TOP_N,),
             ).fetchall()
 
             by_country = conn.execute(

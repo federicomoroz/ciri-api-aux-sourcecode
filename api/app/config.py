@@ -1,5 +1,3 @@
-import logging
-
 from pydantic_settings import BaseSettings
 
 from .domain.constants import (

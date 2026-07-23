@@ -1,10 +1,6 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from ..analysis.analyzer import Analyzer
-
-logger = logging.getLogger(__name__)
 from ..dependencies import get_analyzer
 from ..domain.models import SLACheckRequest
 

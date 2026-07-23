@@ -5,6 +5,7 @@ Extracts orchestration logic from routes/feedback.py.
 """
 
 import logging
+from datetime import datetime, timezone
 
 from ..data.db import Database
 from ..domain.constants import (
@@ -50,6 +51,7 @@ class FeedbackService:
 
         auto_indexed = False
         if resolution:
+            now = datetime.now(timezone.utc).isoformat()
             case_dict = {
                 "case_id": f"{FEEDBACK_CASE_ID_PREFIX}-{feedback_id}",
                 "transaction_id": transaction_id,
@@ -58,8 +60,8 @@ class FeedbackService:
                 "resolution_days": FEEDBACK_AUTO_RESOLUTION_DAYS,
                 "analyst": FEEDBACK_AUTO_ANALYST_TAG,
                 "observations": analyst_notes,
-                "open_date": "",
-                "close_date": "",
+                "open_date": now,
+                "close_date": now,
             }
             auto_indexed = self.updater.on_case_resolved(case_dict, judge_score)
 

@@ -91,6 +91,14 @@ __all__ = [
     "LANGFUSE_STATS_CACHE_TTL_S",
     "LANGFUSE_STATS_TRACE_LIMIT",
     "LANGFUSE_STATS_DISPLAY_LIMIT",
+    "LANGFUSE_STATS_FETCH_LIMIT",
+    "LANGFUSE_OBSERVATION_TYPE",
+    # SQLite
+    "SQLITE_TIMEOUT_S",
+    # Display
+    "DISPLAY_FALLBACK",
+    # LLM Pricing
+    "LLM_PRICING_FALLBACK_KEY",
     # Conversion
     "SECONDS_TO_MS",
 ]
@@ -204,6 +212,17 @@ FALLBACK_REQUEST_ID: str = "unknown"       # default request_id when not set
 LANGFUSE_STATS_CACHE_TTL_S: int = 60
 LANGFUSE_STATS_TRACE_LIMIT: int = 20
 LANGFUSE_STATS_DISPLAY_LIMIT: int = 10
+LANGFUSE_STATS_FETCH_LIMIT: int = 100
+LANGFUSE_OBSERVATION_TYPE: str = "GENERATION"
+
+# ── SQLite ────────────────────────────────────────────────────────────────────
+SQLITE_TIMEOUT_S: int = 30
+
+# ── Display ───────────────────────────────────────────────────────────────────
+DISPLAY_FALLBACK: str = "N/A"
+
+# ── LLM Pricing ──────────────────────────────────────────────────────────────
+LLM_PRICING_FALLBACK_KEY: str = "sonnet"
 
 # ── Conversion ───────────────────────────────────────────────────────────────
 SECONDS_TO_MS: int = 1000

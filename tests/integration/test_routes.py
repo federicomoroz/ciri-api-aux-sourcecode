@@ -75,7 +75,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.pipeline_service = MagicMock()
 
     from api.app.services.langfuse_stats import LangfuseStatsService
-    app.state.langfuse_stats_service = LangfuseStatsService(mock_tracer, "claude-haiku-4-5-20251001")
+    app.state.langfuse_stats_service = LangfuseStatsService(mock_tracer, "claude-sonnet-4-6")
 
     # Ensure report cache table exists
     db.ensure_report_cache_table()

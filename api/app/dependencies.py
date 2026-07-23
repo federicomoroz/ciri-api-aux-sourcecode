@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
     )
-    embedder = FastEmbedder(settings.embedding_model)
+    embedder = FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key)
     tracer = (
         LangfuseTracer(
             public_key=settings.langfuse_public_key,

@@ -141,7 +141,7 @@ class ResolutionService:
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})
 
         if "overall_score" not in result and "criteria" in result:
-            scores = list(result["criteria"].values())
+            scores = [float(v) for v in result["criteria"].values()]
             result["overall_score"] = round(sum(scores) / len(scores), 2) if scores else 0.0
         if "approved" not in result:
             result["approved"] = result.get("overall_score", 0) >= JUDGE_APPROVAL_THRESHOLD

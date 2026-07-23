@@ -76,17 +76,14 @@ class TestClientHistory:
     def test_known_client(self, db):
         history = db.get_client_history("CLI-0003")
         assert history["client_id"] == "CLI-0003"
-        assert history["total_transactions"] >= 1
-        assert "countries_used" in history
-        assert "payment_methods_used" in history
+        assert len(history["transactions"]) >= 1
+        assert "cases" in history
 
-    def test_unknown_client_returns_zeros(self, db):
+    def test_unknown_client_returns_empty(self, db):
         history = db.get_client_history("CLI-NONEXISTENT")
-        assert history["total_transactions"] == 0
-        assert history["total_chargebacks"] == 0
-        assert history["rejected_transactions"] == 0
-        assert history["countries_used"] == []
-        assert history["payment_methods_used"] == []
+        assert history["client_id"] == "CLI-NONEXISTENT"
+        assert history["transactions"] == []
+        assert history["cases"] == []
 
 
 # ---- Merchant Stats ----
