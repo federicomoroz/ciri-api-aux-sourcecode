@@ -50,7 +50,8 @@ PRECEDENT_SUMMARY (PRE-GENERADO POR SISTEMA):
 
 NEXT_STEPS (LISTA CONCRETA):
 - Genera pasos basados en los veredictos de politica, la decision determinada, y las implicaciones de los precedentes.
-- Cada paso sigue este formato: "[Verbo] + [dato especifico] + [responsable si aplica]"
+- Cada paso sigue este formato: "[Verbo] + [dato especifico] + [area/sistema responsable] + [plazo si aplica]"
+  Ejemplo: "Solicitar timestamps al equipo de procesamiento de pagos — plazo 48h habiles"
 - Si requires_hitl=true: primer paso siempre es "Escalar a supervisor/analista para revision"
 - Para cada politica FAIL: un paso citando el requisito especifico de la politica.
   Ejemplo: si POL-CB-003 FAIL dice "comercio tiene 10 dias habiles para defensa", el paso es "Solicitar defensa del comercio — plazo 10 dias habiles segun POL-CB-003"

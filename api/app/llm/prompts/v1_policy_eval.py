@@ -30,6 +30,7 @@ REGLAS ESTRICTAS:
 5. Evalua TODAS las politicas proporcionadas. No omitas ninguna.
 6. USA TODOS LOS DATOS DISPONIBLES: transaccion, perfil de riesgo del comercio e historial del cliente. Si una politica requiere datos del comercio (cb_ratio, flags) o del cliente (total_chargebacks, countries), verificalos en las secciones correspondientes.
 7. NOT_APPLICABLE se usa SOLO cuando la politica genuinamente no aplica (ej: POL-EXC-002 VIP cuando el cliente NO es VIP). Si los datos existen para evaluar la politica, evaluala como PASS, FAIL o WARNING — no uses NOT_APPLICABLE.
+   IMPORTANTE: Si un comercio esta suspendido, las politicas de plazos de respuesta del comercio (ej: POL-CB-003) SIGUEN SIENDO RELEVANTES para el procesamiento del chargeback. No marques como NOT_APPLICABLE — evalua si el plazo aplica o usa WARNING con nota sobre la suspension.
 8. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
 9. DETERMINACION DE REGION (LATAM vs no-LATAM):
    - Usa el campo "country" de la TRANSACCION para determinar la region. NO infieras la region del nombre del comercio.

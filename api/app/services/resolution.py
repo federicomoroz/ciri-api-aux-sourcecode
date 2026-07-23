@@ -255,15 +255,22 @@ class ResolutionService:
 
         annotated = []
         for c in similar_cases:
-            case_text = f"{c.get('motivo', '')} {c.get('observations', '')}"
+            case_motivo = c.get("motivo", "")
+            case_obs = c.get("observations", "")
+            case_text = f"{case_motivo} {case_obs}"
             label = motivo_match_label(current_motivo, case_text) if current_motivo else None
-            annotated.append((c, label))
+            # Track if match is from observations (indirect) vs motivo field (direct).
+            match_source = None
+            if label and current_motivo:
+                direct = motivo_match_label(current_motivo, case_motivo)
+                match_source = "motivo" if direct else "observaciones"
+            annotated.append((c, label, match_source))
 
         # Matches first (label is not None), then rest.
         annotated.sort(key=lambda x: (x[1] is None,))
 
         parts = []
-        for c, label in annotated:
+        for c, label, match_source in annotated:
             tags = []
             if label:
                 tags.append("[MOTIVO SIMILAR]")
@@ -284,7 +291,11 @@ class ResolutionService:
             if label and obs:
                 line += f". Obs: {obs}"
             if label:
-                line += f". Relevancia: mismo patron de {label}"
+                source_note = (
+                    f" (match por {match_source}, motivo registrado: {motivo})"
+                    if match_source == "observaciones" else ""
+                )
+                line += f". Relevancia: mismo patron de {label}{source_note}"
                 # Deterministic outcome note — map resolution to implication.
                 res_lower = resolution.lower()
                 if "sin resolucion" in res_lower or "pendiente" in res_lower:
@@ -300,11 +311,11 @@ class ResolutionService:
             parts.append(line)
 
         # Deterministic pattern analysis across ALL precedents.
-        outcomes_all = [c.get("resolution", "").lower() for c, _ in annotated]
+        outcomes_all = [c.get("resolution", "").lower() for c, _, _ in annotated]
         approved_all = sum(1 for o in outcomes_all if "aprobado" in o or "a favor" in o)
         rejected_all = sum(1 for o in outcomes_all if "rechazado" in o or "denegado" in o)
         total_all = len(annotated)
-        matching = [(c, label) for c, label in annotated if label is not None]
+        matching = [(c, label) for c, label, _ in annotated if label is not None]
 
         # Strategic pattern implication.
         if approved_all > rejected_all:
