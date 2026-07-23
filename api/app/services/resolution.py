@@ -193,9 +193,19 @@ class ResolutionService:
 
         if resolution.get("risk_level") == RiskLevel.BLOCKER and not has_blocker:
             warnings.append(
-                "GUARDRAIL: risk_level=BLOCKER sin veredictos BLOCKER reales — auto-corregido a HIGH (posible alucinacion)"
+                "GUARDRAIL: risk_level=BLOCKER sin veredictos BLOCKER reales — auto-corregido a HIGH + PENDING_HITL"
             )
             resolution["risk_level"] = RiskLevel.HIGH
+            resolution["requires_hitl"] = True
+            if resolution.get("recommended_action") == ResolutionOutcome.REJECT:
+                resolution["recommended_action"] = ResolutionOutcome.PENDING_HITL
+                resolution["hitl_reason"] = "Auto-corregido: REJECT sin BLOCKER requiere confirmacion de analista"
+
+        if resolution.get("recommended_action") == ResolutionOutcome.REJECT and not has_blocker:
+            warnings.append(
+                "GUARDRAIL: REJECT sin veredictos BLOCKER — auto-corregido a PENDING_HITL (requiere revision humana)"
+            )
+            resolution["recommended_action"] = ResolutionOutcome.PENDING_HITL
             resolution["requires_hitl"] = True
 
         comp = resolution.get("compensation_amount_usd", 0)

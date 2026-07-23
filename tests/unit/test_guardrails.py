@@ -54,7 +54,7 @@ class TestGuardrailApproveWithBlocker:
 class TestGuardrailBlockerWithoutBlockerVerdicts:
     """Guardrail 4: risk_level=BLOCKER without actual BLOCKER verdicts → auto-correct to HIGH."""
 
-    def test_blocker_risk_without_blocker_verdicts_corrected_to_high(self):
+    def test_blocker_risk_without_blocker_verdicts_corrected_to_high_hitl(self):
         resolution = {
             "recommended_action": "REJECT",
             "risk_level": "BLOCKER",
@@ -69,6 +69,7 @@ class TestGuardrailBlockerWithoutBlockerVerdicts:
 
         assert any("risk_level=BLOCKER sin veredictos BLOCKER" in w for w in warnings)
         assert resolution["risk_level"] == "HIGH"
+        assert resolution["recommended_action"] == "PENDING_HITL"
         assert resolution["requires_hitl"] is True
 
     def test_blocker_risk_with_blocker_verdicts_no_correction(self):
@@ -94,6 +95,40 @@ class TestGuardrailBlockerWithoutBlockerVerdicts:
         tx = {"amount_usd": 500.0}
         warnings = ResolutionService._validate_resolution(resolution, tx)
         assert not any("risk_level=BLOCKER" in w for w in warnings)
+
+
+class TestGuardrailRejectWithoutBlocker:
+    """Guardrail 5: REJECT without BLOCKER verdicts → auto-correct to PENDING_HITL."""
+
+    def test_reject_without_blocker_corrected_to_hitl(self):
+        resolution = {
+            "recommended_action": "REJECT",
+            "risk_level": "HIGH",
+            "requires_hitl": False,
+            "policy_verdicts": [
+                {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+                {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio"},
+            ],
+        }
+        tx = {"amount_usd": 500.0}
+        warnings = ResolutionService._validate_resolution(resolution, tx)
+
+        assert any("REJECT sin veredictos BLOCKER" in w for w in warnings)
+        assert resolution["recommended_action"] == "PENDING_HITL"
+        assert resolution["requires_hitl"] is True
+
+    def test_reject_with_blocker_no_correction(self):
+        resolution = {
+            "recommended_action": "REJECT",
+            "risk_level": "BLOCKER",
+            "policy_verdicts": [
+                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+            ],
+        }
+        tx = {"amount_usd": 500.0}
+        warnings = ResolutionService._validate_resolution(resolution, tx)
+        assert not any("REJECT sin veredictos BLOCKER" in w for w in warnings)
+        assert resolution["recommended_action"] == "REJECT"
 
 
 class TestGuardrailCompensation:
