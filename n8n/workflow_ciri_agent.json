@@ -5,7 +5,7 @@
       "parameters": {
         "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo visible. Sin AI Agent black box. n8n decide el flujo; FastAPI ejecuta la lógica de negocio.",
         "height": 80,
-        "width": 4752,
+        "width": 7400,
         "color": 4
       },
       "id": "5a5055f6-b155-4d08-bfc3-f36e1f50ca7f",
@@ -13,15 +13,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        59040,
-        21376
+        58900,
+        21200
       ]
     },
     {
       "parameters": {
         "content": "## 🟢 §1 — ENTRADA Y VALIDACIÓN\n\n**IF node** valida formato TXN-XXXXX.\n- ✅ True → **Set node** extrae campos limpios\n- ❌ False → responde 400 sin continuar\n\nError explícito desde el primer nodo.",
-        "height": 1556,
-        "width": 920,
+        "height": 1700,
+        "width": 960,
         "color": 5
       },
       "id": "9dc82bdd-056e-49c9-9ecd-05fa837b08df",
@@ -29,15 +29,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        58800,
-        21488
+        58900,
+        21320
       ]
     },
     {
       "parameters": {
         "content": "## 🔵 §2 — CONTEXTO PARALELO\n\nDespués de obtener la transacción, **6 ramas corren en paralelo**. El nodo **Merge** espera a que todas terminen.\n\n**Nodos nativos de n8n (sin FastAPI):**\n- ✅ **Evaluar Riesgo Comercio** (Set): computa `flags` e `is_strategic` de los datos crudos del comercio.\n- ✅ **Evaluar Historial Cliente** (Set): computa `flags` de riesgo del cliente.\n- ✅ **Verificar SLA** (Set): calcula días transcurridos y límite SLA según país y VIP — sin HTTP call.\n\nReducción de latencia: de ~6× a ~1× el tiempo de un call.",
-        "height": 1564,
-        "width": 776,
+        "height": 1900,
+        "width": 1800,
         "color": 3
       },
       "id": "b3ee8425-a18f-4454-b11f-4307a9582543",
@@ -45,15 +45,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        59728,
-        21488
+        59880,
+        21320
       ]
     },
     {
       "parameters": {
         "content": "## 🟣 §3 — ANÁLISIS CON IA\n\n**Compilar Contexto**: fusiona los 6 resultados del Merge en un objeto unificado.\n\n**Sintetizar Resolución** → FastAPI (LLM con guardrails + caché semántico) evalúa políticas + casos + logs → devuelve `recommended_action`, `risk_level`, `confidence`, `guardrail_warnings`.\n\n**Juez de Calidad** → **Claude directo vía Anthropic API** (HTTP Request nativo). Sin pasar por FastAPI: n8n envía el contexto completo + resolución propuesta, Claude devuelve JSON de evaluación.\n\n**Extraer Evaluación** (Set): parsea la respuesta de Anthropic y expone `judge_evaluation` como objeto n8n.",
-        "height": 1560,
-        "width": 1432,
+        "height": 1700,
+        "width": 1920,
         "color": 6
       },
       "id": "9636afc4-fc42-4c2b-ae53-487c0421f234",
@@ -61,15 +61,15 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        60512,
-        21488
+        61780,
+        21320
       ]
     },
     {
       "parameters": {
         "content": "## 🔀 §4 — ENRUTAMIENTO POR RIESGO\n\n**Switch** por `resolution.risk_level`:\n- **BLOCKER** → rechazo automático inmediato\n- **HIGH** → flujo HITL (ver abajo)\n- **MEDIUM** → alerta de revisión\n- **LOW** → aprobación automática\n\nTodos los reportes: `POST /api/reports/html`",
-        "height": 1360,
-        "width": 1840,
+        "height": 2300,
+        "width": 2600,
         "color": 2
       },
       "id": "cfc28e90-c1cb-4d45-a206-2750274ffba4",
@@ -77,8 +77,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        61968,
-        21488
+        63700,
+        21320
       ]
     },
     {
@@ -93,8 +93,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        62432,
-        21952
+        64420,
+        21600
       ]
     },
     {
@@ -109,8 +109,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        58976,
-        22016
+        59000,
+        22200
       ],
       "webhookId": "ciri-chargeback-agent"
     },
@@ -143,8 +143,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        59184,
-        22016
+        59320,
+        22200
       ]
     },
     {
@@ -178,8 +178,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        59376,
-        22000
+        59640,
+        22200
       ]
     },
     {
@@ -195,8 +195,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        59376,
-        22208
+        59640,
+        22800
       ]
     },
     {
@@ -211,8 +211,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        59776,
-        22096
+        60600,
+        22200
       ],
       "settings": {
         "retryOnFail": true,
@@ -233,8 +233,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        60016,
-        21984
+        60920,
+        21680
       ],
       "settings": {
         "retryOnFail": true,
@@ -280,8 +280,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        60016,
-        22144
+        60920,
+        21940
       ],
       "settings": {
         "retryOnFail": true,
@@ -331,8 +331,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        60016,
-        22304
+        60920,
+        22200
       ],
       "settings": {
         "retryOnFail": true,
@@ -353,8 +353,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        60016,
-        22464
+        60920,
+        22460
       ],
       "settings": {
         "retryOnFail": true,
@@ -388,8 +388,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        60256,
-        22352
+        61240,
+        22460
       ],
       "onError": "continueRegularOutput"
     },
@@ -405,8 +405,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        60016,
-        22624
+        60920,
+        22720
       ],
       "settings": {
         "retryOnFail": true,
@@ -434,8 +434,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        60336,
-        22608
+        61240,
+        22720
       ],
       "onError": "continueRegularOutput"
     },
@@ -488,8 +488,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        60016,
-        22784
+        60920,
+        22980
       ],
       "onError": "continueRegularOutput"
     },
@@ -502,8 +502,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        60592,
-        21968
+        61560,
+        22200
       ]
     },
     {
@@ -515,8 +515,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        60800,
-        21968
+        61880,
+        22200
       ],
       "onError": "continueRegularOutput"
     },
@@ -579,8 +579,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        61024,
-        21968
+        62200,
+        22200
       ],
       "settings": {
         "retryOnFail": true,
@@ -616,8 +616,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        61264,
-        21968
+        62840,
+        22200
       ],
       "settings": {
         "retryOnFail": true,
@@ -645,8 +645,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        61504,
-        21968
+        63160,
+        22200
       ],
       "onError": "continueRegularOutput"
     },
@@ -659,8 +659,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        61744,
-        21968
+        63800,
+        22200
       ],
       "onError": "continueRegularOutput"
     },
@@ -779,8 +779,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        61984,
-        21936
+        64120,
+        22200
       ]
     },
     {
@@ -858,8 +858,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        62480,
-        21728
+        64520,
+        21400
       ],
       "settings": {
         "retryOnFail": true,
@@ -889,8 +889,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        62720,
-        21728
+        64840,
+        21400
       ]
     },
     {
@@ -948,8 +948,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        62384,
-        22208
+        64520,
+        21900
       ]
     },
     {
@@ -991,8 +991,8 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        62624,
-        22208
+        64840,
+        21900
       ],
       "webhookId": "ciri-hitl-resume"
     },
@@ -1005,8 +1005,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        62864,
-        22208
+        65160,
+        21900
       ]
     },
     {
@@ -1048,8 +1048,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        63104,
-        22208
+        65480,
+        21900
       ],
       "settings": {
         "retryOnFail": true,
@@ -1133,8 +1133,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        63344,
-        22208
+        65800,
+        21900
       ],
       "settings": {
         "retryOnFail": true,
@@ -1164,8 +1164,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        63584,
-        22208
+        66120,
+        21900
       ]
     },
     {
@@ -1243,8 +1243,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        62384,
-        22448
+        64520,
+        22400
       ],
       "settings": {
         "retryOnFail": true,
@@ -1274,8 +1274,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        62624,
-        22448
+        64840,
+        22400
       ]
     },
     {
@@ -1353,8 +1353,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        62384,
-        22688
+        64520,
+        22900
       ],
       "settings": {
         "retryOnFail": true,
@@ -1384,8 +1384,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        62624,
-        22688
+        64840,
+        22900
       ]
     },
     {
@@ -1400,8 +1400,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        59552,
-        22000
+        59960,
+        22200
       ],
       "settings": {
         "retryOnFail": true,
@@ -1423,8 +1423,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        59776,
-        22320
+        60920,
+        22800
       ]
     },
     {
@@ -1440,8 +1440,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        61024,
-        22208
+        62520,
+        22800
       ]
     },
     {
@@ -1457,8 +1457,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        63232,
-        22656
+        64840,
+        23400
       ]
     },
     {
@@ -1472,8 +1472,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        59168,
-        22432
+        59540,
+        22720
       ]
     },
     {
@@ -1489,8 +1489,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        59552,
-        21808
+        60280,
+        22200
       ],
       "onError": "continueErrorOutput"
     },
@@ -1523,8 +1523,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        59776,
-        21920
+        60500,
+        21600
       ]
     },
     {
@@ -1552,8 +1552,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        60016,
-        21808
+        60820,
+        21600
       ]
     },
     {
@@ -1568,8 +1568,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        59296,
-        21536
+        60180,
+        21400
       ]
     },
     {
@@ -1581,8 +1581,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        61136,
-        21968
+        62520,
+        22200
       ]
     },
     {
@@ -1614,8 +1614,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        61624,
-        21968
+        63480,
+        22200
       ]
     },
     {
@@ -1638,8 +1638,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        61624,
-        22160
+        63480,
+        22700
       ]
     },
     {
@@ -1654,7 +1654,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        61040,
+        62420,
         21700
       ]
     },
@@ -1670,7 +1670,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        61520,
+        63380,
         21700
       ]
     }
