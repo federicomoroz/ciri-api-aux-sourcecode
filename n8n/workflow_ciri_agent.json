@@ -964,7 +964,7 @@
     {
       "parameters": {
         "resume": "timeInterval",
-        "amount": 15,
+        "amount": 5,
         "unit": "seconds"
       },
       "id": "fb156049-a6f2-4456-ade1-3bccfd0789be",
@@ -1033,7 +1033,9 @@
         22700
       ],
       "settings": {
-        "retryOnFail": false
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 10000
       },
       "onError": "continueRegularOutput"
     }
