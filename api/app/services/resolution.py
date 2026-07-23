@@ -301,7 +301,8 @@ class ResolutionService:
                 if "sin resolucion" in res_lower or "pendiente" in res_lower:
                     line += f". Nota: caso similar permanece sin resolver — sugiere que este tipo de caso requiere investigacion adicional antes de decidir"
                 elif "cerrado" in res_lower:
-                    line += f". Nota: caso similar fue cerrado sin resolucion explicita"
+                    days_val = c.get("resolution_days", "?")
+                    line += f". Nota: caso similar fue cerrado sin resolucion explicita en {days_val}d — riesgo de que caso actual siga mismo camino si no se investiga causa raiz antes de decidir"
                 elif "aprobado" in res_lower or "a favor" in res_lower:
                     line += f". Nota: precedente fue aprobado — patron favorable al cliente para este tipo de caso"
                 elif "rechazado" in res_lower or "denegado" in res_lower:

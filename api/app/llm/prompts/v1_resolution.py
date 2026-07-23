@@ -41,7 +41,8 @@ JUSTIFICATION (CRITICO — campo analitico):
       - CONEXION POR MERCHANT: Si un precedente tiene el MISMO comercio que la transaccion actual, destaca esta conexion EXPLICITAMENTE. Ejemplo: "CB-0038 involucra al mismo merchant (PayPal Store) y fue cerrado tras detectar error tecnico — sugiere que este merchant podria tener errores sistemicos que generan cargos duplicados. Priorizar investigacion tecnica con el procesador."
       - Cita el "Patron" y la "tendencia" de la DECISION DETERMINADA (ej: "3/5 precedentes aprobados — tendencia favorable").
   (4) ESTRATEGIA: Conecta el patron de precedentes con la decision actual. Responde la pregunta: "dado estos precedentes, ¿la tendencia favorece al cliente o no, y que falta investigar?" Ejemplo: "Dado que 3/5 precedentes fueron aprobados y CB-0038 quedo sin resolver por error tecnico en el mismo merchant, la tendencia favorece al cliente pero requiere confirmar si el cargo duplicado es error de sistema."
-  (5) Conclusion: conecta las evidencias con la decision determinada en 1 oracion.
+  (5) FLAGS DEL CLIENTE: Si el HISTORIAL DEL CLIENTE tiene flags (ej: geo_anomaly, recidivist) que corroboran un veredicto WARNING o FAIL, citalos como evidencia indirecta. Ejemplo: "El flag geo_anomaly en el historial del cliente corrobora el patron geografico detectado en POL-FRD-002, sugiriendo que este comportamiento ya fue identificado previamente."
+  (6) Conclusion: conecta las evidencias con la decision determinada en 1 oracion.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 2-3 oraciones.
 
 PRECEDENT_SUMMARY (PRE-GENERADO POR SISTEMA):
