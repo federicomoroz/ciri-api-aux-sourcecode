@@ -1,4 +1,4 @@
-# PROMPT VERSION: v2.1 | DATE: 2025-07 | CHANGES: Mechanical extraction only. No analysis. Haiku = robot.
+# PROMPT VERSION: v2.5 | DATE: 2025-07 | CHANGES: Pattern analysis + explicit policy codes + SLA precision.
 # PURPOSE: Justify a pre-determined chargeback resolution using evidence
 # OUTPUT: Resolution JSON object (action/risk/verdicts are pre-determined by system)
 
@@ -33,8 +33,8 @@ REGLAS ESTRICTAS:
 CONCISION (CRITICO):
 - justification: MAXIMO 150 palabras. Estructura OBLIGATORIA:
   (1) Copia risk_reason de DECISION DETERMINADA como primera oracion.
-  (2) Lista las politicas FAIL/BLOCKER con sus datos.
-  (3) Si hay precedentes [MOTIVO SIMILAR], menciona su case_id y outcome.
+  (2) Lista las politicas FAIL/BLOCKER con sus datos especificos (montos, scores, umbrales).
+  (3) Cita el "Patron" de precedentes de DECISION DETERMINADA (ej: "3/5 aprobados"). Para cada [MOTIVO SIMILAR], cita case_id y outcome. Para precedentes sin [MOTIVO SIMILAR], cita solo los que tengan patrones de decision relevantes (ej: mismo merchant, fraud_score similar).
 - precedent_summary: Copia EXACTAMENTE el valor de DECISION DETERMINADA.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 1-2 oraciones.
 
@@ -53,7 +53,7 @@ NEXT_STEPS (LISTA MECANICA):
 - Si hay precedente [MOTIVO SIMILAR] con observaciones relevantes, incluir paso: "Verificar [patron del precedente] en sistema de pagos"
 - Para cada politica WARNING con datos faltantes (ej: timestamps, documentacion): incluir paso "Solicitar [dato faltante] para confirmar/descartar [POL-XXX-NNN]"
   Ejemplo: POL-FRD-002 WARNING por falta de timestamps → "Solicitar timestamps de transacciones para confirmar ventana de 24h segun POL-FRD-002"
-- Si requires_hitl=true y compensation_applicable=false: incluir paso final "Monitorear SLA durante revision HITL — si excede plazo, aplicar compensacion segun POL-SLA-004"
+- Si requires_hitl=true y compensation_applicable=false: incluir paso final "Resolver revision HITL dentro del plazo SLA restante — si tiempo total de resolucion (incluyendo espera HITL) excede plazo, la empresa debe compensar segun POL-SLA-004"
 - DATOS FALTANTES: Si logs=[] (0 eventos), NO propongas "revisar logs". Escribe "Logs no disponibles — validacion tecnica limitada."
 - NO uses "evaluar", "considerar", "analizar". Usa: "verificar", "confirmar", "solicitar", "notificar".
 
@@ -82,13 +82,13 @@ Respuesta correcta (extraccion mecanica, sin interpretacion):
   "transaction_id": "TXN-00042",
   "recommended_action": "PENDING_HITL",
   "confidence": 0.72,
-  "justification": "HIGH por: 1 violacion de politica, fraud_score=4 (umbral severo: 15). POL-FRD-001 FAIL (fraud_score=4, umbral 30). POL-EXC-002 PASS (cliente VIP, SLA 5d). CB-0020 [MOTIVO SIMILAR]: aprobado en 2d.",
-  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay. Relevancia: mismo patron de fraude / no reconocido | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon",
+  "justification": "HIGH por: 1 violacion de politica (POL-FRD-001), fraud_score=4 indica bajo riesgo de fraude — riesgo HIGH es por violaciones de politica, no por fraude. POL-FRD-001 FAIL (fraud_score=4, umbral 30). POL-EXC-002 PASS (cliente VIP, SLA 5d). Patron: de 2 precedentes, 2 aprobados, 0 rechazados. CB-0020 [MOTIVO SIMILAR]: aprobado en 2d.",
+  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay. Relevancia: mismo patron de fraude / no reconocido | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon | Patron: de 2 precedentes, 2 aprobados, 0 rechazados. Motivo similar: 1/2, 1 aprobados",
   "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
   "risk_level": "HIGH",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
-  "next_steps": ["Escalar a supervisor para revision (requires_hitl=true)", "Verificar POL-FRD-001 — fraud_score=4 vs umbral 30, requiere validacion", "Solicitar prueba de entrega al comercio — plazo segun POL-CB-003", "Notificar al cliente VIP despues de resolucion"],
+  "next_steps": ["Escalar a supervisor para revision (requires_hitl=true)", "Verificar POL-FRD-001 — fraud_score=4 vs umbral 30, requiere validacion", "Solicitar prueba de entrega al comercio — plazo segun POL-CB-003", "Notificar al cliente VIP despues de resolucion", "Resolver revision HITL dentro del plazo SLA restante — si tiempo total excede plazo, compensar segun POL-SLA-004"],
   "requires_hitl": true,
   "hitl_reason": "fraud_score=4 con cliente VIP — requiere validacion de supervisor"
 }"""

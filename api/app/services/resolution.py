@@ -286,6 +286,23 @@ class ResolutionService:
                     line += f". Nota: precedente resuelto con reembolso parcial"
             parts.append(line)
 
+        # Deterministic pattern analysis across ALL precedents.
+        outcomes_all = [c.get("resolution", "").lower() for c, _ in annotated]
+        approved_all = sum(1 for o in outcomes_all if "aprobado" in o or "a favor" in o)
+        rejected_all = sum(1 for o in outcomes_all if "rechazado" in o or "denegado" in o)
+        total_all = len(annotated)
+        matching = [(c, label) for c, label in annotated if label is not None]
+
+        pattern = f"Patron: de {total_all} precedentes, {approved_all} aprobados, {rejected_all} rechazados"
+        if matching:
+            approved_match = sum(
+                1 for c, _ in matching
+                if "aprobado" in c.get("resolution", "").lower()
+                or "a favor" in c.get("resolution", "").lower()
+            )
+            pattern += f". Motivo similar: {len(matching)}/{total_all}, {approved_match} aprobados"
+        parts.append(pattern)
+
         return " | ".join(parts)
 
     @staticmethod
@@ -310,21 +327,31 @@ class ResolutionService:
         )
         fraud_score = int(tx_data.get("fraud_score", FRAUD_SCORE_DEFAULT))
 
+        # Helper: list failing policy codes for explicit risk_reason.
+        fail_codes = [
+            v.get("policy_code", "?") for v in policy_verdicts
+            if v.get("verdict") in (VerdictType.FAIL, VerdictType.BLOCKER)
+        ]
+
         # ── Risk level ──
         if has_blocker:
             risk_level = RiskLevel.BLOCKER
-            risk_reason = "Veredicto BLOCKER presente (transaccion irreversible)"
+            blocker_codes = [
+                v.get("policy_code", "?") for v in policy_verdicts
+                if v.get("verdict") == VerdictType.BLOCKER
+            ]
+            risk_reason = f"Veredicto BLOCKER en {', '.join(blocker_codes)} (transaccion irreversible)"
         elif fail_count >= RISK_HIGH_MIN_FAILS or fraud_score < RISK_FRAUD_SEVERE:
             risk_level = RiskLevel.HIGH
             reasons = []
             if fail_count >= RISK_HIGH_MIN_FAILS:
-                reasons.append(f"{fail_count} violaciones de politica")
+                reasons.append(f"{fail_count} violaciones de politica ({', '.join(fail_codes)})")
             if fraud_score < RISK_FRAUD_SEVERE:
                 reasons.append(f"fraud_score={fraud_score} (umbral severo: {RISK_FRAUD_SEVERE})")
             # Clarify when risk is from policy, not fraud.
             if fraud_score >= FRAUD_SCORE_HIGH_RISK_THRESHOLD:
                 reasons.append(
-                    f"fraud_score={fraud_score} indica bajo riesgo de fraude — riesgo es de politica"
+                    f"fraud_score={fraud_score} indica bajo riesgo de fraude — riesgo HIGH es por violaciones de politica, no por fraude"
                 )
             risk_reason = f"HIGH por: {', '.join(reasons)}"
         elif fail_count >= 1 or fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
@@ -333,7 +360,8 @@ class ResolutionService:
                 f" (fraud_score={fraud_score} seguro, riesgo es de politica)"
                 if fraud_score >= FRAUD_SCORE_HIGH_RISK_THRESHOLD else ""
             )
-            risk_reason = f"MEDIUM por: {fail_count} violacion(es), fraud_score={fraud_score}{fraud_note}"
+            codes_note = f" ({', '.join(fail_codes)})" if fail_codes else ""
+            risk_reason = f"MEDIUM por: {fail_count} violacion(es){codes_note}, fraud_score={fraud_score}{fraud_note}"
         else:
             risk_level = RiskLevel.LOW
             risk_reason = f"LOW: sin violaciones, fraud_score={fraud_score} (seguro)"
