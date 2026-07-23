@@ -2,7 +2,7 @@
 Unit tests for rag/formatter.py — prompt formatting for policies and cases.
 """
 
-from api.app.rag.formatter import format_cases_for_prompt, format_policies_for_prompt
+from api.app.rag.formatter import format_cases_for_prompt, format_policies_for_prompt, _motivo_matches
 
 
 class TestFormatPoliciesForPrompt:
@@ -98,3 +98,53 @@ class TestFormatCasesForPrompt:
         result = format_cases_for_prompt(cases)
         assert "Precedente 1" in result
         assert "Precedente 2" in result
+
+
+class TestMotivoMatching:
+    """Deterministic motivo synonym matching."""
+
+    def test_exact_match(self):
+        assert _motivo_matches("Cargo duplicado", "cargo duplicado")
+
+    def test_synonym_match_doble_duplicado(self):
+        assert _motivo_matches("Cargo duplicado", "cargo doble por timeout")
+
+    def test_synonym_match_fraude_no_reconoce(self):
+        assert _motivo_matches("No reconoce la compra", "compra no autorizada fraude")
+
+    def test_no_match_different_motivos(self):
+        assert not _motivo_matches("Cargo duplicado", "Producto defectuoso")
+
+    def test_no_match_empty(self):
+        assert not _motivo_matches("", "Cargo duplicado")
+
+    def test_case_insensitive(self):
+        assert _motivo_matches("CARGO DUPLICADO", "doble cobro en sistema")
+
+    def test_observations_checked_in_format(self):
+        """Cases with matching observations (not just motivo) are tagged."""
+        cases = [
+            {"case_id": "CB-001", "motivo": "Monto incorrecto", "score": 0.8,
+             "resolution": "Cerrado", "resolution_days": 3,
+             "merchant": "Rappi", "amount_usd": 50, "country": "COL",
+             "observations": "Error en sistema — cargo doble por timeout"},
+            {"case_id": "CB-002", "motivo": "Defecto", "score": 0.7,
+             "resolution": "Reembolso", "resolution_days": 5,
+             "merchant": "Amazon", "amount_usd": 100, "country": "MEX"},
+        ]
+        result = format_cases_for_prompt(cases, current_motivo="Cargo duplicado")
+        # CB-001 should be tagged and listed first
+        assert "[MOTIVO SIMILAR]" in result
+        pos_cb001 = result.index("CB-001")
+        pos_cb002 = result.index("CB-002")
+        assert pos_cb001 < pos_cb002
+
+    def test_no_motivo_no_tags(self):
+        """Without current_motivo, no tags are added."""
+        cases = [
+            {"case_id": "CB-001", "motivo": "Cargo duplicado", "score": 0.8,
+             "resolution": "R", "resolution_days": 1,
+             "merchant": "X", "amount_usd": 10, "country": "A"},
+        ]
+        result = format_cases_for_prompt(cases, current_motivo=None)
+        assert "[MOTIVO SIMILAR]" not in result

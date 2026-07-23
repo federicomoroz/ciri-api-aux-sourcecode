@@ -101,6 +101,7 @@ USER_TEMPLATE = """## TRANSACCION
 ## DECISION DETERMINADA (por sistema de guardrails — NO modificar estos valores)
 - recommended_action: {determined_action}
 - risk_level: {determined_risk}
+- risk_reason: {determined_risk_reason}
 - requires_hitl: {determined_hitl}
 {determined_hitl_reason}
 
@@ -157,6 +158,7 @@ def render(
         log_count=log_count,
         determined_action=outcome.get("recommended_action", "PENDING_HITL"),
         determined_risk=outcome.get("risk_level", "MEDIUM"),
+        determined_risk_reason=outcome.get("risk_reason", ""),
         determined_hitl=outcome.get("requires_hitl", False),
         determined_hitl_reason=hitl_reason_line,
     )

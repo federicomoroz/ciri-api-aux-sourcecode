@@ -151,7 +151,7 @@ class ResolutionService:
         determined_outcome: dict | None = None,
     ) -> tuple[dict, LLMResult]:
         """Step 4: LLM resolution synthesis. Raises on failure."""
-        cases_formatted = format_cases_for_prompt(similar_cases)
+        cases_formatted = format_cases_for_prompt(similar_cases, current_motivo=motivo)
         sys_res, usr_res = prompts.v1_resolution.render(
             transaction=tx_data,
             policy_verdicts=json.dumps(policy_verdicts, ensure_ascii=False, indent=2),
@@ -257,12 +257,21 @@ class ResolutionService:
         # ── Risk level ──
         if has_blocker:
             risk_level = RiskLevel.BLOCKER
+            risk_reason = "Veredicto BLOCKER presente (transaccion irreversible)"
         elif fail_count >= RISK_HIGH_MIN_FAILS or fraud_score < RISK_FRAUD_SEVERE:
             risk_level = RiskLevel.HIGH
+            reasons = []
+            if fail_count >= RISK_HIGH_MIN_FAILS:
+                reasons.append(f"{fail_count} violaciones de politica")
+            if fraud_score < RISK_FRAUD_SEVERE:
+                reasons.append(f"fraud_score={fraud_score} (umbral severo: {RISK_FRAUD_SEVERE})")
+            risk_reason = f"HIGH por: {', '.join(reasons)}"
         elif fail_count >= 1 or fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
             risk_level = RiskLevel.MEDIUM
+            risk_reason = f"MEDIUM por: {fail_count} violacion(es), fraud_score={fraud_score}"
         else:
             risk_level = RiskLevel.LOW
+            risk_reason = f"LOW: sin violaciones, fraud_score={fraud_score} (seguro)"
 
         # ── Action ──
         if has_blocker:
@@ -286,6 +295,7 @@ class ResolutionService:
         return {
             "recommended_action": action,
             "risk_level": risk_level,
+            "risk_reason": risk_reason,
             "requires_hitl": requires_hitl,
             "hitl_reason": hitl_reason,
         }
