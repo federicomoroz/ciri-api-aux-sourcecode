@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Preparar Respuesta → Responder\n• HIGH → Wait (15s) → Procesar HITL → Registrar Feedback → Restaurar Payload → Generar Reporte → Preparar Respuesta → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa 15s para decisión del analista\n• Procesar construye payload con decisión HITL incluida\n• Reporte final ya incluye la decisión del analista\n\n**Respuesta JSON (raw data + HTML):**\n• Preparar Respuesta Final merge raw data + rendered HTML\n• Webhook responde JSON: { transaction, resolution, ..., html }\n• Panel extrae .html; otros sistemas usan los campos raw\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler",
+        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Responder (JSON raw data)\n• HIGH → Wait (15s) → Procesar HITL → Registrar Feedback → Restaurar Payload → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa 15s para decisión del analista\n• Procesar construye payload con decisión HITL incluida\n• Reporte final ya incluye la decisión del analista\n\n**Respuesta:**\n• Webhook responde JSON raw: { transaction, resolution, judge, ... }\n• El panel aplica el template HTML (POST /api/reports/html)\n• Otros sistemas consumen el JSON directamente\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler",
         "height": 2400,
         "width": 3200,
         "color": 6
@@ -960,91 +960,6 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "transaction",
-              "value": "={{ $json.transaction }}"
-            },
-            {
-              "name": "resolution",
-              "value": "={{ $json.resolution }}"
-            },
-            {
-              "name": "judge_evaluation",
-              "value": "={{ $json.judge_evaluation }}"
-            },
-            {
-              "name": "agent_analysis",
-              "value": "={{ $json.agent_analysis }}"
-            },
-            {
-              "name": "merchant_risk",
-              "value": "={{ $json.merchant_risk }}"
-            },
-            {
-              "name": "client_profile",
-              "value": "={{ $json.client_profile }}"
-            },
-            {
-              "name": "logs",
-              "value": "={{ $json.logs }}"
-            },
-            {
-              "name": "policies_evaluated",
-              "value": "={{ $json.policies_evaluated }}"
-            },
-            {
-              "name": "similar_cases",
-              "value": "={{ $json.similar_cases }}"
-            },
-            {
-              "name": "hitl_decision",
-              "value": "={{ $json.hitl_decision }}"
-            },
-            {
-              "name": "cache_hit",
-              "value": "={{ $json.cache_hit }}"
-            },
-            {
-              "name": "guardrail_warnings",
-              "value": "={{ $json.guardrail_warnings }}"
-            },
-            {
-              "name": "motivo",
-              "value": "={{ $json.motivo }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $json.cliente_vip }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        },
-        "contentType": "json"
-      },
-      "id": "e9d8a0a2-56ca-4aca-8d58-4562d1ea4f73",
-      "name": "Generar Reporte",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        66100,
-        22200
-      ],
-      "settings": {
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
           "responseCode": 200
@@ -1055,20 +970,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        67200,
-        22200
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Merge raw report data + rendered HTML into a single JSON response.\n// Non-HIGH path: raw data from Preparar Informe.\n// HIGH (HITL) path: raw data from Restaurar Payload HITL.\nconst html = $json.html;\nlet raw;\ntry {\n  raw = $('Restaurar Payload HITL').first().json;\n} catch {\n  raw = $('Preparar Informe').first().json;\n}\nconst { _feedback_payload, ...cleanRaw } = raw;\nreturn [{ json: { ...cleanRaw, html } }];"
-      },
-      "id": "f1a2b3c4-d5e6-7890-abcd-112233445566",
-      "name": "Preparar Respuesta Final",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        66700,
+        64600,
         22200
       ]
     },
@@ -1377,7 +1279,7 @@
       "main": [
         [
           {
-            "node": "Generar Reporte",
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }
@@ -1391,14 +1293,14 @@
         ],
         [
           {
-            "node": "Generar Reporte",
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Generar Reporte",
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }
@@ -1550,35 +1452,6 @@
         ]
       ]
     },
-    "Generar Reporte": {
-      "main": [
-        [
-          {
-            "node": "Preparar Respuesta Final",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Propagar → Error Handler — Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Preparar Respuesta Final": {
-      "main": [
-        [
-          {
-            "node": "Responder — Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Formatear Caché": {
       "main": [
         [
@@ -1639,7 +1512,7 @@
       "main": [
         [
           {
-            "node": "Generar Reporte",
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }

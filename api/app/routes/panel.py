@@ -80,6 +80,7 @@ async def panel_analyze(
     direct: bool              = Query(False, description="Skip n8n, use direct FastAPI pipeline"),
     n8n_test: bool            = Query(False, description="Use n8n test webhook URL instead of production"),
     pipeline: PipelineService = Depends(get_pipeline_service),
+    report_gen: ReportGenerator = Depends(get_report_generator),
     settings: Settings        = Depends(get_settings),
 ) -> HTMLResponse:
     """
@@ -87,12 +88,11 @@ async def panel_analyze(
 
     Strategy:
     1. If direct=false, try the n8n explicit workflow (POST /webhook/chargeback-agent).
-       n8n orchestrates 9 explicit HTTP calls to FastAPI and returns text/html.
-    2. If n8n is unavailable, returns non-HTML, or direct=true, use the
-       direct FastAPI pipeline (identical business logic, no n8n dependency).
+       n8n returns raw JSON data; the panel applies the HTML template locally.
+    2. If n8n is unavailable or direct=true, use the direct FastAPI pipeline.
     """
     if not direct:
-        html = await _try_n8n(req, settings, n8n_test)
+        html = await _try_n8n(req, settings, report_gen, n8n_test)
         if html is not None:
             return HTMLResponse(content=html, status_code=200)
 
@@ -114,12 +114,16 @@ async def panel_analyze(
         return HTMLResponse(content=error_html, status_code=500)
 
 
-async def _try_n8n(req: AnalyzeRequest, settings: Settings, n8n_test: bool) -> str | None:
-    """Try n8n webhook. Returns HTML string on success, None on failure.
+async def _try_n8n(
+    req: AnalyzeRequest,
+    settings: Settings,
+    report_gen: ReportGenerator,
+    n8n_test: bool,
+) -> str | None:
+    """Try n8n webhook. Returns rendered HTML on success, None on failure.
 
-    n8n responds with JSON containing raw data + rendered HTML:
-      { "transaction": {...}, "resolution": {...}, ..., "html": "<html>..." }
-    We extract the "html" field for the panel.
+    n8n responds with raw JSON data (no HTML). The panel applies the
+    HTML template via ReportGenerator to produce the formatted report.
     """
     webhook_path = N8N_WEBHOOK_TEST_PATH if n8n_test else N8N_WEBHOOK_PATH
     n8n_url = settings.n8n_base_url.rstrip("/") + webhook_path
@@ -140,15 +144,16 @@ async def _try_n8n(req: AnalyzeRequest, settings: Settings, n8n_test: bool) -> s
 
         content_type = r.headers.get("content-type", "")
 
-        # JSON response (new format): extract html field
+        # JSON response: raw data from n8n → apply HTML template locally
         if "application/json" in content_type:
             data = r.json()
-            html = data.get("html")
-            if html:
-                logger.info("panel: n8n returned JSON+HTML for %s", req.transaction_id)
-                return html
-            logger.warning("panel: n8n JSON missing 'html' field — falling back to direct")
-            return None
+            # Cache hit: n8n returns {cached: true, html: "..."} directly
+            if data.get("cached") and data.get("html"):
+                logger.info("panel: n8n cache hit for %s", req.transaction_id)
+                return data["html"]
+            # Normal: render HTML from raw data
+            logger.info("panel: n8n returned raw data for %s — rendering HTML", req.transaction_id)
+            return report_gen.render(data)
 
         # Legacy: text/html response (backwards compatible)
         if "text/html" in content_type:
