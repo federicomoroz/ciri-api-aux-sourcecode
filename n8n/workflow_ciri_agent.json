@@ -5,7 +5,7 @@
       "parameters": {
         "content": "## CIRI Chargeback Agent · Orquestación Explícita\nCada paso es un nodo visible. Sin AI Agent black box. n8n decide el flujo; FastAPI ejecuta la lógica de negocio.",
         "height": 84,
-        "width": 7560,
+        "width": 7840,
         "color": 4
       },
       "id": "5a5055f6-b155-4d08-bfc3-f36e1f50ca7f",
@@ -67,9 +67,9 @@
     },
     {
       "parameters": {
-        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER → auto-rechazo inmediato\n• HIGH → Wait HITL → feedback → reporte\n• MEDIUM → reporte directo\n• LOW → reporte directo\n\n**HITL (Human-in-the-Loop):**\n• Wait node pausa ejecución\n• Analista aprueba o rechaza\n• Feedback + auto-index si score ≥ 8.0\n\n**Error handling:**\n• Cada Generar Reporte tiene error output\n• → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
+        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte (unificado)\n• HIGH → Wait HITL → feedback → Generar Reporte HITL\n• Ambos → Responder Reporte (unificado)\n\n**HITL (Human-in-the-Loop):**\n• Wait node pausa ejecución\n• Analista aprueba o rechaza\n• Feedback + auto-index si score ≥ 8.0\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
         "height": 2400,
-        "width": 2660,
+        "width": 2940,
         "color": 6
       },
       "id": "cfc28e90-c1cb-4d45-a206-2750274ffba4",
@@ -769,116 +769,6 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "transaction",
-              "value": "={{ $json.transaction }}"
-            },
-            {
-              "name": "resolution",
-              "value": "={{ $json.resolution }}"
-            },
-            {
-              "name": "judge_evaluation",
-              "value": "={{ $json.judge_evaluation }}"
-            },
-            {
-              "name": "agent_analysis",
-              "value": "={{ $json.agent_analysis }}"
-            },
-            {
-              "name": "merchant_risk",
-              "value": "={{ $json.merchant_risk }}"
-            },
-            {
-              "name": "client_profile",
-              "value": "={{ $json.client_profile }}"
-            },
-            {
-              "name": "logs",
-              "value": "={{ $json.logs }}"
-            },
-            {
-              "name": "policies_evaluated",
-              "value": "={{ $json.policies_evaluated }}"
-            },
-            {
-              "name": "similar_cases",
-              "value": "={{ $json.similar_cases }}"
-            },
-            {
-              "name": "hitl_decision",
-              "value": "={{ $json.hitl_decision }}"
-            },
-            {
-              "name": "cache_hit",
-              "value": "={{ $json.cache_hit }}"
-            },
-            {
-              "name": "guardrail_warnings",
-              "value": "={{ $json.guardrail_warnings }}"
-            },
-            {
-              "name": "motivo",
-              "value": "={{ $json.motivo }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $json.cliente_vip }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        },
-        "contentType": "json"
-      },
-      "id": "53922da0-fe97-4018-97e0-57e06ca89d42",
-      "name": "Generar Reporte — BLOCKER",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        64520,
-        21400
-      ],
-      "settings": {
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/html; charset=utf-8"
-              }
-            ]
-          }
-        }
-      },
-      "id": "6fbb2fc3-91ea-4f89-a68e-9c0a33160ae7",
-      "name": "Responder — BLOCKER",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        64840,
-        21400
-      ]
-    },
-    {
-      "parameters": {
         "assignments": {
           "assignments": [
             {
@@ -1113,7 +1003,7 @@
         "contentType": "json"
       },
       "id": "8c091793-1794-435b-aaa7-e8c1782c96c9",
-      "name": "Generar Reporte — HIGH",
+      "name": "Generar Reporte — HITL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -1126,251 +1016,6 @@
         "waitBetweenTries": 5000
       },
       "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/html; charset=utf-8"
-              }
-            ]
-          }
-        }
-      },
-      "id": "61e7028b-0e1f-420f-aead-7222ad12aa0c",
-      "name": "Responder — HIGH",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        66120,
-        21900
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "transaction",
-              "value": "={{ $json.transaction }}"
-            },
-            {
-              "name": "resolution",
-              "value": "={{ $json.resolution }}"
-            },
-            {
-              "name": "judge_evaluation",
-              "value": "={{ $json.judge_evaluation }}"
-            },
-            {
-              "name": "agent_analysis",
-              "value": "={{ $json.agent_analysis }}"
-            },
-            {
-              "name": "merchant_risk",
-              "value": "={{ $json.merchant_risk }}"
-            },
-            {
-              "name": "client_profile",
-              "value": "={{ $json.client_profile }}"
-            },
-            {
-              "name": "logs",
-              "value": "={{ $json.logs }}"
-            },
-            {
-              "name": "policies_evaluated",
-              "value": "={{ $json.policies_evaluated }}"
-            },
-            {
-              "name": "similar_cases",
-              "value": "={{ $json.similar_cases }}"
-            },
-            {
-              "name": "hitl_decision",
-              "value": "={{ $json.hitl_decision }}"
-            },
-            {
-              "name": "cache_hit",
-              "value": "={{ $json.cache_hit }}"
-            },
-            {
-              "name": "guardrail_warnings",
-              "value": "={{ $json.guardrail_warnings }}"
-            },
-            {
-              "name": "motivo",
-              "value": "={{ $json.motivo }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $json.cliente_vip }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        },
-        "contentType": "json"
-      },
-      "id": "5b50942f-152b-4e7c-8edc-8507914579a7",
-      "name": "Generar Reporte — MEDIUM",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        64520,
-        22400
-      ],
-      "settings": {
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/html; charset=utf-8"
-              }
-            ]
-          }
-        }
-      },
-      "id": "49357580-4851-4a1e-9d1f-f8ff4fbe5256",
-      "name": "Responder — MEDIUM",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        64840,
-        22400
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "transaction",
-              "value": "={{ $json.transaction }}"
-            },
-            {
-              "name": "resolution",
-              "value": "={{ $json.resolution }}"
-            },
-            {
-              "name": "judge_evaluation",
-              "value": "={{ $json.judge_evaluation }}"
-            },
-            {
-              "name": "agent_analysis",
-              "value": "={{ $json.agent_analysis }}"
-            },
-            {
-              "name": "merchant_risk",
-              "value": "={{ $json.merchant_risk }}"
-            },
-            {
-              "name": "client_profile",
-              "value": "={{ $json.client_profile }}"
-            },
-            {
-              "name": "logs",
-              "value": "={{ $json.logs }}"
-            },
-            {
-              "name": "policies_evaluated",
-              "value": "={{ $json.policies_evaluated }}"
-            },
-            {
-              "name": "similar_cases",
-              "value": "={{ $json.similar_cases }}"
-            },
-            {
-              "name": "hitl_decision",
-              "value": "={{ $json.hitl_decision }}"
-            },
-            {
-              "name": "cache_hit",
-              "value": "={{ $json.cache_hit }}"
-            },
-            {
-              "name": "guardrail_warnings",
-              "value": "={{ $json.guardrail_warnings }}"
-            },
-            {
-              "name": "motivo",
-              "value": "={{ $json.motivo }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $json.cliente_vip }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 30000
-        },
-        "contentType": "json"
-      },
-      "id": "ac5cf00b-8ca7-407a-9038-1a96eb4c1c9a",
-      "name": "Generar Reporte — LOW",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        64520,
-        22900
-      ],
-      "settings": {
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 5000
-      },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
-        "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/html; charset=utf-8"
-              }
-            ]
-          }
-        }
-      },
-      "id": "f6c8ebde-c5af-4f65-b593-de0f30ecfe57",
-      "name": "Responder — LOW",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        64840,
-        22900
-      ]
     },
     {
       "parameters": {
@@ -1646,6 +1291,116 @@
         65160,
         23400
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.API_BASE_URL }}/api/reports/html",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "transaction",
+              "value": "={{ $json.transaction }}"
+            },
+            {
+              "name": "resolution",
+              "value": "={{ $json.resolution }}"
+            },
+            {
+              "name": "judge_evaluation",
+              "value": "={{ $json.judge_evaluation }}"
+            },
+            {
+              "name": "agent_analysis",
+              "value": "={{ $json.agent_analysis }}"
+            },
+            {
+              "name": "merchant_risk",
+              "value": "={{ $json.merchant_risk }}"
+            },
+            {
+              "name": "client_profile",
+              "value": "={{ $json.client_profile }}"
+            },
+            {
+              "name": "logs",
+              "value": "={{ $json.logs }}"
+            },
+            {
+              "name": "policies_evaluated",
+              "value": "={{ $json.policies_evaluated }}"
+            },
+            {
+              "name": "similar_cases",
+              "value": "={{ $json.similar_cases }}"
+            },
+            {
+              "name": "hitl_decision",
+              "value": "={{ $json.hitl_decision }}"
+            },
+            {
+              "name": "cache_hit",
+              "value": "={{ $json.cache_hit }}"
+            },
+            {
+              "name": "guardrail_warnings",
+              "value": "={{ $json.guardrail_warnings }}"
+            },
+            {
+              "name": "motivo",
+              "value": "={{ $json.motivo }}"
+            },
+            {
+              "name": "cliente_vip",
+              "value": "={{ $json.cliente_vip }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "contentType": "json"
+      },
+      "id": "e9d8a0a2-56ca-4aca-8d58-4562d1ea4f73",
+      "name": "Generar Reporte",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64520,
+        22200
+      ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "3a52b742-96cb-442f-a056-3b695760f45f",
+      "name": "Responder — Reporte",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        66400,
+        22200
+      ]
     }
   ],
   "pinData": {},
@@ -1861,7 +1616,7 @@
       "main": [
         [
           {
-            "node": "Generar Reporte — BLOCKER",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
@@ -1875,32 +1630,14 @@
         ],
         [
           {
-            "node": "Generar Reporte — MEDIUM",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Generar Reporte — LOW",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error — Reporte Fallido",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generar Reporte — BLOCKER": {
-      "main": [
-        [
-          {
-            "node": "Responder — BLOCKER",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
@@ -1951,61 +1688,7 @@
       "main": [
         [
           {
-            "node": "Generar Reporte — HIGH",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generar Reporte — HIGH": {
-      "main": [
-        [
-          {
-            "node": "Responder — HIGH",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error — Reporte Fallido",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generar Reporte — MEDIUM": {
-      "main": [
-        [
-          {
-            "node": "Responder — MEDIUM",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error — Reporte Fallido",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generar Reporte — LOW": {
-      "main": [
-        [
-          {
-            "node": "Responder — LOW",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error — Reporte Fallido",
+            "node": "Generar Reporte — HITL",
             "type": "main",
             "index": 0
           }
@@ -2188,6 +1871,42 @@
         [
           {
             "node": "Propagar → Error Handler — Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Reporte": {
+      "main": [
+        [
+          {
+            "node": "Responder — Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error — Reporte Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Reporte — HITL": {
+      "main": [
+        [
+          {
+            "node": "Responder — Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error — Reporte Fallido",
             "type": "main",
             "index": 0
           }
