@@ -53,6 +53,7 @@ __all__ = [
     "FEEDBACK_AUTO_ANALYST_TAG",
     # n8n integration
     "N8N_WEBHOOK_PATH",
+    "N8N_WEBHOOK_TEST_PATH",
     "N8N_HEALTHZ_PATH",
     "N8N_TIMEOUT_S",
     "N8N_PING_TIMEOUT_S",
@@ -75,6 +76,17 @@ __all__ = [
     "HEALTH_OK",
     "HEALTH_HEALTHY",
     "HEALTH_DEGRADED",
+    # LLM Pricing
+    "LLM_PRICING",
+    "LLM_PRICING_PER_MTOK",
+    # Reranking
+    "RERANK_PAYMENT_METHOD_BOOST",
+    "RERANK_COUNTRY_BOOST",
+    "RERANK_MAX_SCORE",
+    # Dashboard
+    "DASHBOARD_TOP_N",
+    # Fallback
+    "FALLBACK_REQUEST_ID",
     # Conversion
     "SECONDS_TO_MS",
 ]
@@ -176,6 +188,13 @@ HEALTH_DEGRADED: str = "degraded"
 # ── Reranking ────────────────────────────────────────────────────────────
 RERANK_PAYMENT_METHOD_BOOST: float = 0.05  # score boost for matching payment method
 RERANK_COUNTRY_BOOST: float = 0.03         # score boost for matching country
+RERANK_MAX_SCORE: float = 1.0              # ceiling for reranked scores
+
+# ── Dashboard ───────────────────────────────────────────────────────────────
+DASHBOARD_TOP_N: int = 5                   # top N merchants shown in dashboard
+
+# ── Fallback ────────────────────────────────────────────────────────────────
+FALLBACK_REQUEST_ID: str = "unknown"       # default request_id when not set
 
 # ── Conversion ───────────────────────────────────────────────────────────────
 SECONDS_TO_MS: int = 1000

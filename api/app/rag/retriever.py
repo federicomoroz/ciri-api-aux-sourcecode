@@ -21,6 +21,7 @@ from ..domain.constants import (
     POLICIES_TOP_K,
     POLICIES_SCORE_THRESHOLD,
     RERANK_COUNTRY_BOOST,
+    RERANK_MAX_SCORE,
     RERANK_PAYMENT_METHOD_BOOST,
     SIMILAR_CASES_TOP_K,
     SIMILAR_CASES_SCORE_THRESHOLD,
@@ -174,5 +175,5 @@ class QdrantRetriever:
                 boost += RERANK_PAYMENT_METHOD_BOOST
             if r.payload.get("country") == country:
                 boost += RERANK_COUNTRY_BOOST
-            r.score = min(r.score + boost, 1.0)
+            r.score = min(r.score + boost, RERANK_MAX_SCORE)
         return sorted(results, key=lambda r: r.score, reverse=True)

@@ -16,6 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from .dependencies import lifespan
+from .domain.constants import FALLBACK_REQUEST_ID
 from .routes import (
     analyze,
     analytics,
@@ -72,7 +73,7 @@ app.add_middleware(
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Return structured JSON error with request_id instead of raw stack trace."""
-    request_id = getattr(request.state, "request_id", "unknown")
+    request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
     logger.error("Unhandled error [request_id=%s]: %s", request_id, exc, exc_info=True)
     return JSONResponse(
         status_code=500,

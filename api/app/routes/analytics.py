@@ -1,6 +1,10 @@
 """Analytics route — aggregated metrics dashboard."""
 
+import logging
+
 from fastapi import APIRouter, Depends
+
+logger = logging.getLogger(__name__)
 
 from ..data.db import Database
 from ..dependencies import get_db

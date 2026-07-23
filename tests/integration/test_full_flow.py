@@ -79,6 +79,7 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
     app.state.embedder = mock_embedder
     app.state.resolution_service = resolution_service
     app.state.feedback_service = feedback_service
+    app.state.pipeline_service = MagicMock()
 
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client

@@ -4,7 +4,11 @@ Core analysis routes: /resolve and /judge.
 Thin HTTP handlers — all orchestration logic lives in ResolutionService.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends
+
+logger = logging.getLogger(__name__)
 
 from ..dependencies import get_resolution_service
 from ..domain.models import JudgeRequest, JudgeResponse, ResolveRequest, ResolveResponse

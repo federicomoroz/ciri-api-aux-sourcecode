@@ -5,7 +5,11 @@ Single source of truth for formatting policies and cases into LLM-readable text.
 Extracted from QdrantRetriever to keep retrieval and presentation concerns separate.
 """
 
+import logging
+
 from ..domain.constants import SIMILAR_CASES_SCORE_THRESHOLD
+
+logger = logging.getLogger(__name__)
 
 
 def format_policies_for_prompt(policies: list[dict]) -> str:

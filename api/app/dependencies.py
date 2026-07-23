@@ -26,6 +26,7 @@ from .rag.retriever import QdrantRetriever
 from .rag.updater import RAGUpdater
 from .reports.generator import ReportGenerator
 from .services.feedback import FeedbackService
+from .services.pipeline import PipelineService
 from .services.resolution import ResolutionService
 
 
@@ -113,6 +114,7 @@ async def lifespan(app: FastAPI):
     resolution_service = ResolutionService(llm, tracer)
     feedback_service = FeedbackService(db, updater, tracer)
     report_generator = ReportGenerator()
+    pipeline_service = PipelineService(db, retriever, analyzer, resolution_service, report_generator)
 
     # Store everything in app.state
     app.state.settings = settings
@@ -128,6 +130,7 @@ async def lifespan(app: FastAPI):
     app.state.report_generator = report_generator
     app.state.resolution_service = resolution_service
     app.state.feedback_service = feedback_service
+    app.state.pipeline_service = pipeline_service
 
     yield
 
@@ -170,3 +173,7 @@ def get_resolution_service(request: Request) -> ResolutionService:
 
 def get_feedback_service(request: Request) -> FeedbackService:
     return request.app.state.feedback_service
+
+
+def get_pipeline_service(request: Request) -> PipelineService:
+    return request.app.state.pipeline_service

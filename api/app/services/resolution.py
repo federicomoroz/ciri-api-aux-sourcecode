@@ -17,11 +17,6 @@ from ..domain.constants import (
     LLM_MAX_CRITICAL_LOGS,
     TRACE_RESOLVE,
     TRACE_JUDGE,
-    TRACE_LLM_CALL,
-    TRACE_FEEDBACK,
-    TRACE_FEEDBACK_SCORE,
-    FEEDBACK_STATUS_RECORDED,
-    FEEDBACK_CASE_ID_PREFIX,
     FALLBACK_TX_ID,
 )
 from ..domain.enums import ResolutionOutcome, RiskLevel, Severity, VerdictType

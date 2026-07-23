@@ -1,6 +1,10 @@
+import logging
+
 from fastapi import APIRouter, Depends
 
 from ..data.db import Database
+
+logger = logging.getLogger(__name__)
 from ..dependencies import get_db
 
 router = APIRouter(prefix="/api/merchants", tags=["merchants"])

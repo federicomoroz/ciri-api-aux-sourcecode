@@ -3,9 +3,12 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
+from ..domain.constants import DASHBOARD_TOP_N, JUDGE_AUTO_INDEX_THRESHOLD
 from ..domain.enums import TransactionStatus
 
 logger = logging.getLogger(__name__)
+
+SQLITE_TIMEOUT_S = 30
 
 
 class Database:
@@ -14,10 +17,13 @@ class Database:
 
     @contextmanager
     def _conn(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=SQLITE_TIMEOUT_S)
         conn.row_factory = sqlite3.Row
         try:
             yield conn
+        except sqlite3.Error as e:
+            logger.error("SQLite error on %s: %s", self.db_path, e)
+            raise
         finally:
             conn.close()
 
@@ -214,13 +220,14 @@ class Database:
             avg_judge_score = round(avg_row["avg"], 2) if avg_row["avg"] else 0.0
 
             auto_indexed = conn.execute(
-                "SELECT COUNT(*) as cnt FROM feedback WHERE judge_score >= ?", (8.0,)
+                "SELECT COUNT(*) as cnt FROM feedback WHERE judge_score >= ?",
+                (JUDGE_AUTO_INDEX_THRESHOLD,)
             ).fetchone()["cnt"]
 
             top_merchants = conn.execute(
                 "SELECT t.merchant, COUNT(*) as cb_count "
                 "FROM cases c JOIN transactions t ON c.transaction_id = t.id "
-                "GROUP BY t.merchant ORDER BY cb_count DESC LIMIT 5"
+                f"GROUP BY t.merchant ORDER BY cb_count DESC LIMIT {DASHBOARD_TOP_N}"
             ).fetchall()
 
             by_country = conn.execute(
