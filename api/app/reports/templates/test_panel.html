@@ -1616,6 +1616,10 @@
           </div>
           <button class="btn-reset" onclick="resetPanel()">Nueva consulta</button>
         </div>
+        <div class="amber-banner" id="fallback-banner" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          n8n no disponible — se ejecuto pipeline directo via FastAPI
+        </div>
         <iframe
           class="report-iframe"
           id="report-frame"
@@ -1629,10 +1633,6 @@
         <div class="error-banner">
           <p class="error-title">Error en el pipeline</p>
           <p class="error-msg" id="error-msg-text">—</p>
-        </div>
-        <div class="amber-banner" id="fallback-banner" style="display:none">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          n8n no disponible — ejecutando pipeline directo via FastAPI
         </div>
         <button class="btn-reset" onclick="resetPanel()">Reintentar</button>
       </div>
@@ -2016,7 +2016,11 @@ async function startAnalysis(payload) {
       if (usageHeader) usageInfo = JSON.parse(usageHeader);
     } catch (e) { /* n8n path — no header */ }
 
-    showResult(body, payload, elapsed, usageInfo);
+    // Detect silent fallback: user chose n8n but got direct pipeline response
+    const mode = getPipelineMode();
+    const wasN8nFallback = mode !== 'direct' && usageInfo !== null;
+
+    showResult(body, payload, elapsed, usageInfo, wasN8nFallback);
 
   } catch (err) {
     clearStepTimers();
@@ -2120,8 +2124,11 @@ function showPanel(which) {
   $('error-state').className       = 'error-state'      + (which === 'error'   ? ' visible' : '');
 }
 
-function showResult(html, payload, elapsed, usageInfo) {
+function showResult(html, payload, elapsed, usageInfo, wasN8nFallback) {
   showPanel('result');
+
+  // Show fallback warning if n8n was selected but direct pipeline was used
+  $('fallback-banner').style.display = wasN8nFallback ? 'flex' : 'none';
 
   let accentClass  = 'verdict-ok';
   let verdictLabel = 'PROCESADA';
@@ -2181,7 +2188,6 @@ function showResult(html, payload, elapsed, usageInfo) {
 function showError(msg, isNetwork) {
   showPanel('error');
   $('error-msg-text').textContent = msg;
-  $('fallback-banner').style.display = isNetwork ? 'flex' : 'none';
 }
 
 // ─── RESET ────────────────────────────────────────────────
