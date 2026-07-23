@@ -8,10 +8,9 @@ LangfuseTracer: sends data to Langfuse cloud dashboard.
 NoOpTracer: used in tests and when langfuse_enabled=False.
 """
 
+import datetime
 import logging
 from typing import Protocol, runtime_checkable
-
-from ..domain.constants import SECONDS_TO_MS
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +80,16 @@ class LangfuseTracer:
         if not self._enabled:
             return
         try:
+            end_time = datetime.datetime.now(datetime.timezone.utc)
+            start_time = end_time - datetime.timedelta(milliseconds=latency_ms)
             self.langfuse.generation(
                 name=name,
                 model=model,
                 input=input,
                 output=output,
                 usage={"input": tokens_in, "output": tokens_out},
-                latency=latency_ms / SECONDS_TO_MS,
+                start_time=start_time,
+                end_time=end_time,
                 trace_id=trace_id,
             )
         except Exception as e:
