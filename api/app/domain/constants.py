@@ -162,7 +162,7 @@ FEEDBACK_AUTO_ANALYST_TAG: str = "auto-index"  # analyst field for auto-indexed 
 N8N_WEBHOOK_PATH: str = "/webhook/chargeback-agent"
 N8N_WEBHOOK_TEST_PATH: str = "/webhook-test/chargeback-agent"
 N8N_HEALTHZ_PATH: str = "/healthz"
-N8N_TIMEOUT_S: float = 120.0
+N8N_TIMEOUT_S: float = 180.0
 N8N_PING_TIMEOUT_S: float = 3.0
 
 # ── Trace / Observability Names ──────────────────────────────────────────────

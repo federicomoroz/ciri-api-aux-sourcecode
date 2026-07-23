@@ -79,6 +79,7 @@ async def panel_analyze(
     req: AnalyzeRequest,
     direct: bool              = Query(False, description="Skip n8n, use direct FastAPI pipeline"),
     n8n_test: bool            = Query(False, description="Use n8n test webhook URL instead of production"),
+    timeout_s: float          = Query(N8N_TIMEOUT_S, description="n8n webhook timeout in seconds", ge=10, le=600),
     pipeline: PipelineService = Depends(get_pipeline_service),
     report_gen: ReportGenerator = Depends(get_report_generator),
     settings: Settings        = Depends(get_settings),
@@ -92,7 +93,7 @@ async def panel_analyze(
     2. If n8n is unavailable or direct=true, use the direct FastAPI pipeline.
     """
     if not direct:
-        html = await _try_n8n(req, settings, report_gen, n8n_test)
+        html = await _try_n8n(req, settings, report_gen, n8n_test, timeout_s)
         if html is not None:
             return HTMLResponse(content=html, status_code=200)
 
@@ -119,6 +120,7 @@ async def _try_n8n(
     settings: Settings,
     report_gen: ReportGenerator,
     n8n_test: bool,
+    timeout_s: float = N8N_TIMEOUT_S,
 ) -> str | None:
     """Try n8n webhook. Returns rendered HTML on success, None on failure.
 
@@ -127,9 +129,9 @@ async def _try_n8n(
     """
     webhook_path = N8N_WEBHOOK_TEST_PATH if n8n_test else N8N_WEBHOOK_PATH
     n8n_url = settings.n8n_base_url.rstrip("/") + webhook_path
-    logger.info("panel: posting to n8n %s at %s for %s", "TEST" if n8n_test else "PROD", n8n_url, req.transaction_id)
+    logger.info("panel: posting to n8n %s at %s for %s (timeout=%ss)", "TEST" if n8n_test else "PROD", n8n_url, req.transaction_id, timeout_s)
     try:
-        async with httpx.AsyncClient(timeout=N8N_TIMEOUT_S) as client:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
             r = await client.post(
                 n8n_url,
                 json={

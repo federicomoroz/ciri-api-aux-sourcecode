@@ -1437,6 +1437,15 @@
         <option value="production">n8n Production</option>
       </select>
     </span>
+    <span class="pipeline-selector">
+      <label class="pipeline-label">Timeout:</label>
+      <select class="pipeline-select" id="timeout-select" title="Timeout maximo para la consulta (incluye cold start de Render)">
+        <option value="60">60s</option>
+        <option value="120">120s</option>
+        <option value="180" selected>180s</option>
+        <option value="300">300s</option>
+      </select>
+    </span>
     <span class="header-tag">v2.0</span>
   </div>
 
@@ -2133,16 +2142,20 @@ async function startAnalysis(payload) {
   scheduleSteps();
 
   abortCtrl = new AbortController();
-  // Safari mobile kills long fetch requests — enforce explicit timeout (150s)
-  const FETCH_TIMEOUT_MS = 150000;
+  // Timeout from panel selector + 20s buffer for backend processing
+  const timeoutSec = parseInt($('timeout-select').value) || 180;
+  const FETCH_TIMEOUT_MS = (timeoutSec + 20) * 1000;
   const timeoutId = setTimeout(() => abortCtrl.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    // Build URL with pipeline mode query params
+    // Build URL with pipeline mode + timeout query params
     let analyzeUrl = API_BASE + '/api/panel/analyze';
     const mode = getPipelineMode();
-    if (mode === 'direct') analyzeUrl += '?direct=1';
-    else if (mode === 'test') analyzeUrl += '?n8n_test=1';
+    const params = new URLSearchParams();
+    if (mode === 'direct') params.set('direct', '1');
+    else if (mode === 'test') params.set('n8n_test', '1');
+    params.set('timeout_s', timeoutSec);
+    analyzeUrl += '?' + params.toString();
 
     const resp = await fetch(analyzeUrl, {
       method:  'POST',
