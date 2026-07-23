@@ -134,11 +134,12 @@ class ResolutionService:
         )
 
         # Strip internal metadata — Judge evaluates the corrected resolution, not the audit trail.
-        # guardrail_warnings mention original pre-correction values which confuse the Judge LLM.
-        judge_resolution = {
-            k: v for k, v in resolution.items()
-            if k not in ("guardrail_warnings", "_usage", "trace_id")
-        }
+        # guardrail_warnings and guardrail-set hitl_reason mention original pre-correction
+        # values (e.g. "Auto-corregido: REJECT sin BLOCKER...") which confuse the Judge LLM.
+        _strip_keys = {"guardrail_warnings", "_usage", "trace_id"}
+        judge_resolution = {k: v for k, v in resolution.items() if k not in _strip_keys}
+        if str(judge_resolution.get("hitl_reason", "")).startswith("Auto-corregido"):
+            judge_resolution["hitl_reason"] = "Requiere revision de analista antes de decision final"
 
         system, user = prompts.v1_judge.render(
             full_context=full_context,
