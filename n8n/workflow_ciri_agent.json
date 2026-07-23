@@ -1102,43 +1102,9 @@
     },
     {
       "parameters": {
-        "resume": "form",
-        "formTitle": "HITL — Aprobación de Contracargo",
-        "formDescription": "Revisa el caso y toma una decisión.",
-        "formFields": {
-          "values": [
-            {
-              "fieldLabel": "Decisión",
-              "fieldType": "options",
-              "requiredField": true,
-              "fieldOptions": {
-                "values": [
-                  {
-                    "option": "APPROVE"
-                  },
-                  {
-                    "option": "REJECT"
-                  }
-                ]
-              }
-            },
-            {
-              "fieldLabel": "Notas del Analista",
-              "fieldType": "textarea",
-              "requiredField": false,
-              "placeholder": "Justificación de la decisión..."
-            }
-          ]
-        },
-        "options": {
-          "buttonLabel": "Enviar Decisión",
-          "limitWaitTime": true
-        },
-        "limitWaitTime": {
-          "limitType": "afterTimeInterval",
-          "resumeAmount": 15,
-          "resumeUnit": "seconds"
-        }
+        "resume": "timeInterval",
+        "amount": 15,
+        "unit": "seconds"
       },
       "id": "fb156049-a6f2-4456-ade1-3bccfd0789be",
       "name": "Wait — Aprobación HITL",
