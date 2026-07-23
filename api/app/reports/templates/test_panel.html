@@ -1664,6 +1664,33 @@
   </div>
 </div>
 
+<!-- N8N TEST CONFIRMATION -->
+<div class="modal-overlay" id="n8n-test-modal" style="display:none" onclick="if(event.target===this)cancelN8nTest()">
+  <div class="modal-content" style="max-width:460px">
+    <div class="modal-header">
+      <span class="modal-title">n8n Test Webhook</span>
+      <button class="btn-reset" onclick="cancelN8nTest()">Cerrar</button>
+    </div>
+    <div class="modal-body" style="padding:20px 16px;text-align:center">
+      <p style="margin-bottom:12px;font-size:14px;line-height:1.6">
+        El webhook de <strong>test</strong> solo escucha mientras el workflow
+        esta abierto en el editor de n8n.
+      </p>
+      <p style="margin-bottom:20px;font-size:13px;color:var(--text-dim)">
+        Abri el workflow en n8n y presiona <strong>"Test Workflow"</strong> antes de continuar.
+      </p>
+      <a id="n8n-test-modal-link" href="#" target="_blank"
+         style="display:inline-block;margin-bottom:20px;color:var(--accent);font-size:13px;font-family:var(--font-mono)">
+        Abrir workflow en n8n
+      </a>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn-analyze" onclick="confirmN8nTest()" style="min-width:140px">Continuar</button>
+        <button class="btn-reset" onclick="cancelN8nTest()" style="min-width:140px">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1726,6 +1753,7 @@ let timerInterval  = null;
 let stepTimers     = [];
 let startTime      = null;
 let allTransactions = [];
+let n8nEditorUrl   = null;
 
 // ─── DOM REFS ─────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -1936,23 +1964,54 @@ function disableSubmit(label) {
 }
 
 // ─── SUBMIT ───────────────────────────────────────────────
-async function submitAnalysis() {
-  let payload;
+let pendingPayload = null;
 
+function buildPayload() {
   if (isCustom) {
     const txnId     = $('sel-txn').value.trim();
     const motivoSel = $('sel-motivo').value;
     const motivo    = motivoSel === '__custom__' ? $('inp-motivo-custom').value.trim() : motivoSel;
-    if (!txnId || !motivo) return;
-    payload = { transaction_id: txnId, motivo, cliente_vip: $('inp-vip').checked };
+    if (!txnId || !motivo) return null;
+    return { transaction_id: txnId, motivo, cliente_vip: $('inp-vip').checked };
   } else if (selectedIdx !== null) {
     const s = SCENARIOS[selectedIdx];
-    payload = { transaction_id: s.transaction_id, motivo: s.motivo, cliente_vip: s.cliente_vip };
-  } else {
+    return { transaction_id: s.transaction_id, motivo: s.motivo, cliente_vip: s.cliente_vip };
+  }
+  return null;
+}
+
+async function submitAnalysis() {
+  const payload = buildPayload();
+  if (!payload) return;
+
+  if (getPipelineMode() === 'test') {
+    pendingPayload = payload;
+    // Set the n8n editor link in the modal
+    const modalLink = $('n8n-test-modal-link');
+    if (n8nEditorUrl) {
+      modalLink.href = n8nEditorUrl;
+      modalLink.style.display = '';
+    } else {
+      modalLink.style.display = 'none';
+    }
+    $('n8n-test-modal').style.display = 'flex';
     return;
   }
 
   startAnalysis(payload);
+}
+
+function confirmN8nTest() {
+  $('n8n-test-modal').style.display = 'none';
+  if (pendingPayload) {
+    startAnalysis(pendingPayload);
+    pendingPayload = null;
+  }
+}
+
+function cancelN8nTest() {
+  $('n8n-test-modal').style.display = 'none';
+  pendingPayload = null;
 }
 
 // ─── ANALYSIS PIPELINE ────────────────────────────────────
@@ -2332,6 +2391,9 @@ async function checkHealth() {
     const data = await r.json();
     setChip('hc-n8n', data.available ? 'ok' : 'warn',
       data.available ? 'n8n \u2713' : 'n8n \u2717 (fallback)');
+
+    // Store n8n base URL for modal link
+    if (data.url) n8nEditorUrl = data.url;
 
     // Populate n8n links (href + tooltip with full URL)
     function setLink(id, url) {
