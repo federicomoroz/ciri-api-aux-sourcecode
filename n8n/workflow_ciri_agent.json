@@ -1033,24 +1033,9 @@
         22700
       ],
       "settings": {
-        "retryOnFail": true,
-        "maxTries": 3,
-        "waitBetweenTries": 10000
+        "retryOnFail": false
       },
-      "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Restaurar el payload del reporte desde Procesar Respuesta HITL\n// (Registrar Feedback reemplaza $json con su respuesta API)\nreturn [$('Procesar Respuesta HITL').first()];"
-      },
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "name": "Restaurar Payload HITL",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        65600,
-        22700
-      ]
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
@@ -1470,36 +1455,12 @@
       "main": [
         [
           {
-            "node": "Registrar Feedback HITL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Registrar Feedback HITL": {
-      "main": [
-        [
-          {
-            "node": "Restaurar Payload HITL",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Restaurar Payload HITL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Restaurar Payload HITL": {
-      "main": [
-        [
-          {
             "node": "Responder — Reporte",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Registrar Feedback HITL",
             "type": "main",
             "index": 0
           }
