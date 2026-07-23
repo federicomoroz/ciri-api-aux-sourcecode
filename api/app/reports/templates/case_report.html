@@ -392,7 +392,35 @@
             document.getElementById('hitl-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const data = Object.fromEntries(new FormData(e.target));
-                alert('Decisión enviada: ' + data.analyst_decision + '. Gracias por su revisión.');
+                if (!data.analyst_decision) { alert('Seleccione una decisión'); return; }
+                const btn = e.target.querySelector('button[type="submit"]');
+                btn.disabled = true;
+                btn.textContent = 'Enviando...';
+                try {
+                    const resp = await fetch('/api/feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            transaction_id: data.transaction_id,
+                            analyst_decision: data.analyst_decision,
+                            analyst_notes: data.analyst_notes || '',
+                            final_outcome: data.analyst_decision,
+                            judge_score: parseFloat(data.judge_score) || 0,
+                        })
+                    });
+                    if (resp.ok) {
+                        btn.textContent = '\u2713 Decision registrada';
+                        btn.className = 'bg-green-500 text-white font-bold px-6 py-3 rounded-xl shadow';
+                    } else {
+                        btn.textContent = 'Error — reintentar';
+                        btn.className = 'bg-red-500 text-white font-bold px-6 py-3 rounded-xl shadow';
+                        btn.disabled = false;
+                    }
+                } catch (err) {
+                    btn.textContent = 'Error de conexion';
+                    btn.className = 'bg-red-500 text-white font-bold px-6 py-3 rounded-xl shadow';
+                    btn.disabled = false;
+                }
             });
         </script>
     </section>

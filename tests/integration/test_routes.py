@@ -74,6 +74,9 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.feedback_service = feedback_service
     app.state.pipeline_service = MagicMock()
 
+    from api.app.services.langfuse_stats import LangfuseStatsService
+    app.state.langfuse_stats_service = LangfuseStatsService(mock_tracer, "claude-haiku-4-5-20251001")
+
     # Ensure report cache table exists
     db.ensure_report_cache_table()
 
@@ -338,3 +341,16 @@ def test_report_html_caches_when_enabled(test_client_routes):
     cached = db.get_cached_report("TXN-00051|False")
     assert cached is not None
     assert "TXN-00051" in cached
+
+
+# ---- Langfuse Stats ----
+
+def test_langfuse_stats_disabled(test_client_routes):
+    """GET /api/langfuse/stats returns disabled when using mock tracer."""
+    client, _, _ = test_client_routes
+    resp = client.get("/api/langfuse/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["enabled"] is False
+    assert data["summary"] is None
+    assert data["recent_traces"] == []

@@ -190,3 +190,10 @@ class DashboardResponse(BaseModel):
     top_merchants_by_chargebacks: list[dict]
     transactions_by_country: list[dict]
     transactions_by_payment_method: list[dict]
+
+
+class LangfuseStatsResponse(BaseModel):
+    """Response from GET /api/langfuse/stats."""
+    enabled: bool
+    summary: dict | None = None
+    recent_traces: list[dict] = []

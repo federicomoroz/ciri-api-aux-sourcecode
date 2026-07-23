@@ -1082,6 +1082,69 @@
     .history-time { font-size: 11px; color: var(--text-dim); flex-shrink: 0; font-family: var(--font-mono); }
 
     /* ─────────────────────────────────────────────
+       LANGFUSE OBSERVABILITY
+    ───────────────────────────────────────────── */
+    .langfuse-section { margin-top: 4px; }
+    .lf-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .lf-card {
+      background: var(--field-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 8px;
+      text-align: center;
+    }
+    .lf-card:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+    }
+    .lf-card-value {
+      display: block;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--accent);
+    }
+    .lf-card-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .lf-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .lf-table th {
+      background: var(--surface-alt);
+      font-weight: 600;
+      text-align: left;
+      padding: 4px 6px;
+      border: 1px solid var(--border);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      color: var(--text-dim);
+    }
+    .lf-table td {
+      padding: 3px 6px;
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 80px;
+    }
+    .lf-table tr:hover td { background: var(--accent-light); }
+    .lf-score-good { color: var(--green); font-weight: 600; }
+    .lf-score-mid  { color: var(--amber); font-weight: 600; }
+    .lf-score-low  { color: var(--red);   font-weight: 600; }
+
+    /* ─────────────────────────────────────────────
        POLICIES BUTTON + MODAL
     ───────────────────────────────────────────── */
     .btn-policies {
@@ -1364,6 +1427,7 @@
       <span class="health-chip" id="hc-sqlite"><span class="health-dot"></span>SQLite</span>
       <span class="health-chip" id="hc-qdrant"><span class="health-dot"></span>Qdrant</span>
       <span class="health-chip" id="hc-n8n"><span class="health-dot"></span>n8n</span>
+      <span class="health-chip" id="hc-langfuse"><span class="health-dot"></span>Langfuse</span>
     </div>
     <button class="btn-policies" onclick="openPoliciesModal()">Politicas</button>
     <span class="pipeline-selector">
@@ -1555,6 +1619,42 @@
       <p class="panel-label">Historial de sesion</p>
       <div class="history-list" id="history-list">
         <p class="history-empty" id="history-empty">Sin consultas aun.</p>
+      </div>
+
+      <!-- Langfuse Observability -->
+      <div class="langfuse-section" id="langfuse-section" style="display:none">
+        <hr class="panel-divider"/>
+        <p class="panel-label">Observabilidad (Langfuse)</p>
+        <div class="lf-cards">
+          <div class="lf-card">
+            <span class="lf-card-value" id="lf-traces">—</span>
+            <span class="lf-card-label">Traces</span>
+          </div>
+          <div class="lf-card">
+            <span class="lf-card-value" id="lf-tokens">—</span>
+            <span class="lf-card-label">Tokens</span>
+          </div>
+          <div class="lf-card">
+            <span class="lf-card-value" id="lf-cost">—</span>
+            <span class="lf-card-label">Costo USD</span>
+          </div>
+          <div class="lf-card">
+            <span class="lf-card-value" id="lf-judge">—</span>
+            <span class="lf-card-label">Avg Judge</span>
+          </div>
+          <div class="lf-card">
+            <span class="lf-card-value" id="lf-latency">—</span>
+            <span class="lf-card-label">Avg Latencia</span>
+          </div>
+        </div>
+        <div class="lf-traces-table" id="lf-traces-table">
+          <table class="lf-table">
+            <thead>
+              <tr><th>Trace</th><th>Tokens</th><th>Latencia</th><th>Score</th></tr>
+            </thead>
+            <tbody id="lf-traces-body"></tbody>
+          </table>
+        </div>
       </div>
 
     </aside>
@@ -2033,6 +2133,9 @@ async function startAnalysis(payload) {
   scheduleSteps();
 
   abortCtrl = new AbortController();
+  // Safari mobile kills long fetch requests — enforce explicit timeout (150s)
+  const FETCH_TIMEOUT_MS = 150000;
+  const timeoutId = setTimeout(() => abortCtrl.abort(), FETCH_TIMEOUT_MS);
 
   try {
     // Build URL with pipeline mode query params
@@ -2048,6 +2151,7 @@ async function startAnalysis(payload) {
       signal:  abortCtrl.signal,
     });
 
+    clearTimeout(timeoutId);
     clearStepTimers();
     stopTimer();
 
@@ -2080,19 +2184,30 @@ async function startAnalysis(payload) {
     showResult(body, payload, elapsed, usageInfo, wasN8nFallback);
 
   } catch (err) {
+    clearTimeout(timeoutId);
     clearStepTimers();
     stopTimer();
 
-    if (err.name === 'AbortError') return;
+    // Manual abort from timeout → user-friendly message
+    if (err.name === 'AbortError') {
+      const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(0);
+      const timeoutMsg = `El analisis tardo mas de ${elapsedSec}s. Intenta de nuevo — el servicio puede estar arrancando (cold start).`;
+      showError(timeoutMsg, true);
+      showToast('amber', 'Timeout', timeoutMsg);
+    } else {
+      const msg = err.message || String(err);
+      const isNetwork = msg.toLowerCase().includes('fetch') ||
+                        msg.toLowerCase().includes('network') ||
+                        msg.toLowerCase().includes('failed') ||
+                        msg.toLowerCase().includes('load');
 
-    const isNetwork = err.message.toLowerCase().includes('fetch') ||
-                      err.message.toLowerCase().includes('network') ||
-                      err.message.toLowerCase().includes('failed');
-
-    showError(err.message, isNetwork);
-    showToast(isNetwork ? 'amber' : 'error',
-              isNetwork ? 'n8n no disponible' : 'Error en el pipeline',
-              err.message);
+      showError(isNetwork
+        ? 'Error de conexion. El servidor puede estar arrancando (cold start en Render). Intenta de nuevo en 30s.'
+        : msg, isNetwork);
+      showToast(isNetwork ? 'amber' : 'error',
+                isNetwork ? 'Conexion perdida' : 'Error en el pipeline',
+                msg);
+    }
   }
 
   $('btn-submit').disabled = false;
@@ -2240,6 +2355,9 @@ function showResult(html, payload, elapsed, usageInfo, wasN8nFallback) {
       payload,
     });
   };
+
+  // Refresh Langfuse stats after analysis (delay for ingestion)
+  setTimeout(loadLangfuseStats, 2000);
 }
 
 function showError(msg, isNetwork) {
@@ -2537,6 +2655,51 @@ async function savePolicy(idx) {
   saveBtn.textContent = 'Guardar cambios';
 }
 
+// ─── LANGFUSE STATS ──────────────────────────────────────
+async function loadLangfuseStats() {
+  try {
+    const r = await fetch(API_BASE + '/api/langfuse/stats');
+    const data = await r.json();
+
+    // Update health chip
+    if (data.enabled) {
+      setChip('hc-langfuse', 'ok', 'Langfuse \u2713');
+      $('langfuse-section').style.display = '';
+    } else {
+      setChip('hc-langfuse', 'warn', 'Langfuse off');
+      $('langfuse-section').style.display = 'none';
+      return;
+    }
+
+    const s = data.summary;
+    if (!s) return;
+
+    $('lf-traces').textContent  = s.total_traces ?? '—';
+    $('lf-tokens').textContent  = s.total_tokens ? s.total_tokens.toLocaleString() : '—';
+    $('lf-cost').textContent    = s.cost_usd != null ? '$' + s.cost_usd.toFixed(4) : '—';
+    $('lf-judge').textContent   = s.avg_judge_score != null ? s.avg_judge_score.toFixed(1) : '—';
+    $('lf-latency').textContent = s.avg_latency_s != null ? s.avg_latency_s.toFixed(1) + 's' : '—';
+
+    // Render recent traces table
+    const tbody = $('lf-traces-body');
+    tbody.innerHTML = '';
+    (data.recent_traces || []).forEach(t => {
+      const tr = document.createElement('tr');
+      const scoreVal = t.score != null ? t.score.toFixed(1) : '—';
+      const scoreCls = t.score >= 8 ? 'lf-score-good' : t.score >= 5 ? 'lf-score-mid' : t.score != null ? 'lf-score-low' : '';
+      const name = (t.name || t.trace_id || '').slice(0, 20);
+      tr.innerHTML =
+        '<td title="' + (t.trace_id || '') + '">' + name + '</td>' +
+        '<td>' + (t.tokens || 0).toLocaleString() + '</td>' +
+        '<td>' + (t.latency_s || 0).toFixed(1) + 's</td>' +
+        '<td class="' + scoreCls + '">' + scoreVal + '</td>';
+      tbody.appendChild(tr);
+    });
+  } catch {
+    setChip('hc-langfuse', 'warn', 'Langfuse \u2717');
+  }
+}
+
 // ─── INIT ─────────────────────────────────────────────────
 showPanel('idle');
 disableSubmit('Seleccionar escenario');
@@ -2544,6 +2707,7 @@ checkHealth();
 setInterval(checkHealth, 30_000);
 loadTransactions();
 renderHistory();
+loadLangfuseStats();
 </script>
 </body>
 </html>

@@ -25,6 +25,7 @@ from .routes import (
     clients,
     feedback,
     health,
+    langfuse,
     logs,
     merchants,
     panel,
@@ -61,9 +62,11 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5678",   # n8n
-        "http://localhost:3000",   # front local
-        "http://localhost:8000",   # panel served from same origin
+        "http://localhost:5678",                          # n8n local
+        "http://localhost:3000",                          # front local
+        "http://localhost:8000",                          # panel local
+        "https://ciri-chargeback-agent.onrender.com",    # Render production
+        "https://federicomoroz.app.n8n.cloud",           # n8n Cloud
     ],
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
@@ -101,3 +104,4 @@ app.include_router(feedback.router)
 app.include_router(analytics.router)
 app.include_router(reports.router)
 app.include_router(panel.router)
+app.include_router(langfuse.router)

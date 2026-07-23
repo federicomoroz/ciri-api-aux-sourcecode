@@ -87,6 +87,10 @@ __all__ = [
     "DASHBOARD_TOP_N",
     # Fallback
     "FALLBACK_REQUEST_ID",
+    # Langfuse stats
+    "LANGFUSE_STATS_CACHE_TTL_S",
+    "LANGFUSE_STATS_TRACE_LIMIT",
+    "LANGFUSE_STATS_DISPLAY_LIMIT",
     # Conversion
     "SECONDS_TO_MS",
 ]
@@ -195,6 +199,11 @@ DASHBOARD_TOP_N: int = 5                   # top N merchants shown in dashboard
 
 # ── Fallback ────────────────────────────────────────────────────────────────
 FALLBACK_REQUEST_ID: str = "unknown"       # default request_id when not set
+
+# ── Langfuse Stats ─────────────────────────────────────────────────────────
+LANGFUSE_STATS_CACHE_TTL_S: int = 30
+LANGFUSE_STATS_TRACE_LIMIT: int = 20
+LANGFUSE_STATS_DISPLAY_LIMIT: int = 10
 
 # ── Conversion ───────────────────────────────────────────────────────────────
 SECONDS_TO_MS: int = 1000

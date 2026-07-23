@@ -22,6 +22,12 @@
   --rose: #fb7185;
   --sky: #38bdf8;
   --radius: 8px;
+
+  /* Section colors */
+  --s1: #34d399;
+  --s2: #38bdf8;
+  --s3: #818cf8;
+  --s4: #fbbf24;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,16 +42,17 @@ body {
 }
 
 .page {
-  max-width: 1160px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 56px 40px 72px;
+  padding: 48px 40px 72px;
 }
 
 /* ── HERO ── */
 .hero {
   text-align: center;
-  padding: 48px 0 56px;
+  padding: 40px 0 48px;
   position: relative;
+  animation: heroIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .hero::before {
@@ -91,26 +98,47 @@ body {
   max-width: 600px;
   margin-left: auto;
   margin-right: auto;
-  line-height: 1.6;
+}
+
+.tech-pills {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.75rem;
+  color: var(--dim);
+  font-weight: 500;
 }
 
 .hero-stats {
   display: flex;
   justify-content: center;
   gap: 32px;
-  margin-top: 32px;
+  margin-top: 28px;
 }
 
-.stat {
-  text-align: center;
-}
+.stat { text-align: center; }
 
 .stat-value {
   font-family: 'JetBrains Mono', monospace;
   font-size: 1.5rem;
   font-weight: 700;
   color: #fff;
+  animation: countPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
+
+.stat:nth-child(1) .stat-value { animation-delay: 0.5s; }
+.stat:nth-child(2) .stat-value { animation-delay: 0.6s; }
+.stat:nth-child(3) .stat-value { animation-delay: 0.7s; }
+.stat:nth-child(4) .stat-value { animation-delay: 0.8s; }
 
 .stat-label {
   font-size: 0.75rem;
@@ -118,7 +146,7 @@ body {
   margin-top: 2px;
 }
 
-/* ── PRINCIPLE STRIP ── */
+/* ── PRINCIPLES ── */
 .principles {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -127,18 +155,21 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   margin-bottom: 48px;
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
 }
 
 .principle {
   background: var(--surface);
   padding: 20px 24px;
   text-align: center;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.principle-icon {
-  font-size: 1.3rem;
-  margin-bottom: 8px;
-}
+.principle:nth-child(1) { animation-delay: 0.25s; }
+.principle:nth-child(2) { animation-delay: 0.35s; }
+.principle:nth-child(3) { animation-delay: 0.45s; }
+
+.principle-icon { font-size: 1.3rem; margin-bottom: 8px; }
 
 .principle-title {
   font-weight: 600;
@@ -153,150 +184,563 @@ body {
   line-height: 1.5;
 }
 
-/* ── SECTION ── */
-.section {
-  margin-bottom: 12px;
-}
+/* ═══════════════════════════════════════════════
+   FLOWCHART — the visual diagram
+   ═══════════════════════════════════════════════ */
 
-.section-head {
+.flowchart {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius) var(--radius) 0 0;
+  gap: 0;
+  margin-bottom: 40px;
 }
 
-.section-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
+/* Section wrapper */
+.flow-section {
+  width: 100%;
+  position: relative;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.section-name {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 600;
-  font-size: 0.82rem;
-  color: #fff;
-  letter-spacing: 0.3px;
-}
+.flow-section:nth-child(1) { animation-delay: 0.3s; }
+.flow-section:nth-child(3) { animation-delay: 0.5s; }
+.flow-section:nth-child(5) { animation-delay: 0.7s; }
+.flow-section:nth-child(7) { animation-delay: 0.9s; }
 
-.section-info {
-  margin-left: auto;
-  font-size: 0.75rem;
-  color: var(--dim);
-}
-
-.rows {
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  overflow: hidden;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 250px 1fr 90px;
-  border-bottom: 1px solid var(--border-subtle);
-  transition: background 0.15s;
-}
-
-.row:last-child { border-bottom: none; }
-.row:hover { background: rgba(99,102,241,0.03); }
-
-.col {
-  padding: 9px 16px;
-  display: flex;
+/* Section header tag */
+.section-tag {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border-radius: 6px 6px 0 0;
+  margin-left: 24px;
 }
 
-.col-name {
+.section-tag .tag-info {
+  font-weight: 400;
+  opacity: 0.6;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Section body (the box) */
+.section-body {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 32px 24px;
+  position: relative;
+}
+
+/* ── Flow nodes ── */
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flow-row.vertical {
+  flex-direction: column;
+  gap: 0;
+}
+
+.node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
   font-size: 0.82rem;
   font-weight: 500;
-  color: var(--fg);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  white-space: nowrap;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.col-api {
-  border-left: 1px solid var(--border-subtle);
-  font-size: 0.78rem;
-  color: var(--dim);
+.node:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(99,102,241,0.15);
 }
 
-.col-store {
-  border-left: 1px solid var(--border-subtle);
-  justify-content: center;
-}
-
-.method {
-  flex-shrink: 0;
+.node .badge {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
   letter-spacing: 0.5px;
 }
 
-.m-get  { color: var(--green); background: rgba(52,211,153,0.1); }
-.m-post { color: var(--amber); background: rgba(251,191,36,0.1); }
-.m-n8n  { color: var(--accent2); background: rgba(129,140,248,0.08); }
+.badge-sqlite { color: var(--green); background: rgba(52,211,153,0.1); }
+.badge-qdrant { color: var(--sky); background: rgba(56,189,248,0.1); }
+.badge-llm    { color: var(--amber); background: rgba(251,191,36,0.1); }
+.badge-n8n    { color: var(--accent2); background: rgba(129,140,248,0.08); }
+.badge-api    { color: var(--dim); background: rgba(113,113,122,0.1); }
 
-.ep {
+.node .method {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
-  color: var(--fg);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
 }
 
-.ep-note {
-  margin-left: auto;
+.m-get  { color: var(--green); background: rgba(52,211,153,0.12); }
+.m-post { color: var(--amber); background: rgba(251,191,36,0.12); }
+
+.node .ep {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--dim);
+}
+
+/* Decision node (diamond-ish) */
+.node.decision {
+  background: var(--surface2);
+  border-color: var(--muted);
+  border-style: dashed;
+}
+
+.node.decision::before {
+  content: '◇';
+  color: var(--amber);
+  font-size: 0.8rem;
+}
+
+/* Trigger node */
+.node.trigger {
+  border-color: var(--s1);
+  background: rgba(52,211,153,0.05);
+}
+
+/* LLM node */
+.node.llm-node {
+  border-color: var(--amber);
+  background: rgba(251,191,36,0.04);
+}
+
+/* Error node */
+.node.error-node {
+  border-color: var(--rose);
+  background: rgba(251,113,133,0.04);
+  color: var(--rose);
+  font-size: 0.75rem;
+}
+
+/* ── Arrows and connectors ── */
+.arrow {
   color: var(--muted);
-  font-size: 0.7rem;
-  text-align: right;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.arrow-down {
+  width: 2px;
+  height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.arrow-down::before {
+  content: '';
+  width: 2px;
+  height: 100%;
+  background: var(--border);
+}
+
+.arrow-down::after {
+  content: '▼';
+  position: absolute;
+  bottom: -4px;
+  font-size: 0.5rem;
+  color: var(--muted);
+}
+
+.arrow-down.long { height: 32px; }
+
+.arrow-right { padding: 0 2px; }
+.arrow-right::after { content: '→'; color: var(--muted); font-size: 0.9rem; }
+
+/* ── Parallel branch layout ── */
+.parallel-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* The spread line on top */
+.parallel-spread {
+  width: 90%;
+  height: 20px;
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.parallel-spread::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.parallel-spread::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 20px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+/* 6 vertical ticks */
+.spread-ticks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0;
+}
+
+.spread-ticks .tick {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+}
+
+.parallel-branches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.branch-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.branch-node:hover {
+  border-color: var(--s2);
+  box-shadow: 0 0 12px rgba(56,189,248,0.12);
+}
+
+.branch-node .ep {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--dim);
+  word-break: break-all;
+}
+
+.branch-node .badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+/* Converge line on bottom */
+.parallel-converge {
+  width: 90%;
+  height: 20px;
+  position: relative;
+  margin-top: 4px;
+}
+
+.parallel-converge::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.parallel-converge::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  height: 20px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+.converge-ticks {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.converge-ticks .tick {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+}
+
+/* ── Risk routing layout ── */
+.risk-routing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.risk-branches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.risk-lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.risk-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.r-blocker { color: var(--rose);  background: rgba(251,113,133,0.12); border: 1px solid rgba(251,113,133,0.2); }
+.r-high    { color: var(--amber); background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.2); }
+.r-medium  { color: var(--sky);   background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.2); }
+.r-low     { color: var(--green); background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.2); }
+
+.risk-lane .lane-node {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: border-color 0.2s;
+}
+
+.risk-lane .lane-node:hover {
+  border-color: var(--accent);
+}
+
+.risk-lane .lane-node + .lane-node { margin-top: -1px; }
+
+.risk-lane .lane-node.lane-wait {
+  border-style: dashed;
+  border-color: var(--amber);
+  background: rgba(251,191,36,0.03);
+}
+
+.lane-arrow {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+  margin: 0 auto;
+}
+
+/* ── Service sidebar labels ── */
+.service-float {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.service-float.left { left: -110px; }
+.service-float.right { right: -110px; }
+
+.svc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-align: center;
   white-space: nowrap;
 }
 
-.store-tag {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.68rem;
-  font-weight: 500;
+.svc-sqlite  { color: var(--green); border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.05); }
+.svc-qdrant  { color: var(--sky); border-color: rgba(56,189,248,0.25); background: rgba(56,189,248,0.05); }
+.svc-claude  { color: var(--amber); border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.05); }
+.svc-langfuse { color: var(--accent2); border-color: rgba(129,140,248,0.25); background: rgba(129,140,248,0.05); }
+
+/* ── Inter-section connector ── */
+.section-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 36px;
+  position: relative;
 }
 
-.st-sqlite { color: var(--green); }
-.st-qdrant { color: var(--sky); }
-.st-llm    { color: var(--amber); }
-.st-n8n    { color: var(--muted); }
+.section-connector::before {
+  content: '';
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--border), var(--muted));
+}
 
-/* Risk badges */
-.risk {
+.section-connector::after {
+  content: '▼';
+  position: absolute;
+  bottom: -2px;
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+/* ── Cache hit bypass (dashed side path) ── */
+.cache-bypass {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.cache-bypass .bypass-line {
+  position: absolute;
+  right: -40px;
+  top: 0;
+  width: 40px;
+  height: 100%;
+  border-right: 2px dashed var(--green);
+  border-top: 2px dashed var(--green);
+  border-bottom: 2px dashed var(--green);
+  border-radius: 0 8px 8px 0;
+  opacity: 0.3;
+}
+
+/* ── Annotations ── */
+.flow-note {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.flow-label {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.65rem;
-  font-weight: 600;
+  color: var(--dim);
+  text-align: center;
   padding: 2px 8px;
-  border-radius: 4px;
-  letter-spacing: 0.5px;
-  margin-right: 4px;
 }
 
-.r-blocker { color: var(--rose);  background: rgba(251,113,133,0.1); }
-.r-high    { color: var(--amber); background: rgba(251,191,36,0.1); }
-.r-medium  { color: var(--sky);   background: rgba(56,189,248,0.1); }
-.r-low     { color: var(--green); background: rgba(52,211,153,0.1); }
-
-.indent { padding-left: 36px !important; }
-
-.row-muted { background: var(--surface) !important; }
-.row-muted:hover { background: var(--surface) !important; }
-
-/* ── CONNECTOR ── */
-.connector {
+/* ── External services legend ── */
+.services-legend {
   display: flex;
   justify-content: center;
-  padding: 6px 0;
-  color: var(--muted);
-  font-size: 0.8rem;
+  gap: 20px;
+  margin: 24px 0 8px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--dim);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ── Converge to Responder ── */
+.converge-all {
+  width: 80%;
+  height: 24px;
+  position: relative;
+  margin: 8px auto 0;
+}
+
+.converge-all::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.converge-all::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  height: 24px;
+  background: var(--border);
+  transform: translateX(-50%);
 }
 
 /* ── ERROR SECTION ── */
@@ -305,6 +749,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
 }
 
 .error-head {
@@ -349,7 +794,7 @@ body {
 
 /* ── FEEDBACK ── */
 .feedback {
-  margin-top: 32px;
+  margin-top: 24px;
   padding: 18px 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -360,6 +805,7 @@ body {
   flex-wrap: wrap;
   font-size: 0.78rem;
   color: var(--dim);
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.05s both;
 }
 
 .fb-title {
@@ -378,6 +824,7 @@ body {
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-top: 32px;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.1s both;
 }
 
 .info-card {
@@ -428,6 +875,7 @@ body {
   align-items: center;
   color: var(--muted);
   font-size: 0.72rem;
+  animation: fadeUp 0.5s ease 1.2s both;
 }
 
 .footer a {
@@ -436,81 +884,39 @@ body {
 }
 
 /* ── RESPONSIVE ── */
+@media (max-width: 1100px) {
+  .service-float { display: none; }
+}
+
 @media (max-width: 900px) {
   .page { padding: 24px 16px; }
   .hero-title { font-size: 1.6rem; }
   .hero-stats { gap: 20px; }
   .stat-value { font-size: 1.1rem; }
   .principles { grid-template-columns: 1fr; }
-  .row { grid-template-columns: 180px 1fr 70px; }
   .info-grid { grid-template-columns: 1fr; }
   .error-list { grid-template-columns: repeat(2, 1fr); }
-  .ep-note { display: none; }
+  .parallel-branches { grid-template-columns: repeat(3, 1fr); }
+  .risk-branches { grid-template-columns: repeat(2, 1fr); }
+  .flow-row { gap: 6px; }
 }
 
-/* ── LOAD ANIMATIONS ── */
-.hero {
-  animation: heroIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+@media (max-width: 600px) {
+  .parallel-branches { grid-template-columns: repeat(2, 1fr); }
+  .risk-branches { grid-template-columns: 1fr 1fr; }
+  .hero-stats { flex-wrap: wrap; }
 }
 
+/* ── ANIMATIONS ── */
 @keyframes heroIn {
   from { opacity: 0; transform: translateY(-20px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.principles {
-  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-}
-
-.section, .error-section, .feedback, .info-grid {
-  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* Stagger sections */
-.section:nth-of-type(1) { animation-delay: 0.3s; }
-.section:nth-of-type(2) { animation-delay: 0.4s; }
-.section:nth-of-type(3) { animation-delay: 0.5s; }
-.section:nth-of-type(4) { animation-delay: 0.6s; }
-.error-section          { animation-delay: 0.7s; }
-.feedback               { animation-delay: 0.75s; }
-.info-grid              { animation-delay: 0.8s; }
-
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
-/* Row stagger within sections */
-.row {
-  animation: rowSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.row:nth-child(1)  { animation-delay: 0.4s; }
-.row:nth-child(2)  { animation-delay: 0.44s; }
-.row:nth-child(3)  { animation-delay: 0.48s; }
-.row:nth-child(4)  { animation-delay: 0.52s; }
-.row:nth-child(5)  { animation-delay: 0.56s; }
-.row:nth-child(6)  { animation-delay: 0.60s; }
-.row:nth-child(7)  { animation-delay: 0.64s; }
-.row:nth-child(8)  { animation-delay: 0.68s; }
-.row:nth-child(9)  { animation-delay: 0.72s; }
-.row:nth-child(10) { animation-delay: 0.76s; }
-.row:nth-child(11) { animation-delay: 0.80s; }
-
-@keyframes rowSlide {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-
-/* Stat counters */
-.stat-value {
-  animation: countPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-.stat:nth-child(1) .stat-value { animation-delay: 0.5s; }
-.stat:nth-child(2) .stat-value { animation-delay: 0.6s; }
-.stat:nth-child(3) .stat-value { animation-delay: 0.7s; }
-.stat:nth-child(4) .stat-value { animation-delay: 0.8s; }
 
 @keyframes countPop {
   from { opacity: 0; transform: scale(0.5); }
@@ -518,49 +924,21 @@ body {
   to   { opacity: 1; transform: scale(1); }
 }
 
-/* Principle cards */
-.principle {
-  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.principle:nth-child(1) { animation-delay: 0.25s; }
-.principle:nth-child(2) { animation-delay: 0.35s; }
-.principle:nth-child(3) { animation-delay: 0.45s; }
-
-/* Info cards */
-.info-card {
-  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.info-card:nth-child(1) { animation-delay: 0.85s; }
-.info-card:nth-child(2) { animation-delay: 0.9s; }
-.info-card:nth-child(3) { animation-delay: 0.95s; }
-
-/* Section dot pulse */
-.section-dot {
-  animation: dotPulse 2s ease-in-out infinite;
-}
-
 @keyframes dotPulse {
   0%, 100% { box-shadow: 0 0 0 0 currentColor; }
   50%      { box-shadow: 0 0 0 4px transparent; }
 }
 
-/* Connector fade */
-.connector {
-  animation: fadeUp 0.3s ease 0.5s both;
-}
-
-/* Footer slide */
-.footer {
-  animation: fadeUp 0.5s ease 1s both;
+@keyframes flowIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- HERO -->
+  <!-- ═══ HERO ═══ -->
   <div class="hero">
     <div class="hero-label">Architecture Overview</div>
     <div class="hero-title">CIRI <span>Chargeback Agent</span></div>
@@ -568,36 +946,24 @@ body {
       Orquestación explícita con n8n. Sin AI Agent black box.
       Cada paso es un nodo visible, auditable, determinístico.
     </div>
-    <div style="display:flex;gap:8px;justify-content:center;margin-top:20px;flex-wrap:wrap">
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">n8n</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">FastAPI</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Claude Haiku 4.5</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Qdrant Cloud</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Voyage AI</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">Langfuse</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 14px;font-size:0.75rem;color:var(--dim);font-weight:500">SQLite</span>
+    <div class="tech-pills">
+      <span class="pill">n8n</span>
+      <span class="pill">FastAPI</span>
+      <span class="pill">Claude Haiku 4.5</span>
+      <span class="pill">Qdrant Cloud</span>
+      <span class="pill">Voyage AI</span>
+      <span class="pill">Langfuse</span>
+      <span class="pill">SQLite</span>
     </div>
     <div class="hero-stats">
-      <div class="stat">
-        <div class="stat-value">42</div>
-        <div class="stat-label">nodos n8n</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value">10</div>
-        <div class="stat-label">API endpoints</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value">2</div>
-        <div class="stat-label">llamadas LLM</div>
-      </div>
-      <div class="stat">
-        <div class="stat-value">203</div>
-        <div class="stat-label">tests</div>
-      </div>
+      <div class="stat"><div class="stat-value">41</div><div class="stat-label">nodos n8n</div></div>
+      <div class="stat"><div class="stat-value">10</div><div class="stat-label">API endpoints</div></div>
+      <div class="stat"><div class="stat-value">2</div><div class="stat-label">llamadas LLM</div></div>
+      <div class="stat"><div class="stat-value">203</div><div class="stat-label">tests</div></div>
     </div>
   </div>
 
-  <!-- PRINCIPLES -->
+  <!-- ═══ PRINCIPLES ═══ -->
   <div class="principles">
     <div class="principle">
       <div class="principle-icon">&#9632;</div>
@@ -616,248 +982,375 @@ body {
     </div>
   </div>
 
-  <!-- §1 — ENTRADA + CACHÉ -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-dot" style="background:var(--green)"></div>
-      <div class="section-name">§1 Entrada + Caché</div>
-      <div class="section-info">6 nodos — validación, wake-up, idempotencia</div>
-    </div>
-    <div class="rows">
-      <div class="row">
-        <div class="col"><span class="col-name">Webhook — Entrada</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/webhook/chargeback-agent</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">trigger</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Validar Formato — IF</span></div>
-        <div class="col col-api"><span class="method m-n8n">IF</span><span>regex TXN-XXXXX — invalid → Stop and Error</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Validar Formato TXN</span></div>
-        <div class="col col-api"><span class="method m-n8n">SET</span><span>extrae transaction_id, motivo, cliente_vip</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Despertar API</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/health</span><span class="ep-note">wake cold-start</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">API</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Verificar Caché</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/cache/lookup</span><span class="ep-note">idempotencia</span></div>
-        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">¿Cache Hit?</span></div>
-        <div class="col col-api"><span class="method m-n8n">IF</span><span>hit → Formatear Caché → Responder (skip §2–§4)</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-    </div>
+  <!-- ═══ SERVICE LEGEND ═══ -->
+  <div class="services-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>SQLite</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--sky)"></div>Qdrant + Voyage AI</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Claude (LLM)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Langfuse</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>n8n nativo</div>
   </div>
 
-  <div class="connector">↓</div>
+  <!-- ═════════════════════════════════════════════
+       FLOWCHART
+       ═════════════════════════════════════════════ -->
+  <div class="flowchart">
 
-  <!-- §2 — CONTEXTO -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-dot" style="background:var(--sky)"></div>
-      <div class="section-name">§2 Contexto paralelo</div>
-      <div class="section-info">11 nodos — 6 queries → Merge</div>
-    </div>
-    <div class="rows">
-      <div class="row">
-        <div class="col"><span class="col-name">Obtener Transacción</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/transactions/{id}</span><span class="ep-note">merchant, amount, fraud_score</span></div>
-        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
+    <!-- ═══ §1 — ENTRADA + CACHÉ ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(52,211,153,0.08);color:var(--s1);border:1px solid rgba(52,211,153,0.2);border-bottom:none">
+        §1 Entrada + Caché <span class="tag-info">6 nodos</span>
       </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Obtener Logs</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/logs/{tx_id}</span><span class="ep-note">eventos del sistema</span></div>
-        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Buscar Políticas</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/policies/search</span><span class="ep-note">top-17, threshold 0.0</span></div>
-        <div class="col col-store"><span class="store-tag st-qdrant">Qdrant</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Buscar Casos Similares</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/cases/similar</span><span class="ep-note">top-5, threshold 0.40</span></div>
-        <div class="col col-store"><span class="store-tag st-qdrant">Qdrant</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Riesgo del Comercio</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/merchants/{name}/risk</span><span class="ep-note">cb_ratio, flags</span></div>
-        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Evaluar Riesgo Comercio</span></div>
-        <div class="col col-api"><span class="method m-n8n">SET</span><span>is_suspended, is_high_risk, is_strategic</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Historial del Cliente</span></div>
-        <div class="col col-api"><span class="method m-get">GET</span><span class="ep">/api/clients/{id}/history</span><span class="ep-note">casos previos</span></div>
-        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Evaluar Historial Cliente</span></div>
-        <div class="col col-api"><span class="method m-n8n">SET</span><span>is_recidivist, has_geo_anomaly, is_vip</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Verificar SLA</span></div>
-        <div class="col col-api"><span class="method m-n8n">SET</span><span>LATAM 10d / no-LATAM 15d / VIP 5d</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Merge — Contexto Paralelo</span></div>
-        <div class="col col-api"><span class="method m-n8n">MERGE</span><span>espera 6 ramas paralelas (indices 0–5)</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-    </div>
-  </div>
+      <div class="section-body" style="border-color:rgba(52,211,153,0.2)">
 
-  <div class="connector">↓</div>
+        <!-- Row 1: Webhook → Validate → Extract -->
+        <div class="flow-row">
+          <div class="node trigger">
+            <span class="method m-post">POST</span>
+            Webhook — Entrada
+            <span class="ep">/webhook/chargeback-agent</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node decision">
+            Validar Formato — IF
+            <span class="ep" style="font-size:0.65rem">regex TXN-XXXXX</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node">
+            Extraer Campos
+            <span class="badge badge-n8n">SET</span>
+          </div>
+        </div>
 
-  <!-- §3 — ANÁLISIS IA -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-dot" style="background:var(--accent2)"></div>
-      <div class="section-name">§3 Análisis con IA</div>
-      <div class="section-info">8 nodos — Resolución + Guardrails + Judge</div>
-    </div>
-    <div class="rows">
-      <div class="row">
-        <div class="col"><span class="col-name">Compilar Contexto</span></div>
-        <div class="col col-api"><span class="method m-n8n">CODE</span><span>fusiona resultados de §2 en objeto unificado</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Sintetizar Resolución</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/analyze/resolve</span><span class="ep-note">action, risk, confidence</span></div>
-        <div class="col col-store"><span class="store-tag st-llm">Claude</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Verificar Guardrails</span></div>
-        <div class="col col-api"><span class="method m-n8n">CODE</span><span>APPROVE + BLOCKER = hallucination flag</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Juez de Calidad</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/analyze/judge</span><span class="ep-note">score 1–10, 5 criterios</span></div>
-        <div class="col col-store"><span class="store-tag st-llm">Claude</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Extraer Evaluación</span></div>
-        <div class="col col-api"><span class="method m-n8n">SET</span><span>JSON.parse → judge_evaluation</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">¿Juez Aprueba? (≥7.0)</span></div>
-        <div class="col col-api"><span class="method m-n8n">IF</span><span>≥ 7.0 → ok / &lt; 7.0 → Marcar Calidad Baja</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="col-name">Preparar Informe</span></div>
-        <div class="col col-api"><span class="method m-n8n">CODE</span><span>construye ReportRequest payload</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
+        <div class="arrow-down" style="margin:0 auto"></div>
+
+        <!-- Row 2: Wake → Cache → Decision -->
+        <div class="flow-row">
+          <div class="node">
+            <span class="method m-get">GET</span>
+            Despertar API
+            <span class="ep">/health</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node">
+            <span class="method m-get">GET</span>
+            Verificar Caché
+            <span class="ep">/api/cache/lookup</span>
+            <span class="badge badge-sqlite">SQLite</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node decision">
+            ¿Cache Hit?
+          </div>
+        </div>
+
+        <!-- Cache hit/miss paths -->
+        <div style="display:flex;justify-content:center;gap:48px;margin-top:12px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--green);font-weight:600">HIT</div>
+            <div class="node" style="border-color:var(--green);border-style:dashed;font-size:0.78rem">
+              Formatear Caché → Responder
+            </div>
+            <div class="flow-note">skip §2–§4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--dim);font-weight:600">MISS</div>
+            <div style="font-size:0.72rem;color:var(--dim)">continúa ↓</div>
+          </div>
+        </div>
+
+        <!-- Error branch annotation -->
+        <div style="position:absolute;top:16px;right:16px">
+          <div class="node error-node" style="font-size:0.68rem;padding:6px 10px">
+            invalid → Stop &amp; Error
+          </div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="connector">↓</div>
+    <!-- Connector §1 → §2 -->
+    <div class="section-connector"></div>
 
-  <!-- §4 — ROUTING -->
-  <div class="section">
-    <div class="section-head">
-      <div class="section-dot" style="background:var(--amber)"></div>
-      <div class="section-name">§4 Routing + Respuesta</div>
-      <div class="section-info">8 nodos — Switch por risk_level, Responder unificado</div>
+    <!-- ═══ §2 — CONTEXTO PARALELO ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(56,189,248,0.08);color:var(--s2);border:1px solid rgba(56,189,248,0.2);border-bottom:none">
+        §2 Contexto paralelo <span class="tag-info">11 nodos — 6 queries en paralelo → Merge</span>
+      </div>
+      <div class="section-body" style="border-color:rgba(56,189,248,0.2)">
+
+        <div class="parallel-container">
+          <!-- Top spread -->
+          <div class="parallel-spread">
+            <div class="spread-ticks">
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+            </div>
+          </div>
+
+          <!-- 6 parallel branches -->
+          <div class="parallel-branches">
+            <div class="branch">
+              <div class="branch-node">
+                Obtener<br>Transacción
+                <span class="ep">/api/transactions/{id}</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Obtener<br>Logs
+                <span class="ep">/api/logs/{tx_id}</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Buscar<br>Políticas
+                <span class="ep">/api/policies/search</span>
+                <span class="badge badge-qdrant">Qdrant</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Buscar Casos<br>Similares
+                <span class="ep">/api/cases/similar</span>
+                <span class="badge badge-qdrant">Qdrant</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Riesgo del<br>Comercio
+                <span class="ep">/api/merchants/{name}/risk</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+              <div style="width:2px;height:8px;background:var(--border)"></div>
+              <div class="branch-node" style="font-size:0.7rem;padding:6px">
+                Evaluar Riesgo
+                <span class="badge badge-n8n">SET</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Historial del<br>Cliente
+                <span class="ep">/api/clients/{id}/history</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+              <div style="width:2px;height:8px;background:var(--border)"></div>
+              <div class="branch-node" style="font-size:0.7rem;padding:6px">
+                Evaluar Historial
+                <span class="badge badge-n8n">SET</span>
+              </div>
+              <div style="width:2px;height:8px;background:var(--border)"></div>
+              <div class="branch-node" style="font-size:0.7rem;padding:6px">
+                Verificar SLA
+                <span class="badge badge-n8n">SET</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom converge -->
+          <div class="parallel-converge">
+            <div class="converge-ticks">
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+            </div>
+          </div>
+
+          <!-- Merge node -->
+          <div class="arrow-down" style="margin:0 auto"></div>
+          <div class="node" style="border-color:var(--s2)">
+            <span class="badge badge-n8n">MERGE</span>
+            Contexto Paralelo
+            <span class="flow-label">espera 6 ramas</span>
+          </div>
+        </div>
+
+      </div>
     </div>
-    <div class="rows">
-      <div class="row">
-        <div class="col"><span class="col-name">Switch — Nivel de Riesgo</span></div>
-        <div class="col col-api"><span class="method m-n8n">SWITCH</span><span>resolution.risk_level → BLOCKER | HIGH | MEDIUM | LOW</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">routing</span></div>
+
+    <!-- Connector §2 → §3 -->
+    <div class="section-connector"></div>
+
+    <!-- ═══ §3 — ANÁLISIS CON IA ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(129,140,248,0.08);color:var(--s3);border:1px solid rgba(129,140,248,0.2);border-bottom:none">
+        §3 Análisis con IA <span class="tag-info">8 nodos — Resolución + Guardrails + Judge</span>
       </div>
-      <div class="row">
-        <div class="col"><span class="risk r-blocker">BLOCKER</span><span class="col-name">Generar Reporte</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">auto-reject</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="risk r-medium">MEDIUM</span><span class="col-name">Generar Reporte</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">nodo unificado</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="risk r-low">LOW</span><span class="col-name">Generar Reporte</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">nodo unificado</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
-      </div>
-      <div class="row">
-        <div class="col"><span class="risk r-high">HIGH</span><span class="col-name">Notificar Analista</span></div>
-        <div class="col col-api"><span class="method m-n8n">SET</span><span>resume_url para Wait HITL</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col indent"><span class="col-name">Wait — Aprobación HITL</span></div>
-        <div class="col col-api"><span class="method m-n8n">WAIT</span><span>form: APPROVE / REJECT + Notas</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">pausa</span></div>
-      </div>
-      <div class="row">
-        <div class="col indent"><span class="col-name">Procesar Respuesta</span></div>
-        <div class="col col-api"><span class="method m-n8n">CODE</span><span>merge decisión + contexto original</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">n8n</span></div>
-      </div>
-      <div class="row">
-        <div class="col indent"><span class="col-name">Registrar Feedback</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/feedback</span><span class="ep-note">auto-index si ≥ 8.0</span></div>
-        <div class="col col-store"><span class="store-tag st-sqlite">SQLite</span></div>
-      </div>
-      <div class="row">
-        <div class="col indent"><span class="col-name">Generar Reporte — HITL</span></div>
-        <div class="col col-api"><span class="method m-post">POST</span><span class="ep">/api/reports/html</span><span class="ep-note">incluye decisión HITL</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">HTML</span></div>
-      </div>
-      <div class="row row-muted">
-        <div class="col"><span class="col-name" style="color:var(--dim)">Responder — Reporte</span></div>
-        <div class="col col-api"><span style="color:var(--dim)">text/html — responde al webhook original</span></div>
-        <div class="col col-store"><span class="store-tag st-n8n">↩</span></div>
+      <div class="section-body" style="border-color:rgba(129,140,248,0.2)">
+
+        <div class="flow-row vertical">
+          <!-- Compile -->
+          <div class="node">
+            <span class="badge badge-n8n">CODE</span>
+            Compilar Contexto
+            <span class="ep" style="font-size:0.65rem">fusiona resultados de §2</span>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Resolve (LLM) -->
+          <div class="node llm-node">
+            <span class="method m-post">POST</span>
+            Sintetizar Resolución
+            <span class="ep">/api/analyze/resolve</span>
+            <span class="badge badge-llm">Claude</span>
+          </div>
+          <div class="flow-note">action, risk_level, confidence, policy_verdicts</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Guardrails -->
+          <div class="node" style="border-color:var(--rose);border-style:dashed">
+            <span class="badge badge-n8n">CODE</span>
+            Verificar Guardrails
+            <span class="ep" style="font-size:0.65rem;color:var(--rose)">APPROVE + BLOCKER = hallucination</span>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Judge (LLM) -->
+          <div class="node llm-node">
+            <span class="method m-post">POST</span>
+            Juez de Calidad
+            <span class="ep">/api/analyze/judge</span>
+            <span class="badge badge-llm">Claude</span>
+          </div>
+          <div class="flow-note">score 1–10, 5 criterios, trazado en Langfuse</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Judge gate -->
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="node decision">
+              ¿Juez Aprueba? (≥ 7.0)
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="color:var(--rose);font-size:0.7rem;font-family:'JetBrains Mono',monospace">< 7.0</span>
+              <div class="node" style="font-size:0.75rem;border-color:var(--rose);border-style:dashed;padding:6px 10px">
+                Marcar Calidad Baja
+              </div>
+            </div>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Prepare Report -->
+          <div class="node">
+            <span class="badge badge-n8n">CODE</span>
+            Preparar Informe
+            <span class="ep" style="font-size:0.65rem">construye ReportRequest</span>
+          </div>
+        </div>
+
       </div>
     </div>
-  </div>
 
-  <!-- ERROR HANDLING -->
+    <!-- Connector §3 → §4 -->
+    <div class="section-connector"></div>
+
+    <!-- ═══ §4 — ROUTING + RESPUESTA ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(251,191,36,0.08);color:var(--s4);border:1px solid rgba(251,191,36,0.2);border-bottom:none">
+        §4 Routing + Respuesta + HITL <span class="tag-info">7 nodos</span>
+      </div>
+      <div class="section-body" style="border-color:rgba(251,191,36,0.2)">
+
+        <div class="risk-routing">
+          <!-- Switch node -->
+          <div class="node decision" style="border-color:var(--s4)">
+            <span class="badge badge-n8n">SWITCH</span>
+            Nivel de Riesgo
+            <span class="ep" style="font-size:0.65rem">resolution.risk_level</span>
+          </div>
+
+          <!-- 4 risk badges (all → same Generar Reporte) -->
+          <div style="display:flex;justify-content:center;gap:8px;margin:12px 0 4px">
+            <span class="risk-badge r-blocker">BLOCKER</span>
+            <span class="risk-badge r-high">HIGH</span>
+            <span class="risk-badge r-medium">MEDIUM</span>
+            <span class="risk-badge r-low">LOW</span>
+          </div>
+          <div class="flow-note" style="margin-bottom:8px">los 4 niveles convergen al mismo nodo</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Generar Reporte -->
+          <div class="node">
+            <span class="method m-post">POST</span>
+            Generar Reporte
+            <span class="ep">/api/reports/html</span>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Responder -->
+          <div class="node" style="border-color:var(--s4);background:rgba(251,191,36,0.04)">
+            <span style="font-size:1rem">↩</span>
+            Responder — Reporte
+            <span class="ep" style="font-size:0.65rem">text/html al webhook</span>
+          </div>
+          <div class="flow-note">webhook responde inmediatamente con el reporte</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- IF HIGH? -->
+          <div class="node decision">
+            ¿Es HIGH?
+            <span class="ep" style="font-size:0.65rem">risk_level == HIGH</span>
+          </div>
+
+          <!-- Two paths: HIGH (HITL) and others (end) -->
+          <div style="display:flex;justify-content:center;gap:40px;margin-top:12px">
+            <!-- HIGH → HITL sub-flow -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:0">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--amber);font-weight:600">TRUE</div>
+              <div class="lane-arrow"></div>
+              <div class="lane-node lane-wait" style="width:200px">
+                Wait — Aprobación HITL
+                <span style="font-size:0.68rem;color:var(--amber)">APPROVE / REJECT</span>
+                <span style="font-size:0.62rem;color:var(--dim)">timeout: 15s → auto-approve</span>
+              </div>
+              <div class="lane-arrow"></div>
+              <div class="lane-node" style="width:200px">
+                Procesar Respuesta
+                <span style="font-size:0.68rem;color:var(--dim)">CODE — merge decisión</span>
+              </div>
+              <div class="lane-arrow"></div>
+              <div class="lane-node" style="width:200px">
+                Registrar Feedback
+                <span style="font-size:0.68rem;color:var(--dim)">POST /api/feedback</span>
+              </div>
+              <div class="flow-note">auto-indexa si score ≥ 8.0</div>
+            </div>
+
+            <!-- Others → end -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--dim);font-weight:600">FALSE</div>
+              <div style="font-size:0.72rem;color:var(--dim)">fin</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /flowchart -->
+
+  <!-- ═══ ERROR HANDLING ═══ -->
   <div class="error-section">
     <div class="error-head">
       <strong>Error handling</strong>
       <span>4 Stop and Error → Error Handler workflow</span>
     </div>
     <div class="error-list">
-      <div class="error-item">
-        <strong>TXN</strong>
-        Formato inválido
-      </div>
-      <div class="error-item">
-        <strong>API</strong>
-        No disponible (3 reintentos)
-      </div>
-      <div class="error-item">
-        <strong>LLM</strong>
-        Fallo en análisis
-      </div>
-      <div class="error-item">
-        <strong>Reporte</strong>
-        Generación fallida
-      </div>
+      <div class="error-item"><strong>TXN</strong>Formato inválido</div>
+      <div class="error-item"><strong>API</strong>No disponible (3 reintentos)</div>
+      <div class="error-item"><strong>LLM</strong>Fallo en análisis</div>
+      <div class="error-item"><strong>Reporte</strong>Generación fallida</div>
     </div>
   </div>
 
-  <!-- FEEDBACK -->
+  <!-- ═══ FEEDBACK ═══ -->
   <div class="feedback">
     <span class="fb-title">Mejora continua</span>
     <span class="fb-arrow">—</span>
@@ -872,7 +1365,7 @@ body {
     <span>auto-indexa en Qdrant como nuevo precedente</span>
   </div>
 
-  <!-- INFO GRID -->
+  <!-- ═══ INFO GRID ═══ -->
   <div class="info-grid">
     <div class="info-card">
       <div class="info-card-title">Decisiones de diseño</div>
@@ -901,7 +1394,7 @@ body {
       <ul>
         <li>API: Render.com, Docker</li>
         <li>Qdrant Cloud, sa-east-1</li>
-        <li>n8n Cloud, 42 nodos</li>
+        <li>n8n Cloud, 41 nodos</li>
         <li>LLM: Claude Haiku 4.5 (Anthropic)</li>
         <li>Langfuse: tokens, latencia, judge scores</li>
         <li>203 tests, pytest, mocks LLM</li>
@@ -909,7 +1402,7 @@ body {
     </div>
   </div>
 
-  <!-- FOOTER -->
+  <!-- ═══ FOOTER ═══ -->
   <div class="footer">
     <span>Diseñado e implementado por <strong style="color:var(--fg)">Federico Palatnik Moroz</strong></span>
     <span><a href="https://ciri-chargeback-agent.onrender.com" target="_blank">ciri-chargeback-agent.onrender.com</a></span>

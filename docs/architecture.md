@@ -18,11 +18,11 @@
 
 **Explicit Workflow Orchestration with LLM-augmented tools** — sometimes called an *Agentic Pipeline*.
 
-This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — 42 nodes (37 executable + 5 sticky), always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
+This is not an AI Agent. In a classic AI Agent, the LLM decides which tools to call and in what order. Here, **n8n decides the flow explicitly** — 41 nodes (36 executable + 5 sticky), always the same sequence, fully auditable. The LLM only reasons about the data it receives; it never controls the execution path.
 
 | | AI Agent clásico | Este sistema |
 |---|---|---|
-| Quién decide el flujo | El LLM | n8n (explícito, 42 nodos) |
+| Quién decide el flujo | El LLM | n8n (explícito, 41 nodos) |
 | Auditabilidad | Black box | Cada paso es un nodo visible |
 | Determinismo | No garantizado | Siempre la misma secuencia |
 | Debugging | Difícil | Nodo por nodo en el canvas |
@@ -35,7 +35,7 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a **sin
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Orchestration | n8n (42 nodes: 37 exec + 5 sticky) | WHAT to do and WHEN — webhook, sequencing, native computation, guardrails visibility, routing by risk |
+| Orchestration | n8n (41 nodes: 36 exec + 5 sticky) | WHAT to do and WHEN — webhook, sequencing, native computation, guardrails visibility, routing by risk |
 | Business logic | FastAPI | HOW — RAG retrieval, resolution synthesis with guardrails, feedback auto-indexing |
 | Semantic store | Qdrant Cloud | Unstructured truth — policies, historical cases, semantic cache |
 | Structured store | SQLite | Relational truth — transactions, logs, feedback, audit trail |
@@ -49,7 +49,7 @@ The CIRI Chargeback Agent is a multi-service system where each layer has a **sin
 
 ## n8n Explicit Orchestration
 
-The workflow contains **42 nodes (37 executable + 5 sticky notes) across 4 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named node with a specific purpose — native n8n nodes for deterministic logic, HTTP Request nodes for external calls.
+The workflow contains **41 nodes (36 executable + 5 sticky notes) across 4 sections**. There is no AI Agent node, no black box, no tool calling decided by an LLM. Every step is a visible, named node with a specific purpose — native n8n nodes for deterministic logic, HTTP Request nodes for external calls.
 
 ```
 §1 — ENTRY + CACHE (6 nodes)
@@ -82,12 +82,14 @@ The workflow contains **42 nodes (37 executable + 5 sticky notes) across 4 secti
    [Marcar — Calidad Baja]        ← Set node: adds LOW_QUALITY flag
    [Preparar Informe]             ← Code node: builds ReportRequest payload
 
-§4 — RISK ROUTING + RESPONSE (8 nodes unified)
+§4 — RISK ROUTING + RESPONSE (7 nodes)
    [Switch — Nivel de Riesgo]
-      BLOCKER / MEDIUM / LOW → [Generar Reporte] → [Responder — Reporte]
-      HIGH → [Notificar Analista] → [Wait — Aprobación HITL]
-           → [Procesar Respuesta HITL] → [Registrar Feedback HITL]
-           → [Generar Reporte — HITL] → [Responder — Reporte]
+      ALL levels → [Generar Reporte] POST /api/reports/html → [Responder — Reporte]
+      → [¿Es HIGH?]              ← IF node: checks risk_level == HIGH
+         true  → [Wait — Aprobación HITL]   ← Wait node: form (15s auto-approve timeout)
+                → [Procesar Respuesta HITL]  ← Code: merges analyst decision
+                → [Registrar Feedback HITL]  ← POST /api/feedback (auto-index if score ≥ 8.0)
+         false → (end)
    All errors → [Stop and Error] → Error Handler workflow
 
 §E — ERROR HANDLING (separate workflow: CIRI — Error Handler)
@@ -95,9 +97,9 @@ The workflow contains **42 nodes (37 executable + 5 sticky notes) across 4 secti
    [Extraer Info de Error]       ← Set node: error_message, failed_node, timestamp
 ```
 
-**HITL Wait node** uses native n8n form submission — when an analyst visits the approval URL, they see a styled form with "Decisión" (APPROVE/REJECT dropdown) and "Notas del Analista" (textarea), not a raw JSON POST.
+**HITL (Human-in-the-Loop):** All risk levels first respond to the webhook with the HTML report. After responding, an IF node checks if `risk_level == HIGH`. If true, a **Wait node** pauses execution and exposes a form (APPROVE/REJECT + analyst notes). After the analyst submits (or 15s timeout auto-approves), feedback is registered via `POST /api/feedback`. The key: `respondToWebhook` executes **before** Wait, so the n8n resume never encounters an "unused respondToWebhook" error. HIGH-risk reports also include an interactive HITL form as a fallback.
 
-**Unified response path:** All branches converge to a single `[Responder — Reporte]` node. Cache hits go through `[Formatear Caché]` before reaching the same responder. Errors use `stopAndError` nodes that propagate to the Error Handler workflow — no `respondToWebhook` nodes on error paths.
+**Unified response path:** All four risk levels converge to `[Generar Reporte]` → `[Responder — Reporte]`. Cache hits go through `[Formatear Caché]` before the same responder. Errors use `stopAndError` nodes that propagate to the Error Handler workflow.
 
 **Why explicit instead of AI Agent?** An AI Agent node decides autonomously which tools to call and in what order. That creates a black box — no audit trail, non-deterministic sequencing, impossible to debug when it skips a step. The explicit workflow guarantees that every investigation always executes the same 7 context-gathering steps in the same order, every time.
 
@@ -145,17 +147,15 @@ flowchart TD
     subgraph S4 [" "]
         SWITCH{Nivel de riesgo}
         SWITCH -->|BLOCKER| REPORT[Generar Reporte]
+        SWITCH -->|HIGH| REPORT
         SWITCH -->|MEDIUM| REPORT
         SWITCH -->|LOW| REPORT
-        SWITCH -->|HIGH| NOTIFY[Notificar analista]
-        NOTIFY --> WAIT[Wait HITL]
-        WAIT --> PROCESS[Procesar respuesta]
-        PROCESS --> FEEDBACK[Registrar feedback]
-        FEEDBACK --> REPORT_HITL[Generar Reporte HITL]
         REPORT -->|error| ERR_RPT[Stop and Error]
-        REPORT_HITL -->|error| ERR_RPT
         REPORT --> RESPOND([Responder])
-        REPORT_HITL --> RESPOND
+        RESPOND --> IS_HIGH{¿Es HIGH?}
+        IS_HIGH -->|yes| WAIT[Wait HITL]
+        WAIT --> PROCESS_HITL[Procesar Respuesta]
+        PROCESS_HITL --> FEEDBACK[Registrar Feedback]
     end
 
     MERGE --> COMPILE
@@ -286,11 +286,11 @@ These are the same checks that FastAPI enforces — n8n provides canvas visibili
 `[Preparar Informe]` builds the `ReportRequest` payload. The Switch node routes by `resolution.risk_level`:
 
 - **BLOCKER** — auto-reject. Crypto payment or fraud score ≤ 30 with active blocker policy. Report generated immediately.
-- **HIGH** — elevated risk. VIP client or high-value transaction. Analyst notified → Wait HITL → feedback recorded → report generated.
+- **HIGH** — elevated risk. VIP client or high-value transaction. After responding, n8n pauses at a **Wait node** with an HITL form (APPROVE/REJECT). Auto-approves after 15s timeout. Feedback registered via `POST /api/feedback`.
 - **MEDIUM** — standard risk. Report with full reasoning and recommended action.
 - **LOW** — low risk. Expedited report with auto-approval recommendation.
 
-BLOCKER, MEDIUM, and LOW converge to a single `[Generar Reporte]` node. HIGH uses `[Generar Reporte — HITL]` (references the HITL response). Both connect to the unified `[Responder — Reporte]` node. Errors on any report generation go to `[Stop and Error]` and propagate to the Error Handler workflow.
+All four risk levels converge to `[Generar Reporte]` → `[Responder — Reporte]` (webhook responds immediately with the HTML report). After responding, an IF node checks `risk_level == HIGH`; if true, execution continues to Wait → Process → Feedback. The respondToWebhook fires **before** the Wait node, avoiding n8n's "unused respondToWebhook" validation error on resume. Errors on report generation go to `[Stop and Error]` and propagate to the Error Handler workflow.
 
 ### Phase 5: Auto-improvement
 
@@ -306,7 +306,7 @@ When an analyst submits feedback via `POST /api/feedback`, `FeedbackService` sav
 
 **Context:** The system needs an orchestration layer that provides a visual, auditable flow for non-technical stakeholders and guarantees deterministic execution order for every chargeback investigation.
 
-**Decision:** Use n8n with 42 nodes (37 executable + 5 sticky notes) — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge, Wait) handle all deterministic logic. HTTP Request nodes are reserved for external calls. Both the synthesis LLM (`/api/analyze/resolve`) and the Judge (`/api/analyze/judge`) are called via FastAPI — all LLM interactions are centralized with consistent prompt versioning, error handling, and Langfuse observability. A unified `Responder — Reporte` node serves all response paths. Errors propagate to a separate Error Handler workflow via `stopAndError` nodes.
+**Decision:** Use n8n with 41 nodes (36 executable + 5 sticky notes) — no AI Agent node, no LLM-based tool calling in n8n. Every step is a visible node. Native n8n nodes (Set, IF, Switch, Merge) handle all deterministic logic. HTTP Request nodes are reserved for external calls. Both the synthesis LLM (`/api/analyze/resolve`) and the Judge (`/api/analyze/judge`) are called via FastAPI — all LLM interactions are centralized with consistent prompt versioning, error handling, and Langfuse observability. A unified `Responder — Reporte` node serves all response paths. Errors propagate to a separate Error Handler workflow via `stopAndError` nodes.
 
 **Consequences:**
 - Every investigation executes the exact same steps in the same order, every time
