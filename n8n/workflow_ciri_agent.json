@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte (unificado)\n• HIGH → Wait HITL → feedback → Generar Reporte HITL\n• Ambos → Responder Reporte (unificado)\n\n**HITL (Human-in-the-Loop):**\n• Wait node pausa ejecución\n• Analista aprueba o rechaza\n• Feedback + auto-index si score ≥ 8.0\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
+        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Responder (inmediato)\n• HIGH → Wait HITL (15s) → Procesar HITL → Generar Reporte → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa 15s para decisión del analista\n• Procesar construye payload con decisión HITL incluida\n• Reporte final ya incluye la decisión del analista\n• Registrar Feedback en paralelo (auto-index si score ≥ 8.0)\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
         "height": 2400,
         "width": 3200,
         "color": 6
@@ -1070,38 +1070,6 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "eaf0d3bc-82ab-480a-8e64-505cc661dbe1",
-              "leftValue": "={{ $('Preparar Informe').first().json.resolution.risk_level }}",
-              "rightValue": "HIGH",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "54b930dc-0a25-4886-a274-5ae6207f5c13",
-      "name": "¿Es HIGH?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        65320,
-        22200
-      ]
-    },
-    {
-      "parameters": {
         "resume": "timeInterval",
         "amount": 15,
         "unit": "seconds"
@@ -1111,22 +1079,22 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        65720,
-        22200
+        64200,
+        22700
       ],
       "webhookId": "ciri-hitl-resume"
     },
     {
       "parameters": {
-        "jsCode": "// Compatible con resume via webhook y form submission nativo\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resolución').first().json;\nconst judge      = $('Extraer Evaluación — Juez').first().json.judge_evaluation;\n\n// Form fields: 'Decisión' / 'Notas del Analista'; webhook: 'decision' / 'notes'\nconst rawDecision = resume['Decisión'] || resume.decision || 'APPROVE';\nconst rawNotes    = resume['Notas del Analista'] || resume.notes || '';\n\nconst hitlDecision = {\n  analyst_decision: rawDecision.toUpperCase(),\n  analyst_notes:    rawNotes,\n  final_outcome:    rawDecision.toUpperCase() === 'REJECT' ? 'DENIED' : 'APPROVED',\n  timestamp:        new Date().toISOString(),\n};\n\nreturn [{\n  json: {\n    _feedback_payload: {\n      transaction_id:    ctx.transaction_id,\n      analyst_decision:  hitlDecision.analyst_decision,\n      analyst_notes:     hitlDecision.analyst_notes,\n      final_outcome:     hitlDecision.final_outcome,\n      judge_score:       judge.overall_score ?? 0,\n    }\n  }\n}];"
+        "jsCode": "// Procesar decisión HITL y construir payload completo para Generar Reporte\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resolución').first().json;\nconst judge      = $('Extraer Evaluación — Juez').first().json.judge_evaluation || {\n  overall_score: 5.0, criteria: {}, approved: false,\n  strengths: [], weaknesses: ['Judge evaluation unavailable'],\n};\n\n// Form fields: 'Decisión' / 'Notas del Analista'; webhook: 'decision' / 'notes'\nconst rawDecision = resume['Decisión'] || resume.decision || 'APPROVE';\nconst rawNotes    = resume['Notas del Analista'] || resume.notes || '';\n\nconst hitlDecision = {\n  analyst_decision: rawDecision.toUpperCase(),\n  analyst_notes:    rawNotes,\n  final_outcome:    rawDecision.toUpperCase() === 'REJECT' ? 'DENIED' : 'APPROVED',\n  timestamp:        new Date().toISOString(),\n};\n\n// Output: full ReportRequest payload (same shape as Preparar Informe)\n// + _feedback_payload for Registrar Feedback HITL\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  resolution.policy_verdicts || [],\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       hitlDecision,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    motivo:              ctx.motivo || '',\n    cliente_vip:         ctx.cliente_vip || false,\n    _feedback_payload: {\n      transaction_id:    ctx.transaction_id,\n      analyst_decision:  hitlDecision.analyst_decision,\n      analyst_notes:     hitlDecision.analyst_notes,\n      final_outcome:     hitlDecision.final_outcome,\n      judge_score:       judge.overall_score ?? 0,\n    }\n  }\n}];"
       },
       "id": "33cadace-aab0-474e-a6cc-cbc6ddf4623d",
       "name": "Procesar Respuesta HITL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        66120,
-        22200
+        64600,
+        22700
       ]
     },
     {
@@ -1168,8 +1136,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        66520,
-        22200
+        65000,
+        22700
       ],
       "settings": {
         "retryOnFail": true,
@@ -1399,7 +1367,7 @@
         ],
         [
           {
-            "node": "Generar Reporte",
+            "node": "Wait — Aprobación HITL",
             "type": "main",
             "index": 0
           }
@@ -1596,24 +1564,6 @@
     },
     "Responder — Reporte": {
       "main": [
-        [
-          {
-            "node": "¿Es HIGH?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Es HIGH?": {
-      "main": [
-        [
-          {
-            "node": "Wait — Aprobación HITL",
-            "type": "main",
-            "index": 0
-          }
-        ],
         []
       ]
     },
@@ -1631,6 +1581,11 @@
     "Procesar Respuesta HITL": {
       "main": [
         [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          },
           {
             "node": "Registrar Feedback HITL",
             "type": "main",
