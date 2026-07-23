@@ -38,8 +38,9 @@ JUSTIFICATION (CRITICO — campo analitico):
       - Si un precedente [MOTIVO SIMILAR] fue aprobado: "CB-XXXX fue aprobado en Nd, lo que sugiere que casos de [motivo] tienden a resolverse a favor del cliente"
       - Si un precedente [MOTIVO SIMILAR] no fue resuelto: "CB-XXXX permanece sin resolucion, lo que indica que este tipo de caso requiere mayor investigacion antes de decidir"
       - Si varios precedentes comparten un patron (ej: mismo merchant, fraud_scores similares): identifica ese patron y su implicacion para el caso actual.
+      - CONEXION POR MERCHANT: Si un precedente tiene el MISMO comercio que la transaccion actual, destaca esta conexion EXPLICITAMENTE. Ejemplo: "CB-0038 involucra al mismo merchant (PayPal Store) y fue cerrado tras detectar error tecnico — sugiere que este merchant podria tener errores sistemicos que generan cargos duplicados. Priorizar investigacion tecnica con el procesador."
       - Cita el "Patron" y la "tendencia" de la DECISION DETERMINADA (ej: "3/5 precedentes aprobados — tendencia favorable").
-  (4) ESTRATEGIA: Conecta el patron de precedentes con la decision actual. Ejemplo: "Dado que 3/5 precedentes fueron aprobados y CB-0038 quedo sin resolver por error tecnico, la tendencia favorece al cliente una vez resuelta la investigacion pendiente."
+  (4) ESTRATEGIA: Conecta el patron de precedentes con la decision actual. Responde la pregunta: "dado estos precedentes, ¿la tendencia favorece al cliente o no, y que falta investigar?" Ejemplo: "Dado que 3/5 precedentes fueron aprobados y CB-0038 quedo sin resolver por error tecnico en el mismo merchant, la tendencia favorece al cliente pero requiere confirmar si el cargo duplicado es error de sistema."
   (5) Conclusion: conecta las evidencias con la decision determinada en 1 oracion.
 - Si el caso es simple (BLOCKER claro), la justificacion puede ser 2-3 oraciones.
 
@@ -57,9 +58,8 @@ NEXT_STEPS (LISTA CONCRETA):
 - Si compensation_applicable=true: incluir paso "Aplicar compensacion segun POL-SLA-004"
 - Si hay precedente [MOTIVO SIMILAR]: incluir paso que conecte el aprendizaje del precedente con una accion concreta.
   Ejemplo: si CB-0038 de cargo duplicado no fue resuelto → "Verificar con procesador de pagos si existe cargo duplicado real — precedente CB-0038 sugiere investigacion pendiente"
-- Para cada politica WARNING con datos faltantes: incluir paso "Solicitar [dato faltante] para confirmar/descartar [POL-XXX-NNN]" y ACLARAR si el dato faltante es BLOQUEANTE para la decision o es complementario. Ejemplo: "Solicitar timestamps para confirmar POL-FRD-002 — dato complementario, no bloquea la decision PENDING_HITL actual pero es necesario para resolucion definitiva"
-- Si requires_hitl=true y compensation_applicable=false y POL-SLA-004 fue evaluada como FAIL o WARNING: incluir paso final "Resolver revision HITL dentro del plazo SLA restante — si tiempo total de resolucion (incluyendo espera HITL) excede plazo, la empresa debe compensar segun POL-SLA-004"
-- COHERENCIA OBLIGATORIA: Si compensation_applicable=false, NO menciones compensacion en next_steps (seria contradictorio). Solo incluye pasos de compensacion si compensation_applicable=true.
+- Para cada politica WARNING con datos faltantes: incluir paso "Solicitar [dato faltante especifico] para confirmar/descartar [POL-XXX-NNN]" y ACLARAR: (a) que dato exacto falta, (b) si su ausencia bloquea la decision actual o es complementario, (c) que cambiaria si se obtiene el dato. Ejemplo: "Solicitar timestamps de transacciones internacionales para confirmar POL-FRD-002 — dato complementario, no bloquea PENDING_HITL actual. Si se confirman 3+ paises en 24h, elevar a FAIL; si no, descartar alerta"
+- COHERENCIA OBLIGATORIA: Si compensation_applicable=false, NO menciones compensacion ni POL-SLA-004 en next_steps. Solo incluye pasos de compensacion si compensation_applicable=true.
 - DATOS FALTANTES: Si logs=[] (0 eventos), NO propongas "revisar logs". Escribe "Logs no disponibles — validacion tecnica limitada."
 - NO uses "evaluar", "considerar", "analizar". Usa: "verificar", "confirmar", "solicitar", "notificar".
 

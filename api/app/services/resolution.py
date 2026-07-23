@@ -72,7 +72,9 @@ class ResolutionService:
 
         # Deterministic outcome — code decides, LLM explains.
         outcome = self._determine_outcome(policy_verdicts, tx_data)
-        precedent_summary = self._build_precedent_summary(similar_cases, motivo)
+        precedent_summary = self._build_precedent_summary(
+            similar_cases, motivo, tx_merchant=tx_data.get("merchant", ""),
+        )
         outcome["precedent_summary"] = precedent_summary
 
         resolution, synth_result = self._synthesize_resolution(
@@ -238,12 +240,15 @@ class ResolutionService:
 
     @staticmethod
     def _build_precedent_summary(
-        similar_cases: list[dict], current_motivo: str | None,
+        similar_cases: list[dict],
+        current_motivo: str | None,
+        tx_merchant: str = "",
     ) -> str:
         """Build precedent_summary deterministically. No LLM involved.
 
         Extracts case_id, motivo, resolution, resolution_days from each case.
         Tags [MOTIVO SIMILAR] using synonym matching and sorts matches first.
+        Tags [MISMO MERCHANT] when precedent merchant matches current transaction.
         """
         if not similar_cases:
             return "Sin precedentes relevantes."
@@ -259,12 +264,18 @@ class ResolutionService:
 
         parts = []
         for c, label in annotated:
-            tag = " [MOTIVO SIMILAR]" if label else ""
+            tags = []
+            if label:
+                tags.append("[MOTIVO SIMILAR]")
+            case_merchant = c.get("merchant", "")
+            if tx_merchant and case_merchant and case_merchant.lower() == tx_merchant.lower():
+                tags.append("[MISMO MERCHANT]")
+            tag = " " + " ".join(tags) if tags else ""
             case_id = c.get("case_id", "?")
             motivo = c.get("motivo", "?")
             resolution = c.get("resolution", "?")
             days = c.get("resolution_days", "?")
-            merchant = c.get("merchant", "")
+            merchant = case_merchant
             obs = c.get("observations", "")
 
             line = f"{case_id}{tag}: {motivo}, {resolution} en {days}d"
