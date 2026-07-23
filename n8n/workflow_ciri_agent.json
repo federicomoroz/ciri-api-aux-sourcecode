@@ -947,19 +947,6 @@
     },
     {
       "parameters": {
-        "errorMessage": "Error al generar reporte HTML."
-      },
-      "id": "27d06f68-8f20-4892-8b38-53247130023e",
-      "name": "Propagar → Error Handler — Reporte",
-      "type": "n8n-nodes-base.stopAndError",
-      "typeVersion": 1,
-      "position": [
-        65100,
-        23200
-      ]
-    },
-    {
-      "parameters": {
         "respondWith": "firstIncomingItem",
         "options": {
           "responseCode": 200
@@ -1307,7 +1294,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — Reporte",
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }
