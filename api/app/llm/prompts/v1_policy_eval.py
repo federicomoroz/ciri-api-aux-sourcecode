@@ -23,6 +23,7 @@ REGLAS ESTRICTAS:
    - WARNING NO es para valores que no alcanzan el umbral — es SOLO para datos faltantes.
    - Cita datos: score=X, monto=USD Y, cb_count=N vs umbral=M, y el operador exacto (>, >=, <, <=).
    - CONTEO: total_chargebacks en HISTORIAL DEL CLIENTE = conteo PREVIO (sin incluir el caso actual). Reporta solo el valor del historial, no sumes el caso actual. Ejemplo: "total_chargebacks=2 (previos), umbral >3, 2 no supera >3 → PASS".
+   - VENTANA TEMPORAL: Si la politica especifica una ventana (ej: "en 6 meses", "en 24h"), verifica si hay datos de fechas/timestamps para confirmar que los eventos estan dentro de esa ventana. Si NO hay timestamps, marca como WARNING: "N eventos cumplen condicion numerica pero sin timestamps no se puede confirmar ventana de [periodo]".
    - Evalua SOLO contra el criterio EXPLICITO de la politica. No inventes criterios alternativos (ej: no uses "CB rate" o "patron de reincidencia" si la politica dice "mas de N chargebacks").
 2. POL-EXC-003 aplica SIEMPRE como BLOCKER cuando el metodo de pago es "Cripto".
 3. POL-FRD-001 aplica como FAIL o BLOCKER cuando el score antifraude es inferior al umbral.
@@ -33,9 +34,10 @@ REGLAS ESTRICTAS:
    IMPORTANTE: Si un comercio esta suspendido, las politicas de plazos de respuesta del comercio (ej: POL-CB-003) SIGUEN SIENDO RELEVANTES para el procesamiento del chargeback. No marques como NOT_APPLICABLE — evalua si el plazo aplica o usa WARNING con nota sobre la suspension.
 8. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
 9. DETERMINACION DE REGION (LATAM vs no-LATAM):
-   - Usa el campo "country" de la TRANSACCION para determinar la region. NO infieras la region del nombre del comercio.
+   - Distingue entre PAIS DE LA TRANSACCION (campo "country") y PAIS DEL COMERCIO (puede diferir si el merchant es internacional).
    - Paises LATAM: MEX, COL, ARG, BRA, CHL, PER, ECU, VEN, BOL, URY, PRY, CRI, PAN, GTM, HND, SLV, NIC, DOM, CUB, HTI.
-   - Si country esta en la lista LATAM → operacion LATAM. Si no → operacion no-LATAM.
+   - Si la politica refiere a "comercios fuera de LATAM", evalua el pais del COMERCIO (de PERFIL DE RIESGO DEL COMERCIO si esta disponible, o del campo merchant_country). Si no hay dato explicito del pais del comercio, usa WARNING: "country de transaccion es [X] (LATAM), pero pais del comercio [merchant] no confirmado — si el comercio es internacional, aplicarian plazos extendidos".
+   - Si la politica refiere a la "operacion" o "transaccion", usa el campo "country" de la TRANSACCION.
 10. DOCUMENTACION: Si una politica requiere documentacion y marcas WARNING, ESPECIFICA que documentos faltan y si la ausencia BLOQUEA la decision actual o es un paso previo a la revision HITL. Ejemplo: "WARNING — no se encontro comprobante de entrega ni confirmacion de recepcion en notas. Documentos necesarios: comprobante de entrega, ID de seguimiento. No bloquea PENDING_HITL pero es requisito para resolucion definitiva."
 
 Formato de respuesta (array JSON):

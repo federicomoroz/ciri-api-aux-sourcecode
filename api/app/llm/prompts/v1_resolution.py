@@ -52,6 +52,7 @@ NEXT_STEPS (LISTA CONCRETA):
 - Genera pasos basados en los veredictos de politica, la decision determinada, y las implicaciones de los precedentes.
 - Cada paso sigue este formato: "[Verbo] + [dato especifico] + [area/sistema responsable] + [plazo si aplica]"
   Ejemplo: "Solicitar timestamps al equipo de procesamiento de pagos — plazo 48h habiles"
+- UN PASO = UNA ACCION. No agrupes dos acciones distintas en un solo paso. Si necesitas solicitar timestamps Y monitorear respuesta del comercio, son 2 pasos separados con responsables y plazos diferenciados.
 - Si requires_hitl=true: primer paso siempre es "Escalar a supervisor/analista para revision"
 - Para cada politica FAIL: un paso citando el requisito especifico de la politica.
   Ejemplo: si POL-CB-003 FAIL dice "comercio tiene 10 dias habiles para defensa", el paso es "Solicitar defensa del comercio — plazo 10 dias habiles segun POL-CB-003"
