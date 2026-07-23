@@ -1,75 +1,164 @@
-# Prompts — CIRI Chargeback Agent
+# Prompts — Agente de Contracargos CIRI
 
-Prompts are stored as versioned Python modules under `api/app/llm/prompts/`. Each module exports `SYSTEM`, `USER_TEMPLATE`, and a `render()` function that returns `(system_prompt, user_prompt)` as a tuple.
+Los prompts se almacenan como modulos Python versionados en `api/app/llm/prompts/`. Cada modulo exporta `SYSTEM`, `USER_TEMPLATE` y una funcion `render()` que devuelve `(system_prompt, user_prompt)` como tupla.
 
-**Exception — v1_judge:** The Judge prompt is inlined directly in the `[Juez de Calidad]` HTTP Request node in n8n. This avoids a FastAPI proxy hop and guarantees the Judge always uses Claude (not n8n's built-in LLM node). The Python file `v1_judge.py` is the canonical source; the n8n node body parameter mirrors it.
-
----
-
-## Version History
-
-| Version | Date | Summary |
-|---|---|---|
-| v1.0 | 2025-01 | Initial release — 3 LLM prompts + deterministic log analysis for full resolution pipeline |
-| v1.1 | 2025-07 | v1_resolution: deeper precedent analysis, contradiction resolution, provisional determination flagging |
+**Excepcion — v1_judge:** El prompt del Juez se invoca directamente desde el nodo `[Juez de Calidad]` (HTTP Request) en n8n hacia `POST https://api.anthropic.com/v1/messages` usando `$env.CB_ANTHROPIC_API_KEY`. La respuesta se parsea con `JSON.parse($json.content[0].text)` en el nodo `[Extraer Evaluacion — Juez]`. El archivo Python `v1_judge.py` es la fuente canonica; el nodo de n8n lo replica. La ruta FastAPI `/api/analyze/judge` sigue disponible para testing directo.
 
 ---
 
-## Prompt 1: v1_policy_eval
+## Principio central: "El codigo decide, el LLM explica"
 
-**File:** `api/app/llm/prompts/v1_policy_eval.py`
+De los 11 campos del JSON de resolucion, **6 son deterministas** — calculados por Python en `ResolutionService._determine_outcome()` sin intervencion del LLM:
 
-### Purpose
-
-Evaluate a transaction against every retrieved policy and produce a structured verdict for each one. This is the first LLM call in the `/api/analyze/resolve` pipeline and determines which policies are violated, which are passed, and whether any hard blockers exist.
-
-### Role
-
-Auditor de cumplimiento (compliance auditor) for a Latin American fintech.
-
-### Input Specification
-
-| Parameter | Type | Description |
+| Campo | Origen | Metodo |
 |---|---|---|
-| `transaction` | `dict` | Full transaction record (id, amount, merchant, country, payment_method, fraud_score, channel, etc.) |
-| `policies_text` | `str` | Formatted policy list retrieved from Qdrant via QueryBuilder |
-| `policy_count` | `int` | Number of policies being evaluated |
+| `recommended_action` | Determinista | `_determine_outcome()` — logica de verdicts |
+| `risk_level` | Determinista | `_determine_outcome()` — BLOCKER/FAIL counts + fraud_score |
+| `risk_reason` | Determinista | `_determine_outcome()` — texto explicativo generado por codigo |
+| `requires_hitl` | Determinista | `_determine_outcome()` — derivado de action |
+| `precedent_summary` | Determinista | `_build_precedent_summary()` — patron matching + tendencias |
+| `policy_verdicts` | LLM (Call 1) | Evaluados por v1_policy_eval, sanitizados por `_sanitize_verdicts()` |
+| `justification` | LLM (Call 2) | Generado por v1_resolution (Sonnet) |
+| `confidence` | LLM (Call 2) | Estimado por v1_resolution |
+| `next_steps` | LLM (Call 2) | Generado por v1_resolution |
+| `log_summary` | Determinista | `_summarize_logs()` — conteo de severidades + patrones |
+| `compensation_*` | LLM (Call 2) | Evaluado por v1_resolution segun SLA |
 
-### Output Specification
+El LLM recibe la decision ya tomada en la seccion `DECISION DETERMINADA` del prompt y su tarea es justificarla con evidencia, no tomarla. Esto elimina la categoria entera de errores donde el LLM elige una accion incorrecta (por ejemplo, APPROVE con BLOCKER activo).
 
-JSON array of `PolicyVerdict` objects:
+### Logica determinista en detalle
+
+```python
+# Archivo: api/app/services/resolution.py — _determine_outcome()
+
+BLOCKER en verdicts         → REJECT + risk BLOCKER
+FAIL sin BLOCKER            → PENDING_HITL + risk HIGH o MEDIUM
+requires_human_review=true  → PENDING_HITL (red de seguridad)
+Solo PASS/WARNING           → APPROVE + risk LOW o MEDIUM
+```
+
+Ademas, `_sanitize_verdicts()` degrada cualquier BLOCKER emitido por el LLM para politicas fuera de `BLOCKER_POLICY_CODES` (actualmente solo `POL-EXC-003`) a FAIL + `requires_human_review=true`. Esto previene la sobre-escalacion del LLM (por ejemplo, asignar BLOCKER a un comercio suspendido, que no es tecnicamente irreversible).
+
+---
+
+## Estrategia dual-model
+
+El pipeline utiliza dos modelos Claude para optimizar costo vs. calidad:
+
+| Llamada | Modelo | Razon |
+|---|---|---|
+| Call 1: Evaluacion de politicas (v1.2) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
+| Call 2: Sintesis de resolucion (v3.0) | **Sonnet** | Tarea analitica: razonar sobre precedentes, conectar evidencias, justificar. |
+| Call 3: Juez de calidad (v2.0) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
+
+Configuracion en `.env`:
+```
+CB_LLM_MODEL=claude-haiku-4-5-20251001       # Call 1
+CB_LLM_RESOLUTION_MODEL=claude-sonnet-4-20250514  # Call 2 + Call 3
+```
+
+---
+
+## Evolucion del prompt engineering
+
+### Iteracion de scores del Juez
+
+| Fase | Score promedio | Cambio clave |
+|---|---|---|
+| v1.0 inicial | ~8.2 | 3 prompts basicos, todo con Haiku |
+| v1.1 + precedentes | ~8.4 | Instrucciones de analisis de precedentes en v1_resolution |
+| v1.2 policy_eval | ~8.6 | Logica de umbrales estricta, LATAM, documentacion — techo de Haiku identificado |
+| v2.0 resolution | — | Campos deterministas sacados del LLM — pero Haiku aun justifica pobremente |
+| v3.0 resolution + Sonnet | ~9.1 | Sonnet para Call 2 + Call 3, rubrica granular en Judge v2.0 |
+
+**El techo de Haiku (8.6):** Al llegar a v1.2, la evaluacion de politicas era suficientemente precisa, pero la justificacion y el analisis de precedentes seguian siendo superficiales — Haiku listaba datos sin conectarlos analiticamente. La solucion no fue mejorar el prompt sino cambiar el modelo: Sonnet para las tareas que requieren razonamiento (Call 2 y Call 3) y mantener Haiku para la tarea mecanica (Call 1).
+
+**De v2.0 a v3.0 — la transicion critica:** En v2.0, el prompt de resolucion pedia al LLM que extrajera datos mecanicamente (copiar campos, listar politicas). Esto era una tarea donde Haiku era suficiente pero el resultado carecia de profundidad analitica. En v3.0, al mover los 6 campos deterministas al codigo, el prompt se libero para pedir razonamiento genuino: "explica POR QUE este nivel de riesgo es adecuado", "RAZONA sobre las implicaciones de los precedentes", "conecta el patron de precedentes con la decision actual". Sonnet responde a estas instrucciones con analisis que Haiku no puede producir.
+
+---
+
+## Historial de versiones
+
+| Prompt | Version | Fecha | Resumen |
+|---|---|---|---|
+| v1_policy_eval | v1.0 | 2025-01 | Version inicial — 5 veredictos, reglas Cripto=BLOCKER y FRD-001 |
+| v1_policy_eval | v1.2 | 2025-07 | Logica matematica de umbrales (>, >=, <), determinacion LATAM, contexto de comercio/cliente, documentacion, ventanas temporales |
+| v1_resolution | v1.0 | 2025-01 | Version inicial — 8 reglas estrictas, vocabulario de 4 acciones |
+| v1_resolution | v2.0 | 2025-07 | Extraccion mecanica para Haiku — campos deterministas calculados externamente |
+| v1_resolution | v3.0 | 2025-07 | Razonamiento analitico para Sonnet — "el codigo decide, el LLM explica" |
+| v1_judge | v1.0 | 2025-01 | Version inicial — 5 criterios, APPROVE+BLOCKER = 1.0 automatico |
+| v1_judge | v2.0 | 2025-07 | Rubrica granular por criterio (niveles 10.0, 9.0, 7.0-8.9, etc.), semantica de fraud_score, proteccion contra penalizacion incorrecta de PENDING_HITL |
+
+---
+
+## Prompt 1: v1_policy_eval (v1.2)
+
+**Archivo:** `api/app/llm/prompts/v1_policy_eval.py`
+**Modelo:** Haiku (Call 1)
+
+### Proposito
+
+Evaluar una transaccion contra cada politica recuperada por RAG y producir un veredicto estructurado para cada una. Es la primera llamada LLM del pipeline `/api/analyze/resolve` y determina que politicas estan violadas, cuales se cumplen y si existen bloqueos criticos.
+
+### Rol
+
+Auditor de cumplimiento de politicas para una fintech latinoamericana especializada en contracargos.
+
+### Especificacion de entrada
+
+| Parametro | Tipo | Descripcion |
+|---|---|---|
+| `transaction` | `dict` | Registro completo de la transaccion (id, amount, merchant, country, payment_method, fraud_score, channel, etc.) |
+| `policies_text` | `str` | Lista de politicas formateada, recuperada de Qdrant via QueryBuilder |
+| `policy_count` | `int` | Numero de politicas a evaluar |
+| `merchant_risk` | `dict` | Perfil de riesgo del comercio (cb_ratio, flags, suspension) |
+| `client_history` | `dict` | Historial del cliente (total_chargebacks, countries, flags) |
+
+### Especificacion de salida
+
+Array JSON de objetos `PolicyVerdict`:
 
 ```json
 [
   {
     "policy_code": "POL-XXX-NNN",
     "verdict": "PASS | FAIL | BLOCKER | WARNING | NOT_APPLICABLE",
-    "reasoning": "Concise explanation citing specific transaction data",
+    "reasoning": "Explicacion concisa citando datos especificos de la transaccion",
     "requires_human_review": false
   }
 ]
 ```
 
-**Verdict definitions:**
+**Definiciones de veredictos:**
 
-| Verdict | Meaning |
+| Veredicto | Significado |
 |---|---|
-| `PASS` | Transaction complies with this policy |
-| `FAIL` | Transaction violates this policy |
-| `BLOCKER` | Critical violation — chargeback CANNOT proceed under any circumstance |
-| `WARNING` | Potential risk that requires attention but does not block processing |
-| `NOT_APPLICABLE` | Policy is not relevant to this specific transaction |
+| `PASS` | La transaccion cumple esta politica (la condicion de violacion NO se cumple) |
+| `FAIL` | La transaccion viola esta politica (la condicion de violacion SI se cumple) |
+| `BLOCKER` | Violacion critica — la transaccion es TECNICAMENTE IRREVERSIBLE (reservado para Cripto via POL-EXC-003). Un comercio suspendido o un cliente riesgoso NO son BLOCKER |
+| `WARNING` | SOLO cuando falta un dato necesario para evaluar la condicion (ej: timestamps ausentes para verificar ventana temporal) |
+| `NOT_APPLICABLE` | La politica genuinamente no aplica (ej: POL-EXC-002 VIP cuando el cliente no es VIP) |
 
-### Strict Rules Embedded in Prompt
+### Reglas estrictas integradas en el prompt
 
-1. Be precise — cite specific transaction values (score=X, amount=USD Y, channel=Z)
-2. `POL-EXC-003` applies ALWAYS as `BLOCKER` when payment method is "Cripto"
-3. `POL-FRD-001` applies as `FAIL` or `BLOCKER` when anti-fraud score is below threshold
-4. A `BLOCKER` verdict means the final resolution MUST reject the chargeback
-5. Evaluate ALL provided policies — do not skip any
-6. Respond ONLY with a valid JSON array — no additional text, no markdown fences
+1. **Umbrales — logica matematica estricta:**
+   - "mas de 3" = >3 (si el valor es 3, la condicion NO se cumple → PASS)
+   - "al menos 3" = >=3 (si el valor es 3, la condicion SI se cumple)
+   - WARNING NO es para valores que no alcanzan el umbral — es SOLO para datos faltantes
+   - Citar datos especificos: score=X, monto=USD Y, cb_count=N vs umbral=M, operador exacto
+   - `total_chargebacks` del historial = conteo PREVIO (no incluir caso actual)
+   - Ventanas temporales: si no hay timestamps, marcar WARNING (no FAIL)
+2. `POL-EXC-003` aplica SIEMPRE como `BLOCKER` cuando el metodo de pago es "Cripto"
+3. `POL-FRD-001` aplica como `FAIL` o `BLOCKER` cuando el score antifraude es inferior al umbral
+4. Un `BLOCKER` significa que la resolucion final DEBE rechazar el contracargo
+5. Evaluar TODAS las politicas proporcionadas — no omitir ninguna
+6. Usar TODOS los datos disponibles: transaccion, perfil de riesgo del comercio e historial del cliente
+7. `NOT_APPLICABLE` solo cuando la politica genuinamente no aplica; comercios suspendidos siguen siendo relevantes para politicas de plazos
+8. Responder UNICAMENTE con un array JSON valido, sin texto adicional
+9. **Determinacion LATAM:** Distinguir entre pais de la transaccion (campo `country`) y pais del comercio. Lista de paises LATAM explicita (MEX, COL, ARG, BRA, CHL, PER, etc.)
+10. **Documentacion:** Si una politica requiere documentacion y se marca WARNING, especificar que documentos faltan y si bloquean la decision
 
-### Example Rendered User Prompt (abbreviated)
+### Ejemplo de prompt de usuario renderizado (abreviado)
 
 ```
 ## TRANSACCION
@@ -83,6 +172,20 @@ JSON array of `PolicyVerdict` objects:
   "channel": "Web"
 }
 
+## PERFIL DE RIESGO DEL COMERCIO
+{
+  "merchant_name": "CryptoVault SA",
+  "cb_ratio": 0.03,
+  "flags": ["suspended_merchant"]
+}
+
+## HISTORIAL DEL CLIENTE
+{
+  "total_chargebacks": 1,
+  "countries": ["ARG"],
+  "flags": []
+}
+
 ## POLITICAS A EVALUAR (recuperadas por RAG — 17 politicas)
 **POL-EXC-003** — EXCEPCION
 Nombre: Exclusion de criptomonedas
@@ -94,17 +197,17 @@ Nombre: Umbral antifraude
 Descripcion: Transacciones con score < 15 requieren revision manual obligatoria...
 ...
 
-Evalua cada politica y devuelve el array JSON.
+Evalua cada politica usando TODOS los datos disponibles y devuelve el array JSON.
 ```
 
-### Example Expected Output
+### Ejemplo de salida esperada
 
 ```json
 [
   {
     "policy_code": "POL-EXC-003",
     "verdict": "BLOCKER",
-    "reasoning": "Transaccion TXN-00051 usa metodo de pago Cripto. POL-EXC-003 establece que las transacciones con criptomonedas son irreversibles. BLOCKER obligatorio sin excepcion.",
+    "reasoning": "Metodo de pago es Cripto (irreversible). BLOCKER automatico segun POL-EXC-003.",
     "requires_human_review": false
   },
   {
@@ -122,267 +225,359 @@ Evalua cada politica y devuelve el array JSON.
 ]
 ```
 
-### Changelog
+### Guardrail post-LLM: `_sanitize_verdicts()`
 
-- **v1.0** (2025-01): Initial release. 5-verdict system. Hard-coded Cripto=BLOCKER and FRD-001 threshold rules.
+Despues de recibir los veredictos del LLM, el sistema aplica una sanitizacion determinista: cualquier veredicto `BLOCKER` para una politica fuera de `BLOCKER_POLICY_CODES` (actualmente solo `POL-EXC-003`) se degrada a `FAIL` con `requires_human_review=true`. Esto previene que Haiku sobre-escale situaciones que son graves pero no tecnicamente irreversibles.
+
+### Registro de cambios
+
+- **v1.0** (2025-01): Version inicial. Sistema de 5 veredictos. Reglas Cripto=BLOCKER y FRD-001 hardcoded.
+- **v1.2** (2025-07): Logica matematica de umbrales con operadores explicitos (>, >=). Determinacion LATAM (pais de transaccion vs pais del comercio). Contexto enriquecido con perfil de riesgo del comercio e historial del cliente. Reglas de documentacion faltante. Ventanas temporales. Ejemplos de evaluacion correcta.
 
 ---
 
-## Prompt 2: v1_resolution
+## Prompt 2: v1_resolution (v3.0)
 
-**File:** `api/app/llm/prompts/v1_resolution.py`
+**Archivo:** `api/app/llm/prompts/v1_resolution.py`
+**Modelo:** Sonnet (Call 2)
 
-### Purpose
+### Proposito
 
-Synthesize all available evidence — policy verdicts, historical precedents, event logs, merchant risk profile, and client history — into a final chargeback resolution recommendation. This is the second LLM call in the `/api/analyze/resolve` pipeline.
+Justificar y explicar una decision de contracargo que ya fue determinada por el sistema de guardrails. El LLM sintetiza la evidencia disponible — veredictos de politica, precedentes historicos, logs, perfil de riesgo del comercio e historial del cliente — en una justificacion coherente con pasos concretos. Es la segunda llamada LLM del pipeline `/api/analyze/resolve`.
 
-### Role
+**Cambio critico respecto a versiones anteriores:** En v1.0 y v2.0, el LLM decidia la accion recomendada, el nivel de riesgo y si requeria HITL. En v3.0, estos campos los calcula el codigo (`_determine_outcome()`) y el LLM los recibe como `DECISION DETERMINADA`. La instruccion clave del system prompt es:
 
-Analista senior de contracargos (senior chargeback analyst) at a Latin American fintech.
+> "La decision (recommended_action, risk_level, requires_hitl) ya fue determinada por el sistema de guardrails basado en los veredictos de politica. Tu tarea NO es decidir — es JUSTIFICAR y EXPLICAR la decision usando la evidencia disponible."
 
-### Input Specification
+### Rol
 
-| Parameter | Type | Description |
+Analista senior de contracargos en una fintech latinoamericana.
+
+### Especificacion de entrada
+
+| Parametro | Tipo | Descripcion |
 |---|---|---|
-| `transaction` | `dict` | Full transaction record |
-| `policy_verdicts` | `str` | JSON string of `PolicyVerdict[]` from v1_policy_eval |
-| `similar_cases` | `str` | Formatted precedents from Qdrant `historical_cases` |
-| `log_summary` | `str` | Summary of anomalies from transaction event logs |
-| `merchant_risk` | `dict` | Merchant risk profile (chargeback rate, dispute history) |
-| `client_history` | `dict` | Client chargeback history (count, average amount, outcome) |
-| `motivo` | `str \| None` | Stated reason for the chargeback |
-| `cliente_vip` | `bool` | Whether the client holds VIP status |
-| `precedent_count` | `int` | Number of precedents found |
-| `log_count` | `int` | Total number of log events |
+| `transaction` | `dict` | Registro completo de la transaccion |
+| `policy_verdicts` | `str` | JSON string de `PolicyVerdict[]` de v1_policy_eval |
+| `similar_cases` | `str` | Precedentes formateados de Qdrant `historical_cases` |
+| `log_summary` | `str` | Resumen de anomalias de los logs (generado por Python, no por LLM) |
+| `merchant_risk` | `dict` | Perfil de riesgo del comercio |
+| `client_history` | `dict` | Historial de contracargos del cliente |
+| `motivo` | `str \| None` | Motivo declarado del contracargo |
+| `cliente_vip` | `bool` | Si el cliente tiene estatus VIP |
+| `precedent_count` | `int` | Numero de precedentes encontrados |
+| `log_count` | `int` | Numero total de eventos de log |
+| `determined_outcome` | `dict` | Decision determinada por el sistema (action, risk_level, risk_reason, requires_hitl, precedent_summary) |
 
-### Output Specification
+### Campos deterministas vs campos LLM
+
+| Campo de salida | Quien lo genera | Notas |
+|---|---|---|
+| `recommended_action` | **Codigo** (override post-LLM) | El LLM debe copiar el valor de DECISION DETERMINADA |
+| `risk_level` | **Codigo** (override post-LLM) | Idem |
+| `requires_hitl` | **Codigo** (override post-LLM) | Idem |
+| `policy_verdicts` | **Codigo** (inyectado post-LLM) | Se insertan los veredictos de Call 1 directamente |
+| `precedent_summary` | **Codigo** (override post-LLM) | Generado por `_build_precedent_summary()` |
+| `justification` | **LLM** | Campo analitico principal — razonamiento sobre evidencias |
+| `confidence` | **LLM** | Estimacion de certeza (0.0–1.0) |
+| `next_steps` | **LLM** | Pasos concretos derivados de las politicas y precedentes |
+| `log_summary` | **LLM** (con input determinista) | El LLM recibe el resumen pre-computado y lo reformula |
+| `compensation_applicable` | **LLM** | Evaluacion de SLA segun POL-SLA-004 |
+| `compensation_amount_usd` | **LLM** | Maximo USD 15 segun POL-SLA-004 |
+
+Incluso si el LLM devuelve valores diferentes para los campos deterministas, `ResolutionService.resolve()` los sobreescribe con los valores calculados por codigo (lineas 87-93 de `resolution.py`). Esto garantiza que la decision final es siempre determinista, sin importar alucinaciones del LLM.
+
+### Especificacion de salida
 
 ```json
 {
   "transaction_id": "TXN-XXXXX",
-  "recommended_action": "APPROVE | REJECT | ESCALATE | PENDING_HITL",
-  "confidence": 0.0,
-  "justification": "Explanatory text citing specific evidence",
-  "policy_verdicts": [{"policy_code": "...", "verdict": "...", "reasoning": "...", "requires_human_review": false}],
-  "precedent_summary": "Summary of similar historical cases found",
-  "log_summary": "Summary of detected log anomalies",
-  "risk_level": "BLOCKER | HIGH | MEDIUM | LOW",
+  "recommended_action": "VALOR_DE_DECISION_DETERMINADA",
+  "confidence": 0.72,
+  "justification": "Analisis estructurado con evidencias y razonamiento",
+  "precedent_summary": "COPIA EXACTA de DECISION DETERMINADA",
+  "log_summary": "Resumen de anomalias en logs",
+  "risk_level": "VALOR_DE_DECISION_DETERMINADA",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
-  "next_steps": ["Step 1", "Step 2"],
-  "requires_hitl": false,
-  "hitl_reason": null
+  "next_steps": ["Paso 1 concreto", "Paso 2 concreto"],
+  "requires_hitl": true,
+  "hitl_reason": "Motivo de escalacion o null"
 }
 ```
 
-**`recommended_action` values:**
+**Valores de `recommended_action`:**
 
-| Value | Meaning |
+| Valor | Significado | Condicion determinista |
+|---|---|---|
+| `REJECT` | Contracargo rechazado | Al menos un BLOCKER en veredictos |
+| `PENDING_HITL` | Revision humana requerida | FAILs sin BLOCKER, o requires_human_review=true |
+| `APPROVE` | Contracargo aprobado | Solo PASS/WARNING/NOT_APPLICABLE |
+| `ESCALATE` | Escalacion a equipo especializado | (reservado para uso futuro) |
+
+**Determinacion de `risk_level`:**
+
+| Nivel | Condicion |
 |---|---|
-| `APPROVE` | Chargeback is valid — approve and refund |
-| `REJECT` | Chargeback is not valid — deny refund |
-| `ESCALATE` | Route to specialized team (legal, fraud unit) |
-| `PENDING_HITL` | Insufficient evidence for automated decision — analyst must review |
+| `BLOCKER` | Al menos un veredicto BLOCKER |
+| `HIGH` | fail_count >= 2, o fraud_score < 15 |
+| `MEDIUM` | 1 FAIL, o fraud_score < 30 |
+| `LOW` | Solo PASS/WARNING/NOT_APPLICABLE, fraud_score >= 30 |
 
-**`risk_level` determination (embedded in prompt):**
+### Reglas estrictas integradas en el prompt
 
-| Level | Condition |
-|---|---|
-| `BLOCKER` | At least one BLOCKER verdict in policy_verdicts |
-| `HIGH` | Multiple FAIL verdicts or fraud_score < 15 |
-| `MEDIUM` | One FAIL verdict or fraud_score between 15 and 30 |
-| `LOW` | Only PASS/WARNING/NOT_APPLICABLE and fraud_score >= 30 |
+1. Usar EXACTAMENTE los valores de recommended_action, risk_level y requires_hitl de la DECISION DETERMINADA
+2. NO incluir policy_verdicts en el JSON — ya fueron evaluados por un modulo separado
+3. Citar codigos de politica y su veredicto (PASS/FAIL/BLOCKER)
+4. **Prohibido inventar datos** — solo usar valores que aparezcan LITERALMENTE en las secciones de datos
+5. `compensation_applicable` es true SOLO si se incumplio el SLA (POL-SLA-004)
+6. `compensation_amount_usd` maxima: USD 15
+7. `next_steps`: 2 a 5 pasos. Formato: "[verbo] + [dato] + [responsable]"
+8. `confidence`: 0.9+ si todos PASS, 0.7-0.9 si hay FAILs claros, 0.5-0.7 si hay datos faltantes
+9. Responder UNICAMENTE con JSON valido en espanol
+10. Si la transaccion tiene status "Resuelta" o "Cerrada", iniciar justification con "Auditoria de caso cerrado"
 
-### Strict Rules Embedded in Prompt
+### Estructura de la justificacion (campo analitico)
 
-1. If at least one BLOCKER verdict → `recommended_action` MUST be `"REJECT"` — no exceptions
-2. If FAIL verdicts (no BLOCKER) and risk_level is HIGH → `recommended_action` is `"PENDING_HITL"`
-3. Always cite policy codes (POL-FRD-001, POL-EXC-003, etc.) in the justification
-4. NEVER invent data — if information is missing, state "No disponible"
-5. `compensation_applicable` is true ONLY if SLA was breached (POL-SLA-004)
-6. `compensation_amount_usd` maximum is USD 15 per POL-SLA-004
-7. `next_steps` must contain 2–5 concrete, actionable steps in logical order
-8. `confidence` must genuinely reflect certainty (0.0 = very uncertain, 1.0 = completely certain)
-9. Respond ONLY with valid JSON in Spanish
+El prompt v3.0 exige una estructura de justificacion en 6 partes (maximo 200 palabras):
 
-### Analytical Precedent Usage (v1.1)
+1. **Explicacion del riesgo:** No solo copiar risk_reason — explicar POR QUE este nivel de riesgo es adecuado. Distinguir riesgo de politica vs riesgo de fraude
+2. **Politicas FAIL/BLOCKER:** Para cada una, citar datos especificos (montos, scores, umbrales) y explicar el impacto
+3. **Analisis de precedentes:** No solo listar case_id y outcome — RAZONAR sobre implicaciones:
+   - Si precedente similar fue aprobado → "sugiere que casos de [motivo] tienden a resolverse a favor del cliente"
+   - Si precedente del MISMO MERCHANT → destacar conexion explicitamente
+   - Citar patron y tendencia de la DECISION DETERMINADA
+4. **Estrategia:** Conectar patron de precedentes con la decision actual — "dado estos precedentes, la tendencia favorece/no favorece al cliente"
+5. **Flags del cliente:** Si hay flags que corroboran un veredicto, citarlos como evidencia indirecta
+6. **Conclusion:** Conectar evidencias con la decision en 1 oracion
 
-The prompt includes explicit instructions for deep precedent analysis:
-
-| Instruction | Purpose |
-|---|---|
-| **Identify operational patterns** | Determine if similar cases (by merchant/method/motive) were resolved for/against the client, and why |
-| **Extract concrete learnings** | Articulate what each precedent implies for the current case, citing case IDs and outcomes |
-| **Contrast differences** | When a precedent has an opposite outcome, explain why the current case differs |
-| **Impact on confidence** | If no precedents exist, state how this affects recommendation certainty |
-
-### Contradiction Resolution (v1.1)
-
-When contradictory signals exist (e.g., high fraud_score = low fraud probability vs. motive = "doesn't recognize purchase" = possible fraud), the prompt requires:
-
-1. Explicitly identify the contradiction
-2. Explain what each signal means (e.g., "fraud_score=84 means the anti-fraud system considers this LOW risk")
-3. Propose what additional evidence would resolve the ambiguity
-
-### Provisional Determinations (v1.1)
-
-When a determination depends on subsequent verification (e.g., compensation pending SLA date audit), the prompt requires marking it as provisional in both the justification AND next_steps, preventing HITL analysts from assuming finality.
-
-### Example Expected Output
+### Ejemplo de salida esperada
 
 ```json
 {
-  "transaction_id": "TXN-00051",
-  "recommended_action": "REJECT",
-  "confidence": 0.97,
-  "justification": "TXN-00051 involucra una transaccion con Cripto (POL-EXC-003 BLOCKER) y score antifraude de 8/100 (POL-FRD-001 BLOCKER). Las criptomonedas son irreversibles por definicion. Precedente CASO-00023 con perfil similar (Cripto, score=12) fue rechazado.",
-  "policy_verdicts": [...],
-  "precedent_summary": "CASO-00023: contracargo cripto rechazado. CASO-00041: score < 15 rechazado con retencion de fondos.",
-  "log_summary": "3 eventos ERROR: FRAUD_ALERT, AUTH_DECLINED x2. Patron consistente con fraude confirmado.",
-  "risk_level": "BLOCKER",
+  "transaction_id": "TXN-00042",
+  "recommended_action": "PENDING_HITL",
+  "confidence": 0.72,
+  "justification": "Riesgo HIGH por 1 violacion de politica (POL-FRD-001). El riesgo no proviene de fraude sofisticado sino de un fraud_score=4 que incumple el umbral minimo de 30 segun POL-FRD-001. POL-EXC-002 PASS confirma trato VIP con SLA de 5 dias. CB-0020 [MOTIVO SIMILAR] fue aprobado en 2 dias, lo que sugiere que casos de fraude/no reconocido con este perfil tienden a resolverse a favor del cliente. CB-0033 tambien fue aprobado (3d), reforzando el patron: 2/2 precedentes aprobados — tendencia favorable al cliente. Dado este patron favorable, la decision PENDING_HITL permite confirmar el fraud_score antes de seguir la tendencia de aprobacion.",
+  "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay. Relevancia: mismo patron de fraude / no reconocido | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon | Patron: de 2 precedentes, 2 aprobados, 0 rechazados. Motivo similar: 1/2, 1 aprobados",
+  "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
+  "risk_level": "HIGH",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
   "next_steps": [
-    "Notificar al cliente el rechazo citando POL-EXC-003 y POL-FRD-001",
-    "Reportar transaccion al equipo de fraude para investigacion",
-    "Bloquear comercio CryptoVault SA si tasa de contracargos supera el 2%",
-    "Archivar caso con clasificacion FRAUDE_CONFIRMADO"
+    "Escalar a supervisor para revision (requires_hitl=true)",
+    "Verificar POL-FRD-001 — fraud_score=4 vs umbral 30, confirmar si score bajo refleja riesgo real o anomalia",
+    "Solicitar prueba de entrega al comercio — plazo segun POL-CB-003",
+    "Notificar al cliente VIP sobre estado del caso y plazo estimado"
   ],
-  "requires_hitl": false,
-  "hitl_reason": null
+  "requires_hitl": true,
+  "hitl_reason": "fraud_score=4 con cliente VIP — requiere validacion de supervisor"
 }
 ```
 
-### Changelog
+### Registro de cambios
 
-- **v1.0** (2025-01): Initial release. Includes 8 strict rules, 4-action vocabulary, SLA compensation cap at USD 15.
-- **v1.1** (2025-07): Added analytical precedent usage instructions (pattern extraction, learning articulation, difference contrasting). Added contradiction resolution protocol. Added provisional determination flagging. Improved example to demonstrate HITL case with precedent analysis.
+- **v1.0** (2025-01): Version inicial. 8 reglas estrictas, vocabulario de 4 acciones, tope de compensacion USD 15.
+- **v2.0** (2025-07): Extraccion mecanica para Haiku. Campos deterministas calculados externamente pero aun incluidos en las instrucciones del prompt. Instrucciones de precedentes mejoradas.
+- **v3.0** (2025-07): Transicion a razonamiento analitico para Sonnet. Seccion `DECISION DETERMINADA` en el template de usuario. El LLM ya no decide — justifica. Justificacion estructurada en 6 partes. Instrucciones de next_steps con formato "[verbo] + [dato] + [responsable] + [plazo]". Coherencia obligatoria (compensation_applicable=false → no mencionar compensacion). Conexion de precedentes por merchant.
 
 ---
 
-## Prompt 3: v1_judge
+## Prompt 3: v1_judge (v2.0)
 
-**File:** `api/app/llm/prompts/v1_judge.py`
+**Archivo:** `api/app/llm/prompts/v1_judge.py`
+**Modelo:** Sonnet (Call 3)
 
-**Execution path:** Called directly from n8n `[Juez de Calidad]` HTTP Request node → `POST https://api.anthropic.com/v1/messages` using `$env.CB_ANTHROPIC_API_KEY`. Response is parsed by `[Extraer Evaluación — Juez]` Set node via `JSON.parse($json.content[0].text)`. The FastAPI `/api/analyze/judge` route still exists for standalone testing but is bypassed in the main workflow.
+**Ruta de ejecucion:** Invocado desde n8n `[Juez de Calidad]` → `POST https://api.anthropic.com/v1/messages`. La ruta FastAPI `/api/analyze/judge` sigue disponible para testing directo.
 
-### Purpose
+### Proposito
 
-Act as an independent quality supervisor evaluating the resolution produced by v1_resolution. This implements the LLM-as-Judge pattern. The Judge score gates both human escalation and auto-indexing of new precedents.
+Actuar como supervisor independiente evaluando la calidad de la resolucion producida por v1_resolution. Implementa el patron LLM-as-Judge. El score del Juez controla tanto la escalacion a analistas como el auto-indexado de nuevos precedentes en Qdrant.
 
-### Role
+### Rol
 
-Supervisor de calidad de resoluciones (resolution quality supervisor) at a Latin American fintech.
+Supervisor de calidad de resoluciones de contracargos en una fintech latinoamericana.
 
-### Input Specification
+### Especificacion de entrada
 
-| Parameter | Type | Description |
+| Parametro | Tipo | Descripcion |
 |---|---|---|
-| `full_context` | `dict` | Complete evidence package: transaction + policies + precedents + logs + merchant + client |
-| `resolution` | `dict` | Resolution JSON produced by v1_resolution |
+| `full_context` | `dict` | Paquete completo de evidencia: transaccion + politicas + precedentes + logs + comercio + cliente |
+| `resolution` | `dict` | JSON de resolucion producido por v1_resolution (limpiado de metadata interna: sin guardrail_warnings, _usage, trace_id) |
 
-### Output Specification
+### Especificacion de salida
 
 ```json
 {
-  "overall_score": 7.5,
+  "overall_score": 8.7,
   "criteria": {
-    "policy_consistency": 8.0,
-    "justification_quality": 7.0,
-    "precedent_usage": 7.5,
-    "risk_assessment": 8.0,
-    "actionability": 7.0
+    "policy_consistency": 9.2,
+    "justification_quality": 8.5,
+    "precedent_usage": 8.3,
+    "risk_assessment": 9.0,
+    "actionability": 8.5
   },
   "approved": true,
-  "strengths": ["Concrete strength 1", "Concrete strength 2"],
-  "weaknesses": ["Concrete weakness 1", "Concrete weakness 2"]
+  "strengths": ["Fortaleza concreta 1", "Fortaleza concreta 2"],
+  "weaknesses": ["Area de mejora concreta 1"]
 }
 ```
 
-### Scoring Criteria (each 1.0–10.0)
+### Sistema de rubrica por criterio (v2.0)
 
-| Criterion | Key | Scoring guidance |
-|---|---|---|
-| Policy consistency | `policy_consistency` | Resolution respects all BLOCKERs and FAILs. APPROVE with any active BLOCKER = **automatic 1.0** |
-| Justification quality | `justification_quality` | Cites specific IDs, amounts, scores, policy codes = high score; vague justification = low score |
-| Precedent usage | `precedent_usage` | Mentions specific cases and extracts learnings = high; ignores precedents = low |
-| Risk assessment | `risk_assessment` | Assigned risk_level is correct given the verdicts and fraud_score |
-| Actionability | `actionability` | next_steps are concrete, achievable, and relevant to this specific case |
+El cambio principal de v1.0 a v2.0 es la introduccion de rubricas granulares con niveles de referencia por cada criterio. Esto rompio el techo de 8.6 al darle al Juez un marco concreto para puntuar en lugar de depender de su "intuicion".
 
-`overall_score` = arithmetic average of all 5 criteria.
-`approved` = `true` if `overall_score >= 7.0`.
+#### 1. policy_consistency — Consistencia con las politicas
 
-### Gate Logic (used by the system, not the prompt)
-
-| Score range | Outcome |
+| Nivel | Descripcion |
 |---|---|
-| >= 8.0 | Approved + auto-indexed as new precedent in Qdrant |
-| 7.0–7.9 | Approved — delivered to analyst as final resolution |
-| 5.0–6.9 | Not approved — routed to HITL for analyst review |
-| < 5.0 | Not approved + flagged `needs_review=true` in feedback record |
+| **10.0** | Accion perfecta + todos los veredictos respetados sin excepcion |
+| **9.0** | Accion correcta + veredictos citados correctamente, minimas inconsistencias menores |
+| **7.0-8.9** | Accion correcta pero algun veredicto no citado o razonamiento impreciso |
+| **5.0-6.9** | Accion correcta pero inconsistencias claras (cita datos incorrectos) |
+| **1.0-4.9** | Accion incorrecta (APPROVE con BLOCKER, REJECT sin BLOCKER) |
 
-### Changelog
+**Regla especial:** APPROVE con BLOCKER activo = `policy_consistency` automaticamente 1.0 (error mas grave posible).
 
-- **v1.0** (2025-01): Initial release. 5-criterion scoring. APPROVE+BLOCKER = automatic 1.0 on `policy_consistency`.
+#### 2. justification_quality — Calidad de la justificacion
+
+| Nivel | Descripcion |
+|---|---|
+| **10.0** | Cada afirmacion respaldada por datos verificables + explicacion de por que importan |
+| **9.0** | Cita datos correctos de todas las secciones relevantes con analisis de implicaciones |
+| **7.0-8.9** | Cita datos correctos pero sin conectarlos analiticamente |
+| **5.0-6.9** | Justificacion vaga con pocos datos especificos |
+| **1.0-4.9** | ALUCINACION — datos inventados que no existen en la evidencia |
+
+#### 3. precedent_usage — Uso de precedentes
+
+| Nivel | Descripcion |
+|---|---|
+| **10.0** | Analiza TODOS los precedentes relevantes, identifica patrones, conecta implicaciones al caso actual |
+| **9.0** | Analiza precedentes [MOTIVO SIMILAR] con profundidad + cita patron general |
+| **7.0-8.9** | Menciona precedentes y cita outcomes pero sin analisis de implicaciones |
+| **5.0-6.9** | Solo lista case_ids sin extraer aprendizajes |
+| **1.0-4.9** | Ignora completamente los precedentes disponibles |
+
+#### 4. risk_assessment — Evaluacion de riesgo
+
+| Nivel | Descripcion |
+|---|---|
+| **10.0** | Risk level correcto + explicacion de POR QUE (distingue riesgo de fraude vs politica) + conexion con decision |
+| **9.0** | Risk level correcto + explicacion de la fuente del riesgo |
+| **7.0-8.9** | Risk level correcto pero sin explicar la fuente o con explicacion incompleta |
+| **5.0-6.9** | Risk level correcto pero justificacion contradictoria |
+| **1.0-4.9** | Risk level incorrecto |
+
+#### 5. actionability — Accionabilidad de los pasos
+
+| Nivel | Descripcion |
+|---|---|
+| **10.0** | Cada paso cita politica o dato especifico + responsable + sin contradicciones + conecta con precedentes |
+| **9.0** | Pasos concretos con datos de politicas + sin contradicciones entre next_steps y otros campos |
+| **7.0-8.9** | Pasos concretos pero con alguna contradiccion menor |
+| **5.0-6.9** | Pasos vagos o inaplicables |
+| **1.0-4.9** | Sin next_steps o completamente genericos |
+
+### Calculo de scores
+
+- `overall_score` = promedio aritmetico de los 5 criterios
+- `approved` = `true` si `overall_score >= 7.0`
+- Scores con granularidad real (8.7, 9.2, 7.3) — no redondear sistematicamente a .0 o .5
+
+### Logica de umbral (usada por el sistema, no por el prompt)
+
+| Rango de score | Resultado |
+|---|---|
+| >= 8.0 | Aprobado + auto-indexado como nuevo precedente en Qdrant |
+| 7.0–7.9 | Aprobado — entregado al analista como resolucion final |
+| 5.0–6.9 | No aprobado — enviado a HITL para revision de analista |
+| < 5.0 | No aprobado + flag `needs_review=true` en registro de feedback |
+
+### Reglas adicionales del prompt v2.0
+
+1. **Semantica de fraud_score:** fraud_score es escala 0-100 donde ALTO = SEGURO, BAJO = RIESGO. fraud_score=84 significa transaccion segura (84% confianza), fraud_score=4 significa alto riesgo. El prompt lo explicita para que Sonnet no invierta la semantica
+2. **PENDING_HITL no es ambiguo:** No penalizar una resolucion por usar PENDING_HITL cuando hay FAILs sin BLOCKER o requires_human_review=true — es el protocolo correcto
+3. **Verificacion de datos:** Comparar cada dato citado en la resolucion contra la evidencia proporcionada; si no aparece, es alucinacion
+4. **Contradicciones internas:** Si compensation_applicable=false pero un next_step menciona compensar → baja actionability. Coherencia interna es requisito
+
+### Registro de cambios
+
+- **v1.0** (2025-01): Version inicial. 5 criterios de scoring. APPROVE+BLOCKER = automatico 1.0 en policy_consistency.
+- **v2.0** (2025-07): Rubrica granular por criterio con niveles de referencia (10.0, 9.0, 7.0-8.9, 5.0-6.9, 1.0-4.9). Semantica explicita de fraud_score (ALTO=SEGURO). Proteccion contra penalizacion incorrecta de PENDING_HITL. Deteccion de contradicciones internas. Verificacion de alucinaciones. Switch a Sonnet para capacidad evaluativa completa.
 
 ---
 
-## Log Analysis (deterministic — no LLM prompt)
+## Analisis de logs (determinista — sin prompt LLM)
 
-**Implementation:** `api/app/analysis/analyzer.py` → `Analyzer.count_severities()` + `Analyzer.detect_error_patterns()`
-**Pipeline integration:** `ResolutionService._summarize_logs()` in `api/app/services/resolution.py`
+**Implementacion:** `api/app/analysis/analyzer.py` → `Analyzer.count_severities()` + `Analyzer.detect_error_patterns()`
+**Integracion:** `ResolutionService._summarize_logs()` en `api/app/services/resolution.py`
 
-### Purpose
+### Proposito
 
-Analyze payment processing event logs to count severities and detect anomaly patterns. Unlike the other three prompts, log analysis is **deterministic** — it does not use an LLM call. The structured nature of log events (severity, event name, service) makes rule-based pattern matching more reliable, faster, and cheaper than LLM analysis.
+Analizar los eventos de log de procesamiento de pagos para contar severidades y detectar patrones de anomalia. A diferencia de los tres prompts, el analisis de logs es **determinista** — no utiliza una llamada LLM. La naturaleza estructurada de los eventos de log (severidad, nombre de evento, servicio) hace que el patron matching basado en reglas sea mas confiable, rapido y economico que el analisis por LLM.
 
-### How it works
+### Como funciona
 
-1. `Analyzer.count_severities(logs)` produces `{"ERROR": N, "WARN": N, "INFO": N}`
-2. `Analyzer.detect_error_patterns(logs)` scans for 9 known anomaly patterns by event name
-3. `ResolutionService._summarize_logs()` combines both outputs into a text summary that is passed to the `v1_resolution` prompt as the `log_summary` parameter
+1. `Analyzer.count_severities(logs)` produce `{"ERROR": N, "WARN": N, "INFO": N}`
+2. `Analyzer.detect_error_patterns(logs)` escanea 9 patrones de anomalia conocidos por nombre de evento
+3. `ResolutionService._summarize_logs()` combina ambas salidas en un resumen de texto que se pasa al prompt v1_resolution como parametro `log_summary`
 
-The LLM (v1_resolution) receives the pre-computed summary and interprets it alongside other evidence — it never processes raw logs directly.
+El LLM (v1_resolution) recibe el resumen pre-computado y lo interpreta junto con la demas evidencia — nunca procesa logs crudos directamente.
 
-### 9 Anomaly Patterns Detected (deterministic)
+### 9 patrones de anomalia detectados (determinista)
 
-| Pattern | Description | Related policy |
+| Patron | Descripcion | Politica relacionada |
 |---|---|---|
-| `MERCHANT_NO_RESPONSE` x2+ | Systematic merchant timeout | POL-CB-002 |
-| `TIMEOUT_RETRY` | Connectivity or system overload | — |
-| `FRAUD_ALERT + AUTH_DECLINED` | Transaction blocked for fraud | POL-FRD-001 |
-| `SESSION_EXPIRED` during `PAYMENT_INITIATED` | Payment interrupted by expired session | — |
-| `WEBHOOK_FAILED` | Integration failure with merchant system | — |
-| `DOUBLE_CHARGE_DETECT` | Possible duplicate charge | — |
-| `SLA_BREACH` | SLA violation detected by system | POL-SLA-002 |
-| `GEO_ANOMALY` | Geographic anomaly | POL-FRD-002 |
-| `AUTH_DECLINED` multiple | Repeated failed authorization attempts | POL-FRD-001 |
-| `ERROR` sequence | Systemic processing failure | — |
+| `MERCHANT_NO_RESPONSE` x2+ | Timeout sistematico del comercio | POL-CB-002 |
+| `TIMEOUT_RETRY` | Conectividad o sobrecarga del sistema | — |
+| `FRAUD_ALERT + AUTH_DECLINED` | Transaccion bloqueada por fraude | POL-FRD-001 |
+| `SESSION_EXPIRED` durante `PAYMENT_INITIATED` | Pago interrumpido por sesion expirada | — |
+| `WEBHOOK_FAILED` | Falla de integracion con sistema del comercio | — |
+| `DOUBLE_CHARGE_DETECT` | Posible cargo duplicado | — |
+| `SLA_BREACH` | Violacion de SLA detectada por sistema | POL-SLA-002 |
+| `GEO_ANOMALY` | Anomalia geografica | POL-FRD-002 |
+| `AUTH_DECLINED` multiple | Intentos de autorizacion fallidos repetidos | POL-FRD-001 |
+| Secuencia de `ERROR` | Fallo sistematico de procesamiento | — |
 
-### Design rationale
+### Justificacion del diseno
 
-Log events have structured fields (`severity`, `event`, `service`, `code`) that map directly to known anomaly types. Using pattern matching instead of an LLM call eliminates one API round-trip per investigation (~300ms + token cost) with zero accuracy loss.
+Los eventos de log tienen campos estructurados (`severity`, `event`, `service`, `code`) que mapean directamente a tipos de anomalia conocidos. Usar patron matching en lugar de una llamada LLM elimina un round-trip de API por investigacion (~300ms + costo de tokens) con cero perdida de precision.
 
 ---
 
-## Prompt Engineering Principles
+## Principios de ingenieria de prompts
 
-### Why separate Python modules, not inline strings
+### Por que modulos Python separados, no strings inline
 
-Every prompt lives in a dedicated file with a version comment at line 1. This enables:
-- Git diff shows exactly what changed between versions
-- `render()` functions can be unit-tested independently
-- Multiple versions can coexist (`v1_policy_eval.py`, `v2_policy_eval.py`) during rollout
-- IDE tooling (linting, search) works normally on prompt text
+Cada prompt vive en un archivo dedicado con un comentario de version en la linea 1. Esto habilita:
+- Git diff muestra exactamente que cambio entre versiones
+- Las funciones `render()` se pueden testear independientemente con unit tests
+- Multiples versiones pueden coexistir (`v1_policy_eval.py`, `v2_policy_eval.py`) durante un rollout
+- Las herramientas del IDE (linting, busqueda) funcionan normalmente sobre el texto del prompt
 
-### Why Spanish-language prompts
+### Por que prompts en espanol
 
-The dataset, policies, and log messages are in Spanish. Using Spanish prompts eliminates translation overhead and reduces the risk of semantic drift when the LLM translates concepts internally. The embedding model (`voyage-multilingual-2` via Voyage AI) is explicitly multilingual and handles Spanish natively.
+El dataset, las politicas y los mensajes de log estan en espanol. Usar prompts en espanol elimina la sobrecarga de traduccion y reduce el riesgo de drift semantico cuando el LLM traduce conceptos internamente. El modelo de embeddings (`voyage-multilingual-2` via Voyage AI) es explicitamente multilingue y maneja espanol de forma nativa.
 
-### Temperature setting
+### Configuracion de temperatura
 
-All four prompts run at `temperature=0.3` (configurable via `CB_LLM_TEMPERATURE`). This provides a balance between deterministic policy compliance (closer to 0.0) and natural language justification quality (closer to 0.5). Pure factual tasks (policy_eval, judge) benefit most from low temperature.
+Los tres prompts corren a `temperature=0.3` (configurable via `CB_LLM_TEMPERATURE`). Este valor balancea el cumplimiento deterministico de politicas (mas cerca de 0.0) con la calidad de justificaciones en lenguaje natural (mas cerca de 0.5). Las tareas puramente factuales (policy_eval, judge) se benefician mas de temperaturas bajas.
 
-### Structured output enforcement
+### Enforcement de salida estructurada
 
-All prompts instruct the LLM to "Responde UNICAMENTE con JSON valido. Sin texto adicional." The `parse_json_safely()` function in `llm/parsing.py` provides a fallback parser that strips markdown code fences and finds embedded JSON if the model adds surrounding text despite the instruction. For v1_judge (called from n8n), the `[Extraer Evaluación — Juez]` Set node uses a robust expression: `JSON.parse($json.content[0].text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())`.
+Todos los prompts instruyen al LLM: "Responde UNICAMENTE con JSON valido. Sin texto adicional." La funcion `parse_json_safely()` en `llm/parsing.py` proporciona un parser de fallback que elimina code fences de markdown y encuentra JSON embebido si el modelo agrega texto envolvente a pesar de la instruccion. Para v1_judge (invocado desde n8n), el nodo `[Extraer Evaluacion — Juez]` usa una expresion robusta: `JSON.parse($json.content[0].text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim())`.
+
+### Guardrails post-LLM como red de seguridad
+
+Independientemente de lo que el LLM devuelva, `ResolutionService._validate_resolution()` aplica correcciones automaticas:
+
+| Condicion detectada | Correccion |
+|---|---|
+| APPROVE con BLOCKER activo | Auto-corregido a REJECT + risk BLOCKER (posible alucinacion) |
+| risk_level=BLOCKER sin veredictos BLOCKER | Auto-corregido a HIGH + PENDING_HITL |
+| REJECT sin veredictos BLOCKER | Auto-corregido a PENDING_HITL (requiere revision humana) |
+| Compensacion excede monto original en >10% | Warning registrado |
+| Confianza > 0.95 con 2+ violaciones de politica | Warning registrado |
+
+Estas correcciones son el ultimo nivel de defensa y, gracias a la arquitectura v3.0 donde el codigo decide los campos criticos, se activan cada vez con menor frecuencia.

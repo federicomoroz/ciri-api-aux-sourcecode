@@ -1,219 +1,229 @@
 # CIRI Chargeback Agent
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-203%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-244%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
-![Claude](https://img.shields.io/badge/Claude-Sonnet%204-blueviolet)
+![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
 ![Qdrant](https://img.shields.io/badge/Qdrant-vector%20DB-dc382c)
+![Judge](https://img.shields.io/badge/Judge%20Score-9.1%2F10-gold)
 
-Intelligent chargeback resolution agent built for the CIRI (Continuous Improvement & Risk Intelligence) technical evaluation. The system investigates chargeback cases end-to-end: it retrieves applicable policies via RAG, evaluates them against the transaction, synthesizes a resolution, and self-improves through a Judge-gated feedback loop.
+Agente inteligente de resolución de contracargos construido para la evaluación técnica de CIRI (Continuous Improvement & Risk Intelligence). El sistema investiga casos de contracargo end-to-end: recupera políticas aplicables vía RAG, las evalúa contra la transacción, sintetiza una resolución con razonamiento analítico, y se auto-mejora a través de un feedback loop con Judge.
 
-> **Live Demo:** [Test Panel on Render](https://ciri-chargeback-agent.onrender.com/panel) — interactive UI to run chargeback investigations without local setup.
+> **Demo en vivo:** [Panel de Testing en Render](https://ciri-chargeback-agent.onrender.com/panel) — interfaz interactiva para correr investigaciones sin setup local.
+>
+> **Nota:** Render free tier tiene cold starts de ~50 segundos. La primera carga puede demorar.
 
 ---
 
-## Architecture
+## Arquitectura
 
-```mermaid
-graph TD
-    subgraph Orchestration
-        N[n8n 54 nodes — 43 exec + 11 sticky]
-    end
-
-    subgraph "FastAPI :8000"
-        R[Routes — thin HTTP handlers]
-        S[Services — resolve + judge + feedback]
-        A[Analyzer — SLA, risk flags, patterns]
-        RAG[RAG — retriever + indexer + formatter]
-        LLM[LLM — prompts v1_* + parsing]
-    end
-
-    subgraph Storage
-        Q[(Qdrant Cloud)]
-        DB[(SQLite)]
-    end
-
-    subgraph "External APIs"
-        C[Claude — Anthropic API]
-        V[Voyage AI — embeddings]
-    end
-
-    N -->|REST calls| R
-    R --> S
-    S --> A
-    S --> RAG
-    S --> LLM
-    RAG --> Q
-    RAG --> V
-    LLM --> C
-    S --> DB
-    R --> DB
-
-    Q --- P[policies]
-    Q --- HC[historical_cases]
-    Q --- SC[_semantic_cache]
+```
+n8n Cloud (orquestador explícito)
+    │
+    ├── Webhook / Form Trigger
+    │
+    ├── 7 llamadas de contexto ──────────────────────► FastAPI (Render)
+    │   ├── GET /api/transactions/{id}                     │
+    │   ├── GET /api/logs/{tx_id}                          ├── Services
+    │   ├── GET /api/policies/search (RAG)                 │   ├── ResolutionService
+    │   ├── GET /api/cases/similar (RAG)                   │   ├── FeedbackService
+    │   ├── GET /api/merchants/{name}/risk                 │   └── LangfuseStatsService
+    │   ├── GET /api/clients/{id}/history                  │
+    │   └── POST /api/sla/check                            ├── RAG
+    │                                                      │   ├── Qdrant Cloud (3 colecciones)
+    ├── POST /api/analyze/resolve                          │   └── Voyage AI (embeddings)
+    │   ├── Call 1: Policy Eval (Haiku)                    │
+    │   ├── Call 2: Synthesis (Sonnet)                     ├── LLM
+    │   └── Guardrails + overrides determinísticos         │   └── Anthropic API
+    │                                                      │
+    ├── POST /api/analyze/judge                            ├── Análisis
+    │   └── Call 3: Judge (Sonnet)                         │   └── SLA, risk flags, patterns
+    │                                                      │
+    ├── Switch por risk_level                              └── Storage
+    │   └── POST /api/reports/html                             └── SQLite
+    │
+    └── Respuesta HTML
 ```
 
-**Key principle:** n8n is the explicit orchestrator — every step is a named, visible node. No AI Agent black box. Two entry points (Webhook + Form Trigger) share the same flow. Native n8n nodes handle validation, SLA, merchant/client flags, guardrail visibility, and judge score gating. All domain logic, RAG, and LLM calls live in FastAPI services.
+**Principio central:** n8n es el orquestador explícito — cada paso es un nodo nombrado y visible. Sin nodo AI Agent, sin black box. Toda la lógica de dominio, RAG y llamadas LLM viven en servicios de FastAPI.
 
----
+**Principio de resolución:** "El código decide, el LLM explica" — 6 de 11 campos de la resolución son calculados determinísticamente por Python y siempre sobreescriben la salida del LLM.
 
-## Prerequisites
+### Stack y restricciones
 
-| Dependency | Version | Notes |
+| Componente | Servicio | Tier |
 |---|---|---|
-| Docker + Docker Compose | >= 24.x | Runs Qdrant, FastAPI, n8n |
-| Python | 3.11+ | Only needed outside Docker |
-| Anthropic API Key | — | Claude Haiku (default model) |
-| Voyage AI API Key | — | Free tier at https://dash.voyageai.com/ |
-| Langfuse account | — | Optional; for observability |
+| Orquestador | n8n Cloud | Trial |
+| API + Services | Render | Free (cold starts ~50s) |
+| Vector DB | Qdrant Cloud | Free (1GB) |
+| Embeddings | Voyage AI | Free |
+| LLM | Anthropic (Haiku + Sonnet) | Pago por uso |
+| Observabilidad | Langfuse Cloud | Free |
+| DB estructurada | SQLite (efímero en Render) | — |
 
 ---
 
-## Quick Start
+## Prerequisitos
 
-### 1. Clone and configure
+| Dependencia | Versión | Notas |
+|---|---|---|
+| Docker + Docker Compose | >= 24.x | Para correr Qdrant, FastAPI, n8n localmente |
+| Python | 3.11+ | Solo necesario fuera de Docker |
+| Anthropic API Key | — | Claude Haiku + Sonnet |
+| Voyage AI API Key | — | Free tier en https://dash.voyageai.com/ |
+| Langfuse account | — | Opcional; para observabilidad |
+
+---
+
+## Inicio Rápido
+
+### 1. Clonar y configurar
 
 ```bash
 git clone <repo-url>
 cd quest_ML
 cp .env.example .env
-# Edit .env — set CB_ANTHROPIC_API_KEY and CB_VOYAGE_API_KEY at minimum
+# Editar .env — configurar CB_ANTHROPIC_API_KEY y CB_VOYAGE_API_KEY como mínimo
 ```
 
-### 2. Start all services
+### 2. Iniciar servicios
 
 ```bash
 docker-compose up -d
 ```
 
-Services started:
-- Qdrant vector DB → http://localhost:6333
-- FastAPI tools API → http://localhost:8000
-- n8n orchestrator → http://localhost:5678
+Servicios levantados:
+- Qdrant → http://localhost:6333
+- FastAPI → http://localhost:8000
+- n8n → http://localhost:5678
 
-### 3. Seed database and vector store
+### 3. Seed de datos
 
 ```bash
 docker-compose exec api python -m app.seed_data
 ```
 
-This loads 100 transactions, 60 historical cases, 17 policies, and 150 logs into SQLite, then indexes policies and cases into Qdrant.
+Carga 100 transacciones, 60 casos históricos, 17 políticas y 150 logs en SQLite, luego indexa políticas y casos en Qdrant.
 
-### 4. Verify health
+### 4. Verificar health
 
 ```bash
 curl http://localhost:8000/health
 # {"status":"healthy","sqlite":"ok","qdrant":"ok","collections":{"policies":17,"historical_cases":60,"_semantic_cache":0}}
 ```
 
-### 5. Import n8n workflow
+### 5. Importar workflow de n8n
 
-Navigate to http://localhost:5678, import `n8n/workflow_ciri_agent.json` (main workflow, 54 nodes) and `n8n/workflow_ciri_errors.json` (error handler). Activate both workflows. Set the main workflow's Error Workflow to "CIRI — Error Handler" in Settings.
+Navegar a http://localhost:5678, importar `n8n/workflow_ciri_agent.json` (workflow principal, 54 nodos). Activar el workflow.
 
-### 6. Run a demo analysis
+### 6. Correr un análisis demo
 
 ```bash
-# Via n8n webhook (explicit orchestration — 54 nodes)
+# Vía webhook de n8n
 curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' \
   -o report_blocker.html
 
-# Via n8n form trigger (native browser form)
-# http://localhost:5678/form/chargeback-form
-
-# Or via direct FastAPI panel (works without n8n)
+# Vía panel de testing de FastAPI (funciona sin n8n)
 # http://localhost:8000/panel
 ```
 
 ---
 
-## API Reference
+## Referencia de API
 
-All endpoints are prefixed with `/api/`. Full interactive docs: http://localhost:8000/docs
+Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
 
-### Core analysis
+### Análisis principal
 
-| Method | Endpoint | Description |
+| Método | Endpoint | Descripción |
 |---|---|---|
-| `POST` | `/api/analyze/resolve` | Policy evaluation + resolution synthesis + guardrails |
-| `POST` | `/api/analyze/judge` | LLM-as-Judge quality evaluation (5 criteria, 1–10 each) |
+| `POST` | `/api/analyze/resolve` | Evaluación de políticas + síntesis de resolución + guardrails |
+| `POST` | `/api/analyze/judge` | Evaluación de calidad LLM-as-Judge (5 criterios, 1–10) |
 
-### Transactions
+### Transacciones
 
-| Method | Endpoint | Description |
+| Método | Endpoint | Descripción |
 |---|---|---|
-| `GET` | `/api/transactions/{id}` | Get transaction by ID |
-| `GET` | `/api/logs/{tx_id}` | Get all event logs for a transaction |
-| `GET` | `/api/clients/{id}/history` | Chargeback history for the client |
+| `GET` | `/api/transactions/{id}` | Transacción por ID |
+| `GET` | `/api/logs/{tx_id}` | Logs de eventos de una transacción |
+| `GET` | `/api/clients/{id}/history` | Historial de chargebacks del cliente |
 
-### Policies (CRUD + semantic search)
+### Políticas (CRUD + búsqueda semántica)
 
-| Method | Endpoint | Description |
+| Método | Endpoint | Descripción |
 |---|---|---|
-| `GET` | `/api/policies/` | List all policies |
-| `GET` | `/api/policies/search` | Semantic search over Qdrant |
-| `GET` | `/api/policies/{code}` | Get policy by code |
-| `POST` | `/api/policies/` | Create policy → auto-indexed in Qdrant |
-| `PUT` | `/api/policies/{code}` | Update policy → auto-re-indexed in Qdrant |
-| `DELETE` | `/api/policies/{code}` | Delete policy → removed from Qdrant |
+| `GET` | `/api/policies/` | Listar todas las políticas |
+| `GET` | `/api/policies/search` | Búsqueda semántica en Qdrant |
+| `GET` | `/api/policies/{code}` | Política por código |
+| `POST` | `/api/policies/` | Crear política → auto-indexada en Qdrant |
+| `PUT` | `/api/policies/{code}` | Actualizar política → re-indexada en Qdrant |
+| `DELETE` | `/api/policies/{code}` | Eliminar política → removida de Qdrant |
 
-### Cases and merchants
+### Casos, comercios y SLA
 
-| Method | Endpoint | Description |
+| Método | Endpoint | Descripción |
 |---|---|---|
-| `GET` | `/api/cases/similar` | Semantic search for similar historical cases |
-| `GET` | `/api/merchants/{name}/risk` | Merchant risk profile |
-| `POST` | `/api/sla/check` | SLA compliance check |
+| `GET` | `/api/cases/similar` | Búsqueda semántica de casos similares |
+| `GET` | `/api/merchants/{name}/risk` | Perfil de riesgo del comercio |
+| `POST` | `/api/sla/check` | Verificación de cumplimiento SLA |
 
-### Feedback, reports, and cache
+### Feedback, reportes y caché
 
-| Method | Endpoint | Description |
+| Método | Endpoint | Descripción |
 |---|---|---|
-| `POST` | `/api/feedback` | Submit analyst feedback; auto-indexes if judge_score >= 8.0 |
-| `POST` | `/api/reports/html` | Generate HTML resolution report (Jinja2) |
-| `GET` | `/api/cache/lookup` | Idempotency cache check (SQLite exact-match) |
+| `POST` | `/api/feedback` | Feedback de analista; auto-indexa si judge_score >= 8.0 |
+| `POST` | `/api/reports/html` | Generar reporte HTML (Jinja2) |
+| `GET` | `/api/cache/lookup` | Verificación de caché de idempotencia (SQLite) |
+
+### Observabilidad
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/api/langfuse/stats` | Estadísticas de Langfuse (traces, tokens, costos) |
+| `GET` | `/health` | Health check de servicios |
 
 ---
 
-## Configuration
+## Configuración
 
-All settings are read from `.env` with the `CB_` prefix (powered by pydantic-settings).
+Todas las settings se leen de `.env` con prefijo `CB_` (via pydantic-settings).
 
 ```env
-# Required
+# Requeridos
 CB_ANTHROPIC_API_KEY=sk-ant-...
 CB_VOYAGE_API_KEY=pa-...
 
-# LLM (optional — defaults shown)
+# LLM (opcionales — defaults mostrados)
 CB_LLM_MODEL=claude-haiku-4-5-20251001
+CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6    # modelo más fuerte para síntesis + judge
 CB_LLM_TEMPERATURE=0.3
 CB_LLM_MAX_TOKENS=4096
 
-# Qdrant (optional)
+# Qdrant (opcionales)
 CB_QDRANT_URL=http://localhost:6333
 CB_QDRANT_POLICIES_COLLECTION=policies
 CB_QDRANT_CASES_COLLECTION=historical_cases
 CB_QDRANT_CACHE_COLLECTION=_semantic_cache
 
-# Embeddings (optional)
+# Embeddings (opcionales)
 CB_EMBEDDING_MODEL=voyage-multilingual-2
 CB_EMBEDDING_DIM=1024
 
-# SQLite (optional)
+# SQLite (opcionales)
 CB_SQLITE_PATH=data/chargeback.db
 CB_DATA_FILE_PATH=data/Similación_dataset_contracargos_.xlsx
 
-# Semantic cache (optional)
+# Caché semántico (opcionales)
 CB_SEMANTIC_CACHE_ENABLED=true
 CB_SEMANTIC_CACHE_THRESHOLD=0.92
 
-# Auto-improvement gate (optional)
+# Gate de auto-mejora (opcional)
 CB_JUDGE_AUTO_INDEX_THRESHOLD=8.0
 
-# Langfuse observability (optional)
+# Observabilidad Langfuse (opcionales)
 CB_LANGFUSE_ENABLED=false
 CB_LANGFUSE_PUBLIC_KEY=pk-lf-...
 CB_LANGFUSE_SECRET_KEY=sk-lf-...
@@ -222,148 +232,143 @@ CB_LANGFUSE_HOST=https://cloud.langfuse.com
 
 ---
 
-## Testing
+## Tests
 
 ```bash
-# All tests (from project root, outside Docker)
+# Todos los tests (desde la raíz, fuera de Docker)
 python -m pytest tests/ -v --tb=short
 
-# Unit tests only (no external services)
+# Solo unit tests (sin servicios externos)
 python -m pytest tests/unit/ -v
 
-# Integration tests
+# Tests de integración
 python -m pytest tests/integration/ -v
-
-# Single test file
-python -m pytest tests/unit/test_analysis.py -v
-
-# With coverage
-python -m pytest tests/ --cov=api.app --cov-report=term-missing
 ```
 
-203 tests across 11 test files (unit + integration):
+244 tests en 13 archivos (unit + integration):
 
 ```
 tests/
-  conftest.py                        # MockLLMClient, sample data, in-memory SQLite
+  conftest.py                        # MockLLMClient, datos de ejemplo, SQLite in-memory
   unit/
-    test_data_loader.py              # Excel → SQLite data loading
-    test_rag_retriever.py            # QueryBuilder enrichment rules
-    test_analysis.py                 # SLA, error patterns, merchant risk, client flags
-    test_guardrails.py               # Post-LLM guardrail validation
-    test_guardrails_edge.py          # Edge cases: boundaries, combined warnings
-    test_db.py                       # Database layer: CRUD, stats, cache
-    test_indexer.py                  # QdrantIndexer with mocked client
-    test_formatter.py                # RAG formatter output verification
-    test_report_generator.py         # Jinja2 HTML rendering + XSS prevention
+    test_data_loader.py              # Carga Excel → SQLite
+    test_rag_retriever.py            # Reglas de enriquecimiento del QueryBuilder
+    test_analysis.py                 # SLA, patrones de error, riesgo de comercio, flags de cliente
+    test_guardrails.py               # Validación post-LLM de guardrails
+    test_guardrails_edge.py          # Edge cases: boundaries, warnings combinados
+    test_db.py                       # Capa de base de datos: CRUD, stats, caché
+    test_indexer.py                  # QdrantIndexer con client mockeado
+    test_formatter.py                # Verificación de output del formatter RAG
+    test_report_generator.py         # Rendering Jinja2 HTML + prevención XSS
+    test_langfuse_stats.py           # Servicio de estadísticas Langfuse
   integration/
-    test_full_flow.py                # Full resolve → judge → feedback → report cycle
-    test_policies_crud.py            # Policy CRUD + Qdrant re-indexing
-    test_routes.py                   # Route-level integration: SLA, cache, health
+    test_full_flow.py                # Ciclo completo resolve → judge → feedback → report
+    test_policies_crud.py            # CRUD de políticas + re-indexación en Qdrant
+    test_routes.py                   # Integración a nivel de rutas: SLA, caché, health
 ```
 
 ---
 
-## Design Decisions
+## Decisiones de Diseño
 
-9 documented decisions with Context, Rationale, Trade-offs, and Production considerations. See [`docs/decisions.md`](docs/decisions.md) for the complete analysis. Key highlights:
+10 decisiones documentadas con Contexto, Razonamiento, Trade-offs y consideraciones de producción. Ver [`docs/decisions.md`](docs/decisions.md) para el análisis completo.
 
-| # | Decision | Why |
-|---|----------|-----|
-| 1 | n8n explicit orchestration (not AI Agent) | Full auditability for regulated fintech — every step visible |
-| 2 | Policies as data, not code | Zero-downtime updates via REST API, LLM evaluates dynamically |
-| 3 | Deterministic QueryBuilder | Free, reproducible, debuggable RAG queries — no LLM needed |
-| 4 | Service layer architecture | Routes thin (~20 lines), testable layers, swappable implementations |
-| 5 | Voyage AI embeddings (1024d) | Top-3 Spanish multilingual on MTEB, generous free tier |
-| 6 | SQLite over Postgres | Self-contained for evaluation, clean migration path |
-| 7 | Post-LLM guardrails | Catches APPROVE+BLOCKER hallucinations, compensation caps |
-| 8 | Judge through FastAPI | Consistent prompt versioning and Langfuse observability |
-| 9 | Semantic cache in Qdrant | ~20% LLM cost reduction for recurring patterns |
+| # | Decisión | Por qué |
+|---|----------|---------|
+| 1 | Orquestación explícita con n8n | Auditabilidad completa para fintech regulada |
+| 2 | Políticas como datos, no código | Actualizaciones sin downtime vía API REST |
+| 3 | QueryBuilder determinístico | Gratis, reproducible, debuggeable |
+| 4 | Arquitectura de capas de servicio | Routes thin (~20 líneas), capas testeables |
+| 5 | Embeddings Voyage AI (1024d) | Top-3 español multilingüe en MTEB, free tier |
+| 6 | SQLite sobre Postgres | Self-contained para evaluación, migración limpia |
+| 7 | Guardrails post-LLM + overrides | "El código decide, el LLM explica" |
+| 8 | Judge a través de FastAPI | Versionado de prompts + observabilidad Langfuse |
+| 9 | Caché semántico en Qdrant | ~20% reducción de costo LLM |
+| 10 | Modelo dual Haiku + Sonnet | 9.1/10 Judge score vs 8.2 con Haiku solo |
 
 ---
 
-## Project Structure
+## Escenarios Demo
+
+Ver [`docs/demo_scenarios.md`](docs/demo_scenarios.md) para 3 escenarios end-to-end:
+
+| TXN | Escenario | Resultado esperado |
+|---|---|---|
+| TXN-00051 | Cripto + fraud_score=8 | BLOCKER → auto-REJECT |
+| TXN-00042 | Credit Visa + score=4 + VIP | HIGH → PENDING_HITL |
+| TXN-00089 | Debit Visa + USA | WARNING (SLA extendido) |
+
+---
+
+## Estructura del Proyecto
 
 ```
 quest_ML/
   api/
     app/
-      config.py             # pydantic-settings (CB_ prefix)
-      main.py               # FastAPI app, CORS, router registration
-      dependencies.py       # lifespan DI, all services initialized once
+      config.py             # pydantic-settings (prefijo CB_)
+      main.py               # App FastAPI, CORS, registro de routers
+      dependencies.py       # DI via lifespan, todos los servicios inicializados una vez
       domain/
-        models.py           # Pydantic models with Field validators
+        models.py           # Modelos Pydantic con Field validators
         enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
-        constants.py        # 27+ centralized thresholds and limits
+        constants.py        # 45+ umbrales y límites centralizados
       services/
         resolution.py       # ResolutionService: resolve + judge + guardrails
-        feedback.py         # FeedbackService: feedback + auto-indexing
+        feedback.py         # FeedbackService: feedback + auto-indexación
+        pipeline.py         # PipelineService: orquestación para panel directo
+        langfuse_stats.py   # Estadísticas de observabilidad
       rag/
         indexer.py          # QdrantIndexer (batch + single point, uuid5 IDs)
-        retriever.py        # QdrantRetriever + QueryBuilder (deterministic)
-        updater.py          # RAGUpdater (hooks for CRUD + feedback)
-        formatter.py        # Shared formatters for LLM context
+        retriever.py        # QdrantRetriever + QueryBuilder (determinístico)
+        updater.py          # RAGUpdater (hooks para CRUD + feedback)
+        formatter.py        # Formatters compartidos + matching de motivos
         embedder.py         # Voyage AI embedder (lazy, thread-safe)
       llm/
         client.py           # Protocol LLMClient + AnthropicClient
-        parsing.py          # parse_json_safely (LLM response parsing)
+        parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/
-          v1_policy_eval.py
-          v1_resolution.py
-          v1_judge.py
-          v1_log_analysis.py
+          v1_policy_eval.py # v1.2 — evaluación de políticas
+          v1_resolution.py  # v3.0 — síntesis de resolución (Sonnet)
+          v1_judge.py       # v2.0 — LLM-as-Judge con rubrics
       analysis/
-        analyzer.py         # SLA, error patterns, merchant risk, client flags
-      routes/               # Thin handlers (~20 lines each)
+        analyzer.py         # SLA, patrones de error, riesgo, flags de cliente
+      routes/               # Handlers thin (~20 líneas cada uno)
       reports/
         generator.py        # Jinja2 → HTML
         templates/
-          case_report.html  # 9 sections + conditional HITL form
-          test_panel.html   # Interactive test panel
+          case_report.html  # Reporte de caso (9 secciones + formulario HITL)
+          test_panel.html   # Panel interactivo de testing
       observability/
         tracer.py           # LangfuseTracer + NoOpTracer (Protocol)
       data/
-        db.py               # SQLite access (pure data, no business logic)
-        loader.py           # Excel → SQLite (handles row 1 skip + emoji sheets)
+        db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
+        loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
-    workflow_ciri_agent.json  # Main workflow (54 nodes: 43 exec + 11 sticky)
-    workflow_ciri_errors.json # Error handler workflow (separate by n8n design)
+    workflow_ciri_agent.json  # Workflow principal (54 nodos: 43 exec + 11 sticky)
   scripts/
-    seed_data.py              # Excel → SQLite + Qdrant seeding
-    update_workflow.py        # Script to add native n8n nodes to workflow JSON
-  tests/
+    seed_data.py              # Seeding Excel → SQLite + Qdrant
+  tests/                      # 244 tests (unit + integration)
   docs/
-    architecture.md
-    decisions.md
-    prompts.md
-    rag_explanation.md
-    mejora_continua.md
-    demo_scenarios.md
+    architecture.md           # Arquitectura del sistema, flujo n8n
+    decisions.md              # 10 decisiones técnicas con razonamiento
+    prompts.md                # Prompts documentados con versionado
+    rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
+    mejora_continua.md        # Feedback loop, Judge, guardrails
+    demo_scenarios.md         # 3 escenarios demo con comandos curl
   docker-compose.yml
   .env.example
 ```
 
 ---
 
-## Demo Scenarios
+## Documentación
 
-See [`docs/demo_scenarios.md`](docs/demo_scenarios.md) for 3 end-to-end scenarios:
-
-| TXN | Scenario | Expected |
-|---|---|---|
-| TXN-00051 | Cripto + fraud_score=8 | BLOCKER → auto-REJECT |
-| TXN-00042 | Credit Visa + score=4 + VIP | HIGH → HITL (analyst review) |
-| TXN-00089 | Debit Visa + USA | WARNING (extended SLA) |
-
----
-
-## Documentation
-
-| Document | Description |
+| Documento | Descripción |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System architecture, n8n flow, ADRs |
-| [`docs/decisions.md`](docs/decisions.md) | 9 technical decisions with rationale and trade-offs |
-| [`docs/prompts.md`](docs/prompts.md) | All 4 versioned prompts with I/O specs |
-| [`docs/rag_explanation.md`](docs/rag_explanation.md) | RAG strategy, collections, QueryBuilder |
-| [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge gate, guardrails |
-| [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | 3 demo scenarios with curl commands |
+| [`docs/architecture.md`](docs/architecture.md) | Arquitectura del sistema, flujo n8n, diagramas |
+| [`docs/decisions.md`](docs/decisions.md) | 10 decisiones técnicas con razonamiento y trade-offs |
+| [`docs/prompts.md`](docs/prompts.md) | Prompts documentados con versionado y evolución |
+| [`docs/rag_explanation.md`](docs/rag_explanation.md) | Estrategia RAG, colecciones, QueryBuilder |
+| [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge, guardrails, auto-mejora |
+| [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | 3 escenarios demo con comandos curl |

@@ -1,182 +1,232 @@
-# Technical Decisions — CIRI Chargeback Agent
+# Decisiones Técnicas — CIRI Chargeback Agent
 
-This document explains the **why** behind each major technical decision. Each entry follows the format: Context → Decision → Rationale → Trade-offs → What I'd Change in Production.
+Este documento explica el **por qué** detrás de cada decisión técnica importante. Formato: Contexto → Decisión → Razonamiento → Trade-offs → Qué haría distinto en producción.
 
----
-
-## 1. n8n Explicit Orchestration vs AI Agent
-
-**Context:** The system needs an orchestration layer for chargeback investigations. n8n offers an AI Agent node that gives the LLM control over which tools to call and in what order. The alternative is explicit orchestration with named nodes.
-
-**Decision:** Use 38 explicit n8n nodes (33 executable + 5 sticky notes) with HTTP Request, Set, Switch, Wait — no AI Agent node, no LLM-based tool calling in the workflow.
-
-**Rationale:** Chargeback investigations in a fintech require full auditability. A regulator or compliance officer must be able to see exactly what happened, in what order, for every case. An AI Agent is a black box — the LLM decides the flow at runtime, making it non-deterministic and impossible to audit reliably. With explicit nodes, every investigation runs the same steps in the same order: 7 context calls → policy evaluation → resolution synthesis → Judge → risk routing. The flow is visible on the n8n canvas, version-controlled as JSON, and reproducible.
-
-**Trade-offs:**
-- (+) Every step is visible and auditable on the canvas
-- (+) Deterministic execution — same steps, same order, every time
-- (+) Adding a new data source = one HTTP Request + one Set node
-- (-) Less flexible — adding conditional branches requires manual node wiring
-- (-) More nodes to maintain visually
-
-**What I'd change in production:** Nothing fundamental. The explicit orchestration pattern is the right call for regulated fintech. I'd add monitoring nodes (Prometheus metrics per step) and a dead-letter queue for failed investigations.
+Una nota sobre el stack: este proyecto fue construido con las restricciones reales de un free tier: n8n Cloud (trial), Render (free tier con cold starts de ~50s), Qdrant Cloud (1GB free), Voyage AI (free tier). Cada decisión refleja ese contexto — no tuve acceso a infraestructura dedicada, pero el diseño está pensado para escalar cuando lo haya.
 
 ---
 
-## 2. Policies as Data, not Code
+## 1. Orquestación explícita con n8n (no AI Agent)
 
-**Context:** The system evaluates 17+ chargeback policies (fraud thresholds, crypto blockers, SLA rules). These policies change as regulations evolve. The traditional approach is hardcoding rules in Python conditionals.
+**Contexto:** El sistema necesita un orquestador para las investigaciones de contracargos. n8n tiene un nodo "AI Agent" que le da al LLM control sobre qué tools llamar y en qué orden. La alternativa es orquestación explícita con nodos nombrados.
 
-**Decision:** Store policies as Markdown documents in Qdrant (for semantic retrieval) and as rows in SQLite (for exact lookup). The LLM evaluates policies against transactions — not deterministic Python code.
+**Decisión:** Usar 54 nodos explícitos en n8n (43 ejecutables + 11 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
 
-**Rationale:** If an analyst can edit a policy via `PUT /api/policies/{code}` and the system immediately uses the new version (Qdrant re-indexed on every write, no redeploy), then the evaluation must also be dynamic. An LLM can read a natural-language policy and apply it to a transaction — something a hardcoded `if` statement cannot do for arbitrary policy text. This also means domain experts can author policies without writing code.
+**Razonamiento:** En una fintech, un regulador o un oficial de compliance necesita ver exactamente qué pasó, en qué orden, para cada caso. Un AI Agent es una caja negra — el LLM decide el flujo en runtime, lo que lo hace no-determinístico e imposible de auditar. Con nodos explícitos, cada investigación sigue los mismos pasos en el mismo orden: 7 llamadas de contexto → evaluación de políticas → síntesis de resolución → Judge → ruteo por riesgo. El flujo queda visible en el canvas de n8n, versionado como JSON, y es reproducible.
+
+Elegí n8n porque CIRI lo usa como herramienta diaria. Traté de usar la mayor cantidad de nodos nativos posible (Switch, Wait, Set, IF, Code) en lugar de depender solo de HTTP Requests.
 
 **Trade-offs:**
-- (+) Zero-downtime policy updates — edit, save, immediately effective
-- (+) Domain experts can author policies in natural language
-- (+) New policy types don't require code changes
-- (-) LLM evaluation costs tokens per policy per investigation
-- (-) LLM can hallucinate a verdict — mitigated by post-LLM guardrails
+- (+) Cada paso es visible y auditable en el canvas
+- (+) Ejecución determinística — mismos pasos, mismo orden, siempre
+- (+) Agregar una fuente de datos nueva = un HTTP Request + un Set
+- (-) Menos flexible — branches condicionales requieren wiring manual
+- (-) Más nodos que mantener visualmente
 
-**What I'd change in production:** Add policy versioning (git-like history with rollback). Add A/B testing — run new policy versions alongside old ones to compare verdicts before promoting. Add a deterministic pre-filter for trivial policies (e.g., crypto blocker) to save LLM tokens.
+**En producción:** Nada cambiaría en lo fundamental. Agregaría métricas por step (Prometheus) y una dead-letter queue para investigaciones fallidas.
 
 ---
 
-## 3. Deterministic QueryBuilder for RAG
+## 2. Políticas como datos, no como código
 
-**Context:** The system retrieves relevant policies and historical cases from Qdrant before LLM evaluation. The query sent to Qdrant could be generated by an LLM (natural language → query) or by deterministic rules.
+**Contexto:** El sistema evalúa 17+ políticas de contracargos (umbrales de fraude, blocker de cripto, reglas de SLA). Estas políticas cambian con las regulaciones. Lo tradicional es hardcodear reglas en condicionales de Python.
 
-**Decision:** Use a rule-based `QueryBuilder` that constructs Qdrant queries from structured transaction fields. Example: a Cripto payment always appends `"criptomonedas no reversible blocker"`; fraud_score < 30 appends `"alto riesgo fraude score bajo"`.
+**Decisión:** Almacenar políticas como documentos Markdown en Qdrant (para retrieval semántico) y como filas en SQLite (para lookup exacto). El LLM evalúa las políticas contra la transacción — no código Python determinístico.
 
-**Rationale:** Three reasons: (1) **Cost** — no token spend on query generation, (2) **Reproducibility** — same transaction always generates the same query, making debugging straightforward, (3) **Speed** — saves one LLM round-trip per investigation. The enrichment rules encode domain knowledge (e.g., "crypto payments are irreversible" is always relevant context for retrieval).
+**Razonamiento:** Si un analista puede editar una política vía `PUT /api/policies/{code}` y el sistema la usa inmediatamente (Qdrant se re-indexa en cada escritura, sin redeploy), entonces la evaluación también tiene que ser dinámica. Un LLM puede leer una política en lenguaje natural y aplicarla a una transacción — algo que un `if` hardcodeado no puede hacer para texto de política arbitrario.
+
+Esto también significa que expertos de dominio pueden redactar políticas sin escribir código. En CIRI, donde las políticas de contracargos cambian frecuentemente, esto es crítico.
 
 **Trade-offs:**
-- (+) Free — zero token cost for query building
-- (+) Deterministic — same input always produces the same query
-- (+) Fast — no LLM latency for this step
-- (-) Requires manual maintenance when new query patterns emerge
-- (-) May miss relevant documents that a creative LLM query would surface
+- (+) Actualizaciones de política sin downtime — editar, guardar, efectivo inmediatamente
+- (+) Expertos de dominio pueden redactar políticas en lenguaje natural
+- (+) Nuevos tipos de política no requieren cambios de código
+- (-) La evaluación LLM cuesta tokens por política por investigación
+- (-) El LLM puede alucinar un veredicto — mitigado por guardrails post-LLM
 
-**What I'd change in production:** Add a feedback loop — when the Judge scores a case low and the retrieved policies seem incomplete, log the gap. Periodically review gaps and add new enrichment rules. Consider hybrid: deterministic query + optional LLM "query expansion" for edge cases.
+**En producción:** Agregaría versionado de políticas (historial tipo git con rollback), A/B testing de versiones de políticas, y un pre-filtro determinístico para políticas triviales (ej: cripto blocker) para ahorrar tokens.
 
 ---
 
-## 4. Service Layer Architecture
+## 3. QueryBuilder determinístico para RAG
 
-**Context:** FastAPI routes handle HTTP requests. The question is where to put business logic — in routes, in services, or distributed across modules.
+**Contexto:** El sistema recupera políticas y casos históricos relevantes de Qdrant antes de la evaluación LLM. El query a Qdrant podría generarse por LLM o por reglas determinísticas.
 
-**Decision:** Three-layer separation:
-- **Routes** (~20 lines each) — HTTP handling only: parse request, call service, return response
-- **Services** (`ResolutionService`, `FeedbackService`) — orchestrate multiple steps (LLM calls, guardrails, caching)
-- **Analyzer** (`analysis/analyzer.py`) — pure business logic: SLA rules, risk flags, error patterns
+**Decisión:** Usar un `QueryBuilder` basado en reglas que construye queries de Qdrant a partir de campos estructurados de la transacción. Ejemplo: un pago Cripto siempre agrega `"criptomonedas no reversible blocker"`; fraud_score < 30 agrega `"alto riesgo fraude score bajo"`.
 
-Data access is isolated in `data/db.py`. Domain definitions (models, enums, constants) have zero external dependencies.
+**Razonamiento:** Tres razones: (1) **Costo** — cero tokens gastados en generación de queries, (2) **Reproducibilidad** — misma transacción siempre genera el mismo query, facilitando debugging, (3) **Velocidad** — ahorra un round-trip de LLM por investigación. Con Voyage AI en free tier y Qdrant Cloud free, cada token y cada milisegundo cuenta.
 
-**Rationale:** This makes each layer independently testable. Unit tests mock only the layer below. Routes can be tested with `TestClient` and mock services. Services can be tested with mock LLM clients. The analyzer is pure functions — no mocks needed.
+Las reglas de enriquecimiento codifican conocimiento de dominio (ej: "pagos cripto son irreversibles" siempre es contexto relevante para retrieval). Además, hay reranking determinístico: boost de 0.05 por método de pago coincidente y 0.03 por país.
 
 **Trade-offs:**
-- (+) Each layer has a single responsibility
-- (+) Unit tests are fast and focused
-- (+) Easy to swap implementations (e.g., different LLM provider)
-- (-) More files to navigate
-- (-) Simple operations cross 3 layers
+- (+) Gratis — cero costo de tokens para construir queries
+- (+) Determinístico — misma entrada siempre produce el mismo query
+- (+) Rápido — sin latencia de LLM para este paso
+- (-) Requiere mantenimiento manual cuando emergen nuevos patrones
+- (-) Puede perder documentos que un query creativo de LLM encontraría
 
-**What I'd change in production:** Add a CQRS pattern — separate read models (dashboard, reporting) from write models (feedback, policy updates). Add domain events so services don't directly call each other.
+**En producción:** Agregaría un feedback loop — cuando el Judge da score bajo y las políticas recuperadas parecen incompletas, loguear el gap. También consideraría un modo híbrido: query determinístico + expansión LLM opcional para edge cases.
 
 ---
 
-## 5. Voyage AI Embeddings (`voyage-multilingual-2`, 1024d)
+## 4. Arquitectura de capas de servicio
 
-**Context:** The system needs embeddings for semantic search in Qdrant (policies and cases are in Spanish). Options: local model (sentence-transformers), OpenAI embeddings, or Voyage AI.
+**Contexto:** Las rutas de FastAPI manejan requests HTTP. La pregunta es dónde poner la lógica de negocio.
 
-**Decision:** Use Voyage AI's `voyage-multilingual-2` model (1024 dimensions) via API. Lazy initialization with thread-safe double-checked locking.
+**Decisión:** Separación en tres capas:
+- **Routes** (~20 líneas cada una) — solo HTTP: parsear request, llamar servicio, devolver response
+- **Services** (`ResolutionService`, `FeedbackService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching)
+- **Analyzer** (`analysis/analyzer.py`) — lógica de negocio pura: reglas SLA, flags de riesgo, patrones de error
 
-**Rationale:** Three factors drove this choice: (1) **Multilingual quality** — `voyage-multilingual-2` consistently benchmarks top-3 for Spanish text retrieval on MTEB, outperforming `text-embedding-3-small` and local `paraphrase-multilingual-MiniLM-L12-v2`, (2) **Free tier** — Voyage AI offers a generous free tier for development and small-scale production, (3) **1024 dimensions** — good balance between quality and Qdrant storage/search cost.
+El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, constants) tienen cero dependencias externas.
+
+**Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
+
+Con 244 tests pasando, esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
-- (+) Best-in-class Spanish multilingual embeddings
-- (+) Free tier sufficient for this scale
-- (+) API-based — no GPU, no model download, no OOM risks
-- (-) External dependency — API latency + availability risk
-- (-) Vendor lock-in on embedding dimensions (migration requires re-indexing)
+- (+) Cada capa tiene una sola responsabilidad
+- (+) Tests unitarios son rápidos y enfocados
+- (+) Fácil de intercambiar implementaciones (ej: distinto proveedor LLM)
+- (-) Más archivos para navegar
+- (-) Operaciones simples cruzan 3 capas
 
-**What I'd change in production:** Add an embedding cache (hash text → cached vector) to reduce API calls for re-indexed documents. Add a local fallback model for offline development. Monitor embedding API latency and set circuit breaker thresholds.
+**En producción:** Agregaría CQRS — modelos de lectura separados (dashboard, reporting) de modelos de escritura (feedback, actualizaciones de política).
 
 ---
 
-## 6. SQLite over Postgres
+## 5. Embeddings Voyage AI (`voyage-multilingual-2`, 1024d)
 
-**Context:** The system needs structured storage for transactions, cases, logs, policies, and feedback. Options: PostgreSQL, SQLite, or a cloud database.
+**Contexto:** El sistema necesita embeddings para búsqueda semántica en Qdrant. Las políticas y casos están en español. Opciones: modelo local (sentence-transformers), OpenAI embeddings, o Voyage AI.
 
-**Decision:** Use SQLite with parameterized queries. Single `.db` file, no server process, zero configuration.
+**Decisión:** Usar `voyage-multilingual-2` de Voyage AI (1024 dimensiones) vía API.
 
-**Rationale:** For a technical evaluation with ~100 transactions and ~60 cases, SQLite is the pragmatic choice. It eliminates an entire infrastructure component (database server), simplifies Docker Compose, and makes the project self-contained. The data access layer (`db.py`) uses standard SQL — migrating to Postgres requires only changing the connection string and minor dialect adjustments.
+**Razonamiento:** Tres factores: (1) **Calidad multilingüe** — `voyage-multilingual-2` consistentemente benchmarkea top-3 para retrieval de texto en español en MTEB, superando a `text-embedding-3-small` y modelos locales tipo `paraphrase-multilingual-MiniLM-L12-v2`, (2) **Free tier** — Voyage AI ofrece un free tier generoso, suficiente para este proyecto, (3) **1024 dimensiones** — buen balance entre calidad y costo de almacenamiento/búsqueda en Qdrant.
+
+El free tier fue un factor decisivo. Para una prueba técnica no tiene sentido pagar por embeddings cuando hay una opción de igual o mejor calidad gratuita.
 
 **Trade-offs:**
-- (+) Zero configuration — no server, no credentials, no networking
-- (+) Self-contained — the entire database is one file
-- (+) Portable — works on any OS, no Docker dependency for the DB
-- (-) Single-writer — no concurrent write support
-- (-) No JSONB, CTEs with window functions, or advanced indexing
+- (+) Embeddings multilingües best-in-class para español
+- (+) Free tier suficiente para esta escala
+- (+) API-based — sin GPU, sin descarga de modelo, sin OOM
+- (-) Dependencia externa — latencia API + riesgo de disponibilidad
+- (-) Vendor lock-in en dimensiones de embedding (migrar requiere re-indexar)
 
-**What I'd change in production:** Migrate to PostgreSQL for concurrent access, JSONB columns for flexible policy metadata, and proper backup/restore workflows. Use SQLAlchemy Core (not ORM) for dialect-agnostic queries. The current parameterized query patterns port cleanly.
+**En producción:** Agregaría un cache de embeddings (hash de texto → vector cacheado) para reducir llamadas API en documentos re-indexados. También un modelo local como fallback para desarrollo offline.
 
 ---
 
-## 7. Post-LLM Guardrails
+## 6. SQLite en vez de Postgres
 
-**Context:** The LLM generates resolution recommendations (APPROVE/REJECT/ESCALATE). LLMs can hallucinate — e.g., recommending APPROVE when a BLOCKER policy is active, or assigning 99% confidence despite multiple policy failures.
+**Contexto:** El sistema necesita almacenamiento estructurado para transacciones, casos, logs, políticas y feedback.
 
-**Decision:** Three post-LLM guardrails in `ResolutionService._validate_resolution()`:
-1. **APPROVE + BLOCKER** — if the LLM recommends APPROVE but a BLOCKER verdict exists, auto-correct to REJECT and flag as likely hallucination
-2. **Excessive compensation** — if `compensation_amount_usd > 110% of transaction amount`, flag for review
-3. **Overconfident with failures** — if `confidence > 0.95` but 2+ policies have FAIL verdict, flag as suspicious
+**Decisión:** Usar SQLite con queries parametrizadas. Un archivo `.db`, sin proceso servidor, cero configuración.
 
-**Rationale:** These are deterministic checks that catch the most dangerous LLM failure modes. A false APPROVE on a BLOCKER case could cost the company thousands. A false confidence score could skip human review on a risky case. The guardrails are cheap (pure Python, no LLM call) and run after every resolution.
+**Razonamiento:** Para una evaluación técnica con ~100 transacciones y ~60 casos, SQLite es la opción pragmática. Elimina un componente de infraestructura completo (servidor de DB), simplifica Docker Compose, y hace el proyecto self-contained. En Render free tier, SQLite es la opción natural — no hay Postgres managed sin costo.
+
+La capa de acceso a datos (`db.py`) usa SQL estándar con queries parametrizadas — migrar a Postgres requeriría solo cambiar el connection string y ajustes menores de dialecto.
 
 **Trade-offs:**
-- (+) Catches the highest-impact LLM errors
-- (+) Zero latency — pure Python checks
-- (+) Auto-correction for the most critical case (APPROVE + BLOCKER)
-- (-) Hardcoded thresholds (110%, 0.95) — may need tuning
-- (-) Can't catch semantic errors (e.g., wrong policy cited)
+- (+) Cero configuración — sin servidor, sin credenciales, sin networking
+- (+) Self-contained — toda la base de datos es un archivo
+- (+) Portable — funciona en cualquier OS
+- (-) Single-writer — sin soporte de escritura concurrente
+- (-) Sin JSONB, CTEs con window functions, ni indexación avanzada
+- (-) En Render free tier, el filesystem es efímero — la DB se recrea del Excel en cada cold start
 
-**What I'd change in production:** Add more guardrails: cross-reference cited policy codes against actually retrieved policies, verify that the transaction ID in the response matches the request. Add threshold configurability via `constants.py`. Log every guardrail trigger to a dedicated audit table for pattern analysis.
+**En producción:** Migrar a PostgreSQL para acceso concurrente, columnas JSONB para metadata flexible de políticas, y workflows de backup/restore apropiados.
 
 ---
 
-## 8. Judge Through FastAPI (not direct Anthropic API)
+## 7. Guardrails post-LLM + overrides determinísticos
 
-**Context:** The LLM-as-Judge evaluates the quality of each resolution across 5 criteria. Initially, n8n called the Anthropic API directly via an HTTP Request node. This was later changed to route through FastAPI (`POST /api/analyze/judge`).
+**Contexto:** El LLM genera recomendaciones de resolución (APPROVE/REJECT/ESCALATE). Los LLMs pueden alucinar — ej: recomendar APPROVE cuando hay un BLOCKER activo.
 
-**Decision:** Route the Judge call through FastAPI, where the prompt, model, and response parsing are managed in Python code (`v1_judge.py` + `ResolutionService`).
+**Decisión:** Dos mecanismos complementarios:
 
-**Rationale:** Three benefits: (1) **Prompt versioning** — the judge prompt lives in `v1_judge.py`, version-controlled alongside the code that uses it. Inlining it in an n8n HTTP Request body makes it invisible to code review. (2) **Observability** — Langfuse traces capture the full judge call (tokens, latency, cost) alongside the resolution call in the same trace. (3) **Consistency** — all LLM calls go through the same `AnthropicClient` with the same error handling, retry logic, and configuration.
+**Overrides determinísticos** (el código siempre gana):
+- 6 de 11 campos de la resolución son calculados por Python y sobreescriben lo que diga el LLM: `recommended_action`, `risk_level`, `risk_reason`, `requires_hitl`, `precedent_summary`, `policy_verdicts`
+- La whitelist de BLOCKER: solo `POL-EXC-003` (cripto) puede producir veredictos BLOCKER. Cualquier otro BLOCKER del LLM se degrada a FAIL automáticamente.
+
+**Guardrails de validación** (detección de inconsistencias):
+1. APPROVE + BLOCKER → auto-corrección a REJECT + flag de alucinación
+2. REJECT sin BLOCKER → auto-corrección a PENDING_HITL
+3. Compensación excesiva (> 110% del monto) → flag para revisión
+4. Confianza excesiva (> 0.95 con 2+ FAILs) → flag como sospechoso
+
+**Razonamiento:** La filosofía es "el código decide, el LLM explica." El sistema de guardrails de la consigna es uno de los ejes explícitos, y me pareció fundamental que las decisiones críticas (acción, nivel de riesgo, escalamiento) no dependan de que el LLM interprete correctamente. Python calcula la acción basándose en los veredictos de política; el LLM llena los campos de texto (justificación, next_steps, log_summary).
 
 **Trade-offs:**
-- (+) Prompt is version-controlled in Python, not buried in n8n JSON
-- (+) Full Langfuse observability for every LLM call
-- (+) Consistent error handling across all LLM operations
-- (-) One extra network hop (n8n → FastAPI → Anthropic instead of n8n → Anthropic)
-- (-) FastAPI becomes a single point of failure for all LLM calls
+- (+) Atrapa los errores de LLM de mayor impacto
+- (+) Cero latencia — checks puros de Python
+- (+) Auto-corrección para el caso más crítico (APPROVE + BLOCKER)
+- (-) Umbrales hardcodeados (110%, 0.95) — pueden necesitar tuning
+- (-) No puede atrapar errores semánticos (ej: política citada incorrectamente)
 
-**What I'd change in production:** Add a circuit breaker on the FastAPI side for Anthropic API failures. Add a fallback judge (simpler heuristic scoring) when the LLM judge is unavailable. Consider running the Judge asynchronously — it doesn't need to block the response.
+**En producción:** Agregaría más guardrails: verificación cruzada de códigos de política citados contra las efectivamente recuperadas, y logging de cada trigger de guardrail a una tabla de auditoría dedicada.
 
 ---
 
-## 9. Semantic Cache in Qdrant
+## 8. Judge a través de FastAPI (no API directa de Anthropic)
 
-**Context:** Similar chargeback cases (same merchant, same payment method, similar amounts) often produce identical LLM resolutions. Calling the LLM for every case is expensive and slow.
+**Contexto:** El LLM-as-Judge evalúa la calidad de cada resolución en 5 criterios. Inicialmente, n8n llamaba a la API de Anthropic directamente vía HTTP Request. Después lo cambié para que pase por FastAPI (`POST /api/analyze/judge`).
 
-**Decision:** Use a `_semantic_cache` collection in Qdrant. Before calling the LLM for resolution, embed the query and search the cache (threshold 0.92). If a hit is found, return the cached resolution immediately — no LLM call.
+**Decisión:** Rutear el Judge por FastAPI, donde el prompt, modelo y parsing están gestionados en código Python (`v2_judge.py` + `ResolutionService`).
 
-**Rationale:** The 0.92 threshold balances cache hit rate against accuracy. At 0.92, only near-identical cases match — same merchant type, same payment method, similar amounts. This is safe because the policies that apply to these cases are the same. The cache is stored in the same Qdrant instance already running for RAG, so there's no additional infrastructure.
+**Razonamiento:** Tres beneficios: (1) **Versionado de prompts** — el prompt del Judge vive en `v1_judge.py`, versionado junto al código que lo usa. Inlinearlo en un body de HTTP Request de n8n lo hace invisible al code review. (2) **Observabilidad** — Langfuse captura la llamada completa del Judge (tokens, latencia, costo) junto con la resolución en el mismo trace. (3) **Consistencia** — todas las llamadas LLM pasan por el mismo `AnthropicClient` con el mismo error handling, retry logic y configuración.
+
+Esto también me permitió iterar rápido en el prompt del Judge. La versión 2.0 con rubrics granulares (5 niveles por criterio) fue clave para romper el techo de 8.6 que tenía con la versión anterior.
 
 **Trade-offs:**
-- (+) Reduces LLM costs by ~20% for recurring merchant patterns
-- (+) Sub-100ms response for cache hits vs 3-5s for LLM calls
-- (+) No additional infrastructure — reuses existing Qdrant
-- (-) Cache invalidation is implicit — new policies don't automatically invalidate cached resolutions
-- (-) 0.92 threshold may be too aggressive or too conservative depending on the policy landscape
+- (+) Prompt versionado en Python, no enterrado en JSON de n8n
+- (+) Observabilidad completa en Langfuse para cada llamada LLM
+- (+) Consistente error handling en todas las operaciones LLM
+- (-) Un hop de red extra (n8n → FastAPI → Anthropic en vez de n8n → Anthropic)
+- (-) FastAPI se vuelve single point of failure para todas las llamadas LLM
 
-**What I'd change in production:** Add explicit cache invalidation when policies are updated (clear cache entries that reference the modified policy). Add a TTL (e.g., 7 days) so cached resolutions don't persist indefinitely. Add cache hit/miss metrics to Langfuse for monitoring the effective hit rate.
+**En producción:** Circuit breaker en FastAPI para fallos de Anthropic. Judge asíncrono — no necesita bloquear la respuesta.
+
+---
+
+## 9. Caché semántico en Qdrant
+
+**Contexto:** Casos de contracargo similares (mismo comercio, mismo método de pago, montos similares) frecuentemente producen resoluciones LLM idénticas. Llamar al LLM para cada caso es caro y lento.
+
+**Decisión:** Usar una colección `_semantic_cache` en Qdrant. Antes de llamar al LLM para resolución, embedear el query y buscar en el cache (threshold 0.92). Si hay hit, devolver la resolución cacheada inmediatamente — sin llamada LLM.
+
+**Razonamiento:** Con Sonnet para synthesis y Judge, el costo por investigación no es trivial. El umbral de 0.92 balancea tasa de hit contra precisión. A 0.92, solo casos casi idénticos matchean — mismo tipo de comercio, mismo método de pago, montos similares. Esto es seguro porque las políticas que aplican a estos casos son las mismas. El cache usa la misma instancia de Qdrant que ya está corriendo para RAG, así que no hay infraestructura adicional.
+
+**Trade-offs:**
+- (+) Reduce costos LLM ~20% para patrones recurrentes de comercio
+- (+) Respuesta sub-100ms para cache hits vs 3-5s para llamadas LLM
+- (+) Sin infraestructura adicional — reutiliza Qdrant existente
+- (-) Invalidación de cache es implícita — nuevas políticas no invalidan automáticamente resoluciones cacheadas
+- (-) Umbral 0.92 puede ser muy agresivo o muy conservador según el landscape de políticas
+
+**En producción:** Invalidación explícita de cache cuando se actualizan políticas. TTL (ej: 7 días) para que resoluciones cacheadas no persistan indefinidamente. Métricas de hit/miss en Langfuse.
+
+---
+
+## 10. Modelo dual: Haiku para evaluación, Sonnet para síntesis y Judge
+
+**Contexto:** El pipeline tiene 3 llamadas LLM: evaluación de políticas (Call 1), síntesis de resolución (Call 2), y Judge de calidad (Call 3). Usar Sonnet para todo es caro; usar Haiku para todo limita la calidad.
+
+**Decisión:** Modelo dual configurable vía `CB_LLM_MODEL_RESOLUTION`:
+- **Call 1 (Policy Eval):** Haiku — evaluación estructurada, input/output bien definido
+- **Call 2 (Synthesis):** Sonnet — razonamiento analítico, conexión de evidencias
+- **Call 3 (Judge):** Sonnet — discriminación de calidad, rubrics granulares
+
+**Razonamiento:** Empecé con Haiku para todo. El Judge promediaba 8.2/10 y no subía. Probé iterar el prompt del resolution durante 5+ rondas — mismo 8.2. Identifiqué dos cuellos de botella: (1) Haiku no tiene la capacidad analítica para generar justificaciones con profundidad ("Haiku = robot, copia datos, no razona"), (2) Haiku como Judge tiene un techo de scoring en ~8.6 — siempre encuentra 3 debilidades y asigna los mismos scores.
+
+Cambiar Call 2 a Sonnet subió el score a 8.6. Cambiar Call 3 a Sonnet subió a 8.9. Con fixes puntuales llegué a 9.1.
+
+El costo adicional de Sonnet es manejable: Call 2 y Call 3 juntos son ~3-4K tokens de output, que a precios de Sonnet son ~$0.05 por investigación. Call 1 en Haiku mantiene el costo bajo para la parte más voluminosa (17 evaluaciones de política).
+
+**Trade-offs:**
+- (+) Mejor calidad de resolución (9.1 vs 8.2 promedio)
+- (+) Judge con mejor discriminación — scores más granulares y feedback más accionable
+- (+) Call 1 en Haiku mantiene costos controlados
+- (-) 2 clientes LLM que gestionar (pero la config es una env var)
+- (-) Más costoso que Haiku puro (~3x para Calls 2+3)
+
+**En producción:** Consideraría Haiku para los 3 calls en modo "alto volumen" (donde el costo importa más que la calidad individual) y Sonnet para casos de alto valor o cuando el Judge previo dio score bajo. La configuración ya es una env var, así que el switch es instantáneo.
