@@ -202,9 +202,10 @@ class ResolutionService:
     def _determine_outcome(policy_verdicts: list[dict], tx_data: dict) -> dict:
         """Deterministic action/risk from policy verdicts. No LLM involved.
 
-        Rules (mirror prompt documentation):
+        Rules:
         - Any BLOCKER verdict → REJECT + risk BLOCKER
         - Any FAIL (no BLOCKER) → PENDING_HITL + risk HIGH or MEDIUM
+        - Any requires_human_review=true → PENDING_HITL (safety net)
         - All PASS/WARNING → APPROVE + risk LOW or MEDIUM
         """
         has_blocker = any(
@@ -213,6 +214,9 @@ class ResolutionService:
         fail_count = sum(
             1 for v in policy_verdicts
             if v.get("verdict") in (VerdictType.FAIL, VerdictType.BLOCKER)
+        )
+        needs_human = any(
+            v.get("requires_human_review") is True for v in policy_verdicts
         )
         fraud_score = int(tx_data.get("fraud_score", FRAUD_SCORE_DEFAULT))
 
@@ -231,12 +235,15 @@ class ResolutionService:
             action = ResolutionOutcome.REJECT
             requires_hitl = False
             hitl_reason = None
-        elif fail_count > 0:
+        elif fail_count > 0 or needs_human:
             action = ResolutionOutcome.PENDING_HITL
             requires_hitl = True
-            hitl_reason = (
-                f"{fail_count} violacion(es) de politica — requiere revision de analista"
-            )
+            if fail_count > 0:
+                hitl_reason = (
+                    f"{fail_count} violacion(es) de politica — requiere revision de analista"
+                )
+            else:
+                hitl_reason = "Evaluacion de politicas requiere revision humana"
         else:
             action = ResolutionOutcome.APPROVE
             requires_hitl = False

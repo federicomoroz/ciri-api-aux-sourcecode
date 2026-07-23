@@ -282,3 +282,28 @@ class TestDetermineOutcome:
 
         assert outcome["recommended_action"] == "APPROVE"
         assert outcome["risk_level"] == "LOW"
+
+    def test_requires_human_review_forces_pending_hitl(self):
+        """Even without FAILs, requires_human_review=true → PENDING_HITL."""
+        verdicts = [
+            {"policy_code": "POL-CB-005", "verdict": "WARNING", "reasoning": "Needs review",
+             "requires_human_review": True},
+            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+        ]
+        tx = {"fraud_score": 85}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "PENDING_HITL"
+        assert outcome["requires_hitl"] is True
+        assert "revision humana" in outcome["hitl_reason"]
+
+    def test_requires_human_review_false_no_effect(self):
+        """requires_human_review=false doesn't force PENDING_HITL."""
+        verdicts = [
+            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok",
+             "requires_human_review": False},
+        ]
+        tx = {"fraud_score": 85}
+        outcome = ResolutionService._determine_outcome(verdicts, tx)
+
+        assert outcome["recommended_action"] == "APPROVE"

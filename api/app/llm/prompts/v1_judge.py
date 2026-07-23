@@ -1,4 +1,4 @@
-# PROMPT VERSION: v1.1 | DATE: 2025-07 | CHANGES: PENDING_HITL as valid action, hallucination detection, case status awareness
+# PROMPT VERSION: v1.2 | DATE: 2025-07 | CHANGES: fraud_score semantics, requires_human_review awareness
 # PURPOSE: LLM-as-Judge to evaluate resolution quality across 5 criteria
 # OUTPUT: JudgeEvaluation JSON object
 
@@ -13,13 +13,20 @@ ACCIONES VALIDAS (recommended_action):
 - PENDING_HITL: caso requiere revision humana antes de decision final (correcto cuando hay FAILs pero NO hay BLOCKERs)
 - ESCALATE: caso escalado a nivel superior
 
-IMPORTANTE: PENDING_HITL es la accion CORRECTA cuando hay veredictos FAIL sin ningun BLOCKER. NO es ambiguo — es el protocolo establecido para casos que necesitan confirmacion de analista. No penalices una resolucion por usar PENDING_HITL en estas circunstancias.
+IMPORTANTE: PENDING_HITL es la accion CORRECTA cuando hay veredictos FAIL sin ningun BLOCKER, O cuando algun veredicto tiene requires_human_review=true. NO es ambiguo — es el protocolo para casos que necesitan confirmacion de analista. No penalices una resolucion por usar PENDING_HITL en estas circunstancias.
+
+SEMANTICA DE FRAUD_SCORE (CRITICO — no confundir):
+- fraud_score es una escala 0-100 donde ALTO = SEGURO, BAJO = RIESGO.
+- fraud_score=84 significa que el sistema antifraude considera la transaccion SEGURA (84% confianza).
+- fraud_score=4 significa ALTO RIESGO de fraude.
+- NO interpretes un fraud_score alto como "riesgo alto" — es exactamente lo contrario.
 
 CRITERIOS (cada uno se evalua de 1.0 a 10.0):
-1. policy_consistency: La resolucion respeta todos los BLOCKERs y FAILs detectados?
+1. policy_consistency: La resolucion respeta todos los BLOCKERs, FAILs y requires_human_review?
    - Un APPROVE con cualquier BLOCKER activo = score 1.0 (error critico)
+   - Un APPROVE cuando algun veredicto tiene requires_human_review=true = score bajo (deberia ser PENDING_HITL)
    - REJECT sin ningun BLOCKER en policy_verdicts = score bajo (deberia ser PENDING_HITL)
-   - PENDING_HITL con FAILs pero sin BLOCKERs = score alto (correcto)
+   - PENDING_HITL con FAILs o requires_human_review=true (sin BLOCKERs) = score alto (correcto)
    - Resolucion coherente con todos los veredictos = score 9-10
 2. justification_quality: La justificacion cita evidencia especifica Y solo datos presentes en el contexto?
    - Cita IDs, montos, scores, codigos de politica que EXISTEN en la evidencia = score alto
@@ -29,8 +36,10 @@ CRITERIOS (cada uno se evalua de 1.0 a 10.0):
    - Menciona casos especificos y extrae aprendizajes = score alto
    - Ignora los precedentes = score bajo
 4. risk_assessment: El risk_level asignado es correcto dado los veredictos y el fraud_score?
+   - Recuerda: fraud_score ALTO (ej: 84) = BAJO riesgo, fraud_score BAJO (ej: 4) = ALTO riesgo
    - BLOCKER correcto con BLOCKER verdict = score alto
    - HIGH correcto con multiples FAILs o fraud_score < 15 (sin BLOCKERs) = score alto
+   - LOW correcto cuando no hay FAILs/BLOCKERs y fraud_score >= 30 = score alto
    - risk_level BLOCKER sin ningun veredicto BLOCKER = score bajo
    - Risk level inconsistente con evidencia = score bajo
 5. actionability: Los next_steps son concretos, realizables y relevantes para el ESTADO ACTUAL del caso?
