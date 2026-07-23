@@ -53,7 +53,7 @@ curl -X PUT http://localhost:8000/api/policies/POL-FRD-001 \
 **n8n Explicit Orchestrator + FastAPI Tools + Qdrant + SQLite**
 
 ```
-n8n (22 nodes, explicit) = orchestrator — every step is a named, visible node
+n8n (54 nodes, explicit) = orchestrator — every step is a named, visible node
 FastAPI                  = pure execution — thin HTTP endpoints, all business logic in services
 Qdrant                   = semantic truth (policies + historical cases + semantic cache)
 SQLite                   = structured truth (transactions, logs, cases — exact lookup)
@@ -66,7 +66,7 @@ SQLite                   = structured truth (transactions, logs, cases — exact
 - Qdrant RAG → context (which policies apply, what was done before in similar cases)
 - Both combined in the AI Agent's context → justified recommendation with citations
 
-### n8n Flow (22 nodes, explicit)
+### n8n Flow (54 nodes: 43 exec + 11 sticky)
 
 ```
 SECCIÓN 1 — Entrada
@@ -170,7 +170,7 @@ quest_ML/
 ├── docker-compose.yml
 ├── .env.example
 ├── n8n/
-│   └── workflow_ciri_agent.json      # DELIVERABLE: 22 nodes, explicit orchestrator
+│   └── workflow_ciri_agent.json      # DELIVERABLE: 54 nodes (43 exec + 11 sticky)
 ├── scripts/
 │   └── seed_data.py                  # Excel → SQLite + Qdrant
 ├── api/

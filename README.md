@@ -18,7 +18,7 @@ Intelligent chargeback resolution agent built for the CIRI (Continuous Improveme
 ```mermaid
 graph TD
     subgraph Orchestration
-        N[n8n ~28 explicit nodes]
+        N[n8n 54 nodes — 43 exec + 11 sticky]
     end
 
     subgraph "FastAPI :8000"
@@ -55,7 +55,7 @@ graph TD
     Q --- SC[_semantic_cache]
 ```
 
-**Key principle:** n8n is the explicit orchestrator — every step is a named, visible node. No AI Agent black box. All domain logic, guardrails, and RAG live in FastAPI services. n8n nodes never contain business logic.
+**Key principle:** n8n is the explicit orchestrator — every step is a named, visible node. No AI Agent black box. Two entry points (Webhook + Form Trigger) share the same flow. Native n8n nodes handle validation, SLA, merchant/client flags, guardrail visibility, and judge score gating. All domain logic, RAG, and LLM calls live in FastAPI services.
 
 ---
 
@@ -110,16 +110,19 @@ curl http://localhost:8000/health
 
 ### 5. Import n8n workflow
 
-Navigate to http://localhost:5678, import `n8n/workflow_ciri_agent.json`, and activate the workflow.
+Navigate to http://localhost:5678, import `n8n/workflow_ciri_agent.json` (main workflow, 54 nodes) and `n8n/workflow_ciri_errors.json` (error handler). Activate both workflows. Set the main workflow's Error Workflow to "CIRI — Error Handler" in Settings.
 
 ### 6. Run a demo analysis
 
 ```bash
-# Via n8n webhook (explicit orchestration — 22+ nodes)
+# Via n8n webhook (explicit orchestration — 54 nodes)
 curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' \
   -o report_blocker.html
+
+# Via n8n form trigger (native browser form)
+# http://localhost:5678/form/chargeback-form
 
 # Or via direct FastAPI panel (works without n8n)
 # http://localhost:8000/panel
@@ -323,9 +326,11 @@ quest_ML/
         db.py               # SQLite access (pure data, no business logic)
         loader.py           # Excel → SQLite (handles row 1 skip + emoji sheets)
   n8n/
-    workflow_ciri_agent.json  # Explicit orchestration workflow (~28 nodes)
+    workflow_ciri_agent.json  # Main workflow (54 nodes: 43 exec + 11 sticky)
+    workflow_ciri_errors.json # Error handler workflow (separate by n8n design)
   scripts/
     seed_data.py              # Excel → SQLite + Qdrant seeding
+    update_workflow.py        # Script to add native n8n nodes to workflow JSON
   tests/
   docs/
     architecture.md

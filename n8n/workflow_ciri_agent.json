@@ -126,7 +126,7 @@
           "conditions": [
             {
               "id": "check-txn-format",
-              "leftValue": "={{ ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || '').trim() }}",
+              "leftValue": "={{ ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || $input.first().json['Transaction ID'] || '').trim() }}",
               "rightValue": "TXN-[0-9]{5}",
               "operator": {
                 "type": "string",
@@ -154,19 +154,19 @@
             {
               "id": "field-txn-id",
               "name": "transaction_id",
-              "value": "={{ ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || '').trim() }}",
+              "value": "={{ ($input.first().json.body?.transaction_id || $input.first().json.transaction_id || $input.first().json['Transaction ID'] || '').trim() }}",
               "type": "string"
             },
             {
               "id": "field-motivo",
               "name": "motivo",
-              "value": "={{ ($input.first().json.body?.motivo || $input.first().json.motivo || '').trim() }}",
+              "value": "={{ ($input.first().json.body?.motivo || $input.first().json.motivo || $input.first().json['Motivo'] || '').trim() }}",
               "type": "string"
             },
             {
               "id": "field-vip",
               "name": "cliente_vip",
-              "value": "={{ Boolean($input.first().json.body?.cliente_vip || $input.first().json.cliente_vip) }}",
+              "value": "={{ Boolean($input.first().json.body?.cliente_vip || $input.first().json.cliente_vip || $input.first().json['Cliente VIP'] === 'Sí') }}",
               "type": "boolean"
             }
           ]
@@ -201,7 +201,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/transactions/' + $('Validar Formato TXN').first().json.transaction_id }}",
+        "url": "={{ $vars.API_BASE_URL + '/api/transactions/' + $('Validar Formato TXN').first().json.transaction_id }}",
         "options": {
           "timeout": 30000
         }
@@ -223,7 +223,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/logs/' + $('Validar Formato TXN').first().json.transaction_id }}",
+        "url": "={{ $vars.API_BASE_URL + '/api/logs/' + $('Validar Formato TXN').first().json.transaction_id }}",
         "options": {
           "timeout": 30000
         }
@@ -245,7 +245,7 @@
     },
     {
       "parameters": {
-        "url": "https://ciri-chargeback-agent.onrender.com/api/policies/search",
+        "url": "{{ $vars.API_BASE_URL }}/api/policies/search",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -292,7 +292,7 @@
     },
     {
       "parameters": {
-        "url": "https://ciri-chargeback-agent.onrender.com/api/cases/similar",
+        "url": "{{ $vars.API_BASE_URL }}/api/cases/similar",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -343,7 +343,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/merchants/' + encodeURIComponent($('Obtener Transacción').first().json.merchant) + '/risk' }}",
+        "url": "={{ $vars.API_BASE_URL + '/api/merchants/' + encodeURIComponent($('Obtener Transacción').first().json.merchant) + '/risk' }}",
         "options": {
           "timeout": 30000
         }
@@ -395,7 +395,7 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/clients/' + $('Obtener Transacción').first().json.client_id + '/history' }}",
+        "url": "={{ $vars.API_BASE_URL + '/api/clients/' + $('Obtener Transacción').first().json.client_id + '/history' }}",
         "options": {
           "timeout": 30000
         }
@@ -523,7 +523,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/resolve",
+        "url": "{{ $vars.API_BASE_URL }}/api/analyze/resolve",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -592,7 +592,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/analyze/judge",
+        "url": "{{ $vars.API_BASE_URL }}/api/analyze/judge",
         "sendBody": true,
         "contentType": "json",
         "bodyParameters": {
@@ -786,7 +786,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -954,8 +954,37 @@
     },
     {
       "parameters": {
-        "resume": "webhook",
-        "options": {}
+        "resume": "form",
+        "formTitle": "HITL — Aprobación de Contracargo",
+        "formDescription": "Revisa el caso y toma una decisión.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Decisión",
+              "fieldType": "options",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "APPROVE"
+                  },
+                  {
+                    "option": "REJECT"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Notas del Analista",
+              "fieldType": "textarea",
+              "requiredField": false,
+              "placeholder": "Justificación de la decisión..."
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Enviar Decisión"
+        }
       },
       "id": "fb156049-a6f2-4456-ade1-3bccfd0789be",
       "name": "Wait — Aprobación HITL",
@@ -969,7 +998,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// El analista POSTea { decision: 'APPROVE'|'REJECT', notes: '...' } al resume_url\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resoluci\\u00f3n').first().json;\nconst judge      = $('Extraer Evaluaci\\u00f3n \\u2014 Juez').first().json.judge_evaluation;\n\nconst hitlDecision = {\n  analyst_decision: (resume.decision || 'APPROVE').toUpperCase(),\n  analyst_notes:    resume.notes || '',\n  final_outcome:    (resume.decision || 'APPROVE').toUpperCase() === 'REJECT' ? 'DENIED' : 'APPROVED',\n  timestamp:        new Date().toISOString(),\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       hitlDecision,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    motivo:              ctx.motivo || '',\n    cliente_vip:         ctx.cliente_vip || false,\n    _feedback_payload: {\n      transaction_id:    ctx.transaction_id,\n      analyst_decision:  hitlDecision.analyst_decision,\n      analyst_notes:     hitlDecision.analyst_notes,\n      final_outcome:     hitlDecision.final_outcome,\n      judge_score:       judge.overall_score ?? 0,\n    }\n  }\n}];"
+        "jsCode": "// Compatible con resume via webhook y form submission nativo\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resoluci\\u00f3n').first().json;\nconst judge      = $('Extraer Evaluaci\\u00f3n \\u2014 Juez').first().json.judge_evaluation;\n\n// Form fields: 'Decisi\\u00f3n' / 'Notas del Analista'; webhook: 'decision' / 'notes'\nconst rawDecision = resume['Decisi\\u00f3n'] || resume.decision || 'APPROVE';\nconst rawNotes    = resume['Notas del Analista'] || resume.notes || '';\n\nconst hitlDecision = {\n  analyst_decision: rawDecision.toUpperCase(),\n  analyst_notes:    rawNotes,\n  final_outcome:    rawDecision.toUpperCase() === 'REJECT' ? 'DENIED' : 'APPROVED',\n  timestamp:        new Date().toISOString(),\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  ctx.policies,\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       hitlDecision,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    motivo:              ctx.motivo || '',\n    cliente_vip:         ctx.cliente_vip || false,\n    _feedback_payload: {\n      transaction_id:    ctx.transaction_id,\n      analyst_decision:  hitlDecision.analyst_decision,\n      analyst_notes:     hitlDecision.analyst_notes,\n      final_outcome:     hitlDecision.final_outcome,\n      judge_score:       judge.overall_score ?? 0,\n    }\n  }\n}];"
       },
       "id": "33cadace-aab0-474e-a6cc-cbc6ddf4623d",
       "name": "Procesar Respuesta HITL",
@@ -983,7 +1012,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/feedback",
+        "url": "{{ $vars.API_BASE_URL }}/api/feedback",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1032,7 +1061,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1142,7 +1171,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1252,7 +1281,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://ciri-chargeback-agent.onrender.com/api/reports/html",
+        "url": "{{ $vars.API_BASE_URL }}/api/reports/html",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1361,7 +1390,7 @@
     },
     {
       "parameters": {
-        "url": "https://ciri-chargeback-agent.onrender.com/health",
+        "url": "{{ $vars.API_BASE_URL }}/health",
         "options": {
           "timeout": 90000
         }
@@ -1450,7 +1479,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ 'https://ciri-chargeback-agent.onrender.com/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').first().json.cliente_vip || false) }}",
+        "url": "={{ $vars.API_BASE_URL + '/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').first().json.cliente_vip || false) }}",
         "options": {
           "timeout": 10000
         }
@@ -1541,6 +1570,108 @@
       "position": [
         59296,
         21536
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verificar Guardrails post-LLM — visibilidad en el canvas\nconst resolution = $input.first().json;\nconst warnings = resolution.guardrail_warnings || [];\nconst verdicts = resolution.policy_verdicts || [];\n\nconst hasBLOCKER = verdicts.some(v => v.verdict === 'BLOCKER');\nconst isAPPROVE = resolution.recommended_action === 'APPROVE';\nconst compExcesiva = (resolution.compensation_amount_usd || 0) > (resolution.transaction_amount_usd || 99999) * 1.1;\nconst failCount = verdicts.filter(v => ['FAIL','BLOCKER'].includes(v.verdict)).length;\nconst overConfident = (resolution.confidence || 0) > 0.95 && failCount >= 2;\n\nconst guardrailStatus = {\n  approve_with_blocker: isAPPROVE && hasBLOCKER,\n  compensation_excesiva: compExcesiva,\n  overconfident: overConfident,\n  total_warnings: warnings.length,\n  warnings: warnings,\n  status: warnings.length > 0 ? 'GUARDRAILS ACTIVADOS' : 'Sin alertas'\n};\n\nreturn [{ json: { ...resolution, _guardrail_check: guardrailStatus } }];"
+      },
+      "id": "02f762f4-c8be-47bf-b4ba-7506a0dc5063",
+      "name": "Verificar Guardrails",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        61136,
+        21968
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-judge-score",
+              "leftValue": "={{ $json.judge_evaluation.overall_score }}",
+              "rightValue": 7,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "24ca91c4-67a3-4282-a586-3da6ae95bdf3",
+      "name": "¿Juez Aprueba? (≥7.0)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        61624,
+        21968
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "low-score-flag",
+              "name": "judge_evaluation.quality_flag",
+              "value": "LOW_QUALITY — Revisar resolución manualmente",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "f325dc61-bba3-4e83-87d2-75021e01eeab",
+      "name": "Marcar — Calidad Baja",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        61624,
+        22160
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 🛡️ GUARDRAILS POST-LLM\n\nVerificación nativa en n8n (Code):\n1. APPROVE con BLOCKER → auto-REJECT\n2. Compensación > 110% del monto\n3. Confianza > 0.95 con ≥2 fallas\n\nDefensa en profundidad: FastAPI + n8n.",
+        "height": 220,
+        "width": 340,
+        "color": 7
+      },
+      "id": "52192b00-10ca-43ed-9fab-d39727d64daa",
+      "name": "Sticky Note — Guardrails",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        61040,
+        21700
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## ⚖️ EVALUACIÓN DEL JUEZ\n\nIF nativo: score ≥ 7.0 = aprobado.\nScore < 7.0 → flag 'LOW_QUALITY'\nvisible en el reporte.",
+        "height": 160,
+        "width": 300,
+        "color": 6
+      },
+      "id": "6d4fcc6d-07e7-49ef-857f-57cc016c4f85",
+      "name": "Sticky Note — Juez Score",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        61520,
+        21700
       ]
     }
   ],
@@ -1699,7 +1830,7 @@
       "main": [
         [
           {
-            "node": "Juez de Calidad",
+            "node": "Verificar Guardrails",
             "type": "main",
             "index": 0
           }
@@ -1735,7 +1866,7 @@
       "main": [
         [
           {
-            "node": "Preparar Informe",
+            "node": "¿Juez Aprueba? (≥7.0)",
             "type": "main",
             "index": 0
           }
@@ -2000,6 +2131,46 @@
         [
           {
             "node": "Obtener Transacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Guardrails": {
+      "main": [
+        [
+          {
+            "node": "Juez de Calidad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Juez Aprueba? (≥7.0)": {
+      "main": [
+        [
+          {
+            "node": "Preparar Informe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar — Calidad Baja",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar — Calidad Baja": {
+      "main": [
+        [
+          {
+            "node": "Preparar Informe",
             "type": "main",
             "index": 0
           }

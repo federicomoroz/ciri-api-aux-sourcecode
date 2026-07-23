@@ -1,0 +1,143 @@
+{
+  "name": "CIRI — Formulario de Contracargo",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "CIRI — Investigación de Contracargo",
+        "formDescription": "Ingresa los datos para iniciar una investigación de contracargo.\nEl análisis toma ~30 segundos (incluye evaluación LLM + RAG).",
+        "respondMode": "lastNode",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Transaction ID",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "TXN-00051"
+            },
+            {
+              "fieldLabel": "Motivo",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "placeholder": "No reconoce la compra"
+            },
+            {
+              "fieldLabel": "Cliente VIP",
+              "fieldType": "dropdown",
+              "requiredField": false,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "No"
+                  },
+                  {
+                    "option": "Sí"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "buttonLabel": "Iniciar Investigación"
+        }
+      },
+      "id": "form-trigger-001",
+      "name": "Form Trigger — Formulario",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        300
+      ],
+      "webhookId": "chargeback-form"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $vars.N8N_WEBHOOK_URL }}/webhook/chargeback-agent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ transaction_id: $json['Transaction ID'], motivo: $json['Motivo'], cliente_vip: $json['Cliente VIP'] === 'Sí' }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "form-http-001",
+      "name": "Enviar al Webhook Principal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer el HTML del response y devolverlo como completion page\nconst response = $input.first().json;\nconst html = response.data || response.body || 'Análisis completado';\nreturn [{ json: { resultado: 'Análisis completado. Revisa la ejecución del workflow principal para ver el reporte completo.' } }];"
+      },
+      "id": "form-code-001",
+      "name": "Preparar Respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📋 FORMULARIO DE INGESTA\n\nWorkflow auxiliar que demuestra el **Form Trigger** nativo de n8n.\n\nURL: `/form/chargeback-form`\n\nReenvía los datos al webhook del workflow principal y muestra el resultado.\n\nDemuestra Eje 1 (Ingesta) con formulario nativo.",
+        "height": 220,
+        "width": 400,
+        "color": 5
+      },
+      "id": "form-sticky-001",
+      "name": "Sticky Note — Form Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "Form Trigger — Formulario": {
+      "main": [
+        [
+          {
+            "node": "Enviar al Webhook Principal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar al Webhook Principal": {
+      "main": [
+        [
+          {
+            "node": "Preparar Respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1
+}
