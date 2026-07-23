@@ -57,7 +57,8 @@ NEXT_STEPS (LISTA CONCRETA):
 - Si hay precedente [MOTIVO SIMILAR]: incluir paso que conecte el aprendizaje del precedente con una accion concreta.
   Ejemplo: si CB-0038 de cargo duplicado no fue resuelto → "Verificar con procesador de pagos si existe cargo duplicado real — precedente CB-0038 sugiere investigacion pendiente"
 - Para cada politica WARNING con datos faltantes: incluir paso "Solicitar [dato faltante] para confirmar/descartar [POL-XXX-NNN]"
-- Si requires_hitl=true y compensation_applicable=false: incluir paso final "Resolver revision HITL dentro del plazo SLA restante — si tiempo total de resolucion (incluyendo espera HITL) excede plazo, la empresa debe compensar segun POL-SLA-004"
+- Si requires_hitl=true y compensation_applicable=false y POL-SLA-004 fue evaluada como FAIL o WARNING: incluir paso final "Resolver revision HITL dentro del plazo SLA restante — si tiempo total de resolucion (incluyendo espera HITL) excede plazo, la empresa debe compensar segun POL-SLA-004"
+- COHERENCIA OBLIGATORIA: Si compensation_applicable=false, NO menciones compensacion en next_steps (seria contradictorio). Solo incluye pasos de compensacion si compensation_applicable=true.
 - DATOS FALTANTES: Si logs=[] (0 eventos), NO propongas "revisar logs". Escribe "Logs no disponibles — validacion tecnica limitada."
 - NO uses "evaluar", "considerar", "analizar". Usa: "verificar", "confirmar", "solicitar", "notificar".
 
@@ -93,7 +94,7 @@ Respuesta correcta:
   "risk_level": "HIGH",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
-  "next_steps": ["Escalar a supervisor para revision (requires_hitl=true)", "Verificar POL-FRD-001 — fraud_score=4 vs umbral 30, confirmar si score bajo refleja riesgo real o anomalia", "Solicitar prueba de entrega al comercio — plazo segun POL-CB-003", "Notificar al cliente VIP sobre estado del caso y plazo estimado", "Resolver revision HITL dentro del plazo SLA restante — si tiempo total excede plazo, compensar segun POL-SLA-004"],
+  "next_steps": ["Escalar a supervisor para revision (requires_hitl=true)", "Verificar POL-FRD-001 — fraud_score=4 vs umbral 30, confirmar si score bajo refleja riesgo real o anomalia", "Solicitar prueba de entrega al comercio — plazo segun POL-CB-003", "Notificar al cliente VIP sobre estado del caso y plazo estimado"],
   "requires_hitl": true,
   "hitl_reason": "fraud_score=4 con cliente VIP — requiere validacion de supervisor"
 }"""
