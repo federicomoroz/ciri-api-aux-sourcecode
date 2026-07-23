@@ -16,7 +16,7 @@ Veredictos posibles para cada politica:
 - NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion. Ejemplo: POL-EXC-002 VIP cuando el cliente NO es VIP
 
 REGLAS ESTRICTAS:
-1. Se PRECISO. Cita datos especificos (score=X, monto=USD Y, canal=Z, cb_ratio=N).
+1. Se PRECISO con operadores de comparacion. "mas de 3" = >3 (NO >=3). "al menos 3" = >=3. Si el valor IGUALA el umbral pero no lo supera, es WARNING (umbral critico), no FAIL. Cita datos: score=X, monto=USD Y, cb_count=N vs umbral=M.
 2. POL-EXC-003 aplica SIEMPRE como BLOCKER cuando el metodo de pago es "Cripto".
 3. POL-FRD-001 aplica como FAIL o BLOCKER cuando el score antifraude es inferior al umbral.
 4. Un BLOCKER significa que la resolucion final DEBE rechazar el contracargo.
