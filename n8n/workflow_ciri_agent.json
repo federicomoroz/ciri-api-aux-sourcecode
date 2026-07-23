@@ -69,7 +69,7 @@
       "parameters": {
         "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte (unificado)\n• HIGH → Wait HITL → feedback → Generar Reporte HITL\n• Ambos → Responder Reporte (unificado)\n\n**HITL (Human-in-the-Loop):**\n• Wait node pausa ejecución\n• Analista aprueba o rechaza\n• Feedback + auto-index si score ≥ 8.0\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
         "height": 2400,
-        "width": 2940,
+        "width": 3200,
         "color": 6
       },
       "id": "cfc28e90-c1cb-4d45-a206-2750274ffba4",
@@ -954,8 +954,8 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        65160,
-        23400
+        64920,
+        22800
       ]
     },
     {
@@ -1064,7 +1064,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        66400,
+        64920,
         22200
       ]
     },
@@ -1096,7 +1096,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        66720,
+        65320,
         22200
       ]
     },
@@ -1111,7 +1111,7 @@
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        67040,
+        65720,
         22200
       ],
       "webhookId": "ciri-hitl-resume"
@@ -1125,7 +1125,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        67360,
+        66120,
         22200
       ]
     },
@@ -1168,7 +1168,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        67680,
+        66520,
         22200
       ],
       "settings": {
