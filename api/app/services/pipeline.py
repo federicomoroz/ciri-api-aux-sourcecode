@@ -94,6 +94,9 @@ class PipelineService:
                 "motivo": req.motivo,
                 "policies": policies,
                 "similar_cases": similar_cases,
+                "merchant_risk": merchant_risk,
+                "client_history": client_history,
+                "logs": logs,
             },
         )
 

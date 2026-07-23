@@ -570,7 +570,7 @@
             },
             {
               "name": "full_context",
-              "value": "={{ { transaction: $('Compilar Contexto').first().json.tx_data, motivo: $('Compilar Contexto').first().json.motivo || '', policies: ($('Compilar Contexto').first().json.policies || []).map(p => ({ code: p.code, name: p.name, category: p.category, description: p.description, reference: p.reference, score: p.score })), similar_cases: $('Compilar Contexto').first().json.similar_cases || [] } }}"
+              "value": "={{ { transaction: $('Compilar Contexto').first().json.tx_data, motivo: $('Compilar Contexto').first().json.motivo || '', policies: ($('Compilar Contexto').first().json.policies || []).map(p => ({ code: p.code, name: p.name, category: p.category, description: p.description, reference: p.reference, score: p.score })), similar_cases: $('Compilar Contexto').first().json.similar_cases || [], merchant_risk: $('Compilar Contexto').first().json.merchant_risk || {}, client_history: $('Compilar Contexto').first().json.client_history || {}, logs: $('Compilar Contexto').first().json.logs || [] } }}"
             }
           ]
         },
