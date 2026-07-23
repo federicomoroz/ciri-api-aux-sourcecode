@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # n8n
     n8n_base_url: str = "http://n8n:5678"
+    n8n_form_path: str = "/form/chargeback-form"
 
     # Server
     host: str = "0.0.0.0"

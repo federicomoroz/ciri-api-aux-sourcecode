@@ -10,7 +10,7 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from ..analysis.analyzer import Analyzer
@@ -31,6 +31,7 @@ from ..domain.constants import (
     N8N_PING_TIMEOUT_S,
     N8N_TIMEOUT_S,
     N8N_WEBHOOK_PATH,
+    N8N_WEBHOOK_TEST_PATH,
 )
 from ..domain.models import AnalyzeRequest
 from ..rag.retriever import QdrantRetriever
@@ -58,18 +59,33 @@ def serve_panel(
 async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
     """Quick liveness check for n8n — used by the panel UI to show a status badge."""
     url = settings.n8n_base_url.rstrip("/") + N8N_HEALTHZ_PATH
+    base = settings.n8n_base_url.rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=N8N_PING_TIMEOUT_S) as client:
             r = await client.get(url)
-        return {"available": r.status_code < 500, "url": settings.n8n_base_url}
+        return {
+            "available": r.status_code < 500,
+            "url": base,
+            "webhook_url": base + N8N_WEBHOOK_PATH,
+            "webhook_test_url": base + N8N_WEBHOOK_TEST_PATH,
+            "form_url": base + settings.n8n_form_path,
+        }
     except httpx.HTTPError as e:
         logger.debug("n8n ping failed: %s", e)
-        return {"available": False, "url": settings.n8n_base_url}
+        return {
+            "available": False,
+            "url": base,
+            "webhook_url": base + N8N_WEBHOOK_PATH,
+            "webhook_test_url": base + N8N_WEBHOOK_TEST_PATH,
+            "form_url": base + settings.n8n_form_path,
+        }
 
 
 @router.post("/api/panel/analyze", response_class=HTMLResponse)
 async def panel_analyze(
     req: AnalyzeRequest,
+    direct: bool                      = Query(False, description="Skip n8n, use direct FastAPI pipeline"),
+    n8n_test: bool                    = Query(False, description="Use n8n test webhook URL instead of production"),
     db: Database                      = Depends(get_db),
     retriever: QdrantRetriever        = Depends(get_retriever),
     analyzer: Analyzer                = Depends(get_analyzer),
@@ -81,33 +97,38 @@ async def panel_analyze(
     Run the chargeback analysis pipeline and return an HTML report.
 
     Strategy:
-    1. Try the n8n explicit workflow (POST /webhook/chargeback-agent).
+    1. If direct=false, try the n8n explicit workflow (POST /webhook/chargeback-agent).
        n8n orchestrates 9 explicit HTTP calls to FastAPI and returns text/html.
-    2. If n8n is unavailable or returns a non-HTML response, fall back to the
+    2. If n8n is unavailable, returns non-HTML, or direct=true, use the
        direct FastAPI pipeline (identical business logic, no n8n dependency).
     """
-    # ── Primary: n8n explicit workflow ────────────────────────────────────────
-    n8n_url = settings.n8n_base_url.rstrip("/") + N8N_WEBHOOK_PATH
-    try:
-        async with httpx.AsyncClient(timeout=N8N_TIMEOUT_S) as client:
-            r = await client.post(
-                n8n_url,
-                json={
-                    "transaction_id": req.transaction_id,
-                    "motivo":         req.motivo,
-                    "cliente_vip":    req.cliente_vip,
-                },
+    if direct:
+        logger.info("panel: direct mode requested for %s", req.transaction_id)
+    else:
+        # ── Primary: n8n explicit workflow ────────────────────────────────────
+        webhook_path = N8N_WEBHOOK_TEST_PATH if n8n_test else N8N_WEBHOOK_PATH
+        n8n_url = settings.n8n_base_url.rstrip("/") + webhook_path
+        logger.info("panel: posting to n8n %s for %s", "TEST" if n8n_test else "PROD", req.transaction_id)
+        try:
+            async with httpx.AsyncClient(timeout=N8N_TIMEOUT_S) as client:
+                r = await client.post(
+                    n8n_url,
+                    json={
+                        "transaction_id": req.transaction_id,
+                        "motivo":         req.motivo,
+                        "cliente_vip":    req.cliente_vip,
+                    },
+                )
+            if r.status_code == 200 and "text/html" in r.headers.get("content-type", ""):
+                logger.info("panel: n8n returned HTML for %s", req.transaction_id)
+                return HTMLResponse(content=r.text, status_code=200)
+            logger.warning(
+                "panel: n8n returned status=%s content-type=%s — falling back to direct pipeline",
+                r.status_code,
+                r.headers.get("content-type", ""),
             )
-        if r.status_code == 200 and "text/html" in r.headers.get("content-type", ""):
-            logger.info("panel: n8n returned HTML for %s", req.transaction_id)
-            return HTMLResponse(content=r.text, status_code=200)
-        logger.warning(
-            "panel: n8n returned status=%s content-type=%s — falling back to direct pipeline",
-            r.status_code,
-            r.headers.get("content-type", ""),
-        )
-    except Exception as exc:
-        logger.warning("panel: n8n unreachable (%s) — falling back to direct pipeline", exc)
+        except Exception as exc:
+            logger.warning("panel: n8n unreachable (%s) — falling back to direct pipeline", exc)
 
     # ── Fallback: direct FastAPI pipeline ────────────────────────────────────
     try:
