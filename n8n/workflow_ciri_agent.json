@@ -1033,7 +1033,7 @@
           ]
         },
         "options": {
-          "timeout": 30000
+          "timeout": 120000
         },
         "contentType": "json"
       },
@@ -1048,7 +1048,7 @@
       "settings": {
         "retryOnFail": true,
         "maxTries": 3,
-        "waitBetweenTries": 5000
+        "waitBetweenTries": 10000
       },
       "onError": "continueErrorOutput"
     },
@@ -1501,7 +1501,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — Reporte",
+            "node": "Restaurar Payload HITL",
             "type": "main",
             "index": 0
           }
