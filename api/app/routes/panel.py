@@ -115,7 +115,12 @@ async def panel_analyze(
 
 
 async def _try_n8n(req: AnalyzeRequest, settings: Settings, n8n_test: bool) -> str | None:
-    """Try n8n webhook. Returns HTML string on success, None on failure."""
+    """Try n8n webhook. Returns HTML string on success, None on failure.
+
+    n8n responds with JSON containing raw data + rendered HTML:
+      { "transaction": {...}, "resolution": {...}, ..., "html": "<html>..." }
+    We extract the "html" field for the panel.
+    """
     webhook_path = N8N_WEBHOOK_TEST_PATH if n8n_test else N8N_WEBHOOK_PATH
     n8n_url = settings.n8n_base_url.rstrip("/") + webhook_path
     logger.info("panel: posting to n8n %s at %s for %s", "TEST" if n8n_test else "PROD", n8n_url, req.transaction_id)
@@ -129,14 +134,28 @@ async def _try_n8n(req: AnalyzeRequest, settings: Settings, n8n_test: bool) -> s
                     "cliente_vip": req.cliente_vip,
                 },
             )
-        if r.status_code == 200 and "text/html" in r.headers.get("content-type", ""):
+        if r.status_code != 200:
+            logger.warning("panel: n8n returned status=%s — falling back to direct", r.status_code)
+            return None
+
+        content_type = r.headers.get("content-type", "")
+
+        # JSON response (new format): extract html field
+        if "application/json" in content_type:
+            data = r.json()
+            html = data.get("html")
+            if html:
+                logger.info("panel: n8n returned JSON+HTML for %s", req.transaction_id)
+                return html
+            logger.warning("panel: n8n JSON missing 'html' field — falling back to direct")
+            return None
+
+        # Legacy: text/html response (backwards compatible)
+        if "text/html" in content_type:
             logger.info("panel: n8n returned HTML for %s", req.transaction_id)
             return r.text
-        logger.warning(
-            "panel: n8n returned status=%s content-type=%s — falling back to direct",
-            r.status_code,
-            r.headers.get("content-type", ""),
-        )
+
+        logger.warning("panel: n8n unexpected content-type=%s — falling back to direct", content_type)
     except Exception as exc:
         logger.warning("panel: n8n unreachable at %s (%s) — falling back to direct", n8n_url, exc)
     return None

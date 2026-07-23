@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Responder (inmediato)\n• HIGH → Wait HITL (15s) → Procesar HITL → Generar Reporte → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa 15s para decisión del analista\n• Procesar construye payload con decisión HITL incluida\n• Reporte final ya incluye la decisión del analista\n• Registrar Feedback en paralelo (auto-index si score ≥ 8.0)\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n\n**Output:** HTML report via webhook",
+        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Preparar Respuesta → Responder\n• HIGH → Wait (15s) → Procesar HITL → Registrar Feedback → Restaurar Payload → Generar Reporte → Preparar Respuesta → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa 15s para decisión del analista\n• Procesar construye payload con decisión HITL incluida\n• Reporte final ya incluye la decisión del analista\n\n**Respuesta JSON (raw data + HTML):**\n• Preparar Respuesta Final merge raw data + rendered HTML\n• Webhook responde JSON: { transaction, resolution, ..., html }\n• Panel extrae .html; otros sistemas usan los campos raw\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler",
         "height": 2400,
         "width": 3200,
         "color": 6
@@ -825,7 +825,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Formatear respuesta de caché para el Responder unificado\nconst html = $input.first().json.html;\nreturn [{\n  json: {\n    html: html\n  }\n}];"
+        "jsCode": "// Cache hit: return JSON with cached flag + HTML\nconst html = $input.first().json.html;\nreturn [{ json: { cached: true, html } }];"
       },
       "id": "6f598020-515a-4d19-b148-193dcdb3241e",
       "name": "Formatear Caché",
@@ -1045,18 +1045,9 @@
     },
     {
       "parameters": {
-        "respondWith": "text",
-        "responseBody": "={{ $json.html }}",
+        "respondWith": "firstIncomingItem",
         "options": {
-          "responseCode": 200,
-          "responseHeaders": {
-            "entries": [
-              {
-                "name": "Content-Type",
-                "value": "text/html; charset=utf-8"
-              }
-            ]
-          }
+          "responseCode": 200
         }
       },
       "id": "3a52b742-96cb-442f-a056-3b695760f45f",
@@ -1064,7 +1055,20 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        66600,
+        67200,
+        22200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge raw report data + rendered HTML into a single JSON response.\n// Non-HIGH path: raw data from Preparar Informe.\n// HIGH (HITL) path: raw data from Restaurar Payload HITL.\nconst html = $json.html;\nlet raw;\ntry {\n  raw = $('Restaurar Payload HITL').first().json;\n} catch {\n  raw = $('Preparar Informe').first().json;\n}\nconst { _feedback_payload, ...cleanRaw } = raw;\nreturn [{ json: { ...cleanRaw, html } }];"
+      },
+      "id": "f1a2b3c4-d5e6-7890-abcd-112233445566",
+      "name": "Preparar Respuesta Final",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        66700,
         22200
       ]
     },
@@ -1550,7 +1554,7 @@
       "main": [
         [
           {
-            "node": "Responder — Reporte",
+            "node": "Preparar Respuesta Final",
             "type": "main",
             "index": 0
           }
@@ -1558,6 +1562,17 @@
         [
           {
             "node": "Propagar → Error Handler — Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Respuesta Final": {
+      "main": [
+        [
+          {
+            "node": "Responder — Reporte",
             "type": "main",
             "index": 0
           }
