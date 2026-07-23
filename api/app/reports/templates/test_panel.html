@@ -2017,7 +2017,6 @@ async function startAnalysis(payload) {
     } catch (e) { /* n8n path — no header */ }
 
     // Detect silent fallback: user chose n8n but got direct pipeline response
-    const mode = getPipelineMode();
     const wasN8nFallback = mode !== 'direct' && usageInfo !== null;
 
     showResult(body, payload, elapsed, usageInfo, wasN8nFallback);
