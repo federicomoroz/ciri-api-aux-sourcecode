@@ -1463,9 +1463,9 @@
     },
     {
       "parameters": {
-        "content": "## ⚠️ Manejo de Errores\n\n**Cada nodo HTTP tiene:**\n- ✅ Retry automático (3 intentos, 5s entre cada uno)\n- ✅ Error output conectado a un Responder de error\n\n**Nodos de error visibles:**\n- **Error — TXN Inválida** (400): formato TXN incorrecto\n- **Error — API No Disponible** (503): API caída o cold start\n- **Error — Análisis Fallido** (500): fallo LLM (Anthropic)\n- **Error — Reporte Fallido** (500): fallo al generar HTML\n\n**Principio:** fail fast, fail loud. El webhook siempre responde, nunca queda colgado.",
-        "height": 340,
-        "width": 500
+        "content": "## ⚠️ Manejo de Errores\n\n**Patrón:** respondToWebhook → Stop and Error\n\n1. Responde al caller con JSON de error + HTTP status\n2. **Stop and Error** marca la ejecución como fallida\n3. n8n dispara el **Error Handler** workflow automáticamente\n\n**4 nodos de error:**\n- TXN Inválida (400)\n- API No Disponible (503)\n- Análisis Fallido (500)\n- Reporte Fallido (500)\n\n⚙️ Configurar en: Settings → Error Workflow → CIRI Error Handler",
+        "height": 420,
+        "width": 380
       },
       "id": "4f582a07-1d94-4b34-9e14-0a998e0c956b",
       "name": "Sticky Note — Manejo de Errores",
@@ -1672,6 +1672,58 @@
       "position": [
         63380,
         21700
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{Formato de transaction_id inválido. Solicitud rechazada con HTTP 400.}}"
+      },
+      "id": "2e7c0e1f-7df9-40ff-898f-e9fe61a63873",
+      "name": "Propagar → Error Handler — TXN",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        59960,
+        22800
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{API no disponible después de reintentos. Respuesta HTTP 503 enviada al cliente.}}"
+      },
+      "id": "489f690b-d1c5-4682-b270-a9f666d216ec",
+      "name": "Propagar → Error Handler — API",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        61240,
+        22800
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{Fallo en análisis LLM (Anthropic). Respuesta HTTP 500 enviada al cliente.}}"
+      },
+      "id": "ea5b5689-b081-44ff-b171-4f8a9a87fbde",
+      "name": "Propagar → Error Handler — Análisis",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        62840,
+        22800
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{Error al generar reporte HTML. Respuesta HTTP 500 enviada al cliente.}}"
+      },
+      "id": "27d06f68-8f20-4892-8b38-53247130023e",
+      "name": "Propagar → Error Handler — Reporte",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        65160,
+        23400
       ]
     }
   ],
@@ -2171,6 +2223,50 @@
         [
           {
             "node": "Preparar Informe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error — TXN Inválida": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — TXN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error — API No Disponible": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error — Análisis Fallido": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — Análisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error — Reporte Fallido": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — Reporte",
             "type": "main",
             "index": 0
           }
