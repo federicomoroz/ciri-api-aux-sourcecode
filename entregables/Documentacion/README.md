@@ -1,7 +1,7 @@
 # CIRI Chargeback Agent
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-244%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-277%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -302,7 +302,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-244 tests en 13 archivos (unit + integration):
+277 tests en 16 archivos (unit + integration + E2E):
 
 ```
 tests/
@@ -322,7 +322,33 @@ tests/
     test_full_flow.py                # Ciclo completo resolve → judge → feedback → report
     test_policies_crud.py            # CRUD de políticas + re-indexación en Qdrant
     test_routes.py                   # Integración a nivel de rutas: SLA, caché, health
+  e2e/
+    conftest.py                      # httpx.Client contra API real (Render)
+    test_api_real.py                 # 33 tests contra la API desplegada (LLM real, Qdrant real)
 ```
+
+### Tests E2E (sin mocks — API real)
+
+```bash
+# Contra el deploy en Render (requiere API corriendo)
+CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
+```
+
+33 tests E2E que verifican invariantes de negocio contra la API real:
+
+| Suite | Tests | Qué verifica |
+|-------|-------|-------------|
+| Health | 2 | Health check, colecciones Qdrant |
+| Transactions | 4 | Listado, lookup por ID, 404, logs |
+| Policies | 3 | Listado, búsqueda por código, RAG semántico |
+| Cases | 1 | Casos similares (Qdrant) |
+| Analysis | 3 | Riesgo de comercio, historial de cliente, SLA |
+| Full Pipeline | 6 | Streaming SSE, REJECT/BLOCKER, score Judge, HTML |
+| Resolve | 6 | Resolve con contexto completo (LLM real) |
+| Judge | 4 | Judge con contexto real (score >= 7.0) |
+| Report | 1 | Generación de reporte HTML |
+| Alerts | 2 | POST + GET alertas |
+| Panel | 1 | Panel sirve HTML con autor |
 
 ---
 
@@ -407,7 +433,7 @@ quest_ML/
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
-  tests/                      # 244 tests (unit + integration)
+  tests/                      # 277 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 10 decisiones técnicas con razonamiento
