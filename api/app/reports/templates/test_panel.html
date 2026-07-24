@@ -2609,13 +2609,10 @@ function showFromHistory(entry) {
 }
 
 function showResultFromCache(html, elapsed, payload) {
-  $('idle-state').style.display    = 'none';
-  $('loading-state').style.display = 'none';
-  $('error-state').style.display   = 'none';
-  $('result-state').style.display  = '';
+  showPanel('result');
 
   const verdictPill = $('verdict-pill');
-  const metaBar     = $('result-meta');
+  const metaBar     = $('result-meta-text');
   const elapsedBadge = $('elapsed-badge');
 
   if (elapsedBadge) {
