@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends
 
 from ..analysis.analyzer import Analyzer
 from ..data.db import Database
 from ..dependencies import get_analyzer, get_db
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
 

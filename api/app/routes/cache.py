@@ -9,16 +9,12 @@ import logging
 from fastapi import APIRouter, Depends, Query
 
 from ..config import Settings
-from ..data.db import Database
+from ..data.db import Database, cache_key
 from ..dependencies import get_db, get_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/cache", tags=["cache"])
-
-
-def _cache_key(transaction_id: str, cliente_vip: bool = False) -> str:
-    return f"{transaction_id}|{cliente_vip}"
 
 
 @router.get("/lookup")
@@ -32,7 +28,7 @@ def cache_lookup(
     if not settings.semantic_cache_enabled:
         return {"cached": False}
 
-    key = _cache_key(transaction_id, cliente_vip=cliente_vip)
+    key = cache_key(transaction_id, cliente_vip=cliente_vip)
     html = db.get_cached_report(key)
 
     if html:

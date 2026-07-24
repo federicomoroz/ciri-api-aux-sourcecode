@@ -11,8 +11,11 @@ import logging
 from ..analysis.analyzer import Analyzer
 from ..domain.constants import (
     BLOCKER_POLICY_CODES,
+    FALLBACK_TX_ID,
     FRAUD_SCORE_DEFAULT,
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+    GUARDRAIL_AUTO_CORRECTED_PREFIX,
+    GUARDRAIL_HITL_REASON_GENERIC,
     GUARDRAIL_MAX_COMPENSATION_RATIO,
     GUARDRAIL_MAX_CONFIDENCE,
     GUARDRAIL_MIN_FAILS_FOR_WARNING,
@@ -20,9 +23,8 @@ from ..domain.constants import (
     LLM_MAX_CRITICAL_LOGS,
     RISK_FRAUD_SEVERE,
     RISK_HIGH_MIN_FAILS,
-    TRACE_RESOLVE,
     TRACE_JUDGE,
-    FALLBACK_TX_ID,
+    TRACE_RESOLVE,
 )
 from ..domain.enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 from ..domain.models import JudgeEvaluationOutput, PolicyVerdictOutput, ResolutionOutput
@@ -194,8 +196,8 @@ class ResolutionService:
         # values (e.g. "Auto-corregido: REJECT sin BLOCKER...") which confuse the Judge LLM.
         _strip_keys = {"guardrail_warnings", "_usage", "trace_id"}
         judge_resolution = {k: v for k, v in resolution.items() if k not in _strip_keys}
-        if str(judge_resolution.get("hitl_reason", "")).startswith("Auto-corregido"):
-            judge_resolution["hitl_reason"] = "Requiere revision de analista antes de decision final"
+        if str(judge_resolution.get("hitl_reason", "")).startswith(GUARDRAIL_AUTO_CORRECTED_PREFIX):
+            judge_resolution["hitl_reason"] = GUARDRAIL_HITL_REASON_GENERIC
 
         system, user = prompts.v1_judge.render(
             full_context=full_context,
@@ -451,7 +453,7 @@ class ResolutionService:
             resolution["requires_hitl"] = True
             if resolution.get("recommended_action") == ResolutionOutcome.REJECT:
                 resolution["recommended_action"] = ResolutionOutcome.PENDING_HITL
-                resolution["hitl_reason"] = "Auto-corregido: REJECT sin BLOCKER requiere confirmacion de analista"
+                resolution["hitl_reason"] = f"{GUARDRAIL_AUTO_CORRECTED_PREFIX}: REJECT sin BLOCKER requiere confirmacion de analista"
 
         if resolution.get("recommended_action") == ResolutionOutcome.REJECT and not has_blocker:
             warnings.append(

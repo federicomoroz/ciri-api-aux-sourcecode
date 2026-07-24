@@ -469,7 +469,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Consecuencias:**
 - Cada pieza de logica se testea con `pytest` independientemente de n8n
-- 244 tests unitarios/integración pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
+- 244 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
 - 33 tests E2E adicionales corren contra la API real desplegada en Render (LLM real, Qdrant real, sin mocks)
 - n8n es reemplazable (Temporal, Airflow, un cron job) sin tocar FastAPI
 - La documentacion OpenAPI en `/docs` se autogenera y siempre esta actualizada

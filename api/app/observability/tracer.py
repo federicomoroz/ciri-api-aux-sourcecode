@@ -55,6 +55,9 @@ class LangfuseTracer:
         except ImportError:
             logger.warning("langfuse package not installed; observability disabled")
             self._enabled = False
+        except Exception as e:
+            logger.warning("Langfuse init failed: %s; observability disabled", e)
+            self._enabled = False
 
     @property
     def enabled(self) -> bool:

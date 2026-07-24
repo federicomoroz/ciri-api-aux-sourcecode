@@ -8,7 +8,7 @@ in docs/prompts.md and flow as plain dicts through the pipeline.
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .enums import ResolutionOutcome, RiskLevel, VerdictType
+from .enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 
 class ResolveRequest(BaseModel):
@@ -53,10 +53,10 @@ class PolicyCreate(BaseModel):
 
 
 class PolicyUpdate(BaseModel):
-    name: str | None = None
-    category: str | None = None
-    description: str | None = None
-    reference: str | None = None
+    name: str | None = Field(default=None, min_length=1)
+    category: str | None = Field(default=None, min_length=1)
+    description: str | None = Field(default=None, min_length=1)
+    reference: str | None = Field(default=None, min_length=1)
 
 
 class ReportRequest(BaseModel):
@@ -202,7 +202,7 @@ class LangfuseStatsResponse(BaseModel):
 class AlertRequest(BaseModel):
     """Incoming alert from n8n error handler or resolve pipeline."""
     event_type: str = Field(min_length=1)
-    severity: str = "ERROR"
+    severity: Severity = Severity.ERROR
     message: str = Field(min_length=1)
     source: str = ""
     transaction_id: str | None = None

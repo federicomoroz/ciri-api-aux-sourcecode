@@ -74,11 +74,11 @@ Las reglas de enriquecimiento codifican conocimiento de dominio (ej: "pagos crip
 **Contexto:** Las rutas de FastAPI manejan requests HTTP. La pregunta es dónde poner la lógica de negocio.
 
 **Decisión:** Separación en tres capas:
-- **Routes** (~20 líneas cada una) — solo HTTP: parsear request, llamar servicio, devolver response
-- **Services** (`ResolutionService`, `FeedbackService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching)
+- **Routes** (~20 líneas cada una) — solo HTTP: parsear request, llamar servicio, devolver response. Todos los módulos de ruta incluyen `logger = logging.getLogger(__name__)` para observabilidad consistente.
+- **Services** (`ResolutionService`, `FeedbackService`, `PipelineService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching). `PipelineService` usa métodos compartidos (`_submit_context_futures`, `_resolve`, `_judge`, `_build_report_data`) entre el modo síncrono y el streaming SSE, eliminando duplicación.
 - **Analyzer** (`analysis/analyzer.py`) — lógica de negocio pura: reglas SLA, flags de riesgo, patrones de error
 
-El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, constants) tienen cero dependencias externas.
+El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, 55+ constants) tienen cero dependencias externas. Todos los magic numbers y strings del dominio están centralizados en `constants.py` — umbrales de pipeline, tipos de alertas, prefijos de guardrails, nombres de templates.
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
@@ -88,6 +88,7 @@ Con 277 tests pasando (244 unit/integration + 33 E2E contra la API real), esta a
 - (+) Cada capa tiene una sola responsabilidad
 - (+) Tests unitarios son rápidos y enfocados
 - (+) Fácil de intercambiar implementaciones (ej: distinto proveedor LLM)
+- (+) Timeouts explícitos en todas las llamadas I/O externas (Anthropic, Qdrant, Voyage AI)
 - (-) Más archivos para navegar
 - (-) Operaciones simples cruzan 3 capas
 

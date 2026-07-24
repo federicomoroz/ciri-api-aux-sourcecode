@@ -1,3 +1,4 @@
+import json
 import logging
 import sqlite3
 from collections.abc import Generator
@@ -7,6 +8,11 @@ from datetime import datetime, timezone
 from ..domain.constants import DASHBOARD_TOP_N, JUDGE_AUTO_INDEX_THRESHOLD, SQLITE_TIMEOUT_S
 
 logger = logging.getLogger(__name__)
+
+
+def cache_key(transaction_id: str, cliente_vip: bool = False) -> str:
+    """Build the idempotency cache key for a report."""
+    return f"{transaction_id}|{cliente_vip}"
 
 
 class Database:
@@ -289,8 +295,6 @@ class Database:
             conn.commit()
 
     def save_alert(self, alert: dict) -> int:
-        import json as _json
-
         now = datetime.now(timezone.utc).isoformat()
         with self._conn() as conn:
             cursor = conn.execute(
@@ -303,7 +307,7 @@ class Database:
                     alert["message"],
                     alert.get("source", ""),
                     alert.get("transaction_id"),
-                    _json.dumps(alert.get("metadata", {}), ensure_ascii=False),
+                    json.dumps(alert.get("metadata", {}), ensure_ascii=False),
                     now,
                 ),
             )

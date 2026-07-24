@@ -88,7 +88,11 @@ def load_excel(file_path: str) -> dict:
             'logs': [...],          # 150 rows
         }
     """
-    wb = openpyxl.load_workbook(file_path, data_only=True)
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+    except Exception:
+        logger.error("Failed to load Excel file: %s", file_path, exc_info=True)
+        raise
 
     transactions = _parse_sheet(wb, "Transacciones", [
         "id", "client_id", "merchant", "amount_usd", "date",
@@ -134,121 +138,123 @@ def load_excel(file_path: str) -> dict:
 def init_sqlite(db_path: str, data: dict) -> None:
     """Create all tables and insert data. Idempotent (INSERT OR IGNORE)."""
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS transactions (
-            id TEXT PRIMARY KEY,
-            client_id TEXT NOT NULL,
-            merchant TEXT NOT NULL,
-            amount_usd REAL NOT NULL,
-            date TEXT NOT NULL,
-            payment_method TEXT NOT NULL,
-            country TEXT NOT NULL,
-            channel TEXT NOT NULL,
-            device TEXT NOT NULL,
-            fraud_score INTEGER NOT NULL,
-            status TEXT NOT NULL,
-            notes TEXT
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id TEXT PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                merchant TEXT NOT NULL,
+                amount_usd REAL NOT NULL,
+                date TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                country TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                device TEXT NOT NULL,
+                fraud_score INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                notes TEXT
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cases (
+                case_id TEXT PRIMARY KEY,
+                transaction_id TEXT NOT NULL,
+                motivo TEXT NOT NULL,
+                resolution TEXT NOT NULL,
+                resolution_days INTEGER NOT NULL,
+                analyst TEXT NOT NULL,
+                observations TEXT,
+                open_date TEXT NOT NULL,
+                close_date TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS policies (
+                code TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                reference TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                transaction_id TEXT NOT NULL,
+                event TEXT NOT NULL,
+                service TEXT NOT NULL,
+                code TEXT NOT NULL,
+                detail TEXT NOT NULL,
+                severity TEXT NOT NULL
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id TEXT NOT NULL,
+                analyst_decision TEXT NOT NULL,
+                analyst_notes TEXT NOT NULL,
+                final_outcome TEXT NOT NULL,
+                judge_score REAL NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # Indexes for common lookups
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)")
+
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Transactions
+        conn.executemany(
+            "INSERT OR IGNORE INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(
+                t["id"], t["client_id"], t["merchant"], t["amount_usd"],
+                t["date"], t["payment_method"], t["country"], t["channel"],
+                t["device"], t["fraud_score"], t["status"], t.get("notes"),
+            ) for t in data["transactions"]],
         )
-    """)
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS cases (
-            case_id TEXT PRIMARY KEY,
-            transaction_id TEXT NOT NULL,
-            motivo TEXT NOT NULL,
-            resolution TEXT NOT NULL,
-            resolution_days INTEGER NOT NULL,
-            analyst TEXT NOT NULL,
-            observations TEXT,
-            open_date TEXT NOT NULL,
-            close_date TEXT NOT NULL
+        # Cases
+        conn.executemany(
+            "INSERT OR IGNORE INTO cases VALUES (?,?,?,?,?,?,?,?,?)",
+            [(
+                c["case_id"], c["transaction_id"], c["motivo"], c["resolution"],
+                c["resolution_days"], c["analyst"], c.get("observations"),
+                c["open_date"], c["close_date"],
+            ) for c in data["cases"]],
         )
-    """)
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS policies (
-            code TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            description TEXT NOT NULL,
-            reference TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+        # Policies
+        conn.executemany(
+            "INSERT OR IGNORE INTO policies VALUES (?,?,?,?,?,?,?)",
+            [(
+                p["code"], p["name"], p["category"],
+                p["description"], p["reference"], now, now,
+            ) for p in data["policies"]],
         )
-    """)
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            transaction_id TEXT NOT NULL,
-            event TEXT NOT NULL,
-            service TEXT NOT NULL,
-            code TEXT NOT NULL,
-            detail TEXT NOT NULL,
-            severity TEXT NOT NULL
+        # Logs
+        conn.executemany(
+            "INSERT INTO logs (timestamp, transaction_id, event, service, code, detail, severity) VALUES (?,?,?,?,?,?,?)",
+            [(
+                l["timestamp"], l["transaction_id"], l["event"],
+                l["service"], l["code"], l["detail"], l["severity"],
+            ) for l in data["logs"]],
         )
-    """)
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            transaction_id TEXT NOT NULL,
-            analyst_decision TEXT NOT NULL,
-            analyst_notes TEXT NOT NULL,
-            final_outcome TEXT NOT NULL,
-            judge_score REAL NOT NULL,
-            created_at TEXT NOT NULL
-        )
-    """)
-
-    # Indexes for common lookups
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)")
-
-    now = datetime.now(timezone.utc).isoformat()
-
-    # Transactions
-    conn.executemany(
-        "INSERT OR IGNORE INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        [(
-            t["id"], t["client_id"], t["merchant"], t["amount_usd"],
-            t["date"], t["payment_method"], t["country"], t["channel"],
-            t["device"], t["fraud_score"], t["status"], t.get("notes"),
-        ) for t in data["transactions"]],
-    )
-
-    # Cases
-    conn.executemany(
-        "INSERT OR IGNORE INTO cases VALUES (?,?,?,?,?,?,?,?,?)",
-        [(
-            c["case_id"], c["transaction_id"], c["motivo"], c["resolution"],
-            c["resolution_days"], c["analyst"], c.get("observations"),
-            c["open_date"], c["close_date"],
-        ) for c in data["cases"]],
-    )
-
-    # Policies
-    conn.executemany(
-        "INSERT OR IGNORE INTO policies VALUES (?,?,?,?,?,?,?)",
-        [(
-            p["code"], p["name"], p["category"],
-            p["description"], p["reference"], now, now,
-        ) for p in data["policies"]],
-    )
-
-    # Logs
-    conn.executemany(
-        "INSERT INTO logs (timestamp, transaction_id, event, service, code, detail, severity) VALUES (?,?,?,?,?,?,?)",
-        [(
-            l["timestamp"], l["transaction_id"], l["event"],
-            l["service"], l["code"], l["detail"], l["severity"],
-        ) for l in data["logs"]],
-    )
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+    finally:
+        conn.close()

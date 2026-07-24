@@ -1,10 +1,14 @@
 """Analytics route — aggregated metrics dashboard."""
 
+import logging
+
 from fastapi import APIRouter, Depends
 
 from ..data.db import Database
 from ..dependencies import get_db
 from ..domain.models import DashboardResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 

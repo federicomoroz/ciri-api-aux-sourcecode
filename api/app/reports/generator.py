@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader
 
+from ..domain.constants import REPORT_TEMPLATE_NAME
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +20,7 @@ class ReportGenerator:
             loader=FileSystemLoader(templates_dir),
             autoescape=True,
         )
-        self.template = self.env.get_template("case_report.html")
+        self.template = self.env.get_template(REPORT_TEMPLATE_NAME)
 
     def render(self, data: dict) -> str:
         """Render the HTML report template with all case data."""

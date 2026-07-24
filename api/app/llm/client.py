@@ -11,12 +11,14 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 import anthropic
+import httpx
 
 from ..domain.constants import (
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_TEMPERATURE,
     LLM_TRUNCATION_LENGTH,
+    N8N_TIMEOUT_S,
     SECONDS_TO_MS,
     TRACE_LLM_CALL,
 )
@@ -50,7 +52,11 @@ class LLMClient(Protocol):
 
 class AnthropicClient:
     def __init__(self, api_key: str, model: str, tracer: Tracer | None = None, max_retries: int = LLM_DEFAULT_MAX_RETRIES):
-        self.client = anthropic.Anthropic(api_key=api_key, max_retries=max_retries)
+        self.client = anthropic.Anthropic(
+            api_key=api_key,
+            max_retries=max_retries,
+            timeout=httpx.Timeout(N8N_TIMEOUT_S, connect=10.0),
+        )
         self.model = model
         self.tracer = tracer
 

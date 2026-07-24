@@ -103,6 +103,18 @@ __all__ = [
     "LLM_PRICING_FALLBACK_KEY",
     # Conversion
     "SECONDS_TO_MS",
+    # Pipeline
+    "PIPELINE_MAX_WORKERS",
+    "PIPELINE_THREAD_TIMEOUT_S",
+    # Alert events
+    "ALERT_EVENT_BLOCKER_REJECT",
+    "ALERT_EVENT_HITL_REQUIRED",
+    "ALERT_SOURCE_RESOLVE",
+    # Guardrail strings
+    "GUARDRAIL_AUTO_CORRECTED_PREFIX",
+    "GUARDRAIL_HITL_REASON_GENERIC",
+    # Report template
+    "REPORT_TEMPLATE_NAME",
 ]
 
 # ── SLA Limits ──────────────────────────────────────────────────────────────
@@ -241,3 +253,19 @@ LLM_PRICING_FALLBACK_KEY: str = "sonnet"
 
 # ── Conversion ───────────────────────────────────────────────────────────────
 SECONDS_TO_MS: int = 1000
+
+# ── Pipeline ────────────────────────────────────────────────────────────────
+PIPELINE_MAX_WORKERS: int = 4
+PIPELINE_THREAD_TIMEOUT_S: int = 60
+
+# ── Alert Event Types ───────────────────────────────────────────────────────
+ALERT_EVENT_BLOCKER_REJECT: str = "blocker_auto_reject"
+ALERT_EVENT_HITL_REQUIRED: str = "hitl_required"
+ALERT_SOURCE_RESOLVE: str = "resolve"
+
+# ── Guardrail Strings ──────────────────────────────────────────────────────
+GUARDRAIL_AUTO_CORRECTED_PREFIX: str = "Auto-corregido"
+GUARDRAIL_HITL_REASON_GENERIC: str = "Requiere revision de analista antes de decision final"
+
+# ── Report Template ─────────────────────────────────────────────────────────
+REPORT_TEMPLATE_NAME: str = "case_report.html"

@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import get_retriever
 from ..domain.constants import SIMILAR_CASES_TOP_K
 from ..rag.formatter import format_cases_for_prompt
 from ..rag.retriever import QdrantRetriever
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 

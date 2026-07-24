@@ -3,11 +3,10 @@ import logging
 from fastapi import APIRouter, Depends
 
 from ..config import Settings
-from ..data.db import Database
+from ..data.db import Database, cache_key
 from ..dependencies import get_db, get_report_generator, get_settings
 from ..domain.models import ReportRequest
 from ..reports.generator import ReportGenerator
-from .cache import _cache_key
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ def generate_html_report(
     tx_id = req.transaction.get("id", "")
     if settings.semantic_cache_enabled and tx_id:
         try:
-            key = _cache_key(tx_id, req.cliente_vip)
+            key = cache_key(tx_id, req.cliente_vip)
             db.store_cached_report(key, html)
             logger.info("Report cached for %s", tx_id)
         except Exception as e:

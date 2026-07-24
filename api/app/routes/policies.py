@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..data.db import Database
@@ -7,6 +9,8 @@ from ..domain.models import PolicyCreate, PolicyUpdate
 from ..rag.formatter import format_policies_for_prompt
 from ..rag.retriever import QdrantRetriever
 from ..rag.updater import RAGUpdater
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/policies", tags=["policies"])
 

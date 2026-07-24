@@ -44,9 +44,13 @@ async def lifespan(app: FastAPI):
     db_path = settings.sqlite_path
     os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
     if not os.path.exists(db_path):
-        data = load_excel(settings.data_file_path)
-        init_sqlite(db_path, data)
-        del data
+        try:
+            data = load_excel(settings.data_file_path)
+            init_sqlite(db_path, data)
+            del data
+        except Exception:
+            logger.error("Failed to initialize SQLite from Excel", exc_info=True)
+            raise
 
     db = Database(db_path)
     db.ensure_report_cache_table()
@@ -56,6 +60,7 @@ async def lifespan(app: FastAPI):
     qdrant = QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
+        timeout=30,
     )
     embedder = FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key)
     tracer = (
