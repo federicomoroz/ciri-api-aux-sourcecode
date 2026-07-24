@@ -17,6 +17,8 @@ import httpx
 import pytest
 
 BASE_URL = os.environ.get("CB_E2E_BASE_URL", "https://ciri-chargeback-agent.onrender.com")
+ANTHROPIC_KEY = os.environ.get("CB_ANTHROPIC_API_KEY", "")
+ADMIN_KEY = os.environ.get("CB_ADMIN_API_KEY", "")
 
 
 @pytest.fixture(scope="session")
@@ -27,7 +29,10 @@ def base_url() -> str:
 @pytest.fixture(scope="session")
 def client() -> httpx.Client:
     """Shared httpx client with long timeout (LLM calls can take 30s+)."""
-    with httpx.Client(base_url=BASE_URL, timeout=120.0) as c:
+    headers = {}
+    if ADMIN_KEY:
+        headers["X-API-Key"] = ADMIN_KEY
+    with httpx.Client(base_url=BASE_URL, timeout=120.0, headers=headers) as c:
         yield c
 
 

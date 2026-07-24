@@ -59,6 +59,36 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+# Paths exempt from API key auth (public-facing)
+_PUBLIC_PATHS = frozenset({"/", "/health", "/panel"})
+_PUBLIC_PREFIXES = ("/api/panel/",)
+
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    """Require X-API-Key header for all non-public routes.
+
+    If admin_api_key is empty (dev mode), the middleware is a no-op.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        key = getattr(request.app.state, "settings", None)
+        admin_key = getattr(key, "admin_api_key", "") if key else ""
+
+        if not admin_key:
+            return await call_next(request)
+
+        path = request.url.path.rstrip("/") or "/"
+        if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+            return await call_next(request)
+
+        provided = request.headers.get("X-API-Key", "")
+        if provided != admin_key:
+            return JSONResponse(status_code=401, content={"error": "Invalid or missing API key"})
+
+        return await call_next(request)
+
+
+app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RequestIDMiddleware)
 
 app.add_middleware(
@@ -85,7 +115,7 @@ async def anthropic_error_handler(request: Request, exc: anthropic.APIError):
         status_code=status,
         content={
             "error": f"LLM provider error: {type(exc).__name__}",
-            "detail": str(exc),
+            "detail": "LLM service error — check server logs",
             "request_id": request_id,
         },
     )

@@ -164,7 +164,7 @@ def panel_analyze_stream(
                 yield f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.error("Streaming pipeline failed: %s", exc, exc_info=True)
-            yield f"data: {json.dumps({'step': 'error', 'message': str(exc)})}\n\n"
+            yield f"data: {json.dumps({'step': 'error', 'message': 'Error interno del pipeline. Revisa que tu API key sea valida.'})}\n\n"
 
     return StreamingResponse(
         generate(),

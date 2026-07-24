@@ -61,6 +61,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.tracer = mock_tracer
     app.state.report_generator = report_gen
     app.state.settings = MagicMock()
+    app.state.settings.admin_api_key = ""
     app.state.settings.semantic_cache_enabled = True
     app.state.settings.qdrant_policies_collection = "policies"
     app.state.settings.qdrant_cases_collection = "historical_cases"

@@ -50,6 +50,7 @@ def test_client(in_memory_db_path):
     app.state.tracer = mock_tracer
     app.state.report_generator = MagicMock()
     app.state.settings = MagicMock()
+    app.state.settings.admin_api_key = ""
     app.state.embedder = mock_embedder
     app.state.resolution_service = resolution_service
     app.state.feedback_service = feedback_service

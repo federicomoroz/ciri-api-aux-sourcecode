@@ -169,6 +169,9 @@ class TestFullPipeline:
     @pytest.fixture(scope="class")
     def pipeline_events(self, client: httpx.Client) -> list[dict]:
         """Run full pipeline for TXN-00051 via SSE, collect all events."""
+        from tests.e2e.conftest import ANTHROPIC_KEY
+        if not ANTHROPIC_KEY:
+            pytest.skip("CB_ANTHROPIC_API_KEY required for streaming pipeline tests")
         events = []
         with client.stream(
             "POST",
@@ -177,6 +180,7 @@ class TestFullPipeline:
                 "transaction_id": "TXN-00051",
                 "motivo": "No reconoce la compra",
                 "cliente_vip": False,
+                "api_key": ANTHROPIC_KEY,
             },
             timeout=120.0,
         ) as r:
