@@ -408,6 +408,57 @@
       margin-top: 3px;
     }
 
+    /* API Key (BYOK) */
+    .api-key-section {
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    .api-key-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .api-key-header .form-label { margin-bottom: 0; }
+    .api-key-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      line-height: 1.4;
+    }
+    .api-key-badge.required { background: #fef3c7; color: #92400e; }
+    .api-key-badge.ok       { background: #d1fae5; color: #065f46; }
+    .api-key-input-wrap {
+      position: relative;
+    }
+    .api-key-input-wrap input {
+      width: 100%;
+      background: var(--field-bg);
+      border: 2px solid;
+      border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      padding: 5px 32px 5px 8px;
+      outline: none;
+    }
+    .api-key-input-wrap input:focus {
+      border-color: var(--accent) var(--bevel-light) var(--bevel-light) var(--accent);
+    }
+    .api-key-toggle {
+      position: absolute;
+      right: 4px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      font-size: 14px; color: var(--text-muted); padding: 2px 4px;
+    }
+    .api-key-toggle:hover { color: var(--text); }
+
     /* ─────────────────────────────────────────────
        TRANSACTION FILTERS
     ───────────────────────────────────────────── */
@@ -1650,6 +1701,19 @@
         </div>
       </div>
 
+      <!-- API Key (BYOK) -->
+      <div class="api-key-section">
+        <div class="api-key-header">
+          <label class="form-label" for="inp-api-key">Anthropic API Key</label>
+          <span class="api-key-badge required" id="api-key-badge">requerida</span>
+        </div>
+        <div class="api-key-input-wrap">
+          <input type="password" id="inp-api-key" placeholder="sk-ant-api03-..." oninput="onApiKeyChange()" autocomplete="off" spellcheck="false" />
+          <button class="api-key-toggle" onclick="toggleApiKeyVisibility()" title="Mostrar/ocultar" type="button">&#128065;</button>
+        </div>
+        <p class="form-hint">Usa tu propia key — cada usuario consume sus creditos. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent)">Obtener key</a></p>
+      </div>
+
       <!-- Submit -->
       <button class="btn-analyze" id="btn-submit" onclick="submitAnalysis()" disabled>
         <span class="btn-shimmer"></span>
@@ -2082,6 +2146,34 @@ function deactivateCustom() {
   if (selectedIdx === null) disableSubmit('Seleccionar escenario');
 }
 
+// ─── BYOK (Bring Your Own Key) ──────────────────────────
+function getApiKey() {
+  return ($('inp-api-key')?.value || '').trim();
+}
+
+function hasApiKey() {
+  return getApiKey().length > 10;
+}
+
+function onApiKeyChange() {
+  const badge = $('api-key-badge');
+  if (hasApiKey()) {
+    badge.textContent = 'ok';
+    badge.className   = 'api-key-badge ok';
+  } else {
+    badge.textContent = 'requerida';
+    badge.className   = 'api-key-badge required';
+  }
+  // Re-check submit eligibility
+  if (isCustom) refreshSubmitBtn();
+  else if (selectedIdx !== null) enableSubmit(SCENARIOS[selectedIdx].label);
+}
+
+function toggleApiKeyVisibility() {
+  const inp = $('inp-api-key');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
 function refreshSubmitBtn() {
   const txnId   = $('sel-txn').value;
   const motivoSel = $('sel-motivo').value;
@@ -2127,22 +2219,33 @@ function disableSubmit(label) {
 let pendingPayload = null;
 
 function buildPayload() {
+  let base = null;
   if (isCustom) {
     const txnId     = $('sel-txn').value.trim();
     const motivoSel = $('sel-motivo').value;
     const motivo    = motivoSel === '__custom__' ? $('inp-motivo-custom').value.trim() : motivoSel;
     if (!txnId || !motivo) return null;
-    return { transaction_id: txnId, motivo, cliente_vip: $('inp-vip').checked };
+    base = { transaction_id: txnId, motivo, cliente_vip: $('inp-vip').checked };
   } else if (selectedIdx !== null) {
     const s = SCENARIOS[selectedIdx];
-    return { transaction_id: s.transaction_id, motivo: s.motivo, cliente_vip: s.cliente_vip };
+    base = { transaction_id: s.transaction_id, motivo: s.motivo, cliente_vip: s.cliente_vip };
   }
-  return null;
+  if (!base) return null;
+  const key = getApiKey();
+  if (key) base.api_key = key;
+  return base;
 }
 
 async function submitAnalysis() {
   const payload = buildPayload();
   if (!payload) return;
+
+  // BYOK: always require API key for panel analysis
+  if (!hasApiKey()) {
+    showToast('amber', 'API Key requerida', 'Ingresa tu Anthropic API Key para ejecutar el analisis.');
+    $('inp-api-key').focus();
+    return;
+  }
 
   if (getPipelineMode() === 'test') {
     pendingPayload = payload;

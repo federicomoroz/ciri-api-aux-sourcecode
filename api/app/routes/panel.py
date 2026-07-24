@@ -10,7 +10,7 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 from ..config import Settings
@@ -27,12 +27,29 @@ from ..domain.constants import (
     N8N_WEBHOOK_TEST_PATH,
 )
 from ..domain.models import AnalyzeRequest
+from ..llm.client import AnthropicClient
 from ..reports.generator import ReportGenerator
 from ..services.pipeline import PipelineService
+from ..services.resolution import ResolutionService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["panel"])
+
+
+def _byok_pipeline(api_key: str, base: PipelineService, settings: Settings, request: Request) -> PipelineService:
+    """Build a temporary pipeline using the visitor's own Anthropic API key."""
+    tracer = request.app.state.tracer
+    llm = AnthropicClient(api_key=api_key, model=settings.llm_model, tracer=tracer)
+    llm_res = (
+        AnthropicClient(api_key=api_key, model=settings.llm_model_resolution, tracer=tracer)
+        if settings.llm_model_resolution else llm
+    )
+    resolution_svc = ResolutionService(llm, tracer, llm_resolution=llm_res)
+    return PipelineService(
+        db=base.db, retriever=base.retriever, analyzer=base.analyzer,
+        resolution_svc=resolution_svc, report_gen=base.report_gen,
+    )
 
 
 @router.get("/panel", response_class=HTMLResponse, include_in_schema=False)
@@ -77,6 +94,7 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
 @router.post("/api/panel/analyze", response_class=HTMLResponse)
 async def panel_analyze(
     req: AnalyzeRequest,
+    request: Request,
     direct: bool              = Query(False, description="Skip n8n, use direct FastAPI pipeline"),
     n8n_test: bool            = Query(False, description="Use n8n test webhook URL instead of production"),
     timeout_s: float          = Query(N8N_TIMEOUT_S, description="n8n webhook timeout in seconds", ge=10, le=600),
@@ -98,6 +116,12 @@ async def panel_analyze(
             return HTMLResponse(content=html, status_code=200)
 
     # ── Direct pipeline fallback ──────────────────────────────────────────
+    if not req.api_key:
+        return HTMLResponse(
+            content="<html><body><h2>API key requerida</h2><p>Ingresa tu Anthropic API Key en el panel.</p></body></html>",
+            status_code=400,
+        )
+    pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
     try:
         html, usage = pipeline.run(req, model_name=settings.llm_model)
         response = HTMLResponse(content=html, status_code=200)
@@ -118,10 +142,21 @@ async def panel_analyze(
 @router.post("/api/panel/analyze-stream")
 def panel_analyze_stream(
     req: AnalyzeRequest,
+    request: Request,
     pipeline: PipelineService = Depends(get_pipeline_service),
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
-    """Run the pipeline with SSE streaming — emits real-time progress events."""
+    """Run the pipeline with SSE streaming — emits real-time progress events.
+
+    BYOK: visitors must provide their own Anthropic API key.
+    The server key is reserved for n8n and direct API endpoints.
+    """
+    if not req.api_key:
+        return StreamingResponse(
+            iter([f"data: {json.dumps({'step': 'error', 'message': 'API key requerida. Ingresa tu Anthropic API Key.'})}\n\n"]),
+            media_type="text/event-stream",
+        )
+    pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
 
     def generate():
         try:

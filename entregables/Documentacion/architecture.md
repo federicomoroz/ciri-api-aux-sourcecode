@@ -614,6 +614,8 @@ Error Trigger -> Extraer Info -> POST /api/alerts/ -> Send Email ($vars.ALERT_EM
 
 El panel soporta 3 modos de pipeline: **Directo (sin n8n)** (default), **n8n Test** y **n8n Production**.
 
+**BYOK (Bring Your Own Key):** El panel requiere que cada visitante ingrese su propia API key de Anthropic. La key se envía en el body del request (`api_key` en `AnalyzeRequest`), se usa para crear un `AnthropicClient` temporal por request, y nunca se almacena (ni en localStorage, ni servidor, ni logs). Esto permite compartir el panel publicamente sin exponer creditos propios. La key del servidor (`CB_ANTHROPIC_API_KEY`) sigue activa para n8n webhooks y endpoints API directos.
+
 En modo directo, el panel usa SSE streaming (`POST /api/panel/analyze-stream`) para mostrar el progreso del pipeline en tiempo real. Cada paso emite un evento SSE con datos reales a medida que se completa: nombre del comercio, cantidad de politicas recuperadas, desglose de veredictos (PASS/FAIL/BLOCKER), score del juez, etc. El endpoint usa `PipelineService.run_streaming()`, un generador que yield-ea tuplas `(step, data)` y ejecuta pasos paralelos con `as_completed()`. El header `X-Accel-Buffering: no` asegura compatibilidad con Render/nginx.
 
 En modo n8n, el panel muestra un spinner simple con "Esperando respuesta de n8n..." sin pasos intermedios.

@@ -81,6 +81,7 @@ class AnalyzeRequest(BaseModel):
     transaction_id: str = Field(min_length=1)
     motivo: str = Field(min_length=1)
     cliente_vip: bool = False
+    api_key: str | None = Field(default=None, exclude=True)
 
 
 # ---- LLM Output Validation Models ----

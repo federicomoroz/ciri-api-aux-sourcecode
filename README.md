@@ -10,7 +10,7 @@
 
 Agente inteligente de resolución de contracargos construido para la evaluación técnica de CIRI (Continuous Improvement & Risk Intelligence). El sistema investiga casos de contracargo end-to-end: recupera políticas aplicables vía RAG, las evalúa contra la transacción, sintetiza una resolución con razonamiento analítico, y se auto-mejora a través de un feedback loop con Judge.
 
-> **Demo en vivo:** [Panel de Testing en Render](https://ciri-chargeback-agent.onrender.com/panel) — interfaz interactiva para correr investigaciones sin setup local.
+> **Demo en vivo:** [Panel de Testing en Render](https://ciri-chargeback-agent.onrender.com/panel) — interfaz interactiva para correr investigaciones. Requiere una API key de Anthropic propia (BYOK).
 >
 > **Nota:** Render free tier tiene cold starts de ~50 segundos. La primera carga puede demorar.
 
@@ -22,7 +22,11 @@ La forma más rápida de probar el sistema completo:
 
 ### Opción 1 — Panel web (sin n8n)
 
-Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel), seleccionar una transacción y hacer clic en "Analizar". El panel tiene 3 modos de pipeline:
+Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel), ingresar tu API key de Anthropic, seleccionar una transacción y hacer clic en "Analizar".
+
+**BYOK (Bring Your Own Key):** El panel requiere que cada visitante ingrese su propia [API key de Anthropic](https://console.anthropic.com/settings/keys). La key se usa solo para esa sesión — no se almacena en ningún lado (ni localStorage, ni servidor, ni logs). Cada usuario consume sus propios créditos.
+
+El panel tiene 3 modos de pipeline:
 
 - **Directo (sin n8n)** (default) — ejecuta el pipeline completo via SSE streaming (`POST /api/panel/analyze-stream`), mostrando progreso en tiempo real con datos reales de cada paso (nombre del comercio, cantidad de políticas, desglose de veredictos, score del juez, etc.)
 - **n8n Test** — envía el request al webhook de n8n en entorno de test
@@ -49,7 +53,7 @@ curl -X POST https://<tu-instancia-n8n>/webhook/chargeback-agent \
   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'
 ```
 
-No se necesitan API keys de Anthropic, Voyage ni Qdrant — todo corre en el backend ya desplegado en Render.
+No se necesitan API keys de Voyage ni Qdrant — todo corre en el backend ya desplegado en Render. Solo se requiere una API key de Anthropic para el panel (BYOK).
 
 > **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para manejar el cold start de Render automáticamente.
 
