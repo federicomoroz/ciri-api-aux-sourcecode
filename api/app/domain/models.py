@@ -197,3 +197,24 @@ class LangfuseStatsResponse(BaseModel):
     enabled: bool
     summary: dict | None = None
     recent_traces: list[dict] = []
+
+
+class AlertRequest(BaseModel):
+    """Incoming alert from n8n error handler or resolve pipeline."""
+    event_type: str = Field(min_length=1)
+    severity: str = "ERROR"
+    message: str = Field(min_length=1)
+    source: str = ""
+    transaction_id: str | None = None
+    metadata: dict = {}
+
+
+class AlertResponse(BaseModel):
+    """Alert stored in SQLite."""
+    id: int
+    event_type: str
+    severity: str
+    message: str
+    source: str
+    transaction_id: str | None = None
+    created_at: str = ""

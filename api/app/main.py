@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 from .dependencies import lifespan
 from .domain.constants import FALLBACK_REQUEST_ID
 from .routes import (
+    alerts,
     analyze,
     analytics,
     cache,
@@ -108,6 +109,7 @@ def root() -> RedirectResponse:
 
 
 app.include_router(health.router)
+app.include_router(alerts.router)
 app.include_router(cache.router)
 app.include_router(transactions.router)
 app.include_router(logs.router)

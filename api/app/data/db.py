@@ -269,3 +269,53 @@ class Database:
                 (cache_key, html, now),
             )
             conn.commit()
+
+    # --- Alerts (operational event log) ---
+
+    def ensure_alerts_table(self) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS alerts (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type      TEXT NOT NULL,
+                    severity        TEXT NOT NULL DEFAULT 'ERROR',
+                    message         TEXT NOT NULL,
+                    source          TEXT NOT NULL DEFAULT '',
+                    transaction_id  TEXT,
+                    metadata_json   TEXT NOT NULL DEFAULT '{}',
+                    created_at      TEXT NOT NULL
+                )"""
+            )
+            conn.commit()
+
+    def save_alert(self, alert: dict) -> int:
+        import json as _json
+
+        now = datetime.now(timezone.utc).isoformat()
+        with self._conn() as conn:
+            cursor = conn.execute(
+                """INSERT INTO alerts
+                   (event_type, severity, message, source, transaction_id, metadata_json, created_at)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (
+                    alert["event_type"],
+                    alert.get("severity", "ERROR"),
+                    alert["message"],
+                    alert.get("source", ""),
+                    alert.get("transaction_id"),
+                    _json.dumps(alert.get("metadata", {}), ensure_ascii=False),
+                    now,
+                ),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_recent_alerts(self, limit: int = 50) -> list[dict]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """SELECT id, event_type, severity, message, source,
+                          transaction_id, created_at
+                   FROM alerts ORDER BY id DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return self._rows_to_list(rows)

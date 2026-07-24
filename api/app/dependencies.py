@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
 
     db = Database(db_path)
     db.ensure_report_cache_table()
+    db.ensure_alerts_table()
 
     # --- Phase 2: Connect external services ---
     qdrant = QdrantClient(

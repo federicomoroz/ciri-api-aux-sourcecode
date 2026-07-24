@@ -30,10 +30,11 @@ Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback
    - `workflow_ciri_agent.json` — workflow principal (54 nodos)
    - `workflow_ciri_errors.json` — error handler (recibe errores de Stop and Error)
    - `workflow_ciri_form.json` — form trigger (formulario nativo n8n)
-2. Ir a **Settings → Variables** y crear una variable:
-   - **Name:** `API_BASE_URL`
-   - **Value:** `https://ciri-chargeback-agent.onrender.com`
-3. Activar el workflow
+2. Ir a **Settings → Variables** y crear dos variables:
+   - **`API_BASE_URL`** = `https://ciri-chargeback-agent.onrender.com`
+   - **`ALERT_EMAIL`** = email destino para alertas de error (el error handler envía notificaciones por email + POST a la API)
+3. (Opcional) Crear credencial SMTP "SMTP CIRI" en n8n para habilitar el envío de emails de alerta
+4. Activar los workflows
 4. Enviar un request al webhook:
 
 ```bash
@@ -222,6 +223,8 @@ Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
 |---|---|---|
 | `GET` | `/api/langfuse/stats` | Estadísticas de Langfuse (traces, tokens, costos) |
 | `GET` | `/health` | Health check de servicios |
+| `POST` | `/api/alerts/` | Registrar alerta operativa (desde n8n error handler o pipeline) |
+| `GET` | `/api/alerts/` | Listar alertas recientes (panel log) |
 
 ---
 

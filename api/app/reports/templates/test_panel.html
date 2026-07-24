@@ -1082,6 +1082,38 @@
     .history-time { font-size: 11px; color: var(--text-dim); flex-shrink: 0; font-family: var(--font-mono); }
 
     /* ─────────────────────────────────────────────
+       ALERTS LOG
+    ───────────────────────────────────────────── */
+    .alerts-section { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
+    .alert-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 6px 8px;
+      background: var(--field-bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      font-size: 12px;
+    }
+    .alert-sev {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .alert-sev-ERROR   { background: rgba(220,38,38,0.15); color: var(--red); }
+    .alert-sev-WARNING { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .alert-sev-INFO    { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .alert-body { flex: 1; min-width: 0; }
+    .alert-msg  { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .alert-meta { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+    .alert-time { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .alerts-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 10px 0; }
+
+    /* ─────────────────────────────────────────────
        LANGFUSE OBSERVABILITY
     ───────────────────────────────────────────── */
     .langfuse-section { margin-top: 4px; }
@@ -1664,6 +1696,16 @@
             <tbody id="lf-traces-body"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Alerts Log -->
+      <hr class="panel-divider"/>
+      <p class="panel-label">
+        Log de alertas
+        <button class="btn-policies" style="font-size:10px;padding:2px 8px;margin-left:6px" onclick="loadAlerts()">Actualizar</button>
+      </p>
+      <div class="alerts-section" id="alerts-list">
+        <p class="alerts-empty" id="alerts-empty">Sin alertas.</p>
       </div>
 
     </aside>
@@ -2366,11 +2408,13 @@ function showResult(html, payload, elapsed, usageInfo, wasN8nFallback) {
       risk:      riskLevel,
       time:      new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
       payload,
+      html,
     });
   };
 
   // Refresh Langfuse stats after analysis (delay for ingestion)
   setTimeout(loadLangfuseStats, 2000);
+  setTimeout(loadAlerts, 1000);
 }
 
 function showError(msg, isNetwork) {
@@ -2432,18 +2476,49 @@ function renderHistory() {
     const risk  = entry.risk || 'OK';
     const item  = document.createElement('div');
     item.className = 'history-item';
-    item.title     = `Motivo: ${entry.motivo}${entry.vip ? ' · VIP' : ''}`;
+    item.title     = `Motivo: ${entry.motivo}${entry.vip ? ' · VIP' : ''} · Click para ver informe`;
     item.innerHTML = `
       <span class="history-badge hist-${risk}">${risk}</span>
       <div class="history-info">
         <div class="history-txn">${entry.txn_id}</div>
-        <div class="history-meta">${entry.motivo.slice(0, 32)}${entry.motivo.length > 32 ? '…' : ''}</div>
+        <div class="history-meta">${entry.motivo.slice(0, 32)}${entry.motivo.length > 32 ? '…' : ''} · ${entry.elapsed || '?'}s</div>
       </div>
       <span class="history-time">${entry.time}</span>
     `;
-    item.onclick = () => rerunFromHistory(entry);
+    item.onclick = () => showFromHistory(entry);
     list.appendChild(item);
   });
+}
+
+function showFromHistory(entry) {
+  if (entry.html) {
+    // Show cached report directly — no re-analysis needed
+    showResultFromCache(entry.html, entry.elapsed, entry.payload);
+  } else {
+    // Legacy entry without saved HTML — re-fill form
+    rerunFromHistory(entry);
+  }
+}
+
+function showResultFromCache(html, elapsed, payload) {
+  $('idle-state').style.display    = 'none';
+  $('loading-state').style.display = 'none';
+  $('error-state').style.display   = 'none';
+  $('result-state').style.display  = '';
+
+  const verdictPill = $('verdict-pill');
+  const metaBar     = $('result-meta');
+  const elapsedBadge = $('elapsed-badge');
+
+  if (elapsedBadge) {
+    elapsedBadge.textContent = (elapsed || '?') + 's (cache)';
+    elapsedBadge.classList.add('visible');
+  }
+  if (verdictPill) { verdictPill.textContent = 'CACHE'; verdictPill.className = 'verdict-pill vp-LOW'; }
+  if (metaBar)     { metaBar.textContent = payload ? payload.transaction_id : ''; }
+
+  const frame = $('report-frame');
+  frame.srcdoc = html;
 }
 
 function rerunFromHistory(entry) {
@@ -2464,6 +2539,46 @@ function rerunFromHistory(entry) {
     if (entry.vip !== undefined) $('inp-vip').checked = entry.vip;
     refreshSubmitBtn();
   }
+}
+
+// ─── ALERTS LOG ──────────────────────────────────────────
+async function loadAlerts() {
+  try {
+    const r = await fetch(API_BASE + '/api/alerts/?limit=20');
+    if (!r.ok) return;
+    const alerts = await r.json();
+    renderAlerts(alerts);
+  } catch { /* silent — alerts are non-critical */ }
+}
+
+function renderAlerts(alerts) {
+  const list  = $('alerts-list');
+  const empty = $('alerts-empty');
+  if (!list) return;
+
+  list.querySelectorAll('.alert-item').forEach(el => el.remove());
+
+  if (!alerts || alerts.length === 0) {
+    if (empty) empty.style.display = '';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  alerts.forEach(function(a) {
+    const item = document.createElement('div');
+    item.className = 'alert-item';
+    const sev  = a.severity || 'INFO';
+    const ts   = a.created_at ? a.created_at.slice(11, 19) : '';
+    const tx   = a.transaction_id ? ' · ' + a.transaction_id : '';
+    item.innerHTML =
+      '<span class="alert-sev alert-sev-' + sev + '">' + sev + '</span>' +
+      '<div class="alert-body">' +
+        '<div class="alert-msg">' + ((a.message || '').length > 80 ? (a.message || '').slice(0, 80) + '...' : (a.message || '')) + '</div>' +
+        '<div class="alert-meta">' + (a.event_type || '') + tx + '</div>' +
+      '</div>' +
+      '<span class="alert-time">' + ts + '</span>';
+    list.appendChild(item);
+  });
 }
 
 // ─── TOAST ────────────────────────────────────────────────
@@ -2721,6 +2836,7 @@ setInterval(checkHealth, 30_000);
 loadTransactions();
 renderHistory();
 loadLangfuseStats();
+loadAlerts();
 </script>
 </body>
 </html>

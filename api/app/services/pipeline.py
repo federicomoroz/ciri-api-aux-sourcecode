@@ -40,6 +40,13 @@ class PipelineService:
         """Execute the 9-step pipeline. Returns (html, usage_dict)."""
         txn_id = req.transaction_id
 
+        # Step 0 — cache check (mirrors n8n §1 "Verificar Caché")
+        cache_key = f"{txn_id}|{req.cliente_vip}"
+        cached_html = self.db.get_cached_report(cache_key)
+        if cached_html:
+            logger.info("Pipeline cache HIT for %s", txn_id)
+            return cached_html, {"cache_hit": True}
+
         # Step 1 — lookup_transaction
         tx = self.db.get_transaction(txn_id)
         if not tx:

@@ -87,6 +87,8 @@ __all__ = [
     "DASHBOARD_TOP_N",
     # Fallback
     "FALLBACK_REQUEST_ID",
+    # Alerts
+    "ALERTS_DEFAULT_LIMIT",
     # Langfuse stats
     "LANGFUSE_STATS_CACHE_TTL_S",
     "LANGFUSE_STATS_TRACE_LIMIT",
@@ -217,6 +219,9 @@ DASHBOARD_TOP_N: int = 5                   # top N merchants shown in dashboard
 
 # ── Fallback ────────────────────────────────────────────────────────────────
 FALLBACK_REQUEST_ID: str = "unknown"       # default request_id when not set
+
+# ── Alerts ────────────────────────────────────────────────────────────────────
+ALERTS_DEFAULT_LIMIT: int = 50
 
 # ── Langfuse Stats ─────────────────────────────────────────────────────────
 LANGFUSE_STATS_CACHE_TTL_S: int = 60
