@@ -2184,8 +2184,6 @@ async function startAnalysis(payload) {
   $('elapsed-badge').classList.remove('visible');
   $('cost-badge').classList.remove('visible');
 
-  buildStepsDom();
-
   startTime = Date.now();
   updateTimer();
   timerInterval = setInterval(updateTimer, 500);
@@ -2198,6 +2196,14 @@ async function startAnalysis(payload) {
   // Use streaming endpoint for direct pipeline, regular for n8n
   const mode = getPipelineMode();
   const useStream = (mode === 'direct' || mode === 'auto');
+
+  if (useStream) {
+    buildStepsDom();
+  } else {
+    // n8n mode: hide step list, show simple message
+    $('steps-list').innerHTML = '';
+    $('loading-subline').innerHTML = 'Esperando respuesta de n8n... · <span id="timer-display">0s</span>';
+  }
 
   try {
     if (useStream) {
@@ -2331,8 +2337,6 @@ function _buildStepDetail(step, ev) {
 
 // ─── CLASSIC (non-streaming) PATH for n8n ─────────────────
 async function _runClassic(payload, mode, timeoutSec, timeoutId) {
-  scheduleSteps();
-
   let analyzeUrl = API_BASE + '/api/panel/analyze';
   const params = new URLSearchParams();
   if (mode === 'direct') params.set('direct', '1');
@@ -2348,7 +2352,6 @@ async function _runClassic(payload, mode, timeoutSec, timeoutId) {
   });
 
   clearTimeout(timeoutId);
-  clearStepTimers();
   stopTimer();
 
   if (!resp.ok) {
@@ -2359,7 +2362,6 @@ async function _runClassic(payload, mode, timeoutSec, timeoutId) {
   const body = await resp.text();
   if (!body || !body.trim()) throw new Error('El pipeline devolvio una respuesta vacia.');
 
-  finishAllSteps();
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
   let usageInfo = null;
