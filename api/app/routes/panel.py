@@ -11,7 +11,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from ..config import Settings
 from ..dependencies import (
@@ -113,6 +113,29 @@ async def panel_analyze(
             f"</body></html>"
         )
         return HTMLResponse(content=error_html, status_code=500)
+
+
+@router.post("/api/panel/analyze-stream")
+def panel_analyze_stream(
+    req: AnalyzeRequest,
+    pipeline: PipelineService = Depends(get_pipeline_service),
+    settings: Settings = Depends(get_settings),
+) -> StreamingResponse:
+    """Run the pipeline with SSE streaming — emits real-time progress events."""
+
+    def generate():
+        try:
+            for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
+                yield f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            logger.error("Streaming pipeline failed: %s", exc, exc_info=True)
+            yield f"data: {json.dumps({'step': 'error', 'message': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 async def _try_n8n(

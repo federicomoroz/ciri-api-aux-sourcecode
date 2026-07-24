@@ -1883,18 +1883,26 @@ const SCENARIOS = [
   },
 ];
 
-// ─── LOADING STEPS ────────────────────────────────────────
+// ─── LOADING STEPS (real-time SSE, no fake delays) ───────
 const STEPS = [
-  { label: 'Identificando transaccion...',              detail: 'GET /api/transactions/{id} → SQLite',                       icon: 'db',    delay: 0   },
-  { label: 'Recuperando logs de eventos...',            detail: 'GET /api/logs/{tx_id} → historial completo',                icon: 'log',   delay: 3200 },
-  { label: 'Buscando politicas aplicables en RAG...',   detail: 'GET /api/policies/search → Qdrant vector search',           icon: 'rag',   delay: 6400 },
-  { label: 'Recuperando casos precedentes similares...', detail: 'GET /api/cases/similar → Voyage AI embeddings',   icon: 'cases', delay: 9600 },
-  { label: 'Evaluando perfil de riesgo del comercio...', detail: 'GET /api/merchants/{name}/risk → CB ratio + flags',        icon: 'merch', delay: 12800 },
-  { label: 'Verificando SLA...',                        detail: 'POST /api/sla/check → LATAM 10d / no-LATAM 15d',           icon: 'sla',   delay: 16000 },
-  { label: 'Sintetizando resolucion con LLM...',        detail: 'POST /api/analyze/resolve → Claude Sonnet 4.6 · T=0.3',   icon: 'llm',   delay: 19200 },
-  { label: 'Ejecutando juez de calidad...',             detail: 'POST /api/analyze/judge → LLM-as-Judge · 5 criterios',     icon: 'judge', delay: 22400 },
-  { label: 'Generando informe final...',                detail: 'POST /api/reports/html → Jinja2 template render',          icon: 'rep',   delay: 25600 },
+  { label: 'Verificando cache...',                       detail: 'SQLite exact-match lookup' },
+  { label: 'Obteniendo transaccion...',                  detail: 'GET /api/transactions/{id}' },
+  { label: 'Recuperando logs de eventos...',             detail: 'GET /api/logs/{tx_id}' },
+  { label: 'Buscando politicas en RAG...',               detail: 'Qdrant semantic search' },
+  { label: 'Recuperando casos similares...',             detail: 'Voyage AI embeddings' },
+  { label: 'Evaluando riesgo del comercio...',           detail: 'CB ratio + flags' },
+  { label: 'Verificando historial del cliente...',       detail: 'Chargebacks + flags' },
+  { label: 'Sintetizando resolucion con LLM...',         detail: 'Haiku (eval) + Sonnet (sintesis)' },
+  { label: 'Ejecutando juez de calidad...',              detail: 'LLM-as-Judge · 5 criterios' },
+  { label: 'Generando informe final...',                 detail: 'Jinja2 template render' },
 ];
+
+// Maps SSE step names → STEPS indices for real-time updates
+const STEP_INDEX = {
+  cache_check: 0, transaction: 1, logs: 2, policies: 3,
+  cases: 4, merchant_risk: 5, client_flags: 6,
+  resolving: 7, resolved: 7, judging: 8, judged: 8, done: 9,
+};
 
 // ─── STATE ────────────────────────────────────────────────
 let selectedIdx    = null;
@@ -2165,7 +2173,7 @@ function cancelN8nTest() {
   pendingPayload = null;
 }
 
-// ─── ANALYSIS PIPELINE ────────────────────────────────────
+// ─── ANALYSIS PIPELINE (SSE streaming — real-time progress) ──
 async function startAnalysis(payload) {
   showPanel('loading');
   $('btn-submit').disabled = true;
@@ -2181,93 +2189,186 @@ async function startAnalysis(payload) {
   updateTimer();
   timerInterval = setInterval(updateTimer, 500);
 
-  scheduleSteps();
-
   abortCtrl = new AbortController();
-  // Timeout from panel selector + 20s buffer for backend processing
   const timeoutSec = parseInt($('timeout-select').value) || 180;
   const FETCH_TIMEOUT_MS = (timeoutSec + 20) * 1000;
   const timeoutId = setTimeout(() => abortCtrl.abort(), FETCH_TIMEOUT_MS);
 
+  // Use streaming endpoint for direct pipeline, regular for n8n
+  const mode = getPipelineMode();
+  const useStream = (mode === 'direct' || mode === 'auto');
+
   try {
-    // Build URL with pipeline mode + timeout query params
-    let analyzeUrl = API_BASE + '/api/panel/analyze';
-    const mode = getPipelineMode();
-    const params = new URLSearchParams();
-    if (mode === 'direct') params.set('direct', '1');
-    else if (mode === 'test') params.set('n8n_test', '1');
-    params.set('timeout_s', timeoutSec);
-    analyzeUrl += '?' + params.toString();
-
-    const resp = await fetch(analyzeUrl, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-      signal:  abortCtrl.signal,
-    });
-
-    clearTimeout(timeoutId);
-    clearStepTimers();
-    stopTimer();
-
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 300)}`);
+    if (useStream) {
+      await _runStreaming(payload, timeoutId);
+    } else {
+      await _runClassic(payload, mode, timeoutSec, timeoutId);
     }
-
-    const contentType = resp.headers.get('content-type') || '';
-    const body        = await resp.text();
-
-    if (!body || body.trim() === '') {
-      throw new Error('El pipeline devolvio una respuesta vacia.');
-    }
-
-    finishAllSteps();
-
-    // Read cost/usage header from direct pipeline
-    let usageInfo = null;
-    try {
-      const usageHeader = resp.headers.get('X-Usage-JSON');
-      if (usageHeader) usageInfo = JSON.parse(usageHeader);
-    } catch (e) { /* n8n path — no header */ }
-
-    // Detect silent fallback: user chose n8n but got direct pipeline response
-    const wasN8nFallback = mode !== 'direct' && usageInfo !== null;
-
-    showResult(body, payload, elapsed, usageInfo, wasN8nFallback);
-
   } catch (err) {
     clearTimeout(timeoutId);
-    clearStepTimers();
     stopTimer();
-
-    // Manual abort from timeout → user-friendly message
     if (err.name === 'AbortError') {
       const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(0);
-      const timeoutMsg = `El analisis tardo mas de ${elapsedSec}s. Intenta de nuevo — el servicio puede estar arrancando (cold start).`;
-      showError(timeoutMsg, true);
-      showToast('amber', 'Timeout', timeoutMsg);
+      const msg = `El analisis tardo mas de ${elapsedSec}s. Intenta de nuevo — el servicio puede estar arrancando (cold start).`;
+      showError(msg, true);
+      showToast('amber', 'Timeout', msg);
     } else {
       const msg = err.message || String(err);
-      const isNetwork = msg.toLowerCase().includes('fetch') ||
-                        msg.toLowerCase().includes('network') ||
-                        msg.toLowerCase().includes('failed') ||
-                        msg.toLowerCase().includes('load');
-
+      const isNetwork = /fetch|network|failed|load/i.test(msg);
       showError(isNetwork
         ? 'Error de conexion. El servidor puede estar arrancando (cold start en Render). Intenta de nuevo en 30s.'
         : msg, isNetwork);
-      showToast(isNetwork ? 'amber' : 'error',
-                isNetwork ? 'Conexion perdida' : 'Error en el pipeline',
-                msg);
+      showToast(isNetwork ? 'amber' : 'error', isNetwork ? 'Conexion perdida' : 'Error', msg);
     }
   }
 
   $('btn-submit').disabled = false;
   $('btn-submit').classList.remove('loading');
   $('btn-label').textContent = 'Analizar · ' + (isCustom ? $('sel-txn').value : SCENARIOS[selectedIdx]?.label || '?');
+}
+
+// ─── SSE STREAMING PATH ──────────────────────────────────
+async function _runStreaming(payload, timeoutId) {
+  const url = API_BASE + '/api/panel/analyze-stream';
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: abortCtrl.signal,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let lastIdx = -1;
+  let resultHtml = '';
+  let usageInfo = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop();
+
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith('data: ')) continue;
+      let event;
+      try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+      const step = event.step;
+      if (!step) continue;
+
+      // Handle error event
+      if (step === 'error') {
+        throw new Error(event.message || 'Pipeline error');
+      }
+
+      // Handle done event — final HTML + usage
+      if (step === 'done') {
+        clearTimeout(timeoutId);
+        stopTimer();
+        resultHtml = event.html || '';
+        usageInfo = event.usage || null;
+        finishAllSteps();
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        showResult(resultHtml, payload, elapsed, usageInfo, false);
+        return;
+      }
+
+      // Update step UI with real data
+      const idx = STEP_INDEX[step];
+      if (idx === undefined) continue;
+
+      // Mark all prior steps as done
+      for (let i = lastIdx + 1; i < idx; i++) markStep(i, 'done');
+      lastIdx = idx;
+
+      // Build real detail text from event data
+      const detail = _buildStepDetail(step, event);
+
+      // Mark current step active or done
+      if (step === 'resolved' || step === 'judged') {
+        markStep(idx, 'done', detail);
+      } else {
+        markStep(idx, 'active', detail);
+      }
+      updateProgress(Math.round(((idx + 1) / STEPS.length) * 90));
+      $('loading-subline').innerHTML = STEPS[idx]?.label + ' · <span id="timer-display">' + elapsed() + 's</span>';
+    }
+  }
+
+  // Stream ended without 'done' event
+  clearTimeout(timeoutId);
+  stopTimer();
+  if (!resultHtml) throw new Error('Stream ended without result');
+}
+
+function _buildStepDetail(step, ev) {
+  switch (step) {
+    case 'cache_check':   return ev.hit ? 'Cache HIT — respuesta inmediata' : 'Cache miss — ejecutando pipeline';
+    case 'transaction':   return `${ev.merchant} · USD ${ev.amount} · ${ev.country} · score ${ev.fraud_score}`;
+    case 'logs':          return `${ev.count} log(s) recuperados`;
+    case 'policies':      return `${ev.count} politicas encontradas`;
+    case 'cases':         return `${ev.count} precedentes similares`;
+    case 'merchant_risk': return `CB ratio: ${(ev.cb_ratio*100).toFixed(1)}%` + (ev.flags?.length ? ` · flags: ${ev.flags.join(', ')}` : '');
+    case 'client_flags':  return `${ev.total_chargebacks} CB previos` + (ev.flags?.length ? ` · flags: ${ev.flags.join(', ')}` : '');
+    case 'resolving':     return 'Haiku (eval) + Sonnet (sintesis) + guardrails...';
+    case 'resolved':      return `${ev.action} · ${ev.risk_level} · ${ev.verdicts} veredictos · ${ev.blockers} blocker · ${ev.fails} fail` + (ev.warnings ? ` · ${ev.warnings} warning(s)` : '');
+    case 'judging':       return 'Sonnet · 5 criterios · score 1-10...';
+    case 'judged':        return `Score: ${ev.score}/10 · ${ev.approved ? 'Aprobado' : 'No aprobado'}`;
+    default:              return '';
+  }
+}
+
+// ─── CLASSIC (non-streaming) PATH for n8n ─────────────────
+async function _runClassic(payload, mode, timeoutSec, timeoutId) {
+  scheduleSteps();
+
+  let analyzeUrl = API_BASE + '/api/panel/analyze';
+  const params = new URLSearchParams();
+  if (mode === 'direct') params.set('direct', '1');
+  else if (mode === 'test') params.set('n8n_test', '1');
+  params.set('timeout_s', timeoutSec);
+  analyzeUrl += '?' + params.toString();
+
+  const resp = await fetch(analyzeUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: abortCtrl.signal,
+  });
+
+  clearTimeout(timeoutId);
+  clearStepTimers();
+  stopTimer();
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`HTTP ${resp.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const body = await resp.text();
+  if (!body || !body.trim()) throw new Error('El pipeline devolvio una respuesta vacia.');
+
+  finishAllSteps();
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  let usageInfo = null;
+  try {
+    const h = resp.headers.get('X-Usage-JSON');
+    if (h) usageInfo = JSON.parse(h);
+  } catch {}
+
+  const wasN8nFallback = mode !== 'direct' && usageInfo !== null;
+  showResult(body, payload, elapsed, usageInfo, wasN8nFallback);
 }
 
 // ─── STEP ANIMATION ───────────────────────────────────────
@@ -2310,12 +2411,16 @@ function clearStepTimers() {
   stepTimers = [];
 }
 
-function markStep(idx, state) {
+function markStep(idx, state, detail) {
   const row = $('step-' + idx);
   if (!row) return;
   row.className = 'step-row ' + state;
   if (state === 'done') {
     $('step-time-' + idx).textContent = elapsed() + 's';
+  }
+  if (detail) {
+    const detailEl = row.querySelector('.step-detail');
+    if (detailEl) detailEl.textContent = detail;
   }
 }
 
