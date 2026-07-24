@@ -78,7 +78,7 @@ Las reglas de enriquecimiento codifican conocimiento de dominio (ej: "pagos crip
 - **Services** (`ResolutionService`, `FeedbackService`, `PipelineService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching). `PipelineService` usa métodos compartidos (`_submit_context_futures`, `_resolve`, `_judge`, `_build_report_data`) entre el modo síncrono y el streaming SSE, eliminando duplicación.
 - **Analyzer** (`analysis/analyzer.py`) — lógica de negocio pura: reglas SLA, flags de riesgo, patrones de error
 
-El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, 55+ constants) tienen cero dependencias externas. Todos los magic numbers y strings del dominio están centralizados en `constants.py` — umbrales de pipeline, tipos de alertas, prefijos de guardrails, nombres de templates.
+El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, 73+ constants) tienen cero dependencias externas. Todos los magic numbers y strings del dominio están centralizados en `constants.py` — umbrales de pipeline, tipos de alertas, prefijos de guardrails, nombres de templates.
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 

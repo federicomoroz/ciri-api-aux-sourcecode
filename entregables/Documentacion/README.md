@@ -395,7 +395,7 @@ quest_ML/
       domain/
         models.py           # Modelos Pydantic con Field validators
         enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
-        constants.py        # 55+ umbrales y límites centralizados
+        constants.py        # 73+ umbrales y límites centralizados
       services/
         resolution.py       # ResolutionService: resolve + judge + guardrails
         feedback.py         # FeedbackService: feedback + auto-indexación
