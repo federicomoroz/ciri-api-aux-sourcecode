@@ -461,3 +461,9 @@ quest_ML/
 | [`docs/rag_explanation.md`](docs/rag_explanation.md) | Estrategia RAG, colecciones, QueryBuilder |
 | [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge, guardrails, auto-mejora |
 | [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | 3 escenarios demo con comandos curl |
+
+---
+
+## Herramientas de desarrollo
+
+Este proyecto fue construido utilizando **Claude Opus 4.6** (Anthropic) como asistente de desarrollo.
