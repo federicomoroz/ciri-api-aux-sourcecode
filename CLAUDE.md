@@ -113,7 +113,13 @@ Each "Generar Reporte" node is identical — same endpoint, same payload shape (
 | `POST /api/feedback` | Auto-improvement loop |
 | `POST /api/reports/html` | Jinja2 → HTML report |
 | `GET /api/cache/lookup` | Idempotency cache (SQLite exact-match) |
-| `GET /panel` | Interactive test panel (n8n or fallback) |
+| `POST /api/alerts/` | Register operational alert |
+| `GET /api/alerts/` | List recent alerts |
+| `GET /panel` | Interactive test panel (3 modes: direct, n8n test, n8n prod) |
+| `POST /api/panel/analyze` | Analysis via n8n webhook (or direct fallback) |
+| `POST /api/panel/analyze-stream` | SSE streaming pipeline with real-time progress |
+| `GET /api/panel/n8n-status` | n8n liveness check (panel badge) |
+| `GET /api/analytics/dashboard` | Aggregated metrics |
 | `GET /health` | Service health check |
 
 ### Qdrant collections

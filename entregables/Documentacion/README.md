@@ -228,16 +228,19 @@ Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
 | Método | Endpoint | Descripción |
 |---|---|---|
 | `GET` | `/panel` | Panel interactivo de testing (3 modos: directo, n8n test, n8n prod) |
+| `POST` | `/api/panel/analyze` | Análisis via n8n webhook (o fallback directo) |
 | `POST` | `/api/panel/analyze-stream` | Pipeline completo via SSE streaming con progreso en tiempo real |
+| `GET` | `/api/panel/n8n-status` | Liveness check de n8n (badge del panel) |
 
-### Observabilidad
+### Observabilidad y alertas
 
 | Método | Endpoint | Descripción |
 |---|---|---|
 | `GET` | `/api/langfuse/stats` | Estadísticas de Langfuse (traces, tokens, costos) |
+| `GET` | `/api/analytics/dashboard` | Métricas agregadas (transacciones, casos, feedback) |
 | `GET` | `/health` | Health check de servicios |
 | `POST` | `/api/alerts/` | Registrar alerta operativa (desde n8n error handler o pipeline) |
-| `GET` | `/api/alerts/` | Listar alertas recientes (panel log) |
+| `GET` | `/api/alerts/` | Listar alertas recientes (panel log, default 50) |
 
 ---
 
