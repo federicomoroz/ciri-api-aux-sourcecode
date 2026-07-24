@@ -104,8 +104,13 @@ S4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (7 nodos)
                -> [Procesar Respuesta HITL]   <- Code: fusiona decision del analista
                -> [Registrar Feedback HITL]   <- POST /api/feedback (auto-index si score >= 8.0)
          false -> (fin)
-   Todos los errores -> [Stop and Error] -> Error Handler workflow
+   Todos los errores -> [Stop and Error] -> Error Handler workflow (workflow_ciri_errors.json)
 ```
+
+**3 workflows n8n:**
+- `workflow_ciri_agent.json` — workflow principal (54 nodos: 43 exec + 11 sticky)
+- `workflow_ciri_errors.json` — error handler separado (Error Trigger → captura errores de Stop and Error)
+- `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa al webhook)
 
 **HITL (Human-in-the-Loop):** Todos los niveles de riesgo primero responden al webhook con el reporte HTML. Despues de responder, un nodo IF verifica si `risk_level == HIGH`. Si es verdadero, un **Wait node** pausa la ejecucion y expone un formulario (APROBAR/RECHAZAR + notas del analista). Despues de que el analista envia (o timeout de 5s auto-aprueba), el feedback se registra via `POST /api/feedback`. La clave: `respondToWebhook` se ejecuta **antes** del Wait, evitando el error de n8n "unused respondToWebhook" en el resume. Los reportes HIGH tambien incluyen un formulario HITL interactivo como fallback.
 

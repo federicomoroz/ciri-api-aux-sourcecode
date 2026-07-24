@@ -26,7 +26,10 @@ Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback
 
 ### Opción 2 — Workflow n8n (orquestación completa)
 
-1. Importar `n8n/workflow_ciri_agent.json` en cualquier cuenta de n8n (Cloud o self-hosted)
+1. Importar los 3 workflows de `n8n/` en cualquier cuenta de n8n (Cloud o self-hosted):
+   - `workflow_ciri_agent.json` — workflow principal (54 nodos)
+   - `workflow_ciri_errors.json` — error handler (recibe errores de Stop and Error)
+   - `workflow_ciri_form.json` — form trigger (formulario nativo n8n)
 2. Ir a **Settings → Variables** y crear una variable:
    - **Name:** `API_BASE_URL`
    - **Value:** `https://ciri-chargeback-agent.onrender.com`
@@ -144,7 +147,13 @@ curl http://localhost:8000/health
 
 ### 5. Importar workflow de n8n
 
-Navegar a http://localhost:5678, importar `n8n/workflow_ciri_agent.json` (workflow principal, 54 nodos). Activar el workflow.
+Navegar a http://localhost:5678 e importar los 3 workflows:
+
+- `n8n/workflow_ciri_agent.json` — workflow principal (54 nodos)
+- `n8n/workflow_ciri_errors.json` — error handler
+- `n8n/workflow_ciri_form.json` — form trigger
+
+Crear la variable `API_BASE_URL` en **Settings → Variables** con valor `http://host.docker.internal:8000` (o la URL de Render si se usa remotamente). Activar los workflows.
 
 ### 6. Correr un análisis demo
 
@@ -375,6 +384,8 @@ quest_ML/
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
     workflow_ciri_agent.json  # Workflow principal (54 nodos: 43 exec + 11 sticky)
+    workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
+    workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
   tests/                      # 244 tests (unit + integration)
