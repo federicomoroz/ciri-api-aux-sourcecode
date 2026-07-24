@@ -7,7 +7,10 @@
       "name": "Error Trigger",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -52,7 +55,10 @@
       "name": "Extraer Info de Error",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -63,13 +69,25 @@
         "jsonBody": "={{ JSON.stringify({ event_type: 'n8n_execution_error', severity: 'ERROR', message: 'Error en ' + $json.workflow_name + ': ' + $json.error_message, source: 'n8n', transaction_id: null, metadata: { failed_node: $json.failed_node, execution_url: $json.execution_url, workflow_name: $json.workflow_name, timestamp: $json.timestamp } }) }}",
         "options": {
           "timeout": 10000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "err-http-001",
       "name": "Registrar Alerta en API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [750, 300],
+      "position": [
+        750,
+        300
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -84,7 +102,10 @@
       "name": "Enviar Email de Alerta",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [1000, 300],
+      "position": [
+        1000,
+        300
+      ],
       "credentials": {
         "smtp": {
           "id": "smtp-ciri",
@@ -104,7 +125,10 @@
       "name": "Sticky Note — Error Handler",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [200, 20]
+      "position": [
+        200,
+        20
+      ]
     }
   ],
   "connections": {

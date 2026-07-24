@@ -171,6 +171,15 @@
         "url": "={{ $vars.API_BASE_URL + '/api/transactions/' + $('Validar Formato TXN').first().json.transaction_id }}",
         "options": {
           "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "2166b7d3-830d-42e3-a847-fc01dbdc4ac8",
@@ -193,6 +202,15 @@
         "url": "={{ $vars.API_BASE_URL + '/api/logs/' + $('Validar Formato TXN').first().json.transaction_id }}",
         "options": {
           "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "6d9b06c0-210d-4958-aa2a-1adef2b1d04b",
@@ -240,6 +258,15 @@
         },
         "options": {
           "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "5368bc15-b501-4ed2-813a-1ba352ea5f31",
@@ -291,6 +318,15 @@
         },
         "options": {
           "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "279accef-c554-442d-b8e5-c05a3f52c1f7",
@@ -313,6 +349,15 @@
         "url": "={{ $vars.API_BASE_URL + '/api/merchants/' + encodeURIComponent($('Obtener Transacción').first().json.merchant) + '/risk' }}",
         "options": {
           "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "8e83cfd1-9fb2-4795-9632-7d32b896a052",
@@ -365,6 +410,15 @@
         "url": "={{ $vars.API_BASE_URL + '/api/clients/' + $('Obtener Transacción').first().json.client_id + '/history' }}",
         "options": {
           "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "6e24160d-7c54-4de6-828c-42fed25270aa",
@@ -538,6 +592,15 @@
         },
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "8d6fb87b-3fc8-4aa2-bc75-8cbe74e3ce96",
@@ -574,6 +637,15 @@
         },
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "6f341afc-f757-429d-bda6-9e1a71b39fd4",
@@ -775,6 +847,15 @@
         "url": "={{ $vars.API_BASE_URL + '/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').first().json.cliente_vip || false) }}",
         "options": {
           "timeout": 10000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "d1aecc87-312a-400f-aa84-5719e8a9a165",
@@ -1013,6 +1094,15 @@
         },
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $vars.API_KEY }}"
+            }
+          ]
         }
       },
       "id": "798b3938-a660-443e-bf06-6802492b1d15",
