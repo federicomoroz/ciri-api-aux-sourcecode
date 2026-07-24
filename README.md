@@ -22,7 +22,13 @@ La forma más rápida de probar el sistema completo:
 
 ### Opción 1 — Panel web (sin n8n)
 
-Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel), seleccionar una transacción y hacer clic en "Analizar". El panel ejecuta el pipeline completo (RAG + LLM + guardrails + judge) directamente.
+Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel), seleccionar una transacción y hacer clic en "Analizar". El panel tiene 3 modos de pipeline:
+
+- **Directo (sin n8n)** (default) — ejecuta el pipeline completo via SSE streaming (`POST /api/panel/analyze-stream`), mostrando progreso en tiempo real con datos reales de cada paso (nombre del comercio, cantidad de políticas, desglose de veredictos, score del juez, etc.)
+- **n8n Test** — envía el request al webhook de n8n en entorno de test
+- **n8n Production** — envía el request al webhook de n8n en producción
+
+En modo directo, cada paso del pipeline se muestra en tiempo real a medida que se completa. En modo n8n, se muestra un spinner simple con "Esperando respuesta de n8n...".
 
 ### Opción 2 — Workflow n8n (orquestación completa)
 
@@ -217,6 +223,13 @@ Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
 | `POST` | `/api/reports/html` | Generar reporte HTML (Jinja2) |
 | `GET` | `/api/cache/lookup` | Verificación de caché de idempotencia (SQLite) |
 
+### Panel interactivo
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/panel` | Panel interactivo de testing (3 modos: directo, n8n test, n8n prod) |
+| `POST` | `/api/panel/analyze-stream` | Pipeline completo via SSE streaming con progreso en tiempo real |
+
 ### Observabilidad
 
 | Método | Endpoint | Descripción |
@@ -357,7 +370,7 @@ quest_ML/
       services/
         resolution.py       # ResolutionService: resolve + judge + guardrails
         feedback.py         # FeedbackService: feedback + auto-indexación
-        pipeline.py         # PipelineService: orquestación para panel directo
+        pipeline.py         # PipelineService: orquestación para panel directo + SSE streaming
         langfuse_stats.py   # Estadísticas de observabilidad
       rag/
         indexer.py          # QdrantIndexer (batch + single point, uuid5 IDs)

@@ -27,7 +27,7 @@ El panel de pruebas está disponible en `http://localhost:8000/panel`.
 
 ### Panel de pruebas (`/panel`)
 
-La forma más fácil de probar cualquier escenario es el panel interactivo en `/panel`. Funciona con o sin n8n — si n8n no está disponible, el panel ejecuta el pipeline completo directamente contra la API de FastAPI como fallback. Solo se necesita ingresar el `transaction_id` y opcionalmente el motivo del contracargo.
+La forma más fácil de probar cualquier escenario es el panel interactivo en `/panel`. El panel ofrece 3 modos de pipeline: **Directo (sin n8n)** (default), **n8n Test** y **n8n Production**. En modo directo, el panel usa SSE streaming para mostrar el progreso en tiempo real con datos reales de cada paso (nombre del comercio, políticas recuperadas, desglose de veredictos, score del juez, etc.). En modo n8n, se muestra un spinner con "Esperando respuesta de n8n...". Solo se necesita ingresar el `transaction_id` y opcionalmente el motivo del contracargo.
 
 ---
 
@@ -485,8 +485,8 @@ http://localhost:8000/panel
 https://ciri-chargeback-agent.onrender.com/panel
 ```
 
-Probar en orden:
-1. Ingresar `TXN-00051` → resultado: BLOCKER / REJECT
+Seleccionar modo **Directo (sin n8n)** para ver el progreso en tiempo real via SSE streaming. Probar en orden:
+1. Ingresar `TXN-00051` → resultado: BLOCKER / REJECT (el streaming muestra cada paso con datos reales)
 2. Ingresar `TXN-00042` → resultado: HIGH / PENDING_HITL
 3. Ingresar `TXN-00089` → resultado: HIGH / PENDING_HITL con WARNING de SLA extendido
 

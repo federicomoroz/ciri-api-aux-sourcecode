@@ -611,7 +611,13 @@ Error Trigger -> Extraer Info -> POST /api/alerts/ -> Send Email ($vars.ALERT_EM
 
 ### Panel de testing
 
-El panel incluye un "Log de alertas" que muestra las ultimas 20 alertas con:
+El panel soporta 3 modos de pipeline: **Directo (sin n8n)** (default), **n8n Test** y **n8n Production**.
+
+En modo directo, el panel usa SSE streaming (`POST /api/panel/analyze-stream`) para mostrar el progreso del pipeline en tiempo real. Cada paso emite un evento SSE con datos reales a medida que se completa: nombre del comercio, cantidad de politicas recuperadas, desglose de veredictos (PASS/FAIL/BLOCKER), score del juez, etc. El endpoint usa `PipelineService.run_streaming()`, un generador que yield-ea tuplas `(step, data)` y ejecuta pasos paralelos con `as_completed()`. El header `X-Accel-Buffering: no` asegura compatibilidad con Render/nginx.
+
+En modo n8n, el panel muestra un spinner simple con "Esperando respuesta de n8n..." sin pasos intermedios.
+
+El panel tambien incluye un "Log de alertas" que muestra las ultimas 20 alertas con:
 - Color por severidad (rojo=ERROR, amarillo=WARNING, azul=INFO)
 - Polling automatico cada 30 segundos
 - Actualizacion manual via boton "Actualizar"
