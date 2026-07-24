@@ -2626,6 +2626,7 @@ function showResultFromCache(html, elapsed, payload) {
   if (metaBar)     { metaBar.textContent = payload ? payload.transaction_id : ''; }
 
   const frame = $('report-frame');
+  frame.onload = null;  // prevent stale handler from adding duplicate history entry
   frame.srcdoc = html;
 }
 

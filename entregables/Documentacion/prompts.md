@@ -2,7 +2,7 @@
 
 Los prompts se almacenan como modulos Python versionados en `api/app/llm/prompts/`. Cada modulo exporta `SYSTEM`, `USER_TEMPLATE` y una funcion `render()` que devuelve `(system_prompt, user_prompt)` como tupla.
 
-**Excepcion — v1_judge:** El prompt del Juez se invoca directamente desde el nodo `[Juez de Calidad]` (HTTP Request) en n8n hacia `POST https://api.anthropic.com/v1/messages` usando `$env.CB_ANTHROPIC_API_KEY`. La respuesta se parsea con `JSON.parse($json.content[0].text)` en el nodo `[Extraer Evaluacion — Juez]`. El archivo Python `v1_judge.py` es la fuente canonica; el nodo de n8n lo replica. La ruta FastAPI `/api/analyze/judge` sigue disponible para testing directo.
+Todas las llamadas LLM — incluyendo el Juez — pasan por FastAPI para observabilidad consistente via Langfuse, versionado de prompts y manejo de errores unificado. El nodo `[Juez de Calidad]` en n8n llama a `POST /api/analyze/judge`, donde el prompt `v1_judge.py` se renderiza y se ejecuta a traves del mismo `AnthropicClient`. La respuesta se parsea con `JSON.parse` en el nodo `[Extraer Evaluacion — Juez]`.
 
 ---
 
@@ -54,7 +54,7 @@ El pipeline utiliza dos modelos Claude para optimizar costo vs. calidad:
 Configuracion en `.env`:
 ```
 CB_LLM_MODEL=claude-haiku-4-5-20251001       # Call 1
-CB_LLM_RESOLUTION_MODEL=claude-sonnet-4-20250514  # Call 2 + Call 3
+CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-20250514  # Call 2 + Call 3
 ```
 
 ---
@@ -388,7 +388,7 @@ El prompt v3.0 exige una estructura de justificacion en 6 partes (maximo 200 pal
 **Archivo:** `api/app/llm/prompts/v1_judge.py`
 **Modelo:** Sonnet (Call 3)
 
-**Ruta de ejecucion:** Invocado desde n8n `[Juez de Calidad]` → `POST https://api.anthropic.com/v1/messages`. La ruta FastAPI `/api/analyze/judge` sigue disponible para testing directo.
+**Ruta de ejecucion:** Invocado desde n8n `[Juez de Calidad]` via `POST /api/analyze/judge` en FastAPI. Todas las llamadas LLM (incluyendo el Juez) pasan por FastAPI para observabilidad Langfuse y versionado de prompts consistente.
 
 ### Proposito
 
