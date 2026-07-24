@@ -70,14 +70,14 @@ class TestLangfuseStatsEnabled:
         obs_resp.data = [mock_obs]
         mock_tracer.langfuse.fetch_observations.return_value = obs_resp
 
-        # Scores — bulk fetch, must include trace_id
+        # Scores — bulk fetch via client.score.get(), must include trace_id
         mock_score = MagicMock()
         mock_score.trace_id = "trace-001"
         mock_score.value = 8.5
 
         scores_resp = MagicMock()
         scores_resp.data = [mock_score]
-        mock_tracer.langfuse.fetch_scores.return_value = scores_resp
+        mock_tracer.langfuse.client.score.get.return_value = scores_resp
 
     def test_returns_enabled_with_summary(self, service, mock_tracer):
         self._setup_langfuse_mocks(mock_tracer)
@@ -131,7 +131,7 @@ class TestLangfuseStatsEnabled:
         # No scores for this trace
         scores_resp = MagicMock()
         scores_resp.data = []
-        mock_tracer.langfuse.fetch_scores.return_value = scores_resp
+        mock_tracer.langfuse.client.score.get.return_value = scores_resp
 
         result = service.get_stats()
         assert result["summary"]["avg_judge_score"] is None

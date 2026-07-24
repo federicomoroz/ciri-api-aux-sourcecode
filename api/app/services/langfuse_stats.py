@@ -88,15 +88,15 @@ class LangfuseStatsService:
         # --- 1 API call: fetch all recent scores (bulk) ---
         scores_by_trace: dict[str, float] = {}
         try:
-            scores_resp = langfuse.fetch_scores(limit=LANGFUSE_STATS_FETCH_LIMIT)
+            scores_resp = langfuse.client.score.get(limit=LANGFUSE_STATS_FETCH_LIMIT)
             scores_list = scores_resp.data if hasattr(scores_resp, "data") else []
             for s in scores_list:
                 tid = s.trace_id if hasattr(s, "trace_id") else s.get("trace_id", "")
                 val = s.value if hasattr(s, "value") else s.get("value")
                 if tid and val is not None:
-                    scores_by_trace[tid] = val
+                    scores_by_trace[tid] = float(val)
         except Exception as e:
-            logger.debug("Failed to fetch scores: %s", e)
+            logger.warning("Failed to fetch scores: %s", e)
 
         # --- Aggregate per trace ---
         total_input_tokens = 0
