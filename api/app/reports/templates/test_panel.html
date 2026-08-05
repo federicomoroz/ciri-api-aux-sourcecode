@@ -1714,6 +1714,18 @@
         <p class="form-hint" id="api-key-hint">Usa tu propia key — cada usuario consume sus creditos. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent)">Obtener key</a></p>
       </div>
 
+      <!-- n8n URL (BYON8N) -->
+      <div class="api-key-section" id="n8n-url-section">
+        <div class="api-key-header">
+          <label class="form-label" for="inp-n8n-url">n8n URL</label>
+          <span class="api-key-badge" id="n8n-url-badge">opcional</span>
+        </div>
+        <div class="api-key-input-wrap">
+          <input type="text" id="inp-n8n-url" placeholder="https://tu-instancia.app.n8n.cloud" oninput="onN8nUrlChange()" autocomplete="off" spellcheck="false" />
+        </div>
+        <p class="form-hint">Si importaste el workflow en tu n8n, pega la URL base para ejecutarlo desde aca. Dejalo vacio para usar pipeline directo.</p>
+      </div>
+
       <!-- Submit -->
       <button class="btn-analyze" id="btn-submit" onclick="submitAnalysis()" disabled>
         <span class="btn-shimmer"></span>
@@ -2190,6 +2202,26 @@ async function checkServerKey() {
   } catch { /* ignore */ }
 }
 
+// ─── BYON8N (Bring Your Own n8n) ─────────────────────────
+function getN8nUrl() {
+  return ($('inp-n8n-url')?.value || '').trim().replace(/\/+$/, '');
+}
+
+function onN8nUrlChange() {
+  const url = getN8nUrl();
+  const badge = $('n8n-url-badge');
+  const mode  = $('pipeline-mode');
+  if (url) {
+    badge.textContent = 'ok';
+    badge.className   = 'api-key-badge ok';
+    // Auto-switch to n8n test mode when URL is entered
+    if (mode.value === 'direct') mode.value = 'test';
+  } else {
+    badge.textContent = 'opcional';
+    badge.className   = 'api-key-badge';
+  }
+}
+
 function toggleApiKeyVisibility() {
   const inp = $('inp-api-key');
   inp.type = inp.type === 'password' ? 'text' : 'password';
@@ -2465,6 +2497,8 @@ async function _runClassic(payload, mode, timeoutSec, timeoutId) {
   const params = new URLSearchParams();
   if (mode === 'direct') params.set('direct', '1');
   else if (mode === 'test') params.set('n8n_test', '1');
+  const customN8n = getN8nUrl();
+  if (customN8n && mode !== 'direct') params.set('n8n_base_url', customN8n);
   params.set('timeout_s', timeoutSec);
   analyzeUrl += '?' + params.toString();
 
