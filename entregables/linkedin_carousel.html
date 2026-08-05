@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkedIn Carousel — Agente de Contracargos</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090b;
+  --surface: #111114;
+  --surface2: #18181c;
+  --surface3: #1e1e23;
+  --border: #232328;
+  --border-hi: #2e2e35;
+  --fg: #e4e4e7;
+  --dim: #71717a;
+  --muted: #52525b;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.08);
+  --green-border: rgba(52,211,153,0.18);
+  --amber: #fbbf24;
+  --amber-dim: rgba(251,191,36,0.07);
+  --amber-border: rgba(251,191,36,0.18);
+  --rose: #fb7185;
+  --rose-dim: rgba(251,113,133,0.07);
+  --rose-border: rgba(251,113,133,0.18);
+  --sky: #38bdf8;
+  --sky-dim: rgba(56,189,248,0.07);
+  --sky-border: rgba(56,189,248,0.18);
+  --indigo-dim: rgba(99,102,241,0.07);
+  --indigo-border: rgba(99,102,241,0.18);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #000;
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  padding: 40px 20px;
+}
+
+/* ═══ SLIDE CONTAINER ═══ */
+.slide {
+  width: 1080px;
+  height: 1350px;
+  background: var(--bg);
+  color: var(--fg);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  page-break-after: always;
+}
+
+/* Grain overlay per slide */
+.slide::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Slide number badge */
+.slide-num {
+  position: absolute;
+  top: 48px;
+  right: 56px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 1px;
+  z-index: 5;
+}
+
+/* ═══ SHARED TYPOGRAPHY ═══ */
+.slide-title {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1.1;
+  color: #fff;
+}
+
+.slide-subtitle {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--dim);
+  line-height: 1.5;
+  margin-top: 12px;
+}
+
+.slide-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--accent2);
+  margin-bottom: 16px;
+}
+
+.grad {
+  background: linear-gradient(135deg, var(--accent2) 0%, var(--sky) 50%, var(--green) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ═══ SHARED COMPONENTS ═══ */
+.pill {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--dim);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tag-green  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+.tag-sky    { background: var(--sky-dim); color: var(--sky); border: 1px solid var(--sky-border); }
+.tag-indigo { background: var(--indigo-dim); color: var(--accent2); border: 1px solid var(--indigo-border); }
+.tag-amber  { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber-border); }
+.tag-rose   { background: var(--rose-dim); color: var(--rose); border: 1px solid var(--rose-border); }
+
+.mono { font-family: var(--mono); }
+
+.callout {
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 1 — HERO HOOK
+═══════════════════════════════════════════════════════════ */
+.s1-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 80px 72px;
+  text-align: center;
+  position: relative;
+}
+
+/* Radial glow */
+.s1-inner::before {
+  content: '';
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 500px;
+  background: radial-gradient(ellipse 55% 45%, rgba(99,102,241,0.12) 0%, rgba(56,189,248,0.05) 40%, transparent 70%);
+  pointer-events: none;
+}
+
+.s1-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 8px 20px;
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.s1-badge-dot {
+  width: 7px; height: 7px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--green);
+}
+
+.s1-badge-text {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.s1-title {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -2.5px;
+  line-height: 1.08;
+  color: #fff;
+  max-width: 800px;
+  position: relative;
+}
+
+.s1-sub {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--dim);
+  margin-top: 20px;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+
+.s1-sub strong { color: var(--fg); font-weight: 700; }
+
+/* Stats */
+.s1-stats {
+  display: flex;
+  gap: 48px;
+  margin-top: 56px;
+  position: relative;
+}
+
+.s1-stat { text-align: center; }
+.s1-stat-val {
+  font-family: var(--mono);
+  font-size: 36px;
+  font-weight: 700;
+  color: #fff;
+}
+.s1-stat-lbl {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Pills */
+.s1-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 44px;
+  max-width: 680px;
+  position: relative;
+}
+
+/* Swipe CTA */
+.s1-cta {
+  position: absolute;
+  bottom: 56px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+
+.s1-cta span { color: var(--accent2); }
+
+/* Decorative lines */
+.s1-line {
+  position: absolute;
+  width: 1px;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, var(--border), transparent);
+}
+.s1-line-l { left: 56px; top: 50%; transform: translateY(-50%); }
+.s1-line-r { right: 56px; top: 50%; transform: translateY(-50%); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 2 — PIPELINE FLOW
+═══════════════════════════════════════════════════════════ */
+.s2-inner {
+  padding: 56px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.s2-layout {
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  gap: 20px;
+  flex: 1;
+  margin-top: 28px;
+}
+
+.s2-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Section boxes */
+.s2-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  position: relative;
+}
+.s2-section + .s2-section { margin-top: 10px; }
+
+.s2-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.s2-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Flow nodes */
+.s2-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.s2-node-tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.s2-nodes-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Parallel branch visual */
+.s2-parallel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.s2-parallel-node {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: center;
+}
+
+.s2-parallel-node .s2-node-tag {
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Arrow connector between sections */
+.s2-arrow {
+  text-align: center;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
+/* Diamond decision */
+.s2-diamond {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--surface2);
+  border: 1px dashed var(--border-hi);
+  transform: rotate(45deg);
+  font-size: 10px;
+}
+.s2-diamond span { transform: rotate(-45deg); }
+
+/* Risk lanes */
+.s2-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.s2-risk-lane {
+  border-radius: var(--radius-sm);
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: 0.5px;
+}
+
+/* Storage sidebar */
+.s2-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.s2-store {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.s2-store-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.s2-store-detail {
+  font-size: 10px;
+  color: var(--dim);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* Feedback loop */
+.s2-feedback {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.s2-feedback-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.s2-feedback-text {
+  font-size: 12px;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.s2-feedback-text strong { color: var(--green); font-weight: 700; }
+
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 3 — DETERMINISTIC
+═══════════════════════════════════════════════════════════ */
+.s3-inner {
+  padding: 56px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.s3-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.s3-col {
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.s3-col-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.s3-col-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.s3-col-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.s3-col-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+.s3-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.s3-field:last-child { border-bottom: none; }
+
+.s3-field-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+}
+
+.s3-field-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.s3-field-desc {
+  font-size: 11px;
+  color: var(--dim);
+  margin-left: auto;
+  font-weight: 500;
+}
+
+/* Callouts */
+.s3-callouts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.s3-callout-amber {
+  background: var(--amber-dim);
+  border: 1px solid var(--amber-border);
+}
+
+.s3-callout-green {
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+}
+
+.s3-callout-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.s3-callout-body {
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* Bottom stat */
+.s3-bottom {
+  margin-top: auto;
+  text-align: center;
+  padding-top: 24px;
+}
+
+.s3-bottom-stat {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.s3-bottom-label {
+  font-size: 14px;
+  color: var(--dim);
+  margin-top: 4px;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 4 — N8N WORKFLOW
+═══════════════════════════════════════════════════════════ */
+.s4-inner {
+  padding: 56px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.s4-workflow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 28px;
+  flex: 1;
+}
+
+.s4-section-box {
+  border-radius: var(--radius);
+  padding: 20px;
+  position: relative;
+}
+
+.s4-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.s4-section-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.s4-section-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.s4-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.s4-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.s4-node-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.s4-node-type {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  margin-left: auto;
+  opacity: 0.5;
+}
+
+/* Connection lines between sections */
+.s4-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.s4-bottom-msg {
+  margin-top: auto;
+  text-align: center;
+  padding-top: 20px;
+}
+
+.s4-bottom-msg p {
+  font-size: 14px;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.s4-bottom-msg strong { color: var(--fg); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   SLIDE 5 — CTA
+═══════════════════════════════════════════════════════════ */
+.s5-inner {
+  padding: 56px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+}
+
+.s5-inner::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(ellipse 60% 50%, rgba(99,102,241,0.10) 0%, rgba(52,211,153,0.05) 40%, transparent 70%);
+  pointer-events: none;
+}
+
+.s5-link-card {
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  border-radius: 16px;
+  padding: 32px 48px;
+  margin-top: 36px;
+  position: relative;
+  max-width: 700px;
+}
+
+.s5-link-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+.s5-url {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent2);
+  word-break: break-all;
+}
+
+.s5-byok {
+  font-size: 13px;
+  color: var(--dim);
+  margin-top: 10px;
+  font-weight: 500;
+}
+
+.s5-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 36px;
+  max-width: 650px;
+  width: 100%;
+  position: relative;
+}
+
+.s5-feature {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.s5-feature-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.s5-feature-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.s5-feature-text span {
+  display: block;
+  font-size: 11px;
+  color: var(--dim);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.s5-stack {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 36px;
+  position: relative;
+}
+
+.s5-author {
+  margin-top: 44px;
+  position: relative;
+}
+
+.s5-author-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.s5-author-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+/* ═══ ANIMATIONS ═══ */
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══ PRINT / PDF EXPORT ═══ */
+@media print {
+  body { padding: 0; gap: 0; background: #000; }
+  .slide { page-break-after: always; }
+}
+</style>
+</head>
+<body>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 1 — HERO HOOK
+═══════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-1">
+  <span class="slide-num">01 / 05</span>
+  <div class="s1-inner">
+    <div class="s1-line s1-line-l"></div>
+    <div class="s1-line s1-line-r"></div>
+
+    <div class="s1-badge">
+      <span class="s1-badge-dot"></span>
+      <span class="s1-badge-text">Prueba técnica completada</span>
+    </div>
+
+    <h1 class="s1-title">
+      Construí un agente de IA<br>que <span class="grad">investiga contracargos</span>
+    </h1>
+
+    <p class="s1-sub">
+      Sin alucinaciones. Sin caja negra. <strong>277 tests.</strong>
+    </p>
+
+    <div class="s1-stats">
+      <div class="s1-stat">
+        <div class="s1-stat-val">54</div>
+        <div class="s1-stat-lbl">nodos n8n</div>
+      </div>
+      <div class="s1-stat">
+        <div class="s1-stat-val">277</div>
+        <div class="s1-stat-lbl">tests</div>
+      </div>
+      <div class="s1-stat">
+        <div class="s1-stat-val">9.1<span style="font-size:20px;color:var(--dim)">/10</span></div>
+        <div class="s1-stat-lbl">Judge score</div>
+      </div>
+      <div class="s1-stat">
+        <div class="s1-stat-val">17+</div>
+        <div class="s1-stat-lbl">políticas</div>
+      </div>
+    </div>
+
+    <div class="s1-pills">
+      <span class="pill">n8n</span>
+      <span class="pill">FastAPI</span>
+      <span class="pill">Qdrant</span>
+      <span class="pill">SQLite</span>
+      <span class="pill">Claude Haiku + Sonnet</span>
+      <span class="pill">Voyage AI</span>
+      <span class="pill">Langfuse</span>
+    </div>
+
+    <div class="s1-cta">
+      <span>&#8594;</span> Deslizá para ver cómo funciona
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 2 — PIPELINE FLOW
+═══════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-2">
+  <span class="slide-num">02 / 05</span>
+  <div class="s2-inner">
+    <p class="slide-eyebrow">Arquitectura</p>
+    <h2 class="slide-title">Cada paso es un<br>nodo <span class="grad">visible</span></h2>
+
+    <div class="s2-layout">
+      <div class="s2-flow">
+
+        <!-- S1: Entry -->
+        <div class="s2-section" style="border-color: var(--green-border); background: var(--green-dim);">
+          <div class="s2-section-header">
+            <span class="tag tag-green">S1</span>
+            <span class="s2-section-title">Entrada + Caché</span>
+          </div>
+          <div class="s2-nodes-row">
+            <div class="s2-node">
+              <span class="s2-node-tag" style="background:var(--green-dim);color:var(--green)">POST</span>
+              Webhook
+            </div>
+            <div class="s2-node">Validar TXN</div>
+            <div class="s2-node">
+              <span class="s2-node-tag" style="background:var(--green-dim);color:var(--green)">GET</span>
+              Cache
+            </div>
+            <div class="s2-diamond"><span>?</span></div>
+          </div>
+        </div>
+
+        <div class="s2-arrow">&#8595;</div>
+
+        <!-- S2: Context -->
+        <div class="s2-section" style="border-color: var(--sky-border); background: var(--sky-dim);">
+          <div class="s2-section-header">
+            <span class="tag tag-sky">S2</span>
+            <span class="s2-section-title">Contexto — 6 consultas en paralelo</span>
+          </div>
+          <div class="s2-parallel">
+            <div class="s2-parallel-node">
+              <span class="s2-node-tag" style="background:var(--sky-dim);color:var(--sky)">GET</span>
+              Transacción
+            </div>
+            <div class="s2-parallel-node">
+              <span class="s2-node-tag" style="background:var(--sky-dim);color:var(--sky)">GET</span>
+              Logs
+            </div>
+            <div class="s2-parallel-node">
+              <span class="s2-node-tag" style="background:var(--accent);color:#fff;border-radius:3px">RAG</span>
+              Políticas
+            </div>
+            <div class="s2-parallel-node">
+              <span class="s2-node-tag" style="background:var(--accent);color:#fff;border-radius:3px">RAG</span>
+              Precedentes
+            </div>
+            <div class="s2-parallel-node">
+              <span class="s2-node-tag" style="background:var(--sky-dim);color:var(--sky)">GET</span>
+              Riesgo Comercio
+            </div>
+            <div class="s2-parallel-node">
+              <span class="s2-node-tag" style="background:var(--sky-dim);color:var(--sky)">GET</span>
+              Historial Cliente
+            </div>
+          </div>
+        </div>
+
+        <div class="s2-arrow">&#8595;</div>
+
+        <!-- S3: AI Analysis -->
+        <div class="s2-section" style="border-color: var(--indigo-border); background: var(--indigo-dim);">
+          <div class="s2-section-header">
+            <span class="tag tag-indigo">S3</span>
+            <span class="s2-section-title">Análisis con IA</span>
+          </div>
+          <div class="s2-nodes-row">
+            <div class="s2-node">
+              <span class="s2-node-tag" style="background:var(--amber-dim);color:var(--amber)">LLM</span>
+              Policy Eval · Haiku
+            </div>
+            <div class="s2-node">
+              <span class="s2-node-tag" style="background:var(--rose-dim);color:var(--rose)">&#9632;</span>
+              5 Guardrails
+            </div>
+          </div>
+          <div class="s2-nodes-row" style="margin-top:6px">
+            <div class="s2-node">
+              <span class="s2-node-tag" style="background:var(--amber-dim);color:var(--amber)">LLM</span>
+              Resolución · Sonnet
+            </div>
+            <div class="s2-node">
+              <span class="s2-node-tag" style="background:var(--amber-dim);color:var(--amber)">LLM</span>
+              Juez · Sonnet
+            </div>
+          </div>
+        </div>
+
+        <div class="s2-arrow">&#8595;</div>
+
+        <!-- S4: Risk routing -->
+        <div class="s2-section" style="border-color: var(--amber-border); background: var(--amber-dim);">
+          <div class="s2-section-header">
+            <span class="tag tag-amber">S4</span>
+            <span class="s2-section-title">Enrutamiento por riesgo</span>
+          </div>
+          <div class="s2-risk-grid">
+            <div class="s2-risk-lane" style="background:var(--rose-dim);color:var(--rose);border:1px solid var(--rose-border)">BLOCKER</div>
+            <div class="s2-risk-lane" style="background:var(--amber-dim);color:var(--amber);border:1px solid var(--amber-border)">HIGH<br><span style="font-size:8px;opacity:0.7">+ HITL</span></div>
+            <div class="s2-risk-lane" style="background:var(--sky-dim);color:var(--sky);border:1px solid var(--sky-border)">MEDIUM</div>
+            <div class="s2-risk-lane" style="background:var(--green-dim);color:var(--green);border:1px solid var(--green-border)">LOW</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Storage Sidebar -->
+      <div class="s2-sidebar">
+        <div class="s2-store">
+          <div class="s2-store-title">
+            <span style="color:var(--accent2)">&#9670;</span> Qdrant
+          </div>
+          <div class="s2-store-detail">
+            <strong style="color:var(--fg)">policies</strong> · 17+ docs<br>
+            <strong style="color:var(--fg)">historical_cases</strong> · 60+<br>
+            <strong style="color:var(--fg)">_semantic_cache</strong>
+          </div>
+        </div>
+
+        <div class="s2-store">
+          <div class="s2-store-title">
+            <span style="color:var(--sky)">&#9632;</span> SQLite
+          </div>
+          <div class="s2-store-detail">
+            Transacciones, logs,<br>
+            clientes, políticas,<br>
+            caché de reportes
+          </div>
+        </div>
+
+        <div class="s2-store">
+          <div class="s2-store-title">
+            <span style="color:var(--green)">&#9679;</span> Langfuse
+          </div>
+          <div class="s2-store-detail">
+            Tokens, latencia,<br>
+            trazas, scores
+          </div>
+        </div>
+
+        <div class="s2-store">
+          <div class="s2-store-title">
+            <span style="color:var(--amber)">&#11042;</span> Voyage AI
+          </div>
+          <div class="s2-store-detail">
+            voyage-multilingual-2<br>
+            1024 dims, multilingüe
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback loop -->
+    <div class="s2-feedback">
+      <span class="s2-feedback-icon">&#8635;</span>
+      <span class="s2-feedback-text">
+        <strong>Feedback loop:</strong> Judge score ≥ 8.0 → caso auto-indexado como precedente en Qdrant → mejora futuras resoluciones
+      </span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 3 — DETERMINISTIC
+═══════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-3">
+  <span class="slide-num">03 / 05</span>
+  <div class="s3-inner">
+    <p class="slide-eyebrow">Filosofía</p>
+    <h2 class="slide-title">El código <span class="grad">decide</span>,<br>el LLM <span style="color:var(--dim)">explica</span></h2>
+    <p class="slide-subtitle">6 de 11 campos son determinísticos — Python los calcula, la IA no puede overridearlos.</p>
+
+    <div class="s3-columns">
+      <!-- Python decides -->
+      <div class="s3-col" style="background:var(--green-dim); border:1px solid var(--green-border);">
+        <div class="s3-col-header">
+          <div class="s3-col-icon" style="background:var(--green-dim); border:1px solid var(--green-border);">&#10003;</div>
+          <div>
+            <div class="s3-col-title" style="color:var(--green)">Python decide</div>
+            <div class="s3-col-count">6 campos</div>
+          </div>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--green)">&#10003;</span>
+          <span class="s3-field-name">recommended_action</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--green)">&#10003;</span>
+          <span class="s3-field-name">risk_level</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--green)">&#10003;</span>
+          <span class="s3-field-name">requires_hitl</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--green)">&#10003;</span>
+          <span class="s3-field-name">hitl_reason</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--green)">&#10003;</span>
+          <span class="s3-field-name">policy_verdicts</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--green)">&#10003;</span>
+          <span class="s3-field-name">precedent_summary</span>
+        </div>
+      </div>
+
+      <!-- LLM generates -->
+      <div class="s3-col" style="background:var(--indigo-dim); border:1px solid var(--indigo-border);">
+        <div class="s3-col-header">
+          <div class="s3-col-icon" style="background:var(--indigo-dim); border:1px solid var(--indigo-border);">&#9881;</div>
+          <div>
+            <div class="s3-col-title" style="color:var(--accent2)">LLM genera</div>
+            <div class="s3-col-count">5 campos</div>
+          </div>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--accent2)">&#9881;</span>
+          <span class="s3-field-name">reasoning</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--accent2)">&#9881;</span>
+          <span class="s3-field-name">summary</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--accent2)">&#9881;</span>
+          <span class="s3-field-name">confidence</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--accent2)">&#9881;</span>
+          <span class="s3-field-name">compensation</span>
+        </div>
+        <div class="s3-field">
+          <span class="s3-field-icon" style="color:var(--accent2)">&#9881;</span>
+          <span class="s3-field-name">observations</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Callouts -->
+    <div class="s3-callouts">
+      <div class="callout s3-callout-amber">
+        <div class="s3-callout-title" style="color:var(--amber)">&#9888; Guardrail anti-alucinación</div>
+        <div class="s3-callout-body">Si el LLM dice <strong style="color:var(--fg)">APPROVE</strong> pero hay un <strong style="color:var(--rose)">BLOCKER</strong> activo → se auto-corrige a <strong style="color:var(--fg)">REJECT</strong>. Imposible aprobar un caso prohibido.</div>
+      </div>
+      <div class="callout s3-callout-green">
+        <div class="s3-callout-title" style="color:var(--green)">&#9632; Whitelist de auto-rechazo</div>
+        <div class="s3-callout-body">Solo <strong style="color:var(--fg)">POL-EXC-003</strong> (cripto/pagos irreversibles) puede producir auto-rechazo. Cualquier otro BLOCKER del LLM se baja a FAIL + revisión humana.</div>
+      </div>
+    </div>
+
+    <!-- Bottom stat -->
+    <div class="s3-bottom">
+      <div class="s3-bottom-stat">9.1<span style="font-size:16px;color:var(--dim)">/10</span> · <span style="font-size:24px">~$0.04</span> <span style="font-size:16px;color:var(--dim)">USD/caso</span></div>
+      <div class="s3-bottom-label">Calidad alta, costo bajo — porque la IA recibe solo lo necesario</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 4 — N8N WORKFLOW
+═══════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-4">
+  <span class="slide-num">04 / 05</span>
+  <div class="s4-inner">
+    <p class="slide-eyebrow">Orquestación</p>
+    <h2 class="slide-title">54 nodos, <span class="grad">0 cajas negras</span></h2>
+    <p class="slide-subtitle">43 ejecutables + 11 sticky notes de documentación — todo auditable como JSON versionable.</p>
+
+    <div class="s4-workflow">
+      <!-- §1 Entrada -->
+      <div class="s4-section-box" style="background:var(--green-dim); border:1px solid var(--green-border);">
+        <div class="s4-section-header">
+          <span class="s4-section-num" style="color:var(--green)">§1</span>
+          <span class="s4-section-name">Entrada</span>
+        </div>
+        <div class="s4-nodes">
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--green-dim);color:var(--green)">&#9656;</div>
+            Webhook — Entrada
+            <span class="s4-node-type">trigger</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--surface2);color:var(--dim)">{ }</div>
+            Validar Formato TXN
+            <span class="s4-node-type">code</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Despertar API
+            <span class="s4-node-type">GET</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Verificar Caché
+            <span class="s4-node-type">GET</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- §2 Contexto -->
+      <div class="s4-section-box" style="background:var(--sky-dim); border:1px solid var(--sky-border);">
+        <div class="s4-section-header">
+          <span class="s4-section-num" style="color:var(--sky)">§2</span>
+          <span class="s4-section-name">Contexto</span>
+        </div>
+        <div class="s4-nodes">
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Obtener Transacción
+            <span class="s4-node-type">GET</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Obtener Logs
+            <span class="s4-node-type">GET</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--accent);color:#fff">R</div>
+            Buscar Políticas
+            <span class="s4-node-type">RAG</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--accent);color:#fff">R</div>
+            Buscar Casos Similares
+            <span class="s4-node-type">RAG</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Riesgo del Comercio
+            <span class="s4-node-type">GET</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Historial del Cliente
+            <span class="s4-node-type">GET</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- §3 Análisis IA -->
+      <div class="s4-section-box" style="background:var(--indigo-dim); border:1px solid var(--indigo-border);">
+        <div class="s4-section-header">
+          <span class="s4-section-num" style="color:var(--accent2)">§3</span>
+          <span class="s4-section-name">Análisis IA</span>
+        </div>
+        <div class="s4-nodes">
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--surface2);color:var(--dim)">{ }</div>
+            Compilar Contexto
+            <span class="s4-node-type">code</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--amber-dim);color:var(--amber)">&#9733;</div>
+            Sintetizar Resolución
+            <span class="s4-node-type">POST</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--amber-dim);color:var(--amber)">&#9733;</div>
+            Juez de Calidad
+            <span class="s4-node-type">POST</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- §4 Enrutamiento -->
+      <div class="s4-section-box" style="background:var(--amber-dim); border:1px solid var(--amber-border);">
+        <div class="s4-section-header">
+          <span class="s4-section-num" style="color:var(--amber)">§4</span>
+          <span class="s4-section-name">Enrutamiento</span>
+        </div>
+        <div class="s4-nodes">
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--surface2);color:var(--dim)">{ }</div>
+            Preparar Informe
+            <span class="s4-node-type">code</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--amber-dim);color:var(--amber)">&#9670;</div>
+            Switch por Riesgo
+            <span class="s4-node-type">switch</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--sky-dim);color:var(--sky)">&#8594;</div>
+            Generar Reporte HTML
+            <span class="s4-node-type">POST</span>
+          </div>
+          <div class="s4-node">
+            <div class="s4-node-icon" style="background:var(--rose-dim);color:var(--rose)">&#9632;</div>
+            HITL Wait (si HIGH)
+            <span class="s4-node-type">wait</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="s4-bottom-msg">
+      <p>Cada decisión tiene un nodo con nombre.<br><strong>Cada llamada HTTP es visible y auditable.</strong></p>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SLIDE 5 — CTA + DEMO
+═══════════════════════════════════════════════════════════ -->
+<div class="slide" id="slide-5">
+  <span class="slide-num">05 / 05</span>
+  <div class="s5-inner">
+    <p class="slide-eyebrow">Demo en vivo</p>
+    <h2 class="slide-title">Probalo <span class="grad">vos mismo</span></h2>
+
+    <div class="s5-link-card">
+      <div class="s5-url">ciri-chargeback-agent.onrender.com/panel</div>
+      <div class="s5-byok">BYOK — Usá tu propia API key de Anthropic. Cada uno consume sus créditos.</div>
+    </div>
+
+    <div class="s5-features">
+      <div class="s5-feature">
+        <span class="s5-feature-icon">&#9656;</span>
+        <div class="s5-feature-text">
+          SSE Streaming
+          <span>Progreso en tiempo real paso a paso</span>
+        </div>
+      </div>
+      <div class="s5-feature">
+        <span class="s5-feature-icon">&#9776;</span>
+        <div class="s5-feature-text">
+          3 modos de pipeline
+          <span>Directo, n8n Test, n8n Producción</span>
+        </div>
+      </div>
+      <div class="s5-feature">
+        <span class="s5-feature-icon">&#128337;</span>
+        <div class="s5-feature-text">
+          Historial de sesión
+          <span>Re-abrí reportes sin re-ejecutar</span>
+        </div>
+      </div>
+      <div class="s5-feature">
+        <span class="s5-feature-icon">&#128200;</span>
+        <div class="s5-feature-text">
+          Observabilidad
+          <span>Langfuse: tokens, latencia, scores</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="s5-stack">
+      <span class="pill">n8n</span>
+      <span class="pill">FastAPI</span>
+      <span class="pill">Qdrant</span>
+      <span class="pill">SQLite</span>
+      <span class="pill">Claude Haiku + Sonnet</span>
+      <span class="pill">Voyage AI</span>
+      <span class="pill">Langfuse</span>
+    </div>
+
+    <div class="s5-author">
+      <div class="s5-author-name">Federico Palatnik Moroz</div>
+      <div class="s5-author-sub">Construido con Claude Opus 4.6 como asistente de desarrollo</div>
+    </div>
+  </div>
+</div>
+
+
+<!--
+═══════════════════════════════════════════════════════════
+  TEXTO DEL POST DE LINKEDIN — copiar/pegar
+═══════════════════════════════════════════════════════════
+
+Construí un agente de IA que investiga contracargos bancarios de punta a punta.
+
+No es un chatbot. No tiene una "caja negra" de IA que decide todo.
+
+El pipeline tiene 54 nodos explícitos en n8n. Cada paso es visible, auditable, y testeable. Las 6 decisiones críticas (aprobar, rechazar, escalar) las toma Python con reglas determinísticas. La IA solo explica por qué.
+
+¿Por qué importa?
+→ Un agente que alucina una aprobación en fintech puede costar miles de dólares
+→ Un regulador necesita ver exactamente qué pasó en cada caso
+→ El costo por caso es ~$0.04 USD porque la IA recibe solo lo necesario
+
+Stack: n8n + FastAPI + Qdrant + SQLite + Claude (Haiku + Sonnet) + Voyage AI + Langfuse
+
+Resultado: 277 tests verdes, Judge score 9.1/10, y un panel interactivo donde podés correr investigaciones en tiempo real.
+
+→ Probalo: https://ciri-chargeback-agent.onrender.com/panel
+(Necesitás tu propia API key de Anthropic — BYOK)
+
+Nota: Render free tier tiene cold starts de ~50 segundos. La primera carga puede demorar.
+
+#AI #FinTech #Python #FastAPI #n8n #RAG #LLM #MachineLearning #Automation
+
+═══════════════════════════════════════════════════════════
+-->
+
+
+</body>
+</html>

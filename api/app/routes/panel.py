@@ -11,7 +11,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from ..config import Settings
 from ..dependencies import (
@@ -59,6 +59,16 @@ def serve_panel(
     """Serve the interactive test panel page."""
     tmpl = report_gen.env.get_template("test_panel.html")
     return HTMLResponse(content=tmpl.render(), status_code=200)
+
+
+@router.get("/api/panel/server-key-status")
+def server_key_status(settings: Settings = Depends(get_settings)) -> JSONResponse:
+    """Check if the server has its own Anthropic API key configured.
+
+    When True, BYOK is optional — the panel can run analyses using the server key.
+    When False, visitors must provide their own key (BYOK required).
+    """
+    return JSONResponse({"has_server_key": bool(settings.anthropic_api_key)})
 
 
 # ─── Panel analyze endpoint ───────────────────────────────────────────────────
@@ -116,12 +126,13 @@ async def panel_analyze(
             return HTMLResponse(content=html, status_code=200)
 
     # ── Direct pipeline fallback ──────────────────────────────────────────
-    if not req.api_key:
+    if req.api_key:
+        pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
+    elif not settings.anthropic_api_key:
         return HTMLResponse(
             content="<html><body><h2>API key requerida</h2><p>Ingresa tu Anthropic API Key en el panel.</p></body></html>",
             status_code=400,
         )
-    pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
     try:
         html, usage = pipeline.run(req, model_name=settings.llm_model)
         response = HTMLResponse(content=html, status_code=200)
@@ -151,12 +162,13 @@ def panel_analyze_stream(
     BYOK: visitors must provide their own Anthropic API key.
     The server key is reserved for n8n and direct API endpoints.
     """
-    if not req.api_key:
+    if req.api_key:
+        pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
+    elif not settings.anthropic_api_key:
         return StreamingResponse(
             iter([f"data: {json.dumps({'step': 'error', 'message': 'API key requerida. Ingresa tu Anthropic API Key.'})}\n\n"]),
             media_type="text/event-stream",
         )
-    pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
 
     def generate():
         try:

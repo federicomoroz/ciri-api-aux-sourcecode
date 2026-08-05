@@ -1711,7 +1711,7 @@
           <input type="password" id="inp-api-key" placeholder="sk-ant-api03-..." oninput="onApiKeyChange()" autocomplete="off" spellcheck="false" />
           <button class="api-key-toggle" onclick="toggleApiKeyVisibility()" title="Mostrar/ocultar" type="button">&#128065;</button>
         </div>
-        <p class="form-hint">Usa tu propia key — cada usuario consume sus creditos. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent)">Obtener key</a></p>
+        <p class="form-hint" id="api-key-hint">Usa tu propia key — cada usuario consume sus creditos. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent)">Obtener key</a></p>
       </div>
 
       <!-- Submit -->
@@ -2147,6 +2147,8 @@ function deactivateCustom() {
 }
 
 // ─── BYOK (Bring Your Own Key) ──────────────────────────
+let serverHasKey = false;
+
 function getApiKey() {
   return ($('inp-api-key')?.value || '').trim();
 }
@@ -2155,10 +2157,17 @@ function hasApiKey() {
   return getApiKey().length > 10;
 }
 
+function byokSatisfied() {
+  return hasApiKey() || serverHasKey;
+}
+
 function onApiKeyChange() {
   const badge = $('api-key-badge');
   if (hasApiKey()) {
     badge.textContent = 'ok';
+    badge.className   = 'api-key-badge ok';
+  } else if (serverHasKey) {
+    badge.textContent = 'opcional';
     badge.className   = 'api-key-badge ok';
   } else {
     badge.textContent = 'requerida';
@@ -2167,6 +2176,18 @@ function onApiKeyChange() {
   // Re-check submit eligibility
   if (isCustom) refreshSubmitBtn();
   else if (selectedIdx !== null) enableSubmit(SCENARIOS[selectedIdx].label);
+}
+
+async function checkServerKey() {
+  try {
+    const r = await fetch('/api/panel/server-key-status');
+    const d = await r.json();
+    serverHasKey = !!d.has_server_key;
+    if (serverHasKey) {
+      $('api-key-hint').innerHTML = 'Opcional \u2014 el servidor tiene key propia. Pod\u00e9s usar la tuya si prefer\u00eds.';
+    }
+    onApiKeyChange();
+  } catch { /* ignore */ }
 }
 
 function toggleApiKeyVisibility() {
@@ -2240,8 +2261,8 @@ async function submitAnalysis() {
   const payload = buildPayload();
   if (!payload) return;
 
-  // BYOK: always require API key for panel analysis
-  if (!hasApiKey()) {
+  // BYOK: require API key unless server has its own
+  if (!byokSatisfied()) {
     showToast('amber', 'API Key requerida', 'Ingresa tu Anthropic API Key para ejecutar el analisis.');
     $('inp-api-key').focus();
     return;
@@ -3041,6 +3062,7 @@ async function loadLangfuseStats() {
 showPanel('idle');
 disableSubmit('Seleccionar escenario');
 checkHealth();
+checkServerKey();
 setInterval(checkHealth, 30_000);
 loadTransactions();
 renderHistory();
