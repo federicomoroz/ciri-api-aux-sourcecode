@@ -70,15 +70,7 @@
         "options": {
           "timeout": 10000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "err-http-001",
       "name": "Registrar Alerta en API",

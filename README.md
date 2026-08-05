@@ -47,14 +47,13 @@ Importar los 3 workflows de `n8n/` en cualquier instancia de n8n (Cloud o self-h
 | `workflow_ciri_errors.json` | Error handler (Error Trigger → alerta por email + POST a API) |
 | `workflow_ciri_form.json` | Form trigger (formulario nativo de n8n) |
 
-Crear dos variables en **Settings → Variables**:
+Crear una variable en **Settings → Variables**:
 
 | Variable | Valor (Render) | Valor (local Docker) |
 |---|---|---|
 | `API_BASE_URL` | `https://ciri-chargeback-agent.onrender.com` | `http://api:8000` |
-| `API_KEY` | *(valor de `CB_ADMIN_API_KEY` del server)* | *(dejar vacío — dev mode)* |
 
-> En modo local (Docker), `CB_ADMIN_API_KEY` está vacío por default y el middleware de auth es no-op. No necesitás configurar `API_KEY` en n8n.
+> Es la única variable necesaria. No se requieren API keys en n8n — toda la autenticación con Anthropic y Voyage AI la maneja el backend.
 
 Activar el workflow y disparar:
 

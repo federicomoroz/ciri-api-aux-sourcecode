@@ -172,15 +172,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "2166b7d3-830d-42e3-a847-fc01dbdc4ac8",
       "name": "Obtener Transacción",
@@ -203,15 +195,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "6d9b06c0-210d-4958-aa2a-1adef2b1d04b",
       "name": "Obtener Logs",
@@ -259,15 +243,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "5368bc15-b501-4ed2-813a-1ba352ea5f31",
       "name": "Buscar Políticas",
@@ -319,15 +295,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "279accef-c554-442d-b8e5-c05a3f52c1f7",
       "name": "Buscar Casos Similares",
@@ -350,15 +318,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "8e83cfd1-9fb2-4795-9632-7d32b896a052",
       "name": "Riesgo del Comercio",
@@ -411,15 +371,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "6e24160d-7c54-4de6-828c-42fed25270aa",
       "name": "Historial del Cliente",
@@ -593,15 +545,7 @@
         "options": {
           "timeout": 120000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "8d6fb87b-3fc8-4aa2-bc75-8cbe74e3ce96",
       "name": "Sintetizar Resolución",
@@ -638,15 +582,7 @@
         "options": {
           "timeout": 120000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "6f341afc-f757-429d-bda6-9e1a71b39fd4",
       "name": "Juez de Calidad",
@@ -848,15 +784,7 @@
         "options": {
           "timeout": 10000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "d1aecc87-312a-400f-aa84-5719e8a9a165",
       "name": "Verificar Caché",
@@ -1095,15 +1023,7 @@
         "options": {
           "timeout": 120000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "798b3938-a660-443e-bf06-6802492b1d15",
       "name": "Registrar Feedback HITL",
