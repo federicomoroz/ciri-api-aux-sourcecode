@@ -129,7 +129,7 @@ curl -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze?direc
 ```bash
 git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
 cd ciri-chargeback-agent
-cp .env.example .env          # ver más abajo qué dos claves poner
+cp .env.example .env          # dos claves, las de acá abajo
 docker-compose up -d
 ```
 
