@@ -1,0 +1,47 @@
+name: keep-alive
+
+# Qdrant Cloud suspende los clusters del free tier tras una semana sin uso, y
+# los borra a las cuatro. Como la instancia publicada puede pasar semanas sin
+# que nadie la abra, una visita semanal la mantiene viva sola.
+#
+# Se pega a una busqueda semantica, no a /health, porque es lo unico que hace
+# trabajo real contra Qdrant: un health check no cuenta como actividad.
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"   # lunes 12:00 UTC
+  workflow_dispatch:
+
+jobs:
+  despertar:
+    name: Despertar Render y Qdrant
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Consultar el vector store
+        run: |
+          API="https://ciri-chargeback-agent.onrender.com"
+
+          # Render free tier duerme a los 15 minutos: la primera llamada puede
+          # tardar ~50s en levantar el contenedor. --max-time lo contempla.
+          codigo=$(curl -s -o respuesta.json -w '%{http_code}' --max-time 120 \
+            "$API/api/policies/search?motivo=fraude&payment_method=Cripto&fraud_score=8")
+
+          echo "HTTP $codigo"
+          cat respuesta.json | head -c 400; echo
+
+          if [ "$codigo" != "200" ]; then
+            echo "::error::La busqueda semantica devolvio $codigo — Qdrant puede estar suspendido."
+            exit 1
+          fi
+
+          # Que responda 200 con cero resultados significa que el cluster esta
+          # en pie pero vacio: se borro y se recreo, y hay que reindexar.
+          # El marcador es el codigo de politica, que es lo que devuelve la ruta.
+          if ! grep -q '"code":"POL-' respuesta.json; then
+            echo "::error::Qdrant responde pero no devuelve politicas — colecciones vacias."
+            exit 1
+          fi
+
+          echo "Qdrant activo y con datos."

@@ -145,7 +145,19 @@ async def lifespan(app: FastAPI):
         cases_collection=settings.qdrant_cases_collection,
     )
     updater = RAGUpdater(indexer, db, judge_threshold=settings.judge_auto_index_threshold)
-    _indexar_si_hace_falta(indexer, qdrant, db, settings)
+    # Qdrant caido no puede impedir que la API arranque. El free tier suspende
+    # los clusters tras una semana sin uso, y esta app corre en un Render que
+    # reinicia el contenedor cada vez que despierta: sin esto, una suspension
+    # deja el servicio entero sin levantar. Los caminos que no dependen del
+    # vector store —entre ellos el modo demo— tienen que seguir respondiendo,
+    # y los que si dependen fallan solos, cada uno con su error.
+    try:
+        _indexar_si_hace_falta(indexer, qdrant, db, settings)
+    except Exception as e:
+        logger.error(
+            "Qdrant no responde al arrancar (%s): la API levanta igual, pero las "
+            "busquedas semanticas van a fallar hasta que vuelva", e,
+        )
 
     analyzer = Analyzer(db)
     resolution_service = ResolutionService(
