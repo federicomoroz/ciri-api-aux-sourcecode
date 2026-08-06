@@ -1,13 +1,10 @@
-import logging
-
 from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import get_retriever
 from ..domain.constants import SIMILAR_CASES_TOP_K
-from ..rag.formatter import format_cases_for_prompt
+from ..rag.formatter import envolver_resultados, format_cases_for_prompt
 from ..rag.retriever import QdrantRetriever
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
@@ -34,10 +31,4 @@ def find_similar_cases(
         motivo=motivo,
         top_k=top_k,
     )
-    formatted = format_cases_for_prompt(results)
-    return {
-        "query_used": results[0].get("_query", "") if results else "",
-        "results": results,
-        "formatted_for_llm": formatted,
-        "count": len(results),
-    }
+    return envolver_resultados(results, format_cases_for_prompt(results))

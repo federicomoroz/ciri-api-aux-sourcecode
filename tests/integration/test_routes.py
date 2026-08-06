@@ -74,8 +74,12 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.feedback_service = feedback_service
     app.state.pipeline_service = MagicMock()
 
+    from api.app.observability.tracer import NoOpTracer
     from api.app.services.langfuse_stats import LangfuseStatsService
-    app.state.langfuse_stats_service = LangfuseStatsService(mock_tracer, "claude-sonnet-4-6")
+
+    # NoOpTracer y no un mock: la pregunta del test es "sin Langfuse detras", y un
+    # MagicMock responde que si a cualquier capacidad que se le consulte.
+    app.state.langfuse_stats_service = LangfuseStatsService(NoOpTracer(), "claude-sonnet-4-6")
 
     # Ensure report cache table exists
     db.ensure_report_cache_table()

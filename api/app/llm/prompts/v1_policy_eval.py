@@ -2,7 +2,7 @@
 # PURPOSE: Evaluate a transaction against all retrieved policies
 # OUTPUT: JSON array of PolicyVerdict objects
 
-import json
+from ._shared import bloque_json
 
 SYSTEM = """Eres un auditor de cumplimiento de politicas para una fintech latinoamericana especializada en contracargos.
 
@@ -92,9 +92,9 @@ def render(
 ) -> tuple[str, str]:
     """Returns (system_prompt, user_prompt)."""
     user = USER_TEMPLATE.format(
-        transaction_json=json.dumps(transaction, indent=2, ensure_ascii=False),
-        merchant_risk=json.dumps(merchant_risk or {}, indent=2, ensure_ascii=False),
-        client_history=json.dumps(client_history or {}, indent=2, ensure_ascii=False),
+        transaction_json=bloque_json(transaction),
+        merchant_risk=bloque_json(merchant_risk or {}),
+        client_history=bloque_json(client_history or {}),
         policies_text=policies_text,
         policy_count=policy_count,
     )

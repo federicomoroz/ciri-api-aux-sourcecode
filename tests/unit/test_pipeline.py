@@ -51,7 +51,7 @@ class AnalyzerFalso:
 
 
 class ResolucionFalsa:
-    def resolve(self, **kwargs):
+    def resolve(self, ctx):
         return {"recommended_action": "REJECT", "risk_level": "BLOCKER",
                 "policy_verdicts": [], "guardrail_warnings": [],
                 "_usage": {"input_tokens": 10, "output_tokens": 5, "call_count": 2}}

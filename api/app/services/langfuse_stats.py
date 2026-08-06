@@ -19,13 +19,26 @@ from ..domain.constants import (
     LANGFUSE_STATS_DISPLAY_LIMIT,
     LANGFUSE_STATS_FETCH_LIMIT,
     LANGFUSE_STATS_TRACE_LIMIT,
-    LLM_PRICING,
-    LLM_PRICING_FALLBACK_KEY,
-    LLM_PRICING_PER_MTOK,
 )
+from ..llm.pricing import estimar_costo_usd
 from ..observability.tracer import Tracer
 
 logger = logging.getLogger(__name__)
+
+
+def _campo(obj, nombre: str, defecto=None):
+    """Lee un campo de la respuesta del SDK, venga como objeto o como dict.
+
+    Langfuse devuelve una cosa u otra segun la version y el endpoint. Sin esto,
+    cada acceso repetia el mismo `hasattr(...) else .get(...)`.
+    """
+    if hasattr(obj, nombre):
+        valor = getattr(obj, nombre)
+        return defecto if valor is None else valor
+    if isinstance(obj, dict):
+        valor = obj.get(nombre, defecto)
+        return defecto if valor is None else valor
+    return defecto
 
 
 class LangfuseStatsService:
@@ -39,8 +52,13 @@ class LangfuseStatsService:
 
     @property
     def enabled(self) -> bool:
-        from ..observability.tracer import LangfuseTracer
-        return isinstance(self._tracer, LangfuseTracer) and self._tracer.enabled
+        """Hay estadisticas si el tracer esta activo y expone un cliente que consultar.
+
+        Se pregunta por capacidades, no por la clase concreta: asi cualquier otro
+        tracer que sepa responder sirve, y este modulo no necesita importar la
+        implementacion de Langfuse.
+        """
+        return bool(getattr(self._tracer, "enabled", False)) and hasattr(self._tracer, "langfuse")
 
     def get_stats(self) -> dict:
         if not self.enabled:
@@ -59,103 +77,92 @@ class LangfuseStatsService:
             logger.warning("Langfuse stats query failed: %s", e)
             return {"enabled": True, "summary": None, "recent_traces": []}
 
-    def _fetch_stats(self) -> dict:
-        langfuse = self._tracer.langfuse
+    # ── Lectura: tres llamadas a la API, ninguna por traza ──────────────
 
-        # --- 1 API call: fetch traces ---
-        traces_resp = langfuse.fetch_traces(limit=LANGFUSE_STATS_TRACE_LIMIT)
-        traces = traces_resp.data if hasattr(traces_resp, "data") else []
+    def _traer_trazas(self) -> list:
+        resp = self._tracer.langfuse.fetch_traces(limit=LANGFUSE_STATS_TRACE_LIMIT)
+        return _campo(resp, "data", [])
 
-        if not traces:
-            return {
-                "enabled": True,
-                "summary": {"total_traces": 0, "total_tokens": 0, "cost_usd": 0, "avg_judge_score": None, "avg_latency_s": None},
-                "recent_traces": [],
-            }
-
-        # --- 1 API call: fetch all recent observations (bulk, no per-trace) ---
-        obs_by_trace: dict[str, list] = defaultdict(list)
+    def _observaciones_por_traza(self) -> dict[str, list]:
+        """Todas las generaciones recientes de una vez, agrupadas por traza."""
+        por_traza: dict[str, list] = defaultdict(list)
         try:
-            obs_resp = langfuse.fetch_observations(type=LANGFUSE_OBSERVATION_TYPE, limit=LANGFUSE_STATS_FETCH_LIMIT)
-            observations = obs_resp.data if hasattr(obs_resp, "data") else []
-            for obs in observations:
-                tid = obs.trace_id if hasattr(obs, "trace_id") else obs.get("trace_id", "")
+            resp = self._tracer.langfuse.fetch_observations(
+                type=LANGFUSE_OBSERVATION_TYPE, limit=LANGFUSE_STATS_FETCH_LIMIT,
+            )
+            for obs in _campo(resp, "data", []):
+                tid = _campo(obs, "trace_id", "")
                 if tid:
-                    obs_by_trace[tid].append(obs)
+                    por_traza[tid].append(obs)
         except Exception as e:
             logger.debug("Failed to fetch observations: %s", e)
+        return por_traza
 
-        # --- 1 API call: fetch all recent scores (bulk) ---
-        scores_by_trace: dict[str, float] = {}
+    def _puntajes_por_traza(self) -> dict[str, float]:
+        puntajes: dict[str, float] = {}
         try:
-            scores_resp = langfuse.client.score.get(limit=LANGFUSE_STATS_FETCH_LIMIT)
-            scores_list = scores_resp.data if hasattr(scores_resp, "data") else []
-            for s in scores_list:
-                tid = s.trace_id if hasattr(s, "trace_id") else s.get("trace_id", "")
-                val = s.value if hasattr(s, "value") else s.get("value")
-                if tid and val is not None:
-                    scores_by_trace[tid] = float(val)
+            resp = self._tracer.langfuse.client.score.get(limit=LANGFUSE_STATS_FETCH_LIMIT)
+            for s in _campo(resp, "data", []):
+                tid, valor = _campo(s, "trace_id", ""), _campo(s, "value")
+                if tid and valor is not None:
+                    puntajes[tid] = float(valor)
         except Exception as e:
             logger.warning("Failed to fetch scores: %s", e)
+        return puntajes
 
-        # --- Aggregate per trace ---
-        total_input_tokens = 0
-        total_output_tokens = 0
-        judge_scores: list[float] = []
-        latencies: list[float] = []
-        recent: list[dict] = []
+    # ── Agregacion ──────────────────────────────────────────────────────
 
-        for trace in traces:
-            trace_id = trace.id if hasattr(trace, "id") else str(trace.get("id", ""))
-            trace_name = trace.name if hasattr(trace, "name") else str(trace.get("name", ""))
-            trace_ts = str(trace.timestamp if hasattr(trace, "timestamp") else trace.get("timestamp", ""))
-
-            trace_tokens_in = 0
-            trace_tokens_out = 0
-            trace_latency = 0.0
-
-            for obs in obs_by_trace.get(trace_id, []):
-                usage = obs.usage if hasattr(obs, "usage") else (obs.get("usage") or {})
-                if hasattr(usage, "input"):
-                    trace_tokens_in += usage.input or 0
-                    trace_tokens_out += usage.output or 0
-                elif isinstance(usage, dict):
-                    trace_tokens_in += usage.get("input", 0) or 0
-                    trace_tokens_out += usage.get("output", 0) or 0
-
-                obs_latency = obs.latency if hasattr(obs, "latency") else obs.get("latency", 0)
-                trace_latency += obs_latency or 0
-
-            trace_total = trace_tokens_in + trace_tokens_out
-            total_input_tokens += trace_tokens_in
-            total_output_tokens += trace_tokens_out
-
-            if trace_latency > 0:
-                latencies.append(trace_latency)
-
-            trace_score = scores_by_trace.get(trace_id)
-            if trace_score is not None:
-                judge_scores.append(trace_score)
-
-            recent.append({
-                "trace_id": trace_id,
-                "name": trace_name,
-                "timestamp": trace_ts,
-                "tokens": trace_total,
-                "latency_s": round(trace_latency, 2),
-                "score": trace_score,
-            })
-
-        total_tokens = total_input_tokens + total_output_tokens
-        cost = self._estimate_cost(total_input_tokens, total_output_tokens)
-
-        summary = {
-            "total_traces": len(traces),
-            "total_tokens": total_tokens,
-            "cost_usd": round(cost, 4),
-            "avg_judge_score": round(sum(judge_scores) / len(judge_scores), 2) if judge_scores else None,
-            "avg_latency_s": round(sum(latencies) / len(latencies), 2) if latencies else None,
+    @staticmethod
+    def _resumir_traza(traza, observaciones: list, puntaje: float | None) -> dict:
+        """Tokens, latencia y puntaje de una traza."""
+        entrada = salida = 0
+        latencia = 0.0
+        for obs in observaciones:
+            uso = _campo(obs, "usage", {})
+            entrada += _campo(uso, "input", 0)
+            salida += _campo(uso, "output", 0)
+            latencia += _campo(obs, "latency", 0)
+        return {
+            "trace_id": str(_campo(traza, "id", "")),
+            "name": str(_campo(traza, "name", "")),
+            "timestamp": str(_campo(traza, "timestamp", "")),
+            "tokens_in": entrada,
+            "tokens_out": salida,
+            "tokens": entrada + salida,
+            "latency_s": round(latencia, 2),
+            "score": puntaje,
         }
+
+    def _resumen(self, filas: list[dict]) -> dict:
+        entrada = sum(f["tokens_in"] for f in filas)
+        salida = sum(f["tokens_out"] for f in filas)
+        puntajes = [f["score"] for f in filas if f["score"] is not None]
+        latencias = [f["latency_s"] for f in filas if f["latency_s"] > 0]
+        return {
+            "total_traces": len(filas),
+            "total_tokens": entrada + salida,
+            "cost_usd": round(estimar_costo_usd(self._model_name, entrada, salida), 4),
+            "avg_judge_score": round(sum(puntajes) / len(puntajes), 2) if puntajes else None,
+            "avg_latency_s": round(sum(latencias) / len(latencias), 2) if latencias else None,
+        }
+
+    def _fetch_stats(self) -> dict:
+        trazas = self._traer_trazas()
+        if not trazas:
+            return {"enabled": True, "summary": self._resumen([]), "recent_traces": []}
+
+        observaciones = self._observaciones_por_traza()
+        puntajes = self._puntajes_por_traza()
+
+        filas = [
+            self._resumir_traza(
+                t, observaciones.get(str(_campo(t, "id", "")), []),
+                puntajes.get(str(_campo(t, "id", ""))),
+            )
+            for t in trazas
+        ]
+        recent = [{k: v for k, v in f.items() if k not in ("tokens_in", "tokens_out")} for f in filas]
+        summary = self._resumen(filas)
 
         return {
             "enabled": True,
@@ -163,16 +170,3 @@ class LangfuseStatsService:
             "recent_traces": recent[:LANGFUSE_STATS_DISPLAY_LIMIT],
         }
 
-    def _estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
-        model = self._model_name.lower()
-        for key, (input_price, output_price) in LLM_PRICING.items():
-            if key in model:
-                return (
-                    (input_tokens / LLM_PRICING_PER_MTOK) * input_price
-                    + (output_tokens / LLM_PRICING_PER_MTOK) * output_price
-                )
-        fallback_in, fallback_out = LLM_PRICING[LLM_PRICING_FALLBACK_KEY]
-        return (
-            (input_tokens / LLM_PRICING_PER_MTOK) * fallback_in
-            + (output_tokens / LLM_PRICING_PER_MTOK) * fallback_out
-        )

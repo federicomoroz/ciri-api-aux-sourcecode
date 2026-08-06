@@ -1,11 +1,8 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..analysis.analyzer import Analyzer
 from ..dependencies import get_analyzer
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
 

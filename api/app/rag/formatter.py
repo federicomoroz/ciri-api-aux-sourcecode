@@ -32,6 +32,20 @@ def motivo_match_label(motivo_a: str, motivo_b: str) -> str | None:
     return None
 
 
+def envolver_resultados(resultados: list[dict], formateado: str, consulta_por_defecto: str = "") -> dict:
+    """Sobre comun de las rutas de busqueda semantica.
+
+    `_query` la agrega el retriever con la consulta enriquecida que realmente
+    ejecuto: devolverla es lo que hace auditable la busqueda.
+    """
+    return {
+        "query_used": resultados[0].get("_query", consulta_por_defecto) if resultados else consulta_por_defecto,
+        "results": resultados,
+        "formatted_for_llm": formateado,
+        "count": len(resultados),
+    }
+
+
 def annotate_by_motivo(
     cases: list[dict],
     current_motivo: str | None,

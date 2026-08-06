@@ -1,18 +1,23 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..data.db import Database
 from ..dependencies import get_db, get_retriever, get_updater
 from ..domain.constants import FRAUD_SCORE_DEFAULT
 from ..domain.models import PolicyCreate, PolicyUpdate
-from ..rag.formatter import format_policies_for_prompt
+from ..rag.formatter import envolver_resultados, format_policies_for_prompt
 from ..rag.retriever import QdrantRetriever
 from ..rag.updater import RAGUpdater
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/policies", tags=["policies"])
+
+
+def _politica_o_404(db: Database, code: str) -> dict:
+    """La politica, o 404. Tres rutas necesitaban exactamente esto."""
+    policy = db.get_policy(code)
+    if not policy:
+        raise HTTPException(status_code=404, detail=f"Policy {code} not found")
+    return policy
 
 
 @router.get("/search")
@@ -34,13 +39,7 @@ def search_policies(
         fraud_score=fraud_score or FRAUD_SCORE_DEFAULT,
         country=country or "",
     )
-    formatted = format_policies_for_prompt(results)
-    return {
-        "query_used": results[0].get("_query", q) if results else q,
-        "results": results,
-        "formatted_for_llm": formatted,
-        "count": len(results),
-    }
+    return envolver_resultados(results, format_policies_for_prompt(results), q)
 
 
 @router.get("/")
@@ -52,10 +51,7 @@ def list_policies(db: Database = Depends(get_db)) -> list[dict]:
 @router.get("/{code}")
 def get_policy(code: str, db: Database = Depends(get_db)) -> dict:
     """Get one policy by code."""
-    policy = db.get_policy(code)
-    if not policy:
-        raise HTTPException(status_code=404, detail=f"Policy {code} not found")
-    return policy
+    return _politica_o_404(db, code)
 
 
 @router.post("/", status_code=201)
@@ -67,7 +63,7 @@ def create_policy(
     """Create new policy -> save to SQLite + index in Qdrant immediately."""
     policy_dict = db.create_policy_record(policy.model_dump())
     updater.on_policy_created(policy_dict)
-    return db.get_policy(policy.code)
+    return policy_dict
 
 
 @router.put("/{code}")
@@ -79,13 +75,10 @@ def update_policy(
 ) -> dict:
     """Update policy -> save to SQLite + re-index in Qdrant immediately.
     No redeploy needed — policies are DATA, not CODE."""
-    existing = db.get_policy(code)
-    if not existing:
-        raise HTTPException(status_code=404, detail=f"Policy {code} not found")
-
+    existing = _politica_o_404(db, code)
     updated = db.merge_policy_update(existing, policy.model_dump(exclude_unset=True))
     updater.on_policy_updated(updated)
-    return db.get_policy(code)
+    return updated
 
 
 @router.delete("/{code}", status_code=204)
@@ -95,7 +88,6 @@ def delete_policy(
     updater: RAGUpdater = Depends(get_updater),
 ) -> None:
     """Delete from SQLite + remove from Qdrant."""
-    if not db.get_policy(code):
-        raise HTTPException(status_code=404, detail=f"Policy {code} not found")
+    _politica_o_404(db, code)
     db.delete_policy(code)
     updater.on_policy_deleted(code)

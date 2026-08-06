@@ -2,7 +2,7 @@
 # PURPOSE: Justify a pre-determined chargeback resolution using evidence + analysis
 # OUTPUT: Resolution JSON object (action/risk/verdicts are pre-determined by system)
 
-import json
+from ._shared import bloque_json
 
 
 SYSTEM = """Eres un analista senior de contracargos en una fintech latinoamericana.
@@ -155,12 +155,12 @@ def render(
         hitl_reason_line = f"- hitl_reason: {outcome['hitl_reason']}"
 
     user = USER_TEMPLATE.format(
-        transaction=json.dumps(transaction, indent=2, ensure_ascii=False),
+        transaction=bloque_json(transaction),
         policy_verdicts=policy_verdicts,
         similar_cases=similar_cases,
         log_summary=log_summary,
-        merchant_risk=json.dumps(merchant_risk, indent=2, ensure_ascii=False),
-        client_history=json.dumps(client_history, indent=2, ensure_ascii=False),
+        merchant_risk=bloque_json(merchant_risk),
+        client_history=bloque_json(client_history),
         motivo=motivo or "No especificado",
         cliente_vip="Si" if cliente_vip else "No",
         precedent_count=precedent_count,

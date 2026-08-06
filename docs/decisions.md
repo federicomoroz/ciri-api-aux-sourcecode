@@ -270,3 +270,42 @@ Hay tres razones más, todas prácticas:
 - (-) Un componente más (SQLite) que si todo viviera dentro de n8n
 
 **En producción:** el argumento se refuerza. El almacén estructurado sería Postgres con las agregaciones como vistas materializadas o índices, no un almacén interno de la herramienta de orquestación limitado a 200 MiB por instancia. Data Tables las usaría para lo que están pensadas: estado operativo del propio workflow — marcadores de deduplicación, flags de feature, datos de evaluación — no como base de datos del dominio.
+
+---
+
+## 12. Deuda tecnica asumida: el panel de testing
+
+**Contexto:** `api/app/reports/templates/test_panel.html` tiene 3112 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
+
+**Decision:** Dejarlo asi para esta entrega, y anotarlo.
+
+**Razonamiento:** El panel no es un entregable de la consigna — es un extra para que se pueda probar el sistema sin montar nada. Partirlo en CSS, JavaScript y plantilla obliga a servir estaticos, que hoy no existen, y el beneficio recae sobre codigo que nadie va a mantener despues de la evaluacion. El costo de equivocarse ahi, ademas, es alto: si el panel se rompe, el evaluador se queda sin la forma mas rapida de ver el sistema andando.
+
+Los archivos que si son entregables — el workflow, la API, los informes — quedaron por debajo de las 100 lineas por funcion despues de la auditoria.
+
+**Trade-offs:**
+- (+) Cero riesgo sobre la unica pieza que el evaluador va a tocar sin instalar nada
+- (+) El esfuerzo se concentro donde se evalua la arquitectura
+- (-) 3112 lineas que nadie va a querer tocar
+- (-) Sin cache de estaticos: el navegador se baja el CSS y el JS en cada carga
+
+**En produccion:** separar en `static/panel.css` y `static/panel.js`, servirlos con `StaticFiles` y versionarlos por hash para poder cachearlos. Es media jornada, pero recien vale la pena cuando el panel deje de ser una herramienta de demostracion.
+
+---
+
+## 13. Un solo tipo para el contexto del caso
+
+**Contexto:** La misma informacion —transaccion, logs, politicas, precedentes, riesgo del comercio, historial del cliente— estaba modelada tres veces: `ResolveRequest` para lo que manda n8n, `_PipelineContext` para el pipeline directo y `ReportRequest` para el informe. Con tres nombres distintos para lo mismo: la transaccion era `tx_data`, `tx` o `transaction`; el historial del cliente, `client_history` o `client_profile`.
+
+**Decision:** Un `CaseContext` interno (`domain/context.py`). Los modelos de entrada y salida conservan sus nombres, porque son contratos que n8n ya consume, pero se traducen a el en la frontera.
+
+**Razonamiento:** `ResolutionService.resolve()` recibia ocho parametros posicionales que siempre viajaban juntos. Eso es un unico concepto disfrazado de lista de argumentos: agregar una fuente de contexto obligaba a tocar la firma, los dos llamadores y todos los tests. Ahora se agrega un campo al contexto y listo.
+
+Traducir en la frontera en vez de renombrar los campos del contrato mantiene la compatibilidad con el workflow que ya esta en manos del evaluador.
+
+**Trade-offs:**
+- (+) Una firma en vez de ocho parametros; agregar contexto no propaga cambios
+- (+) Los nombres internos dejan de contradecirse entre modulos
+- (+) `CaseContext` es inmutable: se arma una vez y viaja
+- (-) Una traduccion mas entre el modelo de entrada y el tipo interno
+- (-) `ReportRequest` sigue con sus propios nombres, porque es contrato de salida

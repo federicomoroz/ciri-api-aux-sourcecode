@@ -57,16 +57,7 @@ def resolve(
     db: Database = Depends(get_db),
 ) -> ResolveResponse:
     """Full resolution pipeline: policy eval -> log summary -> resolution synthesis -> guardrails."""
-    result = service.resolve(
-        tx_data=req.tx_data,
-        policies=req.policies,
-        similar_cases=req.similar_cases,
-        logs=req.logs,
-        merchant_risk=req.merchant_risk,
-        client_history=req.client_history,
-        motivo=req.motivo,
-        cliente_vip=req.cliente_vip,
-    )
+    result = service.resolve(req.to_context())
 
     tx_id = req.transaction_id or (req.tx_data.get("id", "") if req.tx_data else "")
     _emit_resolve_alerts(result, tx_id, db)

@@ -1,11 +1,8 @@
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..data.db import Database
 from ..dependencies import get_db
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 

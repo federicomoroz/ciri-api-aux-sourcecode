@@ -26,6 +26,7 @@ from ..domain.constants import (
     TRACE_JUDGE,
     TRACE_RESOLVE,
 )
+from ..domain.context import CaseContext
 from ..domain.enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 from ..domain.models import JudgeEvaluationOutput, PolicyVerdictOutput, ResolutionOutput
 from ..llm.client import LLMClient, LLMResult
@@ -43,22 +44,16 @@ class ResolutionService:
         self.llm_resolution = llm_resolution or llm
         self.tracer = tracer
 
-    def resolve(
-        self,
-        tx_data: dict,
-        policies: list[dict],
-        similar_cases: list[dict],
-        logs: list[dict],
-        merchant_risk: dict,
-        client_history: dict,
-        motivo: str | None,
-        cliente_vip: bool,
-    ) -> dict:
+    def resolve(self, ctx: CaseContext) -> dict:
         """Full resolution pipeline: policy eval -> log summary -> resolution synthesis -> guardrails.
 
         Raises on LLM failure — never produces incomplete resolutions silently.
         """
-        tx_id = tx_data.get("id", FALLBACK_TX_ID)
+        tx_data, motivo, cliente_vip = ctx.transaction, ctx.motivo, ctx.cliente_vip
+        policies, similar_cases, logs = ctx.policies, ctx.similar_cases, ctx.logs
+        merchant_risk, client_history = ctx.merchant_risk, ctx.client_history
+
+        tx_id = ctx.transaction_id or FALLBACK_TX_ID
         trace_id = self.tracer.trace(
             TRACE_RESOLVE,
             input={"transaction_id": tx_id, "motivo": motivo, "cliente_vip": cliente_vip},
@@ -361,84 +356,97 @@ class ResolutionService:
         return " | ".join(parts)
 
     @staticmethod
-    def _determine_outcome(policy_verdicts: list[dict], tx_data: dict) -> dict:
-        """Deterministic action/risk from policy verdicts. No LLM involved.
-
-        Rules:
-        - Any BLOCKER verdict → REJECT + risk BLOCKER
-        - Any FAIL (no BLOCKER) → PENDING_HITL + risk HIGH or MEDIUM
-        - Any requires_human_review=true → PENDING_HITL (safety net)
-        - All PASS/WARNING → APPROVE + risk LOW or MEDIUM
-        """
-        has_blocker = any(
-            v.get("verdict") == VerdictType.BLOCKER for v in policy_verdicts
-        )
-        fail_count = sum(
-            1 for v in policy_verdicts
-            if v.get("verdict") in (VerdictType.FAIL, VerdictType.BLOCKER)
-        )
-        needs_human = any(
-            v.get("requires_human_review") is True for v in policy_verdicts
-        )
-        fraud_score = int(tx_data.get("fraud_score", FRAUD_SCORE_DEFAULT))
-
-        # Helper: list failing policy codes for explicit risk_reason.
-        fail_codes = [
+    def _codigos(policy_verdicts: list[dict], *veredictos: str) -> list[str]:
+        """Codigos de las politicas con alguno de esos veredictos."""
+        return [
             v.get("policy_code", "?") for v in policy_verdicts
-            if v.get("verdict") in (VerdictType.FAIL, VerdictType.BLOCKER)
+            if v.get("verdict") in veredictos
         ]
 
-        # ── Risk level ──
+    @staticmethod
+    def _nivel_de_riesgo(
+        policy_verdicts: list[dict],
+        has_blocker: bool,
+        fail_count: int,
+        fraud_score: int,
+    ) -> tuple[str, str]:
+        """(nivel, motivo). El motivo se escribe aca para que viaje con el nivel."""
+        codigos_fallidos = ResolutionService._codigos(
+            policy_verdicts, VerdictType.FAIL, VerdictType.BLOCKER,
+        )
+
         if has_blocker:
-            risk_level = RiskLevel.BLOCKER
-            blocker_codes = [
-                v.get("policy_code", "?") for v in policy_verdicts
-                if v.get("verdict") == VerdictType.BLOCKER
-            ]
-            risk_reason = f"Veredicto BLOCKER en {', '.join(blocker_codes)} (transaccion irreversible)"
-        elif fail_count >= RISK_HIGH_MIN_FAILS or fraud_score < RISK_FRAUD_SEVERE:
-            risk_level = RiskLevel.HIGH
-            reasons = []
+            bloqueantes = ResolutionService._codigos(policy_verdicts, VerdictType.BLOCKER)
+            return RiskLevel.BLOCKER, (
+                f"Veredicto BLOCKER en {', '.join(bloqueantes)} (transaccion irreversible)"
+            )
+
+        if fail_count >= RISK_HIGH_MIN_FAILS or fraud_score < RISK_FRAUD_SEVERE:
+            motivos = []
             if fail_count >= RISK_HIGH_MIN_FAILS:
-                reasons.append(f"{fail_count} violaciones de politica ({', '.join(fail_codes)})")
+                motivos.append(f"{fail_count} violaciones de politica ({', '.join(codigos_fallidos)})")
             if fraud_score < RISK_FRAUD_SEVERE:
-                reasons.append(f"fraud_score={fraud_score} (umbral severo: {RISK_FRAUD_SEVERE})")
-            # Clarify when risk is from policy, not fraud.
+                motivos.append(f"fraud_score={fraud_score} (umbral severo: {RISK_FRAUD_SEVERE})")
             if fraud_score >= FRAUD_SCORE_HIGH_RISK_THRESHOLD:
-                reasons.append(
-                    f"fraud_score={fraud_score} indica bajo riesgo de fraude — riesgo HIGH es por violaciones de politica, no por fraude"
+                # El riesgo viene de la politica, no del fraude: conviene decirlo.
+                motivos.append(
+                    f"fraud_score={fraud_score} indica bajo riesgo de fraude — "
+                    f"riesgo HIGH es por violaciones de politica, no por fraude"
                 )
-            risk_reason = f"HIGH por: {', '.join(reasons)}"
-        elif fail_count >= 1 or fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
-            risk_level = RiskLevel.MEDIUM
-            fraud_note = (
+            return RiskLevel.HIGH, f"HIGH por: {', '.join(motivos)}"
+
+        if fail_count >= 1 or fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
+            nota_fraude = (
                 f" (fraud_score={fraud_score} seguro, riesgo es de politica)"
                 if fraud_score >= FRAUD_SCORE_HIGH_RISK_THRESHOLD else ""
             )
-            codes_note = f" ({', '.join(fail_codes)})" if fail_codes else ""
-            risk_reason = f"MEDIUM por: {fail_count} violacion(es){codes_note}, fraud_score={fraud_score}{fraud_note}"
-        else:
-            risk_level = RiskLevel.LOW
-            risk_reason = f"LOW: sin violaciones, fraud_score={fraud_score} (seguro)"
+            nota_codigos = f" ({', '.join(codigos_fallidos)})" if codigos_fallidos else ""
+            return RiskLevel.MEDIUM, (
+                f"MEDIUM por: {fail_count} violacion(es){nota_codigos}, "
+                f"fraud_score={fraud_score}{nota_fraude}"
+            )
 
-        # ── Action ──
+        return RiskLevel.LOW, f"LOW: sin violaciones, fraud_score={fraud_score} (seguro)"
+
+    @staticmethod
+    def _accion(has_blocker: bool, fail_count: int, needs_human: bool) -> tuple[str, bool, str | None]:
+        """(accion, requiere persona, motivo). Un BLOCKER se resuelve solo; una
+        violacion sin BLOCKER siempre pasa por un analista."""
         if has_blocker:
-            action = ResolutionOutcome.REJECT
-            requires_hitl = False
-            hitl_reason = None
-        elif fail_count > 0 or needs_human:
-            action = ResolutionOutcome.PENDING_HITL
-            requires_hitl = True
-            if fail_count > 0:
-                hitl_reason = (
-                    f"{fail_count} violacion(es) de politica — requiere revision de analista"
-                )
-            else:
-                hitl_reason = "Evaluacion de politicas requiere revision humana"
-        else:
-            action = ResolutionOutcome.APPROVE
-            requires_hitl = False
-            hitl_reason = None
+            return ResolutionOutcome.REJECT, False, None
+        if fail_count > 0:
+            return ResolutionOutcome.PENDING_HITL, True, (
+                f"{fail_count} violacion(es) de politica — requiere revision de analista"
+            )
+        if needs_human:
+            return ResolutionOutcome.PENDING_HITL, True, (
+                "Evaluacion de politicas requiere revision humana"
+            )
+        return ResolutionOutcome.APPROVE, False, None
+
+    @staticmethod
+    def _determine_outcome(policy_verdicts: list[dict], tx_data: dict) -> dict:
+        """Accion y riesgo a partir de los veredictos. Sin LLM.
+
+        Reglas:
+        - Algun veredicto BLOCKER → REJECT + riesgo BLOCKER
+        - Algun FAIL (sin BLOCKER) → PENDING_HITL + riesgo HIGH o MEDIUM
+        - Algun requires_human_review → PENDING_HITL (red de seguridad)
+        - Todo PASS/WARNING → APPROVE + riesgo LOW o MEDIUM
+        """
+        has_blocker = any(v.get("verdict") == VerdictType.BLOCKER for v in policy_verdicts)
+        fail_count = len(
+            ResolutionService._codigos(policy_verdicts, VerdictType.FAIL, VerdictType.BLOCKER)
+        )
+        needs_human = any(v.get("requires_human_review") is True for v in policy_verdicts)
+        fraud_score = int(tx_data.get("fraud_score", FRAUD_SCORE_DEFAULT))
+
+        risk_level, risk_reason = ResolutionService._nivel_de_riesgo(
+            policy_verdicts, has_blocker, fail_count, fraud_score,
+        )
+        action, requires_hitl, hitl_reason = ResolutionService._accion(
+            has_blocker, fail_count, needs_human,
+        )
 
         return {
             "recommended_action": action,

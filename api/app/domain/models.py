@@ -8,6 +8,8 @@ in docs/prompts.md and flow as plain dicts through the pipeline.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .context import CaseContext
+
 from .enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 
@@ -21,6 +23,19 @@ class ResolveRequest(BaseModel):
     client_history: dict
     motivo: str | None = None
     cliente_vip: bool = False
+
+    def to_context(self) -> CaseContext:
+        """Los nombres del contrato con n8n, traducidos al tipo interno."""
+        return CaseContext(
+            transaction=self.tx_data,
+            motivo=self.motivo,
+            cliente_vip=self.cliente_vip,
+            logs=self.logs,
+            policies=self.policies,
+            similar_cases=self.similar_cases,
+            merchant_risk=self.merchant_risk,
+            client_history=self.client_history,
+        )
 
 
 class JudgeRequest(BaseModel):

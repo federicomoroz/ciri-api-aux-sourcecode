@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class Tracer(Protocol):
+    @property
+    def enabled(self) -> bool:
+        """Si esta apagado, los demas metodos son no-ops."""
+        ...
+
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
         """Create a trace. Returns trace_id."""
         ...

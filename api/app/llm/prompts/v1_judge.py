@@ -2,7 +2,7 @@
 # PURPOSE: LLM-as-Judge to evaluate resolution quality across 5 criteria
 # OUTPUT: JudgeEvaluation JSON object
 
-import json
+from ._shared import bloque_json
 
 SYSTEM = """Eres un supervisor de calidad de resoluciones de contracargos en una fintech latinoamericana.
 Tu tarea: evaluar la calidad de una resolucion propuesta en 5 criterios.
@@ -97,7 +97,7 @@ Evalua la resolucion usando la RUBRICA de cada criterio y devuelve el JSON de ev
 
 def render(full_context: dict, resolution: dict) -> tuple[str, str]:
     user = USER_TEMPLATE.format(
-        full_context=json.dumps(full_context, indent=2, ensure_ascii=False),
-        resolution=json.dumps(resolution, indent=2, ensure_ascii=False),
+        full_context=bloque_json(full_context),
+        resolution=bloque_json(resolution),
     )
     return SYSTEM, user

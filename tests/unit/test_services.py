@@ -23,6 +23,7 @@ from api.app.domain.constants import (
     TRACE_RESOLVE,
 )
 from api.app.services.feedback import FeedbackService
+from api.app.domain.context import CaseContext
 from api.app.services.resolution import ResolutionService
 
 
@@ -88,16 +89,7 @@ class TestResolutionServiceResolve:
 
     def test_resolve_calls_tracer_trace(self, resolution_service, mock_tracer):
         """Axis 7: resolve() must create a trace with TRACE_RESOLVE name."""
-        resolution_service.resolve(
-            tx_data={"id": "TXN-00051", "merchant": "Airbnb", "amount_usd": 2095.90},
-            policies=[],
-            similar_cases=[],
-            logs=[],
-            merchant_risk={},
-            client_history={},
-            motivo="No reconoce la compra",
-            cliente_vip=False,
-        )
+        resolution_service.resolve(CaseContext(transaction={"id": "TXN-00051", "merchant": "Airbnb", "amount_usd": 2095.90}, motivo="No reconoce la compra", cliente_vip=False))
         mock_tracer.trace.assert_called_once()
         args = mock_tracer.trace.call_args
         assert args[0][0] == TRACE_RESOLVE
@@ -105,42 +97,22 @@ class TestResolutionServiceResolve:
 
     def test_resolve_returns_trace_id(self, resolution_service):
         """resolve() must include trace_id in the response."""
-        result = resolution_service.resolve(
-            tx_data={"id": "TXN-00051"},
-            policies=[], similar_cases=[], logs=[],
-            merchant_risk={}, client_history={},
-            motivo=None, cliente_vip=False,
-        )
+        result = resolution_service.resolve(CaseContext(transaction={"id": "TXN-00051"}, motivo=None, cliente_vip=False))
         assert result["trace_id"] == "trace-123"
 
     def test_resolve_calls_llm_twice(self, resolution_service, mock_llm_resolve):
         """resolve() should call LLM twice: policy eval + resolution synthesis."""
-        resolution_service.resolve(
-            tx_data={"id": "TXN-00051"},
-            policies=[], similar_cases=[], logs=[],
-            merchant_risk={}, client_history={},
-            motivo=None, cliente_vip=False,
-        )
+        resolution_service.resolve(CaseContext(transaction={"id": "TXN-00051"}, motivo=None, cliente_vip=False))
         assert mock_llm_resolve.complete.call_count == 2
 
     def test_resolve_includes_guardrail_warnings(self, resolution_service):
         """resolve() must include guardrail_warnings key in response."""
-        result = resolution_service.resolve(
-            tx_data={"id": "TXN-00051"},
-            policies=[], similar_cases=[], logs=[],
-            merchant_risk={}, client_history={},
-            motivo=None, cliente_vip=False,
-        )
+        result = resolution_service.resolve(CaseContext(transaction={"id": "TXN-00051"}, motivo=None, cliente_vip=False))
         assert "guardrail_warnings" in result
 
     def test_resolve_uses_fallback_tx_id(self, resolution_service, mock_tracer):
         """resolve() should use FALLBACK_TX_ID when tx_data has no id."""
-        resolution_service.resolve(
-            tx_data={},
-            policies=[], similar_cases=[], logs=[],
-            merchant_risk={}, client_history={},
-            motivo=None, cliente_vip=False,
-        )
+        resolution_service.resolve(CaseContext(transaction={}, motivo=None, cliente_vip=False))
         args = mock_tracer.trace.call_args
         assert args[1]["input"]["transaction_id"] == FALLBACK_TX_ID
 

@@ -1,6 +1,7 @@
 """Unit tests for ResolutionService guardrails and deterministic outcome."""
 
 import pytest
+from api.app.domain.context import CaseContext
 from api.app.services.resolution import ResolutionService
 
 
@@ -390,9 +391,10 @@ class TestGuardrailsEnElPipelineCompleto:
 
     def _resolver(self, sintesis: dict, veredicto: str = "BLOCKER") -> dict:
         return self._servicio(sintesis, veredicto).resolve(
-            tx_data=self.TX, policies=self.POLICIES, similar_cases=[], logs=[],
-            merchant_risk={}, client_history={},
-            motivo="No reconoce la compra", cliente_vip=False,
+            CaseContext(
+                transaction=self.TX, policies=self.POLICIES,
+                motivo="No reconoce la compra", cliente_vip=False,
+            )
         )
 
     def test_approve_alucinado_sobre_blocker_queda_registrado(self):

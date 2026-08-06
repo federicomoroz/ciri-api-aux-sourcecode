@@ -1,11 +1,8 @@
-import logging
-
 from fastapi import APIRouter, Depends
 
 from ..analysis.analyzer import Analyzer
 from ..dependencies import get_analyzer
 
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/merchants", tags=["merchants"])
 

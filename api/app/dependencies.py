@@ -31,6 +31,88 @@ from .services.resolution import ResolutionService
 logger = logging.getLogger(__name__)
 
 
+def _preparar_sqlite(settings: Settings) -> Database:
+    """SQLite es efimero en el free tier de Render: si no esta, se recrea del Excel."""
+    db_path = settings.sqlite_path
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    if not os.path.exists(db_path):
+        try:
+            data = load_excel(settings.data_file_path)
+            init_sqlite(db_path, data)
+            del data
+        except Exception:
+            logger.error("Failed to initialize SQLite from Excel", exc_info=True)
+            raise
+
+    db = Database(db_path)
+    db.ensure_report_cache_table()
+    db.ensure_alerts_table()
+    return db
+
+
+def _conectar_servicios(settings: Settings) -> dict:
+    """Clientes de los servicios externos: Qdrant, embeddings, trazas y modelo."""
+    tracer = (
+        LangfuseTracer(
+            public_key=settings.langfuse_public_key,
+            secret_key=settings.langfuse_secret_key,
+            host=settings.langfuse_host,
+        )
+        if settings.langfuse_enabled
+        else NoOpTracer()
+    )
+    llm = AnthropicClient(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
+        tracer=tracer,
+        max_retries=settings.llm_max_retries,
+    )
+    return {
+        "qdrant": QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key or None,
+            timeout=30,
+        ),
+        "embedder": FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key),
+        "tracer": tracer,
+        "llm": llm,
+        "llm_resolution": (
+            AnthropicClient(
+                api_key=settings.anthropic_api_key,
+                model=settings.llm_model_resolution,
+                tracer=tracer,
+                max_retries=settings.llm_max_retries,
+            )
+            if settings.llm_model_resolution
+            else llm
+        ),
+    }
+
+
+def _indexar_si_hace_falta(indexer: QdrantIndexer, qdrant: QdrantClient, db: Database, settings: Settings) -> None:
+    """Indexa en el primer arranque. Si Qdrant ya tiene datos, no hace nada."""
+    indexer.ensure_collections()
+    try:
+        faltan_politicas = qdrant.get_collection(settings.qdrant_policies_collection).points_count == 0
+        faltan_casos = qdrant.get_collection(settings.qdrant_cases_collection).points_count == 0
+    except Exception as e:
+        logger.warning("Could not check Qdrant collection counts, will re-index: %s", e)
+        faltan_politicas = faltan_casos = True
+
+    if not (faltan_politicas or faltan_casos):
+        return
+
+    logger.info("Qdrant collections empty — indexing from SQLite (first-run or reset)")
+    if faltan_politicas:
+        politicas = db.get_all_policies()
+        if politicas:
+            indexer.index_policies(politicas)
+    if faltan_casos:
+        casos, txns = db.get_all_cases(), db.get_all_transactions()
+        if casos:
+            indexer.index_historical_cases(casos, txns)
+
+
 def _ya_cableado(app: FastAPI) -> bool:
     """Si alguien ya dejo los servicios en app.state, no hay nada que construir.
 
@@ -47,105 +129,34 @@ async def lifespan(app: FastAPI):
         return
 
     settings = Settings()
+    db = _preparar_sqlite(settings)
+    externos = _conectar_servicios(settings)
+    qdrant, embedder, tracer = externos["qdrant"], externos["embedder"], externos["tracer"]
 
-    # --- Phase 1: SQLite (ephemeral on Render free tier, recreated from Excel if missing) ---
-    db_path = settings.sqlite_path
-    os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
-    if not os.path.exists(db_path):
-        try:
-            data = load_excel(settings.data_file_path)
-            init_sqlite(db_path, data)
-            del data
-        except Exception:
-            logger.error("Failed to initialize SQLite from Excel", exc_info=True)
-            raise
-
-    db = Database(db_path)
-    db.ensure_report_cache_table()
-    db.ensure_alerts_table()
-
-    # --- Phase 2: Connect external services ---
-    qdrant = QdrantClient(
-        url=settings.qdrant_url,
-        api_key=settings.qdrant_api_key or None,
-        timeout=30,
-    )
-    embedder = FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key)
-    tracer = (
-        LangfuseTracer(
-            public_key=settings.langfuse_public_key,
-            secret_key=settings.langfuse_secret_key,
-            host=settings.langfuse_host,
-        )
-        if settings.langfuse_enabled
-        else NoOpTracer()
-    )
-    llm = AnthropicClient(
-        api_key=settings.anthropic_api_key,
-        model=settings.llm_model,
-        tracer=tracer,
-        max_retries=settings.llm_max_retries,
-    )
-    llm_resolution = (
-        AnthropicClient(
-            api_key=settings.anthropic_api_key,
-            model=settings.llm_model_resolution,
-            tracer=tracer,
-            max_retries=settings.llm_max_retries,
-        )
-        if settings.llm_model_resolution
-        else llm
-    )
-
-    # --- Phase 3: RAG setup ---
     indexer = QdrantIndexer(
-        qdrant,
-        embedder,
+        qdrant, embedder,
         policies_collection=settings.qdrant_policies_collection,
         cases_collection=settings.qdrant_cases_collection,
     )
     retriever = QdrantRetriever(
-        qdrant,
-        embedder,
+        qdrant, embedder,
         policies_collection=settings.qdrant_policies_collection,
         cases_collection=settings.qdrant_cases_collection,
     )
     updater = RAGUpdater(indexer, db, judge_threshold=settings.judge_auto_index_threshold)
+    _indexar_si_hace_falta(indexer, qdrant, db, settings)
 
-    # --- Phase 4: Conditional indexing ---
-    indexer.ensure_collections()
-    try:
-        needs_policies = qdrant.get_collection(settings.qdrant_policies_collection).points_count == 0
-        needs_cases = qdrant.get_collection(settings.qdrant_cases_collection).points_count == 0
-    except Exception as e:
-        logger.warning("Could not check Qdrant collection counts, will re-index: %s", e)
-        needs_policies = needs_cases = True
-
-    if needs_policies or needs_cases:
-        logger.info("Qdrant collections empty — indexing from SQLite (first-run or reset)")
-        policies = db.get_all_policies() if needs_policies else []
-        cases = db.get_all_cases() if needs_cases else []
-        txns = db.get_all_transactions() if needs_cases else []
-        if needs_policies and policies:
-            indexer.index_policies(policies)
-        if needs_cases and cases:
-            indexer.index_historical_cases(cases, txns)
-        del policies, cases, txns
-
-    # Service layer
     analyzer = Analyzer(db)
-    resolution_service = ResolutionService(llm, tracer, llm_resolution=llm_resolution)
-    feedback_service = FeedbackService(db, updater, tracer)
+    resolution_service = ResolutionService(
+        externos["llm"], tracer, llm_resolution=externos["llm_resolution"],
+    )
     report_generator = ReportGenerator()
-    pipeline_service = PipelineService(db, retriever, analyzer, resolution_service, report_generator)
-    langfuse_stats_service = LangfuseStatsService(tracer, settings.llm_model)
 
-    # Store everything in app.state
     app.state.settings = settings
     app.state.db = db
     app.state.qdrant = qdrant
     app.state.embedder = embedder
-    app.state.llm = llm
+    app.state.llm = externos["llm"]
     app.state.indexer = indexer
     app.state.retriever = retriever
     app.state.updater = updater
@@ -153,9 +164,11 @@ async def lifespan(app: FastAPI):
     app.state.tracer = tracer
     app.state.report_generator = report_generator
     app.state.resolution_service = resolution_service
-    app.state.feedback_service = feedback_service
-    app.state.pipeline_service = pipeline_service
-    app.state.langfuse_stats_service = langfuse_stats_service
+    app.state.feedback_service = FeedbackService(db, updater, tracer)
+    app.state.pipeline_service = PipelineService(
+        db, retriever, analyzer, resolution_service, report_generator,
+    )
+    app.state.langfuse_stats_service = LangfuseStatsService(tracer, settings.llm_model)
 
     yield
 

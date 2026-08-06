@@ -377,7 +377,7 @@ CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
 
 ## Decisiones de Diseño
 
-11 decisiones documentadas con Contexto, Razonamiento, Trade-offs y consideraciones de producción. Ver [`docs/decisions.md`](docs/decisions.md) para el análisis completo.
+13 decisiones documentadas con Contexto, Razonamiento, Trade-offs y consideraciones de producción. Ver [`docs/decisions.md`](docs/decisions.md) para el análisis completo.
 
 | # | Decisión | Por qué |
 |---|----------|---------|
@@ -392,6 +392,8 @@ CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
 | 9 | Caché de idempotencia, no semántico | Repetir un caso no vuelve a pagar el LLM, sin arriesgar respuestas cruzadas |
 | 10 | Modelo dual Haiku + Sonnet | 9.1/10 Judge score vs 8.2 con Haiku solo |
 | 11 | Data Tables de n8n descartadas | Sin agregaciones ni joins: la lógica volvería al canvas |
+| 12 | Deuda asumida: el panel de 3112 líneas | No es entregable; el riesgo de tocarlo supera al beneficio |
+| 13 | Un solo tipo para el contexto del caso | Ocho parámetros que viajaban juntos eran un concepto disfrazado |
 
 ---
 
@@ -460,7 +462,7 @@ quest_ML/
   tests/                      # 277 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
-    decisions.md              # 11 decisiones técnicas con razonamiento
+    decisions.md              # 13 decisiones técnicas con razonamiento
     prompts.md                # Prompts documentados con versionado
     rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
     mejora_continua.md        # Feedback loop, Judge, guardrails
@@ -477,7 +479,7 @@ quest_ML/
 |---|---|
 | [`docs/ejes.md`](docs/ejes.md) | Los 7 ejes de la consigna, uno por uno, con evidencia y verificación |
 | [`docs/architecture.md`](docs/architecture.md) | Arquitectura del sistema, flujo n8n, diagramas |
-| [`docs/decisions.md`](docs/decisions.md) | 11 decisiones técnicas con razonamiento y trade-offs |
+| [`docs/decisions.md`](docs/decisions.md) | 13 decisiones técnicas con razonamiento y trade-offs |
 | [`docs/prompts.md`](docs/prompts.md) | Prompts documentados con versionado y evolución |
 | [`docs/rag_explanation.md`](docs/rag_explanation.md) | Estrategia RAG, colecciones, QueryBuilder |
 | [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge, guardrails, auto-mejora |

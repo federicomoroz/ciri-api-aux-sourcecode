@@ -7,17 +7,13 @@ Extracts the 9-step orchestration from routes/panel.py into a proper service.
 import logging
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
 
 from ..analysis.analyzer import Analyzer
 from ..data.db import Database, cache_key
-from ..domain.constants import (
-    LLM_PRICING,
-    LLM_PRICING_PER_MTOK,
-    PIPELINE_MAX_WORKERS,
-    PIPELINE_THREAD_TIMEOUT_S,
-)
+from ..domain.constants import PIPELINE_MAX_WORKERS, PIPELINE_THREAD_TIMEOUT_S
+from ..domain.context import CaseContext
 from ..domain.enums import VerdictType
+from ..llm.pricing import estimar_costo_usd
 from ..domain.models import AnalyzeRequest
 from ..rag.retriever import QdrantRetriever
 from ..reports.generator import ReportGenerator
@@ -27,18 +23,6 @@ logger = logging.getLogger(__name__)
 
 # Type alias for streaming events
 StreamEvent = tuple[str, dict]
-
-
-@dataclass
-class _PipelineContext:
-    """Gathered context shared between run() and run_streaming()."""
-
-    tx: dict
-    logs: list[dict]
-    policies: list[dict]
-    similar_cases: list[dict]
-    merchant_risk: dict
-    client_history: dict
 
 
 class PipelineService:
@@ -86,50 +70,26 @@ class PipelineService:
             ): "client",
         }
 
-    def _resolve(self, ctx: _PipelineContext, req: AnalyzeRequest) -> dict:
-        """Run resolve LLM call."""
-        return self.resolution_svc.resolve(
-            tx_data=ctx.tx,
-            policies=ctx.policies,
-            similar_cases=ctx.similar_cases,
-            logs=ctx.logs,
-            merchant_risk=ctx.merchant_risk,
-            client_history=ctx.client_history,
-            motivo=req.motivo,
-            cliente_vip=req.cliente_vip,
-        )
-
-    def _judge(self, ctx: _PipelineContext, resolution: dict, req: AnalyzeRequest) -> dict:
+    def _judge(self, ctx: CaseContext, resolution: dict) -> dict:
         """Run judge LLM call."""
-        return self.resolution_svc.judge(
-            resolution=resolution,
-            full_context={
-                "transaction": ctx.tx,
-                "motivo": req.motivo,
-                "policies": ctx.policies,
-                "similar_cases": ctx.similar_cases,
-                "merchant_risk": ctx.merchant_risk,
-                "client_history": ctx.client_history,
-                "logs": ctx.logs,
-            },
-        )
+        return self.resolution_svc.judge(resolution=resolution, full_context=ctx.para_el_juez())
 
     def _build_report_data(
         self,
-        ctx: _PipelineContext,
+        ctx: CaseContext,
         resolution: dict,
         judge: dict,
         txn_id: str,
     ) -> dict:
         """Build the report data dict shared by both run paths."""
         return {
-            "transaction": ctx.tx,
+            "transaction": ctx.transaction,
             "resolution": resolution,
             "judge_evaluation": judge,
             "agent_analysis": (
-                f"Pipeline directo — {txn_id}: {ctx.tx.get('merchant', '')}, "
-                f"USD {ctx.tx.get('amount_usd', '')}, canal {ctx.tx.get('channel', '')}, "
-                f"país {ctx.tx.get('country', '')}, score fraude {ctx.tx.get('fraud_score', '')}."
+                f"Pipeline directo — {txn_id}: {ctx.transaction.get('merchant', '')}, "
+                f"USD {ctx.transaction.get('amount_usd', '')}, canal {ctx.transaction.get('channel', '')}, "
+                f"país {ctx.transaction.get('country', '')}, score fraude {ctx.transaction.get('fraud_score', '')}."
             ),
             "merchant_risk": ctx.merchant_risk,
             "client_profile": ctx.client_history,
@@ -170,18 +130,15 @@ class PipelineService:
                 futures_results[futures[future]] = future.result()
 
         policies, similar_cases = futures_results["rag"]
-        ctx = _PipelineContext(
-            tx=tx,
-            logs=futures_results["logs"],
-            policies=policies,
-            similar_cases=similar_cases,
-            merchant_risk=futures_results["merchant"],
-            client_history=futures_results["client"],
+        ctx = CaseContext(
+            transaction=tx, motivo=req.motivo, cliente_vip=req.cliente_vip,
+            logs=futures_results["logs"], policies=policies, similar_cases=similar_cases,
+            merchant_risk=futures_results["merchant"], client_history=futures_results["client"],
         )
 
         # Steps 7+8 — resolve + judge
-        resolution = self._resolve(ctx, req)
-        judge = self._judge(ctx, resolution, req)
+        resolution = self.resolution_svc.resolve(ctx)
+        judge = self._judge(ctx, resolution)
 
         # Step 9 — html report
         report_data = self._build_report_data(ctx, resolution, judge, txn_id)
@@ -255,14 +212,15 @@ class PipelineService:
                         "flags": client_history.get("flags", []),
                     })
 
-        ctx = _PipelineContext(
-            tx=tx, logs=logs, policies=policies, similar_cases=similar_cases,
+        ctx = CaseContext(
+            transaction=tx, motivo=req.motivo, cliente_vip=req.cliente_vip,
+            logs=logs, policies=policies, similar_cases=similar_cases,
             merchant_risk=merchant_risk, client_history=client_history,
         )
 
         # Resolve (LLM)
         yield ("resolving", {})
-        resolution = self._resolve(ctx, req)
+        resolution = self.resolution_svc.resolve(ctx)
         verdicts = resolution.get("policy_verdicts", [])
         yield ("resolved", {
             "action": resolution.get("recommended_action", ""),
@@ -275,7 +233,7 @@ class PipelineService:
 
         # Judge (LLM)
         yield ("judging", {})
-        judge = self._judge(ctx, resolution, req)
+        judge = self._judge(ctx, resolution)
         yield ("judged", {
             "score": judge.get("overall_score", 0),
             "approved": judge.get("approved", False),
@@ -308,17 +266,11 @@ class PipelineService:
         total_out = resolve_usage.get("output_tokens", 0) + judge_usage.get("output_tokens", 0)
         total_calls = resolve_usage.get("call_count", 0) + judge_usage.get("call_count", 0)
 
-        cost_usd = 0.0
-        for key, (in_rate, out_rate) in LLM_PRICING.items():
-            if key in model_name.lower():
-                cost_usd = total_in * in_rate / LLM_PRICING_PER_MTOK + total_out * out_rate / LLM_PRICING_PER_MTOK
-                break
-
         return {
             "input_tokens": total_in,
             "output_tokens": total_out,
             "total_tokens": total_in + total_out,
             "call_count": total_calls,
-            "cost_usd": round(cost_usd, 6),
+            "cost_usd": round(estimar_costo_usd(model_name, total_in, total_out), 6),
             "model": model_name,
         }

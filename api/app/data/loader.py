@@ -135,146 +135,133 @@ def load_excel(file_path: str) -> dict:
     }
 
 
-def init_sqlite(db_path: str, data: dict) -> None:
-    """Create all tables and insert data.
+# Esquema. Se declara aparte porque es la forma del dominio, no un paso del seed.
+_TABLAS = (
+    """CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        merchant TEXT NOT NULL,
+        amount_usd REAL NOT NULL,
+        date TEXT NOT NULL,
+        payment_method TEXT NOT NULL,
+        country TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        device TEXT NOT NULL,
+        fraud_score INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        notes TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS cases (
+        case_id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        motivo TEXT NOT NULL,
+        resolution TEXT NOT NULL,
+        resolution_days INTEGER NOT NULL,
+        analyst TEXT NOT NULL,
+        observations TEXT,
+        open_date TEXT NOT NULL,
+        close_date TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS policies (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL,
+        reference TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp TEXT NOT NULL,
+        transaction_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        service TEXT NOT NULL,
+        code TEXT NOT NULL,
+        detail TEXT NOT NULL,
+        severity TEXT NOT NULL
+    )""",
+    """CREATE TABLE IF NOT EXISTS feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_id TEXT NOT NULL,
+        analyst_decision TEXT NOT NULL,
+        analyst_notes TEXT NOT NULL,
+        final_outcome TEXT NOT NULL,
+        judge_score REAL NOT NULL,
+        created_at TEXT NOT NULL
+    )""",
+)
 
-    Idempotente: transacciones, casos y politicas se deduplican por su clave de
-    negocio con INSERT OR IGNORE; los logs, que no tienen una, se reemplazan.
-    Correr el seed dos veces deja la base igual que correrlo una.
+# Columnas por las que filtra el pipeline. Declararlos documenta como se consulta.
+_INDICES = (
+    "CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)",
+    "CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)",
+    "CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)",
+    "CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)",
+)
+
+
+def _crear_esquema(conn: sqlite3.Connection) -> None:
+    for ddl in _TABLAS + _INDICES:
+        conn.execute(ddl)
+
+
+def _insertar(conn: sqlite3.Connection, data: dict) -> None:
+    """Vuelca el Excel en las tablas.
+
+    Transacciones, casos y politicas se deduplican por su clave de negocio. Los
+    logs no tienen una, asi que se reemplazan enteros: son datos de referencia
+    que solo salen del Excel y nadie escribe en runtime. Sin esto, cada corrida
+    del seed volvia a insertar las 150 filas y falseaba la deteccion de patrones.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
+    conn.executemany(
+        "INSERT OR IGNORE INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        [(
+            t["id"], t["client_id"], t["merchant"], t["amount_usd"], t["date"],
+            t["payment_method"], t["country"], t["channel"], t["device"],
+            t["fraud_score"], t["status"], t["notes"],
+        ) for t in data["transactions"]],
+    )
+
+    conn.executemany(
+        "INSERT OR IGNORE INTO cases VALUES (?,?,?,?,?,?,?,?,?)",
+        [(
+            c["case_id"], c["transaction_id"], c["motivo"], c["resolution"],
+            c["resolution_days"], c["analyst"], c["observations"],
+            c["open_date"], c["close_date"],
+        ) for c in data["cases"]],
+    )
+
+    conn.executemany(
+        "INSERT OR IGNORE INTO policies VALUES (?,?,?,?,?,?,?)",
+        [(
+            p["code"], p["name"], p["category"],
+            p["description"], p["reference"], now, now,
+        ) for p in data["policies"]],
+    )
+
+    conn.execute("DELETE FROM logs")
+    conn.executemany(
+        "INSERT INTO logs (timestamp, transaction_id, event, service, code, detail, severity) VALUES (?,?,?,?,?,?,?)",
+        [(
+            l["timestamp"], l["transaction_id"], l["event"],
+            l["service"], l["code"], l["detail"], l["severity"],
+        ) for l in data["logs"]],
+    )
+
+
+def init_sqlite(db_path: str, data: dict) -> None:
+    """Crea el esquema y carga los datos.
+
+    Idempotente: correr el seed dos veces deja la base igual que correrlo una.
     """
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("PRAGMA journal_mode=WAL")
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS transactions (
-                id TEXT PRIMARY KEY,
-                client_id TEXT NOT NULL,
-                merchant TEXT NOT NULL,
-                amount_usd REAL NOT NULL,
-                date TEXT NOT NULL,
-                payment_method TEXT NOT NULL,
-                country TEXT NOT NULL,
-                channel TEXT NOT NULL,
-                device TEXT NOT NULL,
-                fraud_score INTEGER NOT NULL,
-                status TEXT NOT NULL,
-                notes TEXT
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS cases (
-                case_id TEXT PRIMARY KEY,
-                transaction_id TEXT NOT NULL,
-                motivo TEXT NOT NULL,
-                resolution TEXT NOT NULL,
-                resolution_days INTEGER NOT NULL,
-                analyst TEXT NOT NULL,
-                observations TEXT,
-                open_date TEXT NOT NULL,
-                close_date TEXT NOT NULL
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS policies (
-                code TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                category TEXT NOT NULL,
-                description TEXT NOT NULL,
-                reference TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT NOT NULL,
-                transaction_id TEXT NOT NULL,
-                event TEXT NOT NULL,
-                service TEXT NOT NULL,
-                code TEXT NOT NULL,
-                detail TEXT NOT NULL,
-                severity TEXT NOT NULL
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS feedback (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                transaction_id TEXT NOT NULL,
-                analyst_decision TEXT NOT NULL,
-                analyst_notes TEXT NOT NULL,
-                final_outcome TEXT NOT NULL,
-                judge_score REAL NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-
-        # Indexes for common lookups
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)")
-
-        now = datetime.now(timezone.utc).isoformat()
-
-        # Transactions
-        conn.executemany(
-            "INSERT OR IGNORE INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            [(
-                t["id"], t["client_id"], t["merchant"], t["amount_usd"],
-                t["date"], t["payment_method"], t["country"], t["channel"],
-                t["device"], t["fraud_score"], t["status"], t.get("notes"),
-            ) for t in data["transactions"]],
-        )
-
-        # Cases
-        conn.executemany(
-            "INSERT OR IGNORE INTO cases VALUES (?,?,?,?,?,?,?,?,?)",
-            [(
-                c["case_id"], c["transaction_id"], c["motivo"], c["resolution"],
-                c["resolution_days"], c["analyst"], c.get("observations"),
-                c["open_date"], c["close_date"],
-            ) for c in data["cases"]],
-        )
-
-        # Policies
-        conn.executemany(
-            "INSERT OR IGNORE INTO policies VALUES (?,?,?,?,?,?,?)",
-            [(
-                p["code"], p["name"], p["category"],
-                p["description"], p["reference"], now, now,
-            ) for p in data["policies"]],
-        )
-
-        # Logs. A diferencia del resto no tienen una clave de negocio con la que
-        # deduplicar, asi que se reemplazan enteros: son datos de referencia que
-        # solo salen del Excel y nadie escribe en runtime. Sin esto, cada corrida
-        # del seed volvia a insertar las 150 filas y duplicaba los eventos de
-        # cada transaccion, falseando la deteccion de patrones de error.
-        conn.execute("DELETE FROM logs")
-        conn.executemany(
-            "INSERT INTO logs (timestamp, transaction_id, event, service, code, detail, severity) VALUES (?,?,?,?,?,?,?)",
-            [(
-                l["timestamp"], l["transaction_id"], l["event"],
-                l["service"], l["code"], l["detail"], l["severity"],
-            ) for l in data["logs"]],
-        )
-
-        # Indices de las columnas por las que filtra el pipeline. Con 100 filas
-        # da igual; con volumen real, no. Y declararlos documenta como se consulta.
-        for ddl in (
-            "CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)",
-            "CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)",
-            "CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)",
-            "CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)",
-        ):
-            conn.execute(ddl)
-
+        _crear_esquema(conn)
+        _insertar(conn, data)
         conn.commit()
     finally:
         conn.close()
