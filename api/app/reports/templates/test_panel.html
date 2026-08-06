@@ -1553,7 +1553,7 @@
     <button class="btn-policies" onclick="openPoliciesModal()">Politicas</button>
     <span class="pipeline-selector">
       <label class="pipeline-label">Pipeline:</label>
-      <select class="pipeline-select" id="pipeline-mode" title="Directo = sin n8n (gratis). Test/Prod = via n8n (1 ejecucion).">
+      <select class="pipeline-select" id="pipeline-mode" onchange="onModoPipeline()" title="Directo = sin n8n (gratis). Test/Prod = via n8n (1 ejecucion).">
         <option value="direct" selected>Directo (sin n8n)</option>
         <option value="test">n8n Test</option>
         <option value="production">n8n Production</option>
@@ -2336,16 +2336,48 @@ function marcarN8n(texto, clase, ayuda) {
 
 let verificacionN8n = null;
 
+function usaN8n() {
+  return $('pipeline-mode').value !== 'direct';
+}
+
+// El servidor no puede adivinar donde corre el n8n de quien mira: si eligio
+// ejecutar por n8n, la URL es obligatoria. Y no se cae al pipeline directo en
+// silencio, que devolveria un informe que aparenta venir de la orquestacion.
+function onModoPipeline() {
+  onN8nUrlChange();
+  refrescarBotonPorN8n();
+}
+
+function refrescarBotonPorN8n() {
+  const falta = usaN8n() && !getN8nUrl();
+  const btn = $('btn-submit');
+  if (falta) {
+    btn.disabled = true;
+    $('btn-label').textContent = 'Falta la URL de n8n';
+  } else if (isCustom) {
+    refreshSubmitBtn();
+  } else if (selectedIdx !== null) {
+    enableSubmit(SCENARIOS[selectedIdx].label);
+  }
+}
+
 function onN8nUrlChange() {
   const url  = getN8nUrl();
   const mode = $('pipeline-mode');
   clearTimeout(verificacionN8n);
 
   if (!url) {
-    marcarN8n('opcional', '', 'Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.');
+    if (usaN8n()) {
+      marcarN8n('requerida', 'required',
+        'El modo ' + mode.value + ' ejecuta en TU n8n, y este servidor no puede adivinar donde esta. Pega la URL base, o volve a Directo.');
+    } else {
+      marcarN8n('opcional', '', 'Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.');
+    }
+    refrescarBotonPorN8n();
     return;
   }
   if (mode.value === 'direct') mode.value = 'test';
+  refrescarBotonPorN8n();
 
   const crudo = ($('inp-n8n-url').value || '').trim().replace(/\/+$/, '');
   const aviso = (crudo && normalizarUrlN8n(crudo) !== crudo) ? ' Se usa la base: ' + url : '';
@@ -2367,6 +2399,7 @@ async function verificarN8n(url, aviso) {
       'No se pudo contactar ' + url + '. Revisa que n8n este corriendo y que la URL sea la base, no la del editor.' + aviso);
   } finally {
     clearTimeout(reloj);
+    refrescarBotonPorN8n();
   }
 }
 
@@ -2441,6 +2474,13 @@ function buildPayload() {
 async function submitAnalysis() {
   const payload = buildPayload();
   if (!payload) return;
+
+  if (usaN8n() && !getN8nUrl()) {
+    showToast('amber', 'Falta la URL de n8n',
+      'El modo n8n ejecuta en tu instancia. Pega su URL base, o elegi Directo.');
+    $('inp-n8n-url').focus();
+    return;
+  }
 
   // BYOK: require API key unless server has its own
   if (!byokSatisfied()) {

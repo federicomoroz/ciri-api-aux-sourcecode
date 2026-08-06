@@ -159,6 +159,42 @@ def _pagina_sin_caso_demo(txn_id: str, settings: Settings) -> str:
     )
 
 
+def _pagina_sin_n8n(txn_id: str) -> str:
+    """Eligieron ejecutar por n8n sin decir donde esta."""
+    return _pagina(
+        "Falta la URL de tu n8n",
+        "<p>Elegiste ejecutar a traves de n8n, pero no hay ninguna instancia indicada. "
+        "Este servidor no puede adivinar donde corre tu n8n: la URL la tenes que poner "
+        "vos, en el campo <b>n8n URL</b> del panel.</p>"
+        "<p>Si todavia no lo importaste, o solo queres ver el resultado, elegi el modo "
+        "<b>Directo</b>: corre el mismo pipeline dentro de la API.</p>",
+        txn_id,
+    )
+
+
+def _pagina_n8n_no_respondio(txn_id: str, base: str, es_prueba: bool) -> str:
+    """n8n estaba indicado pero no contesto. No se disimula con el pipeline directo."""
+    ruta = N8N_WEBHOOK_TEST_PATH if es_prueba else N8N_WEBHOOK_PATH
+    extra = (
+        "<li>En modo <b>prueba</b> hay que apretar <b>Execute workflow</b> en el editor "
+        "justo antes: el webhook de test escucha una sola ejecucion.</li>"
+        if es_prueba else
+        "<li>En modo <b>produccion</b> el workflow tiene que estar <b>activo</b>.</li>"
+    )
+    return _pagina(
+        "Tu n8n no respondio",
+        f"<p>Se llamo a <code>{base}{ruta}</code> y no hubo respuesta util.</p>"
+        f"<p><b>Que revisar:</b></p><ul>"
+        f"<li>Que la URL sea la base de n8n, no la del editor "
+        f"(<code>.../workflow/xxxx</code> no sirve).</li>"
+        f"{extra}"
+        f"<li>Que el workflow importado sea <code>workflow_ciri_agent.json</code>.</li></ul>"
+        f"<p>No se ejecuto el pipeline directo en su lugar: un informe asi pareceria "
+        f"venir de la orquestacion sin haber pasado por ella.</p>",
+        txn_id,
+    )
+
+
 def _pagina_de_error(txn_id: str, exc: Exception, settings: Settings) -> str:
     """La pagina cuando el analisis no pudo correr.
 
@@ -383,10 +419,22 @@ async def panel_analyze(
             content=_pagina_sin_caso_demo(req.transaction_id, settings), status_code=200
         )
 
+    # Pidieron n8n explicitamente. Si no se puede, se dice: caer al pipeline
+    # directo en silencio devolveria un informe que parece venir de la
+    # orquestacion sin haber pasado por ella, que es peor que un error.
     if not direct:
+        base = (n8n_base_url or settings.n8n_base_url or "").strip()
+        if not base:
+            return HTMLResponse(
+                content=_pagina_sin_n8n(req.transaction_id), status_code=400
+            )
         html = await _try_n8n(req, settings, report_gen, n8n_test, timeout_s, n8n_base_url)
-        if html is not None:
-            return HTMLResponse(content=html, status_code=200)
+        if html is None:
+            return HTMLResponse(
+                content=_pagina_n8n_no_respondio(req.transaction_id, base, n8n_test),
+                status_code=502,
+            )
+        return HTMLResponse(content=html, status_code=200)
 
     # ── Modo produccion: el pipeline corre de verdad ──────────────────────
     # La clave que venga en la peticion reemplaza a la del servidor. Quien trae

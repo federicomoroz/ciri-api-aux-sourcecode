@@ -541,3 +541,47 @@ class TestElEjemploSeDeclara:
         html = informe_demo(self._carpeta(tmp_path), "TXN-00051")
         assert CARTEL in html
         assert "Pediste" not in html
+
+
+class TestNoSeDisimulaLaFaltaDeN8n:
+    """Pedir n8n y recibir el pipeline directo sería mentir sobre el origen.
+
+    El informe se vería idéntico, y quien evalúa creería que pasó por los 29
+    nodos de orquestación cuando no pasó. Un error explicado es mejor.
+    """
+
+    def test_sin_url_la_pagina_dice_que_falta(self):
+        from api.app.routes.panel import _pagina_sin_n8n
+        pagina = _pagina_sin_n8n("TXN-00051")
+        assert "n8n URL" in pagina
+        assert "no puede adivinar" in pagina
+
+    def test_sin_url_ofrece_el_modo_directo_como_salida(self):
+        from api.app.routes.panel import _pagina_sin_n8n
+        assert "Directo" in _pagina_sin_n8n("TXN-00051")
+
+    def test_si_no_responde_dice_a_donde_se_llamo(self):
+        from api.app.routes.panel import _pagina_n8n_no_respondio
+        pagina = _pagina_n8n_no_respondio("TXN-00051", "http://localhost:5678", False)
+        assert "http://localhost:5678/webhook/chargeback-agent" in pagina
+
+    def test_si_no_responde_aclara_que_no_se_corrio_lo_otro(self):
+        from api.app.routes.panel import _pagina_n8n_no_respondio
+        pagina = _pagina_n8n_no_respondio("TXN-00051", "http://x", False)
+        assert "No se ejecuto el pipeline directo" in pagina
+
+    def test_el_modo_prueba_recuerda_apretar_execute(self):
+        """El webhook de test escucha una sola ejecucion: es el error mas comun."""
+        from api.app.routes.panel import _pagina_n8n_no_respondio
+        assert "Execute workflow" in _pagina_n8n_no_respondio("TXN-1", "http://x", True)
+
+    def test_el_modo_produccion_recuerda_activar_el_workflow(self):
+        from api.app.routes.panel import _pagina_n8n_no_respondio
+        assert "activo" in _pagina_n8n_no_respondio("TXN-1", "http://x", False)
+
+    def test_cada_modo_apunta_a_su_webhook(self):
+        from api.app.routes.panel import _pagina_n8n_no_respondio
+        prueba = _pagina_n8n_no_respondio("TXN-1", "http://x", True)
+        prod = _pagina_n8n_no_respondio("TXN-1", "http://x", False)
+        assert "webhook-test" in prueba
+        assert "webhook-test" not in prod
