@@ -12,6 +12,16 @@ Agente inteligente de resolución de contracargos. Investiga casos end-to-end: r
 
 ---
 
+## El flujo de un vistazo
+
+**[`docs/diagrams/workflow_canvas.svg`](docs/diagrams/workflow_canvas.svg)** — el workflow completo en un solo archivo: los 32 nodos ejecutables, las 4 secciones y todas las conexiones. Es vectorial, así que hace zoom sin perder calidad, y **al pasar el mouse sobre cualquier nodo aparece una ficha con qué hace**.
+
+> Descargalo y abrilo en el navegador para que funcionen las fichas (GitHub lo muestra como imagen estática). Desde ahí, Imprimir → Guardar como PDF conserva el vector.
+
+Se genera desde el JSON del workflow con `python scripts/render_workflow_svg.py`, así que no se desactualiza: si cambia el flujo, se vuelve a generar.
+
+---
+
 ## Para el evaluador — 3 formas de probar
 
 ### Opción A — Importar el workflow en tu n8n (cero configuración)
