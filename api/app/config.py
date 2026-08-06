@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     langfuse_host: str = "https://cloud.langfuse.com"
     langfuse_enabled: bool = False
 
-    # Semantic cache
+    # Cache de idempotencia: match exacto por (transaccion, cliente_vip).
+    # No es semantico, y el porque esta en docs/decisions.md, decision 9.
     report_cache_enabled: bool = True
 
     # Judge

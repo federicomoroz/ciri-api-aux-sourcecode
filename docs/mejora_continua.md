@@ -562,7 +562,9 @@ Por investigacion (1 caso de contracargo), con modelo dual:
 | **Total por caso** | | | **~$0.037** |
 
 - El modelo dual reduce el costo ~21% vs. Sonnet para todo ($0.037 vs ~$0.047)
-- Semantic cache (umbral 0.92) reduce ~20% de llamadas para merchants recurrentes
+- El cache de idempotencia evita repetir un caso ya investigado: 113 segundos la primera
+  vez, 2 la segunda. Es exact-match por transaccion, no semantico — el porque esta en
+  `decisions.md`, decision 9
 - Estimacion mensual para 1,000 casos: ~$30-37 USD con modelo dual
 - Langfuse dashboard permite monitorear el costo real por traza y por prompt
 - Para reducir costos aun mas: Haiku para los 3 pasos (~$0.012/caso), pero el score del Judge baja a ~8.6
