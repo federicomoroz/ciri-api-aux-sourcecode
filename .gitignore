@@ -22,6 +22,9 @@ _plan_raw.md
 # salidas de curl al probar el webhook (ver README)
 /report_*.html
 
-# La entrega es un build, no una fuente: se arma con scripts/build_entrega.py
+# Herramientas con las que construimos la entrega. No son parte de la app.
+/tools/
+
+# La entrega es un build, no una fuente: se arma con tools/build_entrega.py
 /entregables/
 /dist/

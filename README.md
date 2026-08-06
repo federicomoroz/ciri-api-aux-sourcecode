@@ -18,8 +18,6 @@ Agente inteligente de resolución de contracargos. Investiga casos end-to-end: r
 
 No necesita conexión, ni instalar nada, ni importar el workflow. Se adapta al tema claro u oscuro del sistema y se imprime a PDF desde el navegador.
 
-Se genera desde el JSON del workflow con `python scripts/render_workflow_page.py`, así que no puede quedar desfasado del flujo real.
-
 ---
 
 ## Para el evaluador — 3 formas de probar
