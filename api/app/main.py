@@ -98,7 +98,6 @@ app.add_middleware(
         "http://localhost:3000",                          # front local
         "http://localhost:8000",                          # panel local
         "https://ciri-chargeback-agent.onrender.com",    # Render production
-        "https://federicomoroz.app.n8n.cloud",           # n8n Cloud
     ],
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],

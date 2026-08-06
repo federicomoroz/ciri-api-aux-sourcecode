@@ -2899,8 +2899,12 @@ async function checkHealth() {
   try {
     const r    = await fetch(API_BASE + '/api/panel/n8n-status');
     const data = await r.json();
-    setChip('hc-n8n', data.available ? 'ok' : 'warn',
-      data.available ? 'n8n \u2713' : 'n8n \u2717 (fallback)');
+    // Sin instancia configurada no hay nada roto: falta decir cu\u00e1l usar.
+    setChip('hc-n8n',
+      data.available ? 'ok' : 'warn',
+      data.available     ? 'n8n \u2713'
+      : !data.configured ? 'n8n \u2014 peg\u00e1 tu URL'
+      :                    'n8n \u2717 (fallback)');
 
     // Store n8n base URL for modal link
     if (data.url) n8nEditorUrl = data.url;

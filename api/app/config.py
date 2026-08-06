@@ -49,7 +49,9 @@ class Settings(BaseSettings):
     judge_auto_index_threshold: float = JUDGE_AUTO_INDEX_THRESHOLD
 
     # n8n
-    n8n_base_url: str = "http://n8n:5678"
+    # Vacio = no hay instancia asociada. El panel pide una en vez de
+    # apuntar a un host que solo existe dentro de docker-compose.
+    n8n_base_url: str = ""
     n8n_form_path: str = ""
 
     # Security

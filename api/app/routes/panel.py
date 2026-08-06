@@ -76,9 +76,15 @@ def server_key_status(settings: Settings = Depends(get_settings)) -> JSONRespons
 
 @router.get("/api/panel/n8n-status")
 async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
-    """Quick liveness check for n8n — used by the panel UI to show a status badge."""
-    url = settings.n8n_base_url.rstrip("/") + N8N_HEALTHZ_PATH
+    """Quick liveness check for n8n — used by the panel UI to show a status badge.
+
+    Without CB_N8N_BASE_URL there is no instance to point at: the panel asks the
+    user for one instead of advertising a URL that leads nowhere.
+    """
     base = settings.n8n_base_url.rstrip("/")
+    if not base:
+        return {"configured": False, "available": False}
+    url = base + N8N_HEALTHZ_PATH
     # Derive form URLs only when configured
     form_urls: dict[str, str] = {}
     if settings.n8n_form_path:
@@ -87,6 +93,7 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
         form_urls["form_test_url"] = base + fp.replace("/form/", "/form-test/", 1)
 
     status_base = {
+        "configured": True,
         "url": base,
         "webhook_url": base + N8N_WEBHOOK_PATH,
         "webhook_test_url": base + N8N_WEBHOOK_TEST_PATH,
@@ -200,6 +207,9 @@ async def _try_n8n(
     HTML template via ReportGenerator to produce the formatted report.
     """
     base = (n8n_base_url_override or settings.n8n_base_url).rstrip("/")
+    if not base:
+        logger.info("panel: sin instancia de n8n configurada, se usa el pipeline directo")
+        return None
     webhook_path = N8N_WEBHOOK_TEST_PATH if n8n_test else N8N_WEBHOOK_PATH
     n8n_url = base + webhook_path
     logger.info("panel: posting to n8n %s at %s for %s (timeout=%ss)", "TEST" if n8n_test else "PROD", n8n_url, req.transaction_id, timeout_s)
