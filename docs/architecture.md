@@ -680,6 +680,149 @@ El panel tambien incluye un "Log de alertas" que muestra las ultimas 20 alertas 
 
 ---
 
+---
+
+## Estructura del Proyecto
+
+```
+quest_ML/
+  api/
+    app/
+      config.py             # pydantic-settings (prefijo CB_)
+      main.py               # App FastAPI, CORS, registro de routers
+      dependencies.py       # DI via lifespan, todos los servicios inicializados una vez
+      domain/
+        models.py           # Modelos Pydantic con Field validators
+        enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
+        constants.py        # 73+ umbrales y límites centralizados
+      services/
+        resolution.py       # ResolutionService: resolve + judge + guardrails
+        feedback.py         # FeedbackService: feedback + auto-indexación
+        pipeline.py         # PipelineService: orquestación para panel directo + SSE streaming
+        langfuse_stats.py   # Estadísticas de observabilidad
+      rag/
+        indexer.py          # QdrantIndexer (batch + single point, uuid5 IDs)
+        retriever.py        # QdrantRetriever + QueryBuilder (determinístico)
+        updater.py          # RAGUpdater (hooks para CRUD + feedback)
+        formatter.py        # Formatters compartidos + matching de motivos
+        embedder.py         # Voyage AI embedder (lazy, thread-safe)
+      llm/
+        client.py           # Protocol LLMClient + AnthropicClient
+        parsing.py          # parse_json_safely (parsing de respuestas LLM)
+        prompts/
+          v1_policy_eval.py # v1.2 — evaluación de políticas
+          v1_resolution.py  # v3.0 — síntesis de resolución (Sonnet)
+          v1_judge.py       # v2.0 — LLM-as-Judge con rubrics
+      analysis/
+        analyzer.py         # SLA, patrones de error, riesgo, flags de cliente
+      routes/               # Handlers thin (~20 líneas cada uno)
+      reports/
+        generator.py        # Jinja2 → HTML
+        templates/
+          case_report.html  # Reporte de caso (9 secciones + formulario HITL)
+          test_panel.html   # Panel interactivo de testing
+      observability/
+        tracer.py           # LangfuseTracer + NoOpTracer (Protocol)
+      data/
+        db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
+        loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
+  n8n/
+    workflow_ciri_agent.json  # Workflow principal (38 nodos: 32 exec + 6 sticky)
+    workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
+    workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
+  scripts/
+    seed_data.py              # Seeding Excel → SQLite + Qdrant
+  tests/                      # 463 tests (unit + integration + E2E)
+  docs/
+    architecture.md           # Arquitectura del sistema, flujo n8n
+    decisions.md              # 13 decisiones técnicas con razonamiento
+    prompts.md                # Prompts documentados con versionado
+    rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
+    mejora_continua.md        # Feedback loop, Judge, guardrails
+    demo_scenarios.md         # 3 escenarios demo con comandos curl
+  docker-compose.yml
+  .env.example
+```
+
+---
+
+---
+
+## La Suite de Tests
+
+```bash
+# Todos los tests (desde la raíz, fuera de Docker)
+python -m pytest tests/ -v --tb=short
+
+# Solo unit tests (sin servicios externos)
+python -m pytest tests/unit/ -v
+
+# Tests de integración
+python -m pytest tests/integration/ -v
+```
+
+463 tests en 26 archivos (unit + integration + E2E):
+
+```
+tests/
+  conftest.py                      # MockLLMClient, datos de ejemplo, SQLite in-memory
+  unit/
+    test_analysis.py                  #  26 · SLA, patrones de error, riesgo de comercio, flags de cliente
+    test_contacto_n8n.py              #  10 · La señal de que un n8n llegó, sin guardar su origen
+    test_data_loader.py               #  12 · Carga Excel → SQLite
+    test_db.py                        #  27 · Capa de base de datos: CRUD, stats, caché
+    test_embedder.py                  #  16 · Caché de embeddings y límite de rate del proveedor
+    test_error_handlers.py            #  10 · Errores de proveedor explicados, no 500 mudos
+    test_formatter.py                 #  21 · Verificación de output del formatter RAG
+    test_guardrails.py                #  33 · Validación post-LLM de guardrails
+    test_guardrails_edge.py           #  12 · Edge cases: boundaries, warnings combinados
+    test_indexer.py                   #  18 · QdrantIndexer con client mockeado
+    test_informe_autodescriptivo.py   #   8 · El informe lleva sus datos embebidos
+    test_langfuse_stats.py            #   8 · Servicio de estadísticas Langfuse
+    test_langfuse_stats_fetch.py      #  13 · Traída de trazas y cálculo de costos
+    test_modo_demo.py                 #  72 · Modo demo: qué se sirve, cómo se declara, qué no se mezcla
+    test_parsing.py                   #  15 · Extracción de JSON de la salida del modelo
+    test_pipeline.py                  #   9 · PipelineService: timeouts, caché, agregación de uso
+    test_rag_retriever.py             #  13 · Reglas de enriquecimiento del QueryBuilder
+    test_report_generator.py          #   9 · Rendering Jinja2 HTML + prevención XSS
+    test_services.py                  #  17 · ResolutionService: resolve, judge, overrides
+    test_shared.py                    #  23 · Piezas compartidas: tarifas, contexto, clasificador
+    test_updater.py                   #   8 · Re-indexación al editar política o resolver caso
+  integration/
+    test_full_flow.py                 #  16 · Ciclo completo resolve → judge → feedback → report
+    test_panel_n8n.py                 #  13 · El panel no disimula cuando n8n no puede ejecutar
+    test_policies_crud.py             #   6 · CRUD de políticas + re-indexación en Qdrant
+    test_routes.py                    #  15 · Integración a nivel de rutas: SLA, caché, health
+  e2e/
+    conftest.py                       #       httpx.Client contra la API real
+    test_api_real.py                  #  33 · Contra la API desplegada (LLM real, Qdrant real)
+```
+
+### Tests E2E (sin mocks — API real)
+
+```bash
+# Contra el deploy en Render (requiere API corriendo)
+CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
+```
+
+33 tests E2E que verifican invariantes de negocio contra la API real:
+
+| Suite | Tests | Qué verifica |
+|-------|-------|-------------|
+| Health | 2 | Health check, colecciones Qdrant |
+| Transactions | 4 | Listado, lookup por ID, 404, logs |
+| Policies | 3 | Listado, búsqueda por código, RAG semántico |
+| Cases | 1 | Casos similares (Qdrant) |
+| Analysis | 3 | Riesgo de comercio, historial de cliente, SLA |
+| Full Pipeline | 6 | Streaming SSE, REJECT/BLOCKER, score Judge, HTML |
+| Resolve | 6 | Resolve con contexto completo (LLM real) |
+| Judge | 4 | Judge con contexto real (score >= 7.0) |
+| Report | 1 | Generación de reporte HTML |
+| Alerts | 2 | POST + GET alertas |
+| Panel | 1 | Panel sirve HTML con autor |
+
+---
+
 ## Consideraciones de Seguridad
 
 | Aspecto | Implementacion |

@@ -1,6 +1,6 @@
 # La API
 
-27 endpoints. Cada uno es una herramienta que el orquestador llama por su nombre.
+28 endpoints. Cada uno es una herramienta que el orquestador llama por su nombre.
 
 Base pública: `https://ciri-chargeback-agent.onrender.com` · Local: `http://localhost:8000`
 

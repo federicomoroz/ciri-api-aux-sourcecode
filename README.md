@@ -146,73 +146,6 @@ curl -X POST http://localhost:5678/webhook/chargeback-agent \
 
 ---
 
-## Los 7 ejes de la consigna
-
-Mapeo completo con evidencia y comandos de verificación en [`docs/ejes.md`](docs/ejes.md).
-
-| Eje | Dónde está | Verificación rápida |
-|---|---|---|
-| **1. Ingesta** | Webhook + Form Trigger (n8n), API directa, Excel → SQLite | `POST /webhook/chargeback-agent` |
-| **2. RAG** | 3 colecciones Qdrant, embeddings Voyage, QueryBuilder determinístico, sin chunking (y [por qué](docs/rag_explanation.md#estrategia-de-chunking)) | `GET /api/policies/search` devuelve la `query_used` |
-| **3. Agente** | 7 tools HTTP determinísticas · memoria = precedentes reindexados + caché de informes · 3 prompts versionados | [`docs/prompts.md`](docs/prompts.md) |
-| **4. Automatización** | Switch por `risk_level`, HITL con Wait, reportes Jinja2, workflow de alertas | `docs/examples/*.html` |
-| **5. Identificación de fallas** | 8 patrones de error sobre logs, `cb_ratio` por comercio, flags de cliente | `GET /api/merchants/Airbnb/risk` |
-| **6. Auto-mejora** | Feedback loop, 5 guardrails (3 detectan alucinación, 2 validan valores), reindexado del RAG, versionado de prompts | `PUT /api/policies/{code}` reindexa al instante |
-| **7. Observabilidad** | Langfuse (tokens, costo, latencia, score del Judge), alertas, error handler | `GET /api/langfuse/stats` |
-
-> **Sobre el eje 3:** el agente no usa el nodo AI Agent de n8n. El tool calling es determinístico
-> —7 herramientas, siempre las mismas, siempre en el mismo orden— porque en una fintech regulada
-> un auditor tiene que poder reconstruir qué se consultó en cada caso. El trade-off está
-> argumentado en [`docs/decisions.md`](docs/decisions.md#1-orquestación-explícita-con-n8n-no-ai-agent).
-
----
-
-## Arquitectura
-
-```
-n8n (orquestador explícito · Cloud o self-hosted)
-    │
-    ├── Webhook / Form Trigger
-    │
-    ├── 7 llamadas de contexto ──────────────────────► FastAPI (Render)
-    │   ├── GET /api/transactions/{id}                     │
-    │   ├── GET /api/logs/{tx_id}                          ├── Services
-    │   ├── GET /api/policies/search (RAG)                 │   ├── ResolutionService
-    │   ├── GET /api/cases/similar (RAG)                   │   ├── FeedbackService
-    │   ├── GET /api/merchants/{name}/risk                 │   └── LangfuseStatsService
-    │   ├── GET /api/clients/{id}/history                  │
-    │   └── POST /api/sla/check                            ├── RAG
-    │                                                      │   ├── Qdrant Cloud (3 colecciones)
-    ├── POST /api/analyze/resolve                          │   └── Voyage AI (embeddings)
-    │   ├── Call 1: Policy Eval (Haiku)                    │
-    │   ├── Call 2: Synthesis (Sonnet)                     ├── LLM
-    │   └── Guardrails + overrides determinísticos         │   └── Anthropic API
-    │                                                      │
-    ├── POST /api/analyze/judge                            ├── Análisis
-    │   └── Call 3: Judge (Sonnet)                         │   └── SLA, risk flags, patterns
-    │                                                      │
-    ├── Switch por risk_level                              └── Storage
-    │   └── POST /api/reports/html                             └── SQLite
-    │
-    └── Respuesta HTML
-```
-
-**Principio central:** n8n es el orquestador explícito — cada paso es un nodo nombrado y visible. Sin nodo AI Agent, sin black box. Toda la lógica de dominio, RAG y llamadas LLM viven en servicios de FastAPI.
-
-**Principio de resolución:** "El código decide, el LLM explica" — 6 de 11 campos de la resolución son calculados determinísticamente por Python y siempre sobreescriben la salida del LLM.
-
-### Stack
-
-| Componente | Servicio | Notas |
-|---|---|---|
-| Orquestador | n8n (local vía Docker o Cloud) | 38 nodos, workflow exportado en `n8n/` |
-| API + Services | FastAPI (Render o Docker) | Cold start ~50s en Render free tier |
-| Vector DB | Qdrant (Cloud o local) | 3 colecciones: policies, cases, cache |
-| Embeddings | Voyage AI | `voyage-multilingual-2`, 1024 dims, free tier |
-| LLM | Anthropic (Haiku + Sonnet) | Haiku: policy eval · Sonnet: resolución + judge |
-| Observabilidad | Langfuse | Opcional, se activa con `CB_LANGFUSE_ENABLED=true` |
-| DB estructurada | SQLite | Auto-seedeado desde Excel en primer arranque |
-
 ---
 
 ## La API
@@ -223,225 +156,29 @@ está en **[`docs/api.md`](docs/api.md)**.
 
 Documentación interactiva generada por FastAPI: **[/docs](https://ciri-chargeback-agent.onrender.com/docs)**.
 
-## Configuración
-
-Todas las settings se leen de `.env` con prefijo `CB_` (via pydantic-settings).
-
-```env
-# ── Requeridos ─────────────────────────────────────────────
-CB_ANTHROPIC_API_KEY=sk-ant-...          # Claude Haiku + Sonnet
-CB_VOYAGE_API_KEY=pa-...                 # Voyage AI (free tier)
-
-# ── LLM (opcionales, defaults mostrados) ──────────────────
-CB_LLM_MODEL=claude-haiku-4-5-20251001  # policy eval
-CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6  # resolución + judge
-CB_LLM_TEMPERATURE=0.3
-CB_LLM_MAX_TOKENS=4096
-
-# ── Seguridad (opcional) ──────────────────────────────────
-CB_ADMIN_API_KEY=                        # Si vacío = dev mode (sin auth)
-                                         # Si seteado = todos los /api/* requieren X-API-Key header
-                                         # Endpoints públicos: /panel, /api/panel/*, /health
-
-# ── Qdrant (opcionales) ──────────────────────────────────
-CB_QDRANT_URL=http://localhost:6333      # docker-compose usa http://qdrant:6333
-
-# ── Caché de informes (opcional) ──────────────────────────
-CB_REPORT_CACHE_ENABLED=true              # idempotencia por (transacción, VIP)
-
-# ── Observabilidad Langfuse (opcional) ────────────────────
-CB_LANGFUSE_ENABLED=false                # Activar para ver trazas LLM
-CB_LANGFUSE_PUBLIC_KEY=pk-lf-...
-CB_LANGFUSE_SECRET_KEY=sk-lf-...
-CB_LANGFUSE_HOST=https://cloud.langfuse.com
-```
-
 ---
 
-## Tests
+## Dónde está cada cosa
 
-```bash
-# Todos los tests (desde la raíz, fuera de Docker)
-python -m pytest tests/ -v --tb=short
-
-# Solo unit tests (sin servicios externos)
-python -m pytest tests/unit/ -v
-
-# Tests de integración
-python -m pytest tests/integration/ -v
-```
-
-463 tests en 26 archivos (unit + integration + E2E):
-
-```
-tests/
-  conftest.py                      # MockLLMClient, datos de ejemplo, SQLite in-memory
-  unit/
-    test_analysis.py                  #  26 · SLA, patrones de error, riesgo de comercio, flags de cliente
-    test_contacto_n8n.py              #  10 · La señal de que un n8n llegó, sin guardar su origen
-    test_data_loader.py               #  12 · Carga Excel → SQLite
-    test_db.py                        #  27 · Capa de base de datos: CRUD, stats, caché
-    test_embedder.py                  #  16 · Caché de embeddings y límite de rate del proveedor
-    test_error_handlers.py            #  10 · Errores de proveedor explicados, no 500 mudos
-    test_formatter.py                 #  21 · Verificación de output del formatter RAG
-    test_guardrails.py                #  33 · Validación post-LLM de guardrails
-    test_guardrails_edge.py           #  12 · Edge cases: boundaries, warnings combinados
-    test_indexer.py                   #  18 · QdrantIndexer con client mockeado
-    test_informe_autodescriptivo.py   #   8 · El informe lleva sus datos embebidos
-    test_langfuse_stats.py            #   8 · Servicio de estadísticas Langfuse
-    test_langfuse_stats_fetch.py      #  13 · Traída de trazas y cálculo de costos
-    test_modo_demo.py                 #  72 · Modo demo: qué se sirve, cómo se declara, qué no se mezcla
-    test_parsing.py                   #  15 · Extracción de JSON de la salida del modelo
-    test_pipeline.py                  #   9 · PipelineService: timeouts, caché, agregación de uso
-    test_rag_retriever.py             #  13 · Reglas de enriquecimiento del QueryBuilder
-    test_report_generator.py          #   9 · Rendering Jinja2 HTML + prevención XSS
-    test_services.py                  #  17 · ResolutionService: resolve, judge, overrides
-    test_shared.py                    #  23 · Piezas compartidas: tarifas, contexto, clasificador
-    test_updater.py                   #   8 · Re-indexación al editar política o resolver caso
-  integration/
-    test_full_flow.py                 #  16 · Ciclo completo resolve → judge → feedback → report
-    test_panel_n8n.py                 #  13 · El panel no disimula cuando n8n no puede ejecutar
-    test_policies_crud.py             #   6 · CRUD de políticas + re-indexación en Qdrant
-    test_routes.py                    #  15 · Integración a nivel de rutas: SLA, caché, health
-  e2e/
-    conftest.py                       #       httpx.Client contra la API real
-    test_api_real.py                  #  33 · Contra la API desplegada (LLM real, Qdrant real)
-```
-
-### Tests E2E (sin mocks — API real)
-
-```bash
-# Contra el deploy en Render (requiere API corriendo)
-CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
-```
-
-33 tests E2E que verifican invariantes de negocio contra la API real:
-
-| Suite | Tests | Qué verifica |
-|-------|-------|-------------|
-| Health | 2 | Health check, colecciones Qdrant |
-| Transactions | 4 | Listado, lookup por ID, 404, logs |
-| Policies | 3 | Listado, búsqueda por código, RAG semántico |
-| Cases | 1 | Casos similares (Qdrant) |
-| Analysis | 3 | Riesgo de comercio, historial de cliente, SLA |
-| Full Pipeline | 6 | Streaming SSE, REJECT/BLOCKER, score Judge, HTML |
-| Resolve | 6 | Resolve con contexto completo (LLM real) |
-| Judge | 4 | Judge con contexto real (score >= 7.0) |
-| Report | 1 | Generación de reporte HTML |
-| Alerts | 2 | POST + GET alertas |
-| Panel | 1 | Panel sirve HTML con autor |
-
----
-
-## Decisiones de Diseño
-
-13 decisiones documentadas con Contexto, Razonamiento, Trade-offs y consideraciones de producción. Ver [`docs/decisions.md`](docs/decisions.md) para el análisis completo.
-
-| # | Decisión | Por qué |
-|---|----------|---------|
-| 1 | Orquestación explícita con n8n | Auditabilidad completa para fintech regulada |
-| 2 | Políticas como datos, no código | Actualizaciones sin downtime vía API REST |
-| 3 | QueryBuilder determinístico | Gratis, reproducible, debuggeable |
-| 4 | Arquitectura de capas de servicio | Routes thin (~20 líneas), capas testeables |
-| 5 | Embeddings Voyage AI (1024d) | Top-3 español multilingüe en MTEB, free tier |
-| 6 | SQLite sobre Postgres | Self-contained para evaluación, migración limpia |
-| 7 | Guardrails post-LLM + overrides | "El código decide, el LLM explica" |
-| 8 | Judge a través de FastAPI | Versionado de prompts + observabilidad Langfuse |
-| 9 | Caché de idempotencia, no semántico | Repetir un caso no vuelve a pagar el LLM, sin arriesgar respuestas cruzadas |
-| 10 | Modelo dual Haiku + Sonnet | 9.1/10 Judge score vs 8.2 con Haiku solo |
-| 11 | Data Tables de n8n descartadas | Sin agregaciones ni joins: la lógica volvería al canvas |
-| 12 | Deuda asumida: el panel de 3112 líneas | No es entregable; el riesgo de tocarlo supera al beneficio |
-| 13 | Un solo tipo para el contexto del caso | Ocho parámetros que viajaban juntos eran un concepto disfrazado |
-
----
-
-## Escenarios Demo
-
-Ver [`docs/demo_scenarios.md`](docs/demo_scenarios.md) para 3 escenarios end-to-end:
-
-| TXN | Escenario | Resultado esperado |
-|---|---|---|
-| TXN-00051 | Cripto + fraud_score=8 | BLOCKER → auto-REJECT |
-| TXN-00042 | Credit Visa + score=4 + VIP | HIGH → PENDING_HITL |
-| TXN-00089 | Debit Visa + USA | WARNING (SLA extendido) |
-
----
-
-## Estructura del Proyecto
-
-```
-quest_ML/
-  api/
-    app/
-      config.py             # pydantic-settings (prefijo CB_)
-      main.py               # App FastAPI, CORS, registro de routers
-      dependencies.py       # DI via lifespan, todos los servicios inicializados una vez
-      domain/
-        models.py           # Modelos Pydantic con Field validators
-        enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
-        constants.py        # 73+ umbrales y límites centralizados
-      services/
-        resolution.py       # ResolutionService: resolve + judge + guardrails
-        feedback.py         # FeedbackService: feedback + auto-indexación
-        pipeline.py         # PipelineService: orquestación para panel directo + SSE streaming
-        langfuse_stats.py   # Estadísticas de observabilidad
-      rag/
-        indexer.py          # QdrantIndexer (batch + single point, uuid5 IDs)
-        retriever.py        # QdrantRetriever + QueryBuilder (determinístico)
-        updater.py          # RAGUpdater (hooks para CRUD + feedback)
-        formatter.py        # Formatters compartidos + matching de motivos
-        embedder.py         # Voyage AI embedder (lazy, thread-safe)
-      llm/
-        client.py           # Protocol LLMClient + AnthropicClient
-        parsing.py          # parse_json_safely (parsing de respuestas LLM)
-        prompts/
-          v1_policy_eval.py # v1.2 — evaluación de políticas
-          v1_resolution.py  # v3.0 — síntesis de resolución (Sonnet)
-          v1_judge.py       # v2.0 — LLM-as-Judge con rubrics
-      analysis/
-        analyzer.py         # SLA, patrones de error, riesgo, flags de cliente
-      routes/               # Handlers thin (~20 líneas cada uno)
-      reports/
-        generator.py        # Jinja2 → HTML
-        templates/
-          case_report.html  # Reporte de caso (9 secciones + formulario HITL)
-          test_panel.html   # Panel interactivo de testing
-      observability/
-        tracer.py           # LangfuseTracer + NoOpTracer (Protocol)
-      data/
-        db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
-        loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
-  n8n/
-    workflow_ciri_agent.json  # Workflow principal (38 nodos: 32 exec + 6 sticky)
-    workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
-    workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
-  scripts/
-    seed_data.py              # Seeding Excel → SQLite + Qdrant
-  tests/                      # 463 tests (unit + integration + E2E)
-  docs/
-    architecture.md           # Arquitectura del sistema, flujo n8n
-    decisions.md              # 13 decisiones técnicas con razonamiento
-    prompts.md                # Prompts documentados con versionado
-    rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
-    mejora_continua.md        # Feedback loop, Judge, guardrails
-    demo_scenarios.md         # 3 escenarios demo con comandos curl
-  docker-compose.yml
-  .env.example
-```
-
----
-
-## Documentación
-
-| Documento | Descripción |
+| Documento | Qué responde |
 |---|---|
-| [`docs/ejes.md`](docs/ejes.md) | Los 7 ejes de la consigna, uno por uno, con evidencia y verificación |
-| [`docs/architecture.md`](docs/architecture.md) | Arquitectura del sistema, flujo n8n, diagramas |
-| [`docs/decisions.md`](docs/decisions.md) | 13 decisiones técnicas con razonamiento y trade-offs |
-| [`docs/prompts.md`](docs/prompts.md) | Prompts documentados con versionado y evolución |
-| [`docs/rag_explanation.md`](docs/rag_explanation.md) | Estrategia RAG, colecciones, QueryBuilder |
-| [`docs/mejora_continua.md`](docs/mejora_continua.md) | Feedback loop, Judge, guardrails, auto-mejora |
-| [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | 3 escenarios demo con comandos curl |
+| [`docs/ejes.md`](docs/ejes.md) | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
+| [`docs/architecture.md`](docs/architecture.md) | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
+| [`docs/decisions.md`](docs/decisions.md) | 14 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
+| [`docs/prompts.md`](docs/prompts.md) | Los prompts, versionados, y por qué cambiaron |
+| [`docs/rag_explanation.md`](docs/rag_explanation.md) | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
+| [`docs/mejora_continua.md`](docs/mejora_continua.md) | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
+| [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | Los tres escenarios, paso a paso, con los comandos |
+| [`docs/api.md`](docs/api.md) | Los 28 endpoints, agrupados por para qué sirven |
+| [`docs/examples/`](docs/examples/) | Informes HTML ya generados, uno por escenario |
+
+**Configuración:** todo se lee de `.env` con prefijo `CB_`. Las variables, con sus valores por
+defecto y para qué sirve cada una, están comentadas en
+[`.env.example`](.env.example).
+
+**Tests:** `pytest tests/ -v`. Son 463 en 26 archivos; los de `unit/` e `integration/` corren
+sin n8n ni Qdrant levantados. El desglose está en
+[`docs/architecture.md`](docs/architecture.md#la-suite-de-tests).
 
 ---
 
