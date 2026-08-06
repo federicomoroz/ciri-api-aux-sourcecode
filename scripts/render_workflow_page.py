@@ -123,7 +123,7 @@ DESCRIPTIONS: dict[str, str] = {
     "Switch — Nivel de Riesgo": "Enruta según el nivel de riesgo calculado. Bloqueante, medio y bajo se resuelven solos; alto es el único que frena.",
     "Wait — Aprobación HITL": "Persona en el circuito. Pausa la ejecución y expone un formulario para que el analista apruebe o rechace.",
     "Procesar Respuesta HITL": "Fusiona la decisión del analista en el payload, para que el informe final refleje lo que decidió una persona.",
-    "Registrar Feedback HITL": "Cierra el circuito de mejora. Si el juez puntuó ocho o más, el caso se reindexa como precedente en Qdrant.",
+    "Registrar Feedback HITL": "Cierra el circuito de mejora: si el juez puntuó ocho o más, el caso se reindexa como precedente en Qdrant. Corre en paralelo con la generación del informe y termina ahí — no forma parte de la respuesta al webhook.",
     "Generar Reporte": "Renderiza el informe con Jinja2: nueve secciones y formulario de aprobación condicional.",
     "Responder — Reporte": "Devuelve el HTML a quien disparó el webhook. Sirve igual a un navegador, a otro workflow o a un bot.",
 }
@@ -433,8 +433,7 @@ def route(a: dict, lay: dict) -> str:
                 f"V {en['y']:.0f} H {dx:.0f} V {dy:.0f}"
             )
             labels = ex["labels"]
-            lx, ly = g + (12 if g < CENTER else -12), (ex["y"] + en["y"]) / 2
-            anchor = "start" if g < CENTER else "end"
+            lx, ly, anchor = (sx + g) / 2, ex["y"] - 8, "middle"
         out.append(
             f'<path class="w" data-from="{esc(src)}" data-to="{esc(dst)}" d="{d_attr}" '
             f'marker-end="url(#tip)"/>'
@@ -482,6 +481,17 @@ def build(workflow: dict) -> str:
             f'{f"<code class=\'ep\'>{esc(short_ep)}</code>" if ep else ""}'
             "</button>"
         )
+    terminal = [
+        n for n in flow
+        if not a["feeds"].get(n) and family_of(n, execs[n])[0] != "io"
+    ]
+    for name in terminal:
+        x, y = pos[name]
+        cards.append(
+            f'<span class="tail" style="left:{x:.0f}px;top:{y + CARD_H + 8:.0f}px">'
+            "termina acá</span>"
+        )
+
     for name, (x, y) in err.items():
         cards.append(
             f'<button class="chip" data-node="{esc(name)}" type="button" '
@@ -637,12 +647,13 @@ h1 em{font-style:normal;color:var(--muted)}
 .f-io{border-left-color:var(--io)} .f-io .badge{color:var(--io)}
 .node.on{border-color:var(--ink)}
 
+.tail{position:absolute;width:152px;text-align:center;font-size:10.5px;color:var(--faint);font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
 .chip{position:absolute;width:150px;font:inherit;font-size:11.5px;line-height:1.3;
   background:var(--surface);color:var(--error);cursor:pointer;text-align:left;
   border:1px dashed var(--error);border-radius:8px;padding:8px 10px}
 .chip:hover{border-style:solid}
 
-.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:30px 40px;
+.notes{margin-bottom:72px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:30px 40px;
   margin:56px 0 0;padding-top:34px;border-top:1px solid var(--rule)}
 .note{display:grid;grid-template-columns:auto 1fr;gap:14px}
 .n-sec{font-size:12px;color:var(--faint)}
@@ -674,8 +685,6 @@ h1 em{font-style:normal;color:var(--muted)}
   transition:opacity .2s;z-index:30}
 .scrim.on{opacity:1;pointer-events:auto}
 
-footer{padding:44px 0 70px;color:var(--faint);font-size:13.5px}
-footer code{font-family:ui-monospace,monospace}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.panel,.scrim,.theme{display:none}body{background:#fff}}
 </style>
@@ -719,10 +728,6 @@ footer code{font-family:ui-monospace,monospace}
 
 <div class="wrap">
   <div class="notes">__NOTES__</div>
-  <footer>
-    Generado desde <code>n8n/workflow_ciri_agent.json</code> con <code>scripts/render_workflow_page.py</code>,
-    así que no puede quedar desfasado del workflow real.
-  </footer>
 </div>
 
 <div class="scrim" id="scrim"></div>
