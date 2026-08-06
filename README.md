@@ -1,7 +1,7 @@
 # Agente de Investigación de Contracargos
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-430%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-463%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -271,29 +271,41 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-277 tests en 16 archivos (unit + integration + E2E):
+463 tests en 26 archivos (unit + integration + E2E):
 
 ```
 tests/
-  conftest.py                        # MockLLMClient, datos de ejemplo, SQLite in-memory
+  conftest.py                      # MockLLMClient, datos de ejemplo, SQLite in-memory
   unit/
-    test_data_loader.py              # Carga Excel → SQLite
-    test_rag_retriever.py            # Reglas de enriquecimiento del QueryBuilder
-    test_analysis.py                 # SLA, patrones de error, riesgo de comercio, flags de cliente
-    test_guardrails.py               # Validación post-LLM de guardrails
-    test_guardrails_edge.py          # Edge cases: boundaries, warnings combinados
-    test_db.py                       # Capa de base de datos: CRUD, stats, caché
-    test_indexer.py                  # QdrantIndexer con client mockeado
-    test_formatter.py                # Verificación de output del formatter RAG
-    test_report_generator.py         # Rendering Jinja2 HTML + prevención XSS
-    test_langfuse_stats.py           # Servicio de estadísticas Langfuse
+    test_analysis.py                  #  26 · SLA, patrones de error, riesgo de comercio, flags de cliente
+    test_contacto_n8n.py              #  10 · La señal de que un n8n llegó, sin guardar su origen
+    test_data_loader.py               #  12 · Carga Excel → SQLite
+    test_db.py                        #  27 · Capa de base de datos: CRUD, stats, caché
+    test_embedder.py                  #  16 · Caché de embeddings y límite de rate del proveedor
+    test_error_handlers.py            #  10 · Errores de proveedor explicados, no 500 mudos
+    test_formatter.py                 #  21 · Verificación de output del formatter RAG
+    test_guardrails.py                #  33 · Validación post-LLM de guardrails
+    test_guardrails_edge.py           #  12 · Edge cases: boundaries, warnings combinados
+    test_indexer.py                   #  18 · QdrantIndexer con client mockeado
+    test_informe_autodescriptivo.py   #   8 · El informe lleva sus datos embebidos
+    test_langfuse_stats.py            #   8 · Servicio de estadísticas Langfuse
+    test_langfuse_stats_fetch.py      #  13 · Traída de trazas y cálculo de costos
+    test_modo_demo.py                 #  72 · Modo demo: qué se sirve, cómo se declara, qué no se mezcla
+    test_parsing.py                   #  15 · Extracción de JSON de la salida del modelo
+    test_pipeline.py                  #   9 · PipelineService: timeouts, caché, agregación de uso
+    test_rag_retriever.py             #  13 · Reglas de enriquecimiento del QueryBuilder
+    test_report_generator.py          #   9 · Rendering Jinja2 HTML + prevención XSS
+    test_services.py                  #  17 · ResolutionService: resolve, judge, overrides
+    test_shared.py                    #  23 · Piezas compartidas: tarifas, contexto, clasificador
+    test_updater.py                   #   8 · Re-indexación al editar política o resolver caso
   integration/
-    test_full_flow.py                # Ciclo completo resolve → judge → feedback → report
-    test_policies_crud.py            # CRUD de políticas + re-indexación en Qdrant
-    test_routes.py                   # Integración a nivel de rutas: SLA, caché, health
+    test_full_flow.py                 #  16 · Ciclo completo resolve → judge → feedback → report
+    test_panel_n8n.py                 #  13 · El panel no disimula cuando n8n no puede ejecutar
+    test_policies_crud.py             #   6 · CRUD de políticas + re-indexación en Qdrant
+    test_routes.py                    #  15 · Integración a nivel de rutas: SLA, caché, health
   e2e/
-    conftest.py                      # httpx.Client contra API real (Render)
-    test_api_real.py                 # 33 tests contra la API desplegada (LLM real, Qdrant real)
+    conftest.py                       #       httpx.Client contra la API real
+    test_api_real.py                  #  33 · Contra la API desplegada (LLM real, Qdrant real)
 ```
 
 ### Tests E2E (sin mocks — API real)
@@ -405,7 +417,7 @@ quest_ML/
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
-  tests/                      # 277 tests (unit + integration + E2E)
+  tests/                      # 463 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 13 decisiones técnicas con razonamiento
