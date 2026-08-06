@@ -211,7 +211,8 @@ defecto y para qué sirve cada una, están comentadas en
 [`.env.example`](.env.example).
 
 **Tests:** `pytest tests/ -v`. Son 463 en 26 archivos; los de `unit/` e `integration/` corren
-sin n8n ni Qdrant levantados. El desglose está en
+sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
+validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.
 
 ---
