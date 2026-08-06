@@ -181,8 +181,8 @@
     },
     {
       "parameters": {
-        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Sin configurar nada:** manda el caso a la API publica del proyecto. Para otra API, crear la variable `API_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. No se notifica a nadie.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
-        "height": 400,
+        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Sin configurar nada:** manda el caso a la API publica del proyecto. Para otra API, crear la variable `API_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. **No pasa por el error handler**: alertar por cada tipeo marcaria la ejecucion como fallida y mandaria un mail, enterrando las fallas reales. Queda registrado como `WARN` en el log operativo, que es donde sirve para ver si el formulario se entiende.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
+        "height": 460,
         "width": 420,
         "color": 5
       },
@@ -193,6 +193,28 @@
       "position": [
         180,
         120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Form Trigger — Formulario').first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event_type: 'form_input_rejected', severity: 'WARN', message: 'Entrada rechazada en el formulario: «' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '» no tiene el formato TXN-XXXXX', source: 'n8n-form', transaction_id: null, metadata: { entrada: ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim(), motivo: $('Form Trigger — Formulario').first().json['Motivo'] || '' } }) }}",
+        "options": {
+          "timeout": 10000
+        },
+        "sendHeaders": false
+      },
+      "id": "form-http-rechazo",
+      "name": "Registrar Entrada Rechazada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "onError": "continueRegularOutput",
+      "position": [
+        980,
+        500
       ]
     }
   ],
@@ -249,6 +271,17 @@
         [
           {
             "node": "Propagar → Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta — Formato Invalido": {
+      "main": [
+        [
+          {
+            "node": "Registrar Entrada Rechazada",
             "type": "main",
             "index": 0
           }

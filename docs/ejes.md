@@ -96,7 +96,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 | Clasificación | `risk_level` ∈ BLOCKER / HIGH / MEDIUM / LOW, calculado por código (`resolution.py::_determine_outcome`), no por el LLM |
 | Derivación | `Switch — Nivel de Riesgo` en n8n: HIGH va a un `Wait` que espera la aprobación de un analista (HITL); el resto se resuelve solo |
 | Reportes | `POST /api/reports/html` — Jinja2, 9 secciones, formulario HITL condicional. Ejemplos en `docs/examples/` |
-| Alertas | Un solo destino para los fallos de los tres workflows: `workflow_ciri_errors.json` (Error Trigger → `POST /api/alerts/` → email opcional). El principal propaga desde 3 nodos `Stop and Error`, el formulario desde 1. `GET /api/alerts/` los lista |
+| Alertas | Dos severidades con dos caminos. **Fallas** (`ERROR`): los tres workflows propagan a `workflow_ciri_errors.json` — el principal desde 3 nodos `Stop and Error`, el formulario desde 1 — que registra la alerta y avisa por mail. **Entradas rechazadas** (`WARN`): el formulario las registra directo, sin marcar la ejecución como fallida ni mandar mail, porque un tipeo no es una falla. `GET /api/alerts/` lista todo |
 
 Manejo de errores: los 3 nodos `Propagar → Error Handler` cortan el flujo con contexto, los
 nodos HTTP reintentan 3 veces con backoff, y los no críticos siguen con `continueRegularOutput`
