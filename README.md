@@ -186,4 +186,4 @@ sin n8n ni Qdrant levantados. El desglose está en
 
 **Federico Palatnik Moroz**
 
-Construido con **Claude Opus 4.6** (Anthropic) como asistente de desarrollo.
+Desarrollado con **Claude Opus 5** (Anthropic) como asistente.
