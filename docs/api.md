@@ -21,12 +21,15 @@ El campo `demo_mode` del body elige el modo por petición; si no viene, decide e
 | Petición | Qué pasa |
 |---|---|
 | `demo_mode: true` · caso de ejemplo (`TXN-00051`, `TXN-00042`, `TXN-00089`) | Devuelve su informe ya generado. `X-Modo-Demo: true`, costo cero, y el HTML abre con el cartel **DEMO (Caso prearmado)** |
-| `demo_mode: true` · cualquier otro caso | Explica que hace falta una clave propia |
+
 | `demo_mode: false` · con `api_key` | Corre el pipeline completo **con esa clave**, que reemplaza a la del servidor |
-| `demo_mode: false` · sin saldo · caso de ejemplo | Devuelve su informe demo marcado, en vez de un error |
-| `demo_mode: false` · sin saldo · otro caso | `500` con el motivo dicho: sin saldo, o clave inválida |
+| `demo_mode: true` · cualquier otro caso | Devuelve el ejemplo **más cercano en riesgo**, con el cartel nombrando las dos transacciones |
+| `demo_mode: false` · sin saldo | Devuelve el informe demo marcado, en vez de un error |
+| `demo_mode: false` · clave inválida | `500` diciendo que la clave no sirve y cómo es una válida |
 
 `GET /api/panel/demo-status` dice en qué modo arranca el servidor y qué casos tienen informe.
+
+**El modo demo alcanza al workflow de n8n.** `resolve` y `judge` responden con el análisis guardado, así que el flujo corre entero: las siete consultas de contexto son reales, el compilado es real y el informe se genera de verdad. Cuando la resolución es la de otro caso, `/api/reports/html` responde con el informe completo de ese caso en vez de mezclar los dos.
 
 ```bash
 # Modo demo: informe al instante, sin costo

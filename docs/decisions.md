@@ -309,3 +309,43 @@ Traducir en la frontera en vez de renombrar los campos del contrato mantiene la 
 - (+) `CaseContext` es inmutable: se arma una vez y viaja
 - (-) Una traduccion mas entre el modelo de entrada y el tipo interno
 - (-) `ReportRequest` sigue con sus propios nombres, porque es contrato de salida
+
+---
+
+## 14. Modo demo: el sistema se evalúa sin gastar la cuenta de nadie
+
+**Contexto:** Investigar un caso cuesta dinero real —Haiku evalúa cada política recuperada, Sonnet sintetiza, Sonnet vuelve a correr como Juez—. Esto es una prueba técnica que se entrega para que alguien la mire, y esa persona no debería tener que consumir la cuenta de otro, ni cargar una clave propia, sólo para ver si el sistema funciona.
+
+El problema es concreto: si la clave del servidor se queda sin crédito, quien abre el panel ve un error y se va con la idea de que el sistema está roto.
+
+**Decisión:** Un modo demo, encendido por defecto (`CB_DEMO_MODE`), con un toggle en el panel. En ese modo **no se llama al modelo** —no es que intente y falle: no gasta—. Los casos de ejemplo viajan con su análisis ya calculado:
+
+| | |
+|---|---|
+| `data/informes_demo/report_*.html` | El informe completo, tal como se generó |
+| `data/informes_demo/analisis_*.json` | La resolución, la evaluación del Juez y los atributos del caso |
+
+Con el JSON, `POST /api/analyze/resolve` y `POST /api/analyze/judge` responden sin modelo, y **el workflow de n8n corre entero**: las siete consultas de contexto son reales, el compilado es real y el informe se genera de verdad. Lo único pregrabado es lo que hubiera contestado el modelo.
+
+Quien manda `api_key` en la petición corre el pipeline completo con su propia cuenta, y el modo demo no le aplica.
+
+**Un caso que no está guardado recibe el más cercano en riesgo.** La comparación es por score antifraude y nada más: es la única medida de riesgo disponible sin correr el pipeline, y es la que decide POL-FRD-001. Meterle método de pago o país sería comparar otra cosa.
+
+**Razonamiento:** La alternativa era consultar el saldo antes de gastar, pero Anthropic no expone el crédito restante en su API —el Admin API reporta consumo, no saldo—. Y aunque lo expusiera, "intentar y caer parado" sigue costando la llamada fallida. No llamar es más barato y más simple.
+
+Lo que hace que esto sea honesto y no un truco es que se declara por todos lados, siempre:
+
+- el HTML abre con un cartel **DEMO (Caso prearmado)**
+- la respuesta lleva la cabecera `X-Modo-Demo` y `cost_usd: 0.0`
+- el servidor deja un `WARNING` en el log
+- cuando el caso mostrado no es el pedido, el cartel **nombra las dos transacciones**
+
+**Lo que deliberadamente no hace: mezclar.** Si `resolve` devolviera la resolución de TXN-00051 y n8n armara el informe con los datos de TXN-00004, saldría un documento con el encabezado de una transacción y los veredictos de otra: se lee como verdadero y no lo es. Por eso la sustitución es del informe entero —el marcador `demo_ejemplo_de` viaja en la resolución y `/api/reports/html` responde con el informe completo del caso prestado—. Un informe prearmado nunca se hace pasar por un análisis recién hecho.
+
+**Trade-offs:**
+- (+) El sistema se evalúa de punta a punta, incluido n8n, sin clave y sin costo
+- (+) El toggle deja elegir: mirar sin gastar, o correr de verdad con tu cuenta
+- (+) La marca viaja en el HTML, en la cabecera, en el uso y en el log: no hay forma de confundirse
+- (-) Sólo tres casos tienen análisis propio; el resto recibe el más cercano en riesgo
+- (-) El análisis guardado envejece: si cambian los prompts o las políticas, deja de reflejar lo que haría el sistema hoy
+- (-) Un archivo más que mantener por cada caso de ejemplo que se agregue

@@ -57,6 +57,10 @@ h1 em{font-style:normal;color:var(--muted)}
 .lg.f-io i{background:var(--io)} .lg.f-error i{background:var(--error)}
 
 .fine{margin:18px 0 0;font-size:13px;color:var(--faint)}
+.nota-demo{margin:14px 0 0;padding:12px 15px;font-size:13px;line-height:1.6;
+  color:var(--faint);border-left:3px solid #e8a33d;background:rgba(232,163,61,.08);
+  border-radius:0 6px 6px 0;max-width:76ch}
+.nota-demo b{color:var(--ink,inherit)}
 .fine code{font-family:ui-monospace,monospace}
 .figure{margin:34px 0 0;overflow-x:auto;padding-bottom:18px}
 .canvas{position:relative;width:1500px;height:3610px;margin:0 auto}
@@ -153,6 +157,15 @@ h1 em{font-style:normal;color:var(--muted)}
   </p>
   <div class="legend"><span class="lg f-api"><i></i><b>Llamada a la API</b><em>Trae datos de SQLite o ejecuta una regla de negocio.</em></span><span class="lg f-rag"><i></i><b>Búsqueda semántica</b><em>Consulta el vector store Qdrant.</em></span><span class="lg f-llm"><i></i><b>Llamada a un modelo</b><em>Va por la API, que es quien habla con Claude.</em></span><span class="lg f-decide"><i></i><b>Bifurca</b><em>Elige por dónde sigue el caso.</em></span><span class="lg f-logic"><i></i><b>Lógica del canvas</b><em>Arma, fusiona o transforma datos. Sin reglas de negocio.</em></span><span class="lg f-human"><i></i><b>Espera a una persona</b><em>Frena hasta que un analista decide.</em></span><span class="lg f-io"><i></i><b>Entrada y salida</b><em>Por dónde entra el caso y por dónde sale el informe.</em></span><span class="lg f-error"><i></i><b>Salida de error</b><em>Corta la ejecución y avisa.</em></span></div>
   <p class="fine">Las rutas se muestran sin el prefijo <code>/api</code>, que comparten todas. El detalle completo de cada nodo está a un clic.</p>
+  <p class="nota-demo">
+    <b>El modo demo no aparece acá, y es a propósito.</b> La instancia publicada arranca sin
+    llamar al modelo, para que probarla no consuma la cuenta de nadie: los casos de ejemplo se
+    sirven con su análisis ya calculado. Pero eso no cambia el circuito — los mismos 29 pasos,
+    las mismas conexiones, los mismos endpoints. Lo único distinto es de dónde sale la respuesta
+    de <em>Sintetizar&nbsp;Resolución</em> y <em>Juez&nbsp;de&nbsp;Calidad</em>, y el informe lo
+    declara con un cartel. Dibujarlo sería ensuciar el diagrama con algo que no es la
+    arquitectura.
+  </p>
 </header>
 </div>
 

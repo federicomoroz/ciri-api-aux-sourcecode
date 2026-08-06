@@ -38,9 +38,11 @@ Investigar un caso cuesta dinero real —dos modelos, varias llamadas—. Evalua
 
 **Si cargás tu API key, se usa la tuya y no la del servidor.** Esa es la forma de ver el sistema trabajando de verdad sobre cualquier caso, gastando de tu cuenta.
 
-Un informe prearmado nunca se hace pasar por uno recién hecho: el HTML abre con un cartel **DEMO (Caso prearmado)**, la respuesta trae la cabecera `X-Modo-Demo` y el servidor deja un warning en el log.
+**Un caso sin análisis guardado recibe el más cercano en riesgo.** Si pedís `TXN-00004` y el modelo no está disponible, se responde con el ejemplo cuyo score antifraude está más cerca, y el cartel nombra las dos transacciones: *"pediste TXN-00004, esto es TXN-00051"*. El informe es entero del caso prestado — nunca los datos de una transacción con la resolución de otra.
 
-En modo producción, si la clave usada se quedó sin crédito y el caso es uno de los tres de ejemplo, se devuelve su informe demo —marcado como tal— en vez de un error. El panel lo advierte antes de correr.
+Un informe prearmado nunca se hace pasar por uno recién hecho. Se declara en cuatro lugares: el cartel **DEMO (Caso prearmado)** que abre el HTML, la cabecera `X-Modo-Demo`, el uso que informa `cost_usd: 0.0`, y un warning en el log del servidor.
+
+Esto vale también para el workflow de n8n: corre entero en modo demo, con las siete consultas de contexto reales y el informe generado de verdad. Lo único pregrabado es lo que hubiera contestado el modelo. El porqué y los trade-offs, en [`docs/decisions.md`](docs/decisions.md), decisión 14.
 
 Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA e informes. El default del servidor se cambia con `CB_DEMO_MODE=false`.
 

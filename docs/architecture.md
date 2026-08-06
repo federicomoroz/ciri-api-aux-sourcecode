@@ -5,12 +5,13 @@
 1. [Vision General](#vision-general) -- Patron de arquitectura
 2. [Orquestacion Explicita con n8n](#orquestacion-explicita-con-n8n)
 3. [Diagrama Completo](#diagrama-completo)
-4. [El Principio Central: El Codigo Decide, el LLM Explica](#el-principio-central-el-codigo-decide-el-llm-explica)
-5. [Modularidad](#modularidad)
-6. [Escalabilidad](#escalabilidad)
-7. [Flujo de Datos](#flujo-de-datos)
-8. [Decisiones de Arquitectura (ADR)](#decisiones-de-arquitectura-adr)
-9. [Consideraciones de Seguridad](#consideraciones-de-seguridad)
+4. [Modo Demo: Evaluar Sin Gastar](#modo-demo-evaluar-sin-gastar)
+5. [El Principio Central: El Codigo Decide, el LLM Explica](#el-principio-central-el-codigo-decide-el-llm-explica)
+6. [Modularidad](#modularidad)
+7. [Escalabilidad](#escalabilidad)
+8. [Flujo de Datos](#flujo-de-datos)
+9. [Decisiones de Arquitectura (ADR)](#decisiones-de-arquitectura-adr)
+10. [Consideraciones de Seguridad](#consideraciones-de-seguridad)
 
 ---
 
@@ -197,6 +198,42 @@ flowchart TD
     style S3 fill:none,stroke:#666
     style S4 fill:none,stroke:#666
 ```
+
+---
+
+## Modo Demo: Evaluar Sin Gastar
+
+Investigar un caso cuesta dinero real: Haiku evalua cada politica recuperada, Sonnet sintetiza, Sonnet vuelve a correr como Juez. Quien recibe esta prueba tecnica no deberia tener que consumir la cuenta de nadie para ver si el sistema funciona.
+
+Por eso la instancia publicada arranca en **modo demo**, con un toggle en el panel para apagarlo. En ese modo **no se llama al modelo**: no es que intente y falle, no gasta.
+
+**El modo demo no toca la orquestacion.** El diagrama del workflow es el mismo con demo encendido o apagado: los mismos 29 pasos, las mismas conexiones, los mismos endpoints. Lo unico que cambia es de donde sale la respuesta de dos de esos pasos.
+
+```
+                          MODO PRODUCCION          MODO DEMO
+  las 7 consultas         SQLite + Qdrant          SQLite + Qdrant     <- igual
+  Sintetizar Resolucion   Haiku + Sonnet           analisis guardado   <- cambia
+  Juez de Calidad         Sonnet                   analisis guardado   <- cambia
+  Compilar / Preparar     codigo                   codigo              <- igual
+  Generar Reporte         Jinja2                   Jinja2              <- igual
+```
+
+Los casos de ejemplo viajan con su analisis ya calculado en `data/informes_demo/`: el informe HTML completo y un JSON con la resolucion, la evaluacion del Juez y los atributos del caso. Con eso el workflow de n8n **corre entero** sin gastar nada.
+
+Un caso que no tiene analisis guardado recibe el mas cercano en riesgo -- se compara el score antifraude y nada mas, que es la unica medida de riesgo disponible sin correr el pipeline y la que decide POL-FRD-001.
+
+Nada de esto se disimula. Un informe prearmado se declara en cuatro lugares a la vez:
+
+| Donde | Que dice |
+|---|---|
+| El HTML | Abre con un cartel **DEMO (Caso prearmado)**. Si el caso mostrado no es el pedido, el cartel nombra las dos transacciones |
+| La respuesta | Cabecera `X-Modo-Demo: true`, y el uso informa `cost_usd: 0.0` con `call_count: 0` |
+| El log | Un `WARNING` por cada respuesta servida asi |
+| El JSON | `demo: true` en la resolucion y en la evaluacion del Juez |
+
+Y hay algo que deliberadamente **no** hace: mezclar. Si `resolve` devolviera la resolucion de un caso y el informe se armara con los datos de otro, saldria un documento con el encabezado de una transaccion y los veredictos de otra -- se lee como verdadero y no lo es. Por eso la sustitucion es del informe entero.
+
+El detalle completo, con los trade-offs, esta en [`decisions.md`](decisions.md), decision 14.
 
 ---
 

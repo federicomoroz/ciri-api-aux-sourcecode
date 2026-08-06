@@ -14,7 +14,13 @@ El panel interactivo está desplegado en Render:
 https://ciri-chargeback-agent.onrender.com/panel
 ```
 
-Simplemente ingresá un ID de transacción (ej. `TXN-00051`) y hacé clic en "Investigar". El pipeline completo se ejecuta contra la API en producción.
+Elegí un caso y hacé clic en **Analizar**.
+
+> **Sobre el modo demo.** El panel arranca en modo demo y el toggle de arriba lo cambia. En modo demo **no se llama al modelo**: los tres escenarios de este documento se sirven con su análisis ya calculado, al instante y sin costo. El informe abre con un cartel **DEMO (Caso prearmado)** y la respuesta trae `X-Modo-Demo: true`, así que nunca se confunde con un análisis recién hecho.
+>
+> Para verlo ejecutarse de verdad: apagá el toggle (**Modo producción**) y cargá tu clave de Anthropic en el campo **API key**. Esa clave reemplaza a la del servidor y podés analizar cualquier transacción del dataset, gastando de tu cuenta.
+>
+> Si pedís un caso que no tiene análisis guardado y el modelo no está disponible, se responde con el **más cercano en riesgo** de los tres —se compara el score antifraude— y el cartel nombra las dos transacciones para que quede claro de cuál es el informe. El porqué está en [`decisions.md`](decisions.md), decisión 14.
 
 ### Opción 2: Stack local
 
@@ -23,7 +29,7 @@ docker-compose up -d
 python scripts/seed_data.py    # Excel → SQLite + Qdrant (ejecutar solo la primera vez)
 ```
 
-El panel de pruebas está disponible en `http://localhost:8000/panel`.
+El panel de pruebas está disponible en `http://localhost:8000/panel`. Para que el stack local ejecute siempre de verdad en vez de arrancar en demo, poné `CB_DEMO_MODE=false` en el `.env`.
 
 ### Panel de pruebas (`/panel`)
 
