@@ -1,0 +1,303 @@
+{
+  "name": "CIRI — Formulario de Contracargo",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "chargeback-form",
+        "formTitle": "CIRI — Investigación de Contracargo",
+        "formDescription": "Ingresa los datos para iniciar una investigación de contracargo.\nEl análisis toma ~30 segundos (incluye evaluación LLM + RAG).",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Transaction ID",
+              "placeholder": "TXN-00051",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Motivo",
+              "fieldType": "textarea",
+              "placeholder": "No reconoce la compra",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Cliente VIP",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "No"
+                  },
+                  {
+                    "option": "Sí"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "520546a7-97c9-49d5-89f0-4eb78e5fe26d",
+      "name": "Form Trigger — Formulario",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.1,
+      "position": [
+        9952,
+        3088
+      ],
+      "webhookId": "295e700d-57ba-45bd-8d38-40d045b01e37"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.n8n_base_url || $vars.N8N_BASE_URL || 'http://localhost:5678' }}/webhook/chargeback-agent",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ transaction_id: $json['Transaction ID'], motivo: $json['Motivo'], cliente_vip: $json['Cliente VIP'] === 'Sí', api_base_url: $json.api_base_url }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "id": "eee3ea4c-5f80-4395-be3c-289cf010f39d",
+      "name": "Disparar el Orquestador",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10384,
+        3040
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "form-check-txn",
+              "leftValue": "={{ ($json['Transaction ID'] || '').trim() }}",
+              "rightValue": "TXN-[0-9]{5}",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "be78874a-7970-406f-b313-9360fc6f63e7",
+      "name": "Validar Formato — IF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        10160,
+        3088
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Investigación completada",
+        "completionMessage": "={{ 'Se investigó ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '. Corrió el workflow orquestador completo: el informe quedó en su ejecución, en la pestaña Executions.' }}",
+        "options": {}
+      },
+      "id": "cca03576-54f0-4792-8ae2-b04e9b21d011",
+      "name": "Respuesta — Listo",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        10640,
+        2960
+      ],
+      "webhookId": "73b64b04-8f79-4a43-8ca6-af0b668af87a"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Identificador inválido",
+        "completionMessage": "={{ '«' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '» no tiene el formato esperado. Debe ser TXN- seguido de cinco dígitos, por ejemplo TXN-00051.' }}",
+        "options": {}
+      },
+      "id": "61bf02c9-dc31-4caa-9882-bdac16c449f5",
+      "name": "Respuesta — Formato Invalido",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        10384,
+        3248
+      ],
+      "webhookId": "ad5a013b-67e7-4663-8d2b-543d00febd56"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "No se pudo completar la investigación",
+        "completionMessage": "={{ 'No se pudo investigar ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'el orquestador no respondió') + '. El equipo ya fue notificado.' }}",
+        "options": {}
+      },
+      "id": "a8557e0d-16aa-4fe0-890b-72a6461334b5",
+      "name": "Respuesta — Fallo el Analisis",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        10640,
+        3120
+      ],
+      "webhookId": "02d6c409-745c-4091-9492-4b96076e9b17"
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'la API no respondio') }}"
+      },
+      "id": "5c048133-a9a8-4070-b6e9-bf370114c9c1",
+      "name": "Propagar → Error Handler",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        10912,
+        3120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Que hace:** dispara el webhook del workflow orquestador (`/webhook/chargeback-agent`) sobre esta misma instancia. No llama a la API por su cuenta: el formulario es una segunda via de entrada **al agente**, asi que corre los 29 nodos de orquestacion igual que el webhook.\n\n**Sin configurar nada** apunta a `http://localhost:5678`, que es esta instancia. Si tu n8n escucha en otro puerto, crear la variable `N8N_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. **No pasa por el error handler**: alertar por cada tipeo marcaria la ejecucion como fallida y mandaria un mail, enterrando las fallas reales. Queda registrado como `WARN` en el log operativo, que es donde sirve para ver si el formulario se entiende.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
+        "height": 460,
+        "width": 772,
+        "color": 5
+      },
+      "id": "7f265822-78a2-48fe-984d-4d031a7b7f05",
+      "name": "Sticky Note — Form Trigger",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        9920,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Form Trigger — Formulario').first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event_type: 'form_input_rejected', severity: 'WARN', message: 'Entrada rechazada en el formulario: «' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '» no tiene el formato TXN-XXXXX', source: 'n8n-form', transaction_id: null, metadata: { entrada: ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim(), motivo: $('Form Trigger — Formulario').first().json['Motivo'] || '' } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "a0358f0f-558d-4a36-a879-8d9f1498b0dd",
+      "name": "Registrar Entrada Rechazada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10640,
+        3280
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Form Trigger — Formulario": {
+      "main": [
+        [
+          {
+            "node": "Validar Formato — IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Formato — IF": {
+      "main": [
+        [
+          {
+            "node": "Disparar el Orquestador",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta — Formato Invalido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta — Fallo el Analisis": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta — Formato Invalido": {
+      "main": [
+        [
+          {
+            "node": "Registrar Entrada Rechazada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disparar el Orquestador": {
+      "main": [
+        [
+          {
+            "node": "Respuesta — Listo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta — Fallo el Analisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "teWDCm7Y2erv1u3f",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "5f50cb14-a0d8-4fa5-bfb6-bea659e8d0f9",
+  "meta": {
+    "instanceId": "92936ca510fad697deadd62294080b90dc71bd9e892063c4b055dfcec9e98a2e"
+  },
+  "nodeGroups": [],
+  "id": "xVAtdpnExdcaybEk",
+  "tags": []
+}

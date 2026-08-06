@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CIRI — Architecture Overview</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090b;
+  --surface: #131316;
+  --surface2: #1a1a1f;
+  --border: #27272a;
+  --border-subtle: #1e1e22;
+  --fg: #e4e4e7;
+  --dim: #71717a;
+  --muted: #52525b;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --sky: #38bdf8;
+  --radius: 8px;
+
+  /* Section colors */
+  --s1: #34d399;
+  --s2: #38bdf8;
+  --s3: #818cf8;
+  --s4: #fbbf24;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 40px 72px;
+}
+
+/* ── HERO ── */
+.hero {
+  text-align: center;
+  padding: 40px 0 48px;
+  position: relative;
+  animation: heroIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  height: 300px;
+  background: radial-gradient(ellipse, rgba(99,102,241,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.hero-title {
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: #fff;
+  line-height: 1.15;
+}
+
+.hero-title span {
+  background: linear-gradient(135deg, var(--accent2), var(--sky));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-sub {
+  color: var(--dim);
+  font-size: 1rem;
+  margin-top: 12px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tech-pills {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 0.75rem;
+  color: var(--dim);
+  font-weight: 500;
+}
+
+.hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-top: 28px;
+}
+
+.stat { text-align: center; }
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #fff;
+  animation: countPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.stat:nth-child(1) .stat-value { animation-delay: 0.5s; }
+.stat:nth-child(2) .stat-value { animation-delay: 0.6s; }
+.stat:nth-child(3) .stat-value { animation-delay: 0.7s; }
+.stat:nth-child(4) .stat-value { animation-delay: 0.8s; }
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+/* ── PRINCIPLES ── */
+.principles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 48px;
+  animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.principle {
+  background: var(--surface);
+  padding: 20px 24px;
+  text-align: center;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.principle:nth-child(1) { animation-delay: 0.25s; }
+.principle:nth-child(2) { animation-delay: 0.35s; }
+.principle:nth-child(3) { animation-delay: 0.45s; }
+
+.principle-icon { font-size: 1.3rem; margin-bottom: 8px; }
+
+.principle-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.principle-desc {
+  font-size: 0.75rem;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════
+   FLOWCHART — the visual diagram
+   ═══════════════════════════════════════════════ */
+
+.flowchart {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 40px;
+}
+
+/* Section wrapper */
+.flow-section {
+  width: 100%;
+  position: relative;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.flow-section:nth-child(1) { animation-delay: 0.3s; }
+.flow-section:nth-child(3) { animation-delay: 0.5s; }
+.flow-section:nth-child(5) { animation-delay: 0.7s; }
+.flow-section:nth-child(7) { animation-delay: 0.9s; }
+
+/* Section header tag */
+.section-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border-radius: 6px 6px 0 0;
+  margin-left: 24px;
+}
+
+.section-tag .tag-info {
+  font-weight: 400;
+  opacity: 0.6;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* Section body (the box) */
+.section-body {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 32px 24px;
+  position: relative;
+}
+
+/* ── Flow nodes ── */
+.flow-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.flow-row.vertical {
+  flex-direction: column;
+  gap: 0;
+}
+
+.node {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  white-space: nowrap;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.node:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(99,102,241,0.15);
+}
+
+.node .badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.badge-sqlite { color: var(--green); background: rgba(52,211,153,0.1); }
+.badge-qdrant { color: var(--sky); background: rgba(56,189,248,0.1); }
+.badge-llm    { color: var(--amber); background: rgba(251,191,36,0.1); }
+.badge-n8n    { color: var(--accent2); background: rgba(129,140,248,0.08); }
+.badge-api    { color: var(--dim); background: rgba(113,113,122,0.1); }
+
+.node .method {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.m-get  { color: var(--green); background: rgba(52,211,153,0.12); }
+.m-post { color: var(--amber); background: rgba(251,191,36,0.12); }
+
+.node .ep {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--dim);
+}
+
+/* Decision node (diamond-ish) */
+.node.decision {
+  background: var(--surface2);
+  border-color: var(--muted);
+  border-style: dashed;
+}
+
+.node.decision::before {
+  content: '◇';
+  color: var(--amber);
+  font-size: 0.8rem;
+}
+
+/* Trigger node */
+.node.trigger {
+  border-color: var(--s1);
+  background: rgba(52,211,153,0.05);
+}
+
+/* LLM node */
+.node.llm-node {
+  border-color: var(--amber);
+  background: rgba(251,191,36,0.04);
+}
+
+/* Error node */
+.node.error-node {
+  border-color: var(--rose);
+  background: rgba(251,113,133,0.04);
+  color: var(--rose);
+  font-size: 0.75rem;
+}
+
+/* ── Arrows and connectors ── */
+.arrow {
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.arrow-down {
+  width: 2px;
+  height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.arrow-down::before {
+  content: '';
+  width: 2px;
+  height: 100%;
+  background: var(--border);
+}
+
+.arrow-down::after {
+  content: '▼';
+  position: absolute;
+  bottom: -4px;
+  font-size: 0.5rem;
+  color: var(--muted);
+}
+
+.arrow-down.long { height: 32px; }
+
+.arrow-right { padding: 0 2px; }
+.arrow-right::after { content: '→'; color: var(--muted); font-size: 0.9rem; }
+
+/* ── Parallel branch layout ── */
+.parallel-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* The spread line on top */
+.parallel-spread {
+  width: 90%;
+  height: 20px;
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.parallel-spread::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.parallel-spread::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 20px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+/* 6 vertical ticks */
+.spread-ticks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0;
+}
+
+.spread-ticks .tick {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+}
+
+.parallel-branches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.branch-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  width: 100%;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.branch-node:hover {
+  border-color: var(--s2);
+  box-shadow: 0 0 12px rgba(56,189,248,0.12);
+}
+
+.branch-node .ep {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--dim);
+  word-break: break-all;
+}
+
+.branch-node .badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+/* Converge line on bottom */
+.parallel-converge {
+  width: 90%;
+  height: 20px;
+  position: relative;
+  margin-top: 4px;
+}
+
+.parallel-converge::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.parallel-converge::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  height: 20px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+.converge-ticks {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.converge-ticks .tick {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+}
+
+/* ── Risk routing layout ── */
+.risk-routing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.risk-branches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.risk-lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.risk-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.r-blocker { color: var(--rose);  background: rgba(251,113,133,0.12); border: 1px solid rgba(251,113,133,0.2); }
+.r-high    { color: var(--amber); background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.2); }
+.r-medium  { color: var(--sky);   background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.2); }
+.r-low     { color: var(--green); background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.2); }
+
+.risk-lane .lane-node {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: border-color 0.2s;
+}
+
+.risk-lane .lane-node:hover {
+  border-color: var(--accent);
+}
+
+.risk-lane .lane-node + .lane-node { margin-top: -1px; }
+
+.risk-lane .lane-node.lane-wait {
+  border-style: dashed;
+  border-color: var(--amber);
+  background: rgba(251,191,36,0.03);
+}
+
+.lane-arrow {
+  width: 2px;
+  height: 12px;
+  background: var(--border);
+  margin: 0 auto;
+}
+
+/* ── Service sidebar labels ── */
+.service-float {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.service-float.left { left: -110px; }
+.service-float.right { right: -110px; }
+
+.svc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.svc-sqlite  { color: var(--green); border-color: rgba(52,211,153,0.25); background: rgba(52,211,153,0.05); }
+.svc-qdrant  { color: var(--sky); border-color: rgba(56,189,248,0.25); background: rgba(56,189,248,0.05); }
+.svc-claude  { color: var(--amber); border-color: rgba(251,191,36,0.25); background: rgba(251,191,36,0.05); }
+.svc-langfuse { color: var(--accent2); border-color: rgba(129,140,248,0.25); background: rgba(129,140,248,0.05); }
+
+/* ── Inter-section connector ── */
+.section-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 36px;
+  position: relative;
+}
+
+.section-connector::before {
+  content: '';
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--border), var(--muted));
+}
+
+.section-connector::after {
+  content: '▼';
+  position: absolute;
+  bottom: -2px;
+  font-size: 0.6rem;
+  color: var(--muted);
+}
+
+/* ── Cache hit bypass (dashed side path) ── */
+.cache-bypass {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.cache-bypass .bypass-line {
+  position: absolute;
+  right: -40px;
+  top: 0;
+  width: 40px;
+  height: 100%;
+  border-right: 2px dashed var(--green);
+  border-top: 2px dashed var(--green);
+  border-bottom: 2px dashed var(--green);
+  border-radius: 0 8px 8px 0;
+  opacity: 0.3;
+}
+
+/* ── Annotations ── */
+.flow-note {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.flow-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--dim);
+  text-align: center;
+  padding: 2px 8px;
+}
+
+/* ── External services legend ── */
+.services-legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin: 24px 0 8px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  color: var(--dim);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ── Converge to Responder ── */
+.converge-all {
+  width: 80%;
+  height: 24px;
+  position: relative;
+  margin: 8px auto 0;
+}
+
+.converge-all::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.converge-all::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  height: 24px;
+  background: var(--border);
+  transform: translateX(-50%);
+}
+
+/* ── ERROR SECTION ── */
+.error-section {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
+}
+
+.error-head {
+  padding: 10px 20px;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.error-head strong {
+  color: var(--fg);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+}
+
+.error-list {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border-subtle);
+}
+
+.error-item {
+  background: var(--bg);
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  color: var(--dim);
+}
+
+.error-item strong {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--rose);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+/* ── FEEDBACK ── */
+.feedback {
+  margin-top: 24px;
+  padding: 18px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--dim);
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.05s both;
+}
+
+.fb-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: var(--accent2);
+}
+
+.fb-arrow { color: var(--muted); }
+.fb-highlight { color: var(--fg); }
+
+/* ── INFO GRID ── */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 32px;
+  animation: fadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) 1.1s both;
+}
+
+.info-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  background: var(--surface);
+}
+
+.info-card-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: #fff;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.info-card ul { list-style: none; }
+
+.info-card li {
+  padding: 3px 0;
+  font-size: 0.75rem;
+  color: var(--dim);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.info-card li::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+/* ── FOOTER ── */
+.footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+  animation: fadeUp 0.5s ease 1.2s both;
+}
+
+.footer a {
+  color: var(--accent2);
+  text-decoration: none;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1100px) {
+  .service-float { display: none; }
+}
+
+@media (max-width: 900px) {
+  .page { padding: 24px 16px; }
+  .hero-title { font-size: 1.6rem; }
+  .hero-stats { gap: 20px; }
+  .stat-value { font-size: 1.1rem; }
+  .principles { grid-template-columns: 1fr; }
+  .info-grid { grid-template-columns: 1fr; }
+  .error-list { grid-template-columns: repeat(2, 1fr); }
+  .parallel-branches { grid-template-columns: repeat(3, 1fr); }
+  .risk-branches { grid-template-columns: repeat(2, 1fr); }
+  .flow-row { gap: 6px; }
+}
+
+@media (max-width: 600px) {
+  .parallel-branches { grid-template-columns: repeat(2, 1fr); }
+  .risk-branches { grid-template-columns: 1fr 1fr; }
+  .hero-stats { flex-wrap: wrap; }
+}
+
+/* ── ANIMATIONS ── */
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(-20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes countPop {
+  from { opacity: 0; transform: scale(0.5); }
+  60%  { transform: scale(1.1); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50%      { box-shadow: 0 0 0 4px transparent; }
+}
+
+@keyframes flowIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ═══ HERO ═══ -->
+  <div class="hero">
+    <div class="hero-label">Architecture Overview</div>
+    <div class="hero-title">CIRI <span>Chargeback Agent</span></div>
+    <div class="hero-sub">
+      Orquestación explícita con n8n. Sin AI Agent black box.
+      Cada paso es un nodo visible, auditable, determinístico.
+    </div>
+    <div class="tech-pills">
+      <span class="pill">n8n</span>
+      <span class="pill">FastAPI</span>
+      <span class="pill">Claude Haiku + Sonnet</span>
+      <span class="pill">Qdrant Cloud</span>
+      <span class="pill">Voyage AI</span>
+      <span class="pill">Langfuse</span>
+      <span class="pill">SQLite</span>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><div class="stat-value">54</div><div class="stat-label">nodos n8n</div></div>
+      <div class="stat"><div class="stat-value">14</div><div class="stat-label">API endpoints</div></div>
+      <div class="stat"><div class="stat-value">3</div><div class="stat-label">llamadas LLM</div></div>
+      <div class="stat"><div class="stat-value">277</div><div class="stat-label">tests</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ PRINCIPLES ═══ -->
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-icon">&#9632;</div>
+      <div class="principle-title">n8n orquesta, FastAPI ejecuta</div>
+      <div class="principle-desc">n8n decide qué y cuándo. FastAPI tiene toda la lógica de negocio. Nodos n8n nunca contienen business logic.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">&#9650;</div>
+      <div class="principle-title">El código decide, el LLM explica</div>
+      <div class="principle-desc">6/11 campos de la resolución son determinísticos (Python). El LLM justifica la decisión con evidencia, nunca la toma. Guardrails post-LLM corrigen alucinaciones.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-icon">&#9679;</div>
+      <div class="principle-title">RAG + SQL + auto-mejora</div>
+      <div class="principle-desc">Qdrant (semántico) + SQLite (exacto) alimentan a Haiku + Sonnet. Score ≥ 8.0 → auto-indexa como nuevo precedente. Langfuse traza todo.</div>
+    </div>
+  </div>
+
+  <!-- ═══ SERVICE LEGEND ═══ -->
+  <div class="services-legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>SQLite</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--sky)"></div>Qdrant + Voyage AI</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Claude (LLM)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>Langfuse</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>n8n nativo</div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════
+       FLOWCHART
+       ═════════════════════════════════════════════ -->
+  <div class="flowchart">
+
+    <!-- ═══ ETAPA 1 — ENTRADA + CACHÉ ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(52,211,153,0.08);color:var(--s1);border:1px solid rgba(52,211,153,0.2);border-bottom:none">
+        Etapa 1 · Entrada + Caché <span class="tag-info">6 nodos</span>
+      </div>
+      <div class="section-body" style="border-color:rgba(52,211,153,0.2)">
+
+        <!-- Row 1: Triggers → Validate → Extract -->
+        <div class="flow-row">
+          <div style="display:flex;flex-direction:column;gap:6px;align-items:center">
+            <div class="node trigger">
+              <span class="method m-post">POST</span>
+              Webhook
+              <span class="ep">/webhook/chargeback-agent</span>
+            </div>
+            <div style="font-size:0.6rem;color:var(--muted)">o</div>
+            <div class="node trigger">
+              Form Trigger
+              <span class="ep" style="font-size:0.65rem">formulario nativo n8n</span>
+            </div>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node">
+            <span class="badge badge-n8n">CODE</span>
+            Validar + Normalizar
+            <span class="ep" style="font-size:0.65rem">regex TXN-XXXXX</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node">
+            Extraer Campos
+            <span class="badge badge-n8n">SET</span>
+          </div>
+        </div>
+
+        <div class="arrow-down" style="margin:0 auto"></div>
+
+        <!-- Row 2: Wake → Cache → Decision -->
+        <div class="flow-row">
+          <div class="node">
+            <span class="method m-get">GET</span>
+            Despertar API
+            <span class="ep">/health</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node">
+            <span class="method m-get">GET</span>
+            Verificar Caché
+            <span class="ep">/api/cache/lookup</span>
+            <span class="badge badge-sqlite">SQLite</span>
+          </div>
+          <div class="arrow arrow-right"></div>
+          <div class="node decision">
+            ¿Cache Hit?
+          </div>
+        </div>
+
+        <!-- Cache hit/miss paths -->
+        <div style="display:flex;justify-content:center;gap:48px;margin-top:12px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--green);font-weight:600">HIT</div>
+            <div class="node" style="border-color:var(--green);border-style:dashed;font-size:0.78rem">
+              Formatear Caché → Responder
+            </div>
+            <div class="flow-note">saltea las etapas 2 a 4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--dim);font-weight:600">MISS</div>
+            <div style="font-size:0.72rem;color:var(--dim)">continúa ↓</div>
+          </div>
+        </div>
+
+        <!-- Error branch annotation -->
+        <div style="position:absolute;top:16px;right:16px">
+          <div class="node error-node" style="font-size:0.68rem;padding:6px 10px">
+            invalid → Stop &amp; Error
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connector Etapa 1 · → Etapa 2 · -->
+    <div class="section-connector"></div>
+
+    <!-- ═══ ETAPA 2 — CONTEXTO PARALELO ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(56,189,248,0.08);color:var(--s2);border:1px solid rgba(56,189,248,0.2);border-bottom:none">
+        Etapa 2 · Contexto paralelo <span class="tag-info">7 queries HTTP en paralelo → Merge</span>
+      </div>
+      <div class="section-body" style="border-color:rgba(56,189,248,0.2)">
+
+        <div class="parallel-container">
+          <!-- Top spread -->
+          <div class="parallel-spread">
+            <div class="spread-ticks">
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+            </div>
+          </div>
+
+          <!-- 6 parallel branches -->
+          <div class="parallel-branches">
+            <div class="branch">
+              <div class="branch-node">
+                Obtener<br>Transacción
+                <span class="ep">/api/transactions/{id}</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Obtener<br>Logs
+                <span class="ep">/api/logs/{tx_id}</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Buscar<br>Políticas
+                <span class="ep">/api/policies/search</span>
+                <span class="badge badge-qdrant">Qdrant</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Buscar Casos<br>Similares
+                <span class="ep">/api/cases/similar</span>
+                <span class="badge badge-qdrant">Qdrant</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Riesgo del<br>Comercio
+                <span class="ep">/api/merchants/{name}/risk</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+              <div style="width:2px;height:8px;background:var(--border)"></div>
+              <div class="branch-node" style="font-size:0.7rem;padding:6px">
+                Evaluar Riesgo
+                <span class="badge badge-n8n">SET</span>
+              </div>
+            </div>
+            <div class="branch">
+              <div class="branch-node">
+                Historial del<br>Cliente
+                <span class="ep">/api/clients/{id}/history</span>
+                <span class="badge badge-sqlite">SQLite</span>
+              </div>
+              <div style="width:2px;height:8px;background:var(--border)"></div>
+              <div class="branch-node" style="font-size:0.7rem;padding:6px">
+                Evaluar Historial
+                <span class="badge badge-n8n">SET</span>
+              </div>
+              <div style="width:2px;height:8px;background:var(--border)"></div>
+              <div class="branch-node" style="font-size:0.7rem;padding:6px">
+                Verificar SLA
+                <span class="ep">/api/sla/check</span>
+                <span class="badge badge-sqlite">POST</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom converge -->
+          <div class="parallel-converge">
+            <div class="converge-ticks">
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+              <div class="tick"></div><div class="tick"></div><div class="tick"></div>
+            </div>
+          </div>
+
+          <!-- Merge node -->
+          <div class="arrow-down" style="margin:0 auto"></div>
+          <div class="node" style="border-color:var(--s2)">
+            <span class="badge badge-n8n">MERGE</span>
+            Contexto Paralelo
+            <span class="flow-label">espera 6 ramas</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Connector Etapa 2 · → Etapa 3 · -->
+    <div class="section-connector"></div>
+
+    <!-- ═══ ETAPA 3 — ANÁLISIS CON IA ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(129,140,248,0.08);color:var(--s3);border:1px solid rgba(129,140,248,0.2);border-bottom:none">
+        Etapa 3 · Análisis con IA <span class="tag-info">Haiku (eval) + Sonnet (síntesis + judge) + Guardrails</span>
+      </div>
+      <div class="section-body" style="border-color:rgba(129,140,248,0.2)">
+
+        <div class="flow-row vertical">
+          <!-- Compile -->
+          <div class="node">
+            <span class="badge badge-n8n">CODE</span>
+            Compilar Contexto
+            <span class="ep" style="font-size:0.65rem">fusiona los resultados de la etapa 2</span>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Resolve (LLM — 2 calls inside) -->
+          <div class="node llm-node">
+            <span class="method m-post">POST</span>
+            Sintetizar Resolución
+            <span class="ep">/api/analyze/resolve</span>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center;margin:6px 0">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:3px 8px;border-radius:3px;color:var(--amber);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.15)">Call 1: Haiku — Policy Eval</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:3px 8px;border-radius:3px;color:var(--accent2);background:rgba(129,140,248,0.1);border:1px solid rgba(129,140,248,0.15)">Call 2: Sonnet — Síntesis</span>
+          </div>
+          <div class="flow-note">6 campos determinísticos + justificación narrativa</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Guardrails -->
+          <div class="node" style="border-color:var(--rose);border-style:dashed">
+            <span class="badge badge-n8n">CODE</span>
+            Verificar Guardrails
+            <span class="ep" style="font-size:0.65rem;color:var(--rose)">5 validaciones post-LLM</span>
+          </div>
+          <div class="flow-note" style="color:var(--rose)">APPROVE+BLOCKER, BLOCKER whitelist, compensación, overconfidence, risk override</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Judge (LLM) -->
+          <div class="node llm-node">
+            <span class="method m-post">POST</span>
+            Juez de Calidad
+            <span class="ep">/api/analyze/judge</span>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:center;margin:6px 0">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;padding:3px 8px;border-radius:3px;color:var(--accent2);background:rgba(129,140,248,0.1);border:1px solid rgba(129,140,248,0.15)">Call 3: Sonnet — Judge v2.0</span>
+          </div>
+          <div class="flow-note">score 1–10, 5 criterios con rúbricas, avg 9.1/10</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Judge gate -->
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="node decision">
+              ¿Juez Aprueba? (≥ 7.0)
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="color:var(--rose);font-size:0.7rem;font-family:'JetBrains Mono',monospace">< 7.0</span>
+              <div class="node" style="font-size:0.75rem;border-color:var(--rose);border-style:dashed;padding:6px 10px">
+                Marcar Calidad Baja
+              </div>
+            </div>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Prepare Report -->
+          <div class="node">
+            <span class="badge badge-n8n">CODE</span>
+            Preparar Informe
+            <span class="ep" style="font-size:0.65rem">construye ReportRequest</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Connector Etapa 3 · → Etapa 4 · -->
+    <div class="section-connector"></div>
+
+    <!-- ═══ ETAPA 4 — ROUTING + RESPUESTA ═══ -->
+    <div class="flow-section">
+      <div class="section-tag" style="background:rgba(251,191,36,0.08);color:var(--s4);border:1px solid rgba(251,191,36,0.2);border-bottom:none">
+        Etapa 4 · Routing + Respuesta + HITL <span class="tag-info">7 nodos</span>
+      </div>
+      <div class="section-body" style="border-color:rgba(251,191,36,0.2)">
+
+        <div class="risk-routing">
+          <!-- Switch node -->
+          <div class="node decision" style="border-color:var(--s4)">
+            <span class="badge badge-n8n">SWITCH</span>
+            Nivel de Riesgo
+            <span class="ep" style="font-size:0.65rem">resolution.risk_level</span>
+          </div>
+
+          <!-- 4 risk badges (all → same Generar Reporte) -->
+          <div style="display:flex;justify-content:center;gap:8px;margin:12px 0 4px">
+            <span class="risk-badge r-blocker">BLOCKER</span>
+            <span class="risk-badge r-high">HIGH</span>
+            <span class="risk-badge r-medium">MEDIUM</span>
+            <span class="risk-badge r-low">LOW</span>
+          </div>
+          <div class="flow-note" style="margin-bottom:8px">los 4 niveles convergen al mismo nodo</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Generar Reporte -->
+          <div class="node">
+            <span class="method m-post">POST</span>
+            Generar Reporte
+            <span class="ep">/api/reports/html</span>
+          </div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- Responder -->
+          <div class="node" style="border-color:var(--s4);background:rgba(251,191,36,0.04)">
+            <span style="font-size:1rem">↩</span>
+            Responder — Reporte
+            <span class="ep" style="font-size:0.65rem">text/html al webhook</span>
+          </div>
+          <div class="flow-note">webhook responde inmediatamente con el reporte</div>
+
+          <div class="arrow-down" style="margin:0 auto"></div>
+
+          <!-- IF HIGH? -->
+          <div class="node decision">
+            ¿Es HIGH?
+            <span class="ep" style="font-size:0.65rem">risk_level == HIGH</span>
+          </div>
+
+          <!-- Two paths: HIGH (HITL) and others (end) -->
+          <div style="display:flex;justify-content:center;gap:40px;margin-top:12px">
+            <!-- HIGH → HITL sub-flow -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:0">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--amber);font-weight:600">TRUE</div>
+              <div class="lane-arrow"></div>
+              <div class="lane-node lane-wait" style="width:200px">
+                Wait — Aprobación HITL
+                <span style="font-size:0.68rem;color:var(--amber)">APPROVE / REJECT</span>
+                <span style="font-size:0.62rem;color:var(--dim)">timeout: 5s → auto-approve</span>
+              </div>
+              <div class="lane-arrow"></div>
+              <div class="lane-node" style="width:200px">
+                Procesar Respuesta
+                <span style="font-size:0.68rem;color:var(--dim)">CODE — merge decisión</span>
+              </div>
+              <div class="lane-arrow"></div>
+              <div class="lane-node" style="width:200px">
+                Registrar Feedback
+                <span style="font-size:0.68rem;color:var(--dim)">POST /api/feedback</span>
+              </div>
+              <div class="flow-note">auto-indexa si score ≥ 8.0</div>
+            </div>
+
+            <!-- Others → end -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--dim);font-weight:600">FALSE</div>
+              <div style="font-size:0.72rem;color:var(--dim)">fin</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /flowchart -->
+
+  <!-- ═══ ERROR HANDLING + ALERTAS ═══ -->
+  <div class="error-section">
+    <div class="error-head">
+      <strong>Error handling + Alertas</strong>
+      <span>4 Stop and Error → Error Handler workflow → POST /api/alerts/ + Email</span>
+    </div>
+    <div class="error-list">
+      <div class="error-item"><strong>TXN</strong>Formato inválido</div>
+      <div class="error-item"><strong>API</strong>No disponible (3 reintentos)</div>
+      <div class="error-item"><strong>LLM</strong>Fallo en análisis</div>
+      <div class="error-item"><strong>Reporte</strong>Generación fallida</div>
+      <div class="error-item" style="border-color:var(--rose)"><strong>BLOCKER</strong>Alerta auto-reject (ERROR)</div>
+      <div class="error-item" style="border-color:var(--amber)"><strong>HITL</strong>Alerta revisión humana (WARNING)</div>
+    </div>
+  </div>
+
+  <!-- ═══ FEEDBACK ═══ -->
+  <div class="feedback">
+    <span class="fb-title">Mejora continua</span>
+    <span class="fb-arrow">—</span>
+    <span class="fb-highlight">Analista aprueba/rechaza</span>
+    <span class="fb-arrow">→</span>
+    <span>POST /api/feedback</span>
+    <span class="fb-arrow">→</span>
+    <span>Judge evalúa</span>
+    <span class="fb-arrow">→</span>
+    <span class="fb-highlight">score ≥ 8.0</span>
+    <span class="fb-arrow">→</span>
+    <span>auto-indexa en Qdrant como nuevo precedente</span>
+  </div>
+
+  <!-- ═══ INFO GRID ═══ -->
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-card-title">Decisiones de diseño</div>
+      <ul>
+        <li>n8n orquesta, FastAPI ejecuta</li>
+        <li>"El código decide, el LLM explica" — 6/11 campos determinísticos</li>
+        <li>Modelo dual: Haiku (eval) + Sonnet (síntesis + judge)</li>
+        <li>5 guardrails post-LLM + BLOCKER whitelist</li>
+        <li>Políticas editables vía API CRUD, sin redeploy</li>
+        <li>Caché semántico (0.92) + caché de idempotencia</li>
+        <li>Panel con SSE streaming — progreso del pipeline en tiempo real</li>
+      </ul>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">RAG pipeline</div>
+      <ul>
+        <li>Embeddings: Voyage AI (voyage-multilingual-2, 1024d)</li>
+        <li>3 colecciones: policies, historical_cases, _semantic_cache</li>
+        <li>QueryBuilder determinístico, sin LLM para queries</li>
+        <li>Precedent summary con [MOTIVO SIMILAR] + [MISMO MERCHANT]</li>
+        <li>SQLite + Qdrant unidos en contexto LLM</li>
+        <li>Auto-indexing: score ≥ 8.0 → nuevo precedente</li>
+      </ul>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Deploy + Observabilidad + Alertas</div>
+      <ul>
+        <li>API: Render.com (free tier), Docker</li>
+        <li>Qdrant Cloud (free tier), Voyage AI (free tier)</li>
+        <li>n8n Cloud (trial), 54 nodos + error handler</li>
+        <li>LLM: Claude Haiku + Sonnet (Anthropic)</li>
+        <li>Langfuse: tokens, latencia, judge scores (avg 9.1)</li>
+        <li>Alertas: POST/GET /api/alerts/ + log en panel (30s polling)</li>
+        <li>277 tests (244 unit/integration + 33 E2E contra API real)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ═══ FOOTER ═══ -->
+  <div class="footer">
+    <span>Diseñado e implementado por <strong style="color:var(--fg)">Federico Palatnik Moroz</strong></span>
+    <span><a href="https://ciri-chargeback-agent.onrender.com" target="_blank">ciri-chargeback-agent.onrender.com</a></span>
+  </div>
+
+</div>
+</body>
+</html>
