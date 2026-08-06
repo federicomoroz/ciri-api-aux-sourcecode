@@ -3,6 +3,7 @@
   "nodes": [
     {
       "parameters": {
+        "path": "chargeback-form",
         "formTitle": "CIRI — Investigación de Contracargo",
         "formDescription": "Ingresa los datos para iniciar una investigación de contracargo.\nEl análisis toma ~30 segundos (incluye evaluación LLM + RAG).",
         "respondMode": "lastNode",
@@ -73,30 +74,90 @@
       "typeVersion": 4.2,
       "position": [
         740,
-        300
+        260
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 5000
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "jsCode": "// La respuesta del formulario tiene que decir algo cierto y corto.\n// El informe HTML completo queda en la salida del nodo anterior,\n// visible en la ejecucion.\nconst entrada = $('Form Trigger — Formulario').first().json;\nconst txn = entrada['Transaction ID'] || 'la transaccion';\nconst respuesta = $input.first().json;\nconst html = respuesta.data || respuesta.body || '';\n\nreturn [{\n  json: {\n    resultado: html\n      ? `Investigacion completada para ${txn}. El informe quedo en la ejecucion de este workflow.`\n      : `No se pudo completar la investigacion de ${txn}. Revisa la ejecucion para ver el error.`,\n  },\n}];"
       },
       "id": "form-code-001",
-      "name": "Preparar Respuesta",
+      "name": "Respuesta — Listo",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1000,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "form-check-txn",
+              "leftValue": "={{ ($json['Transaction ID'] || '').trim() }}",
+              "rightValue": "TXN-[0-9]{5}",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "form-if-001",
+      "name": "Validar Formato — IF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        500,
         300
       ]
     },
     {
       "parameters": {
-        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada, ademas del webhook.\n\nURL del formulario: `/form/chargeback-form`\n\n**Funciona sin configurar nada:** manda el caso a la API publica del proyecto, que corre el mismo pipeline. No depende de la URL de esta instancia de n8n, que no se puede saber de antemano.\n\nPara apuntarlo a otra API, crear la variable `API_BASE_URL`.\n\nPara que en cambio pase por el workflow principal, cambiar la URL de «Analizar el Caso» por `https://<tu-n8n>/webhook/chargeback-agent`.",
-        "height": 220,
-        "width": 400,
+        "jsCode": "// Un formulario lo completa una persona: el identificador puede venir\n// con cualquier cosa. Se corta antes de gastar una llamada a la API.\nconst txn = ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim();\n\nreturn [{\n  json: {\n    resultado: `«${txn}» no tiene el formato esperado. `\n      + `El identificador es TXN- seguido de cinco digitos, por ejemplo TXN-00051.`,\n  },\n}];"
+      },
+      "id": "form-code-invalido",
+      "name": "Respuesta — Formato Invalido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// La API puede estar dormida, caida, o el caso puede no existir.\n// El formulario tiene que decir que paso, no quedarse en blanco.\nconst txn = ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'la transaccion').trim();\nconst error = $input.first().json.error || {};\nconst detalle = error.message || error.description || 'la API no respondio';\n\nreturn [{\n  json: {\n    resultado: `No se pudo completar la investigacion de ${txn}: ${detalle}. `\n      + `El detalle completo esta en la ejecucion de este workflow.`,\n  },\n}];"
+      },
+      "id": "form-code-fallo",
+      "name": "Respuesta — Fallo el Analisis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada, ademas del webhook.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Sin configurar nada:** manda el caso a la API publica del proyecto. No depende de la URL de esta instancia de n8n, que no se puede saber de antemano. Para otra API, crear la variable `API_BASE_URL`.\n\n**Tres finales posibles**, porque un formulario lo completa una persona:\n• identificador con formato invalido, sin llamar a la API\n• la API falla o no responde, tras 3 reintentos\n• la investigacion se completa\n\nEn los tres casos el formulario responde algo que se entiende.",
+        "height": 300,
+        "width": 420,
         "color": 5
       },
       "id": "form-sticky-001",
@@ -104,8 +165,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        400,
-        80
+        180,
+        120
       ]
     }
   ],
@@ -114,7 +175,25 @@
       "main": [
         [
           {
+            "node": "Validar Formato — IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Formato — IF": {
+      "main": [
+        [
+          {
             "node": "Analizar el Caso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta — Formato Invalido",
             "type": "main",
             "index": 0
           }
@@ -125,7 +204,14 @@
       "main": [
         [
           {
-            "node": "Preparar Respuesta",
+            "node": "Respuesta — Listo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta — Fallo el Analisis",
             "type": "main",
             "index": 0
           }
