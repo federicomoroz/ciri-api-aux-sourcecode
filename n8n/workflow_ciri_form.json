@@ -54,7 +54,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.N8N_WEBHOOK_URL || 'http://localhost:5678' }}/webhook/chargeback-agent",
+        "url": "={{ $json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/panel/analyze?direct=true",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ transaction_id: $json['Transaction ID'], motivo: $json['Motivo'], cliente_vip: $json['Cliente VIP'] === 'Sí' }) }}",
@@ -68,7 +68,7 @@
         }
       },
       "id": "form-http-001",
-      "name": "Enviar al Webhook Principal",
+      "name": "Analizar el Caso",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -81,7 +81,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Extraer el HTML del response y devolverlo como completion page\nconst response = $input.first().json;\nconst html = response.data || response.body || 'Análisis completado';\nreturn [{ json: { resultado: 'Análisis completado. Revisa la ejecución del workflow principal para ver el reporte completo.' } }];"
+        "jsCode": "// La respuesta del formulario tiene que decir algo cierto y corto.\n// El informe HTML completo queda en la salida del nodo anterior,\n// visible en la ejecucion.\nconst entrada = $('Form Trigger — Formulario').first().json;\nconst txn = entrada['Transaction ID'] || 'la transaccion';\nconst respuesta = $input.first().json;\nconst html = respuesta.data || respuesta.body || '';\n\nreturn [{\n  json: {\n    resultado: html\n      ? `Investigacion completada para ${txn}. El informe quedo en la ejecucion de este workflow.`\n      : `No se pudo completar la investigacion de ${txn}. Revisa la ejecucion para ver el error.`,\n  },\n}];"
       },
       "id": "form-code-001",
       "name": "Preparar Respuesta",
@@ -94,7 +94,7 @@
     },
     {
       "parameters": {
-        "content": "## 📋 FORMULARIO DE INGESTA\n\nWorkflow auxiliar que demuestra el **Form Trigger** nativo de n8n.\n\nURL: `/form/chargeback-form`\n\nReenvía los datos al webhook del workflow principal y muestra el resultado.\n\nDemuestra Eje 1 (Ingesta) con formulario nativo.",
+        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada, ademas del webhook.\n\nURL del formulario: `/form/chargeback-form`\n\n**Funciona sin configurar nada:** manda el caso a la API publica del proyecto, que corre el mismo pipeline. No depende de la URL de esta instancia de n8n, que no se puede saber de antemano.\n\nPara apuntarlo a otra API, crear la variable `API_BASE_URL`.\n\nPara que en cambio pase por el workflow principal, cambiar la URL de «Analizar el Caso» por `https://<tu-n8n>/webhook/chargeback-agent`.",
         "height": 220,
         "width": 400,
         "color": 5
@@ -114,14 +114,14 @@
       "main": [
         [
           {
-            "node": "Enviar al Webhook Principal",
+            "node": "Analizar el Caso",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Enviar al Webhook Principal": {
+    "Analizar el Caso": {
       "main": [
         [
           {

@@ -30,7 +30,7 @@ El entregable principal. Importá los 3 archivos de `n8n/` en cualquier instanci
 |---|---|
 | `workflow_ciri_agent.json` | Workflow principal — 38 nodos (32 ejecutables + 6 sticky notes) |
 | `workflow_ciri_errors.json` | Error handler (Error Trigger → POST /api/alerts/ → email opcional) |
-| `workflow_ciri_form.json` | Form trigger (formulario nativo de n8n como entrada alternativa) |
+| `workflow_ciri_form.json` | Form trigger — formulario nativo de n8n como segunda vía de entrada |
 
 **No hay que configurar nada**: los nodos apuntan por defecto a la API pública en Render. Sin variables, sin credenciales, sin API keys — toda la autenticación con Anthropic y Voyage AI la maneja el backend.
 
