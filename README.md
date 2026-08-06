@@ -13,6 +13,30 @@ Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transac
 
 ---
 
+## Configuración
+
+Para las cuatro formas de usarlo **no hay nada que configurar**. Lo demás sólo aparece
+si vas más lejos:
+
+| Hace falta si… | Qué | Dónde se pone |
+|---|---|---|
+| Sólo querés mirar el circuito, el panel o los informes | **Nada** | — |
+| Querés analizar un caso que no es de los tres de ejemplo | Una API key de Anthropic | Campo **API key** del panel, o `api_key` en el body |
+| Querés ejecutar a través de tu propia instancia de n8n | La URL de tu n8n | Campo **n8n URL** del panel |
+| Importaste el workflow del formulario | El path del formulario | Nodo **Form Trigger** → campo **Form Path** → `chargeback-form` |
+| Importaste los workflows y querés que los fallos se registren | El error handler | **Settings → Error Workflow → `workflow_ciri_errors`** |
+| Vas a correr todo en tu máquina con Docker | Dos claves con free tier | `.env`: `CB_ANTHROPIC_API_KEY` y `CB_VOYAGE_API_KEY` |
+| Querés que el servidor ejecute siempre de verdad, sin modo demo | El interruptor del modo | `.env`: `CB_DEMO_MODE=false` |
+
+Todas las variables, con sus valores por defecto y para qué sirve cada una, están
+comentadas en [`.env.example`](.env.example).
+
+> **Antes de la primera prueba:** la API está en el free tier de Render y duerme tras 15
+> minutos sin uso. La primera llamada puede tardar ~50 segundos en despertarla; las
+> siguientes responden en ~12.
+
+---
+
 ## Cómo usarlo
 
 Hay **cuatro formas de usar el sistema**, y todas hacen lo mismo por dentro. Cambia por dónde entra el caso.
@@ -46,8 +70,6 @@ Un informe prearmado nunca se hace pasar por uno recién hecho. Se declara en cu
 Esto vale también para el workflow de n8n: corre entero en modo demo, con las siete consultas de contexto reales y el informe generado de verdad. Lo único pregrabado es lo que hubiera contestado el modelo. El porqué y los trade-offs, en `docs/decisions.md`, decisión 14.
 
 Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA e informes. El default del servidor se cambia con `CB_DEMO_MODE=false`.
-
-> **Sobre la primera llamada:** la API está en el free tier de Render, que duerme tras 15 minutos sin uso. La primera petición puede tardar ~50 segundos en despertarla; las siguientes responden en ~12. El workflow de n8n ya contempla esto con un nodo que la despierta antes de empezar.
 
 ---
 
@@ -205,10 +227,6 @@ sólo el código que la API necesita para funcionar.
 | `docs/demo_scenarios.md` | Los tres escenarios, paso a paso, con los comandos |
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
-
-**Configuración:** todo se lee de `.env` con prefijo `CB_`. Las variables, con sus valores por
-defecto y para qué sirve cada una, están comentadas en
-[`.env.example`](.env.example).
 
 **Tests:** `pytest tests/ -v`. Son 463 en 26 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
