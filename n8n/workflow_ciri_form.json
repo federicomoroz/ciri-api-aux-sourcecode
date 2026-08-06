@@ -40,7 +40,8 @@
         },
         "options": {
           "buttonLabel": "Iniciar Investigación"
-        }
+        },
+        "responseMode": "responseNode"
       },
       "id": "form-trigger-001",
       "name": "Form Trigger — Formulario",
@@ -73,26 +74,13 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        740,
+        720,
         260
       ],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 5000,
       "onError": "continueErrorOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// La respuesta del formulario tiene que decir algo cierto y corto.\n// El informe HTML completo queda en la salida del nodo anterior,\n// visible en la ejecucion.\nconst entrada = $('Form Trigger — Formulario').first().json;\nconst txn = entrada['Transaction ID'] || 'la transaccion';\nconst respuesta = $input.first().json;\nconst html = respuesta.data || respuesta.body || '';\n\nreturn [{\n  json: {\n    resultado: html\n      ? `Investigacion completada para ${txn}. El informe quedo en la ejecucion de este workflow.`\n      : `No se pudo completar la investigacion de ${txn}. Revisa la ejecucion para ver el error.`,\n  },\n}];"
-      },
-      "id": "form-code-001",
-      "name": "Respuesta — Listo",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1000,
-        180
-      ]
     },
     {
       "parameters": {
@@ -129,34 +117,72 @@
     },
     {
       "parameters": {
-        "jsCode": "// Un formulario lo completa una persona: el identificador puede venir\n// con cualquier cosa. Se corta antes de gastar una llamada a la API.\nconst txn = ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim();\n\nreturn [{\n  json: {\n    resultado: `«${txn}» no tiene el formato esperado. `\n      + `El identificador es TXN- seguido de cinco digitos, por ejemplo TXN-00051.`,\n  },\n}];"
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "Investigación completada",
+        "completionMessage": "={{ 'Se investigó ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '. El informe completo quedó en la ejecución de este workflow.' }}",
+        "options": {}
       },
-      "id": "form-code-invalido",
+      "id": "form-fin-ok",
+      "name": "Respuesta — Listo",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        980,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "Identificador inválido",
+        "completionMessage": "={{ '«' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '» no tiene el formato esperado. Debe ser TXN- seguido de cinco dígitos, por ejemplo TXN-00051.' }}",
+        "options": {}
+      },
+      "id": "form-fin-invalido",
       "name": "Respuesta — Formato Invalido",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
       "position": [
-        740,
+        720,
         460
       ]
     },
     {
       "parameters": {
-        "jsCode": "// La API puede estar dormida, caida, o el caso puede no existir.\n// El formulario tiene que decir que paso, no quedarse en blanco.\n// El error se lee del nodo que fallo: el de la alerta ya paso por el medio.\nconst txn = ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'la transaccion').trim();\nconst error = $('Analizar el Caso').first().json.error || {};\nconst detalle = error.message || error.description || 'la API no respondio';\n\nreturn [{\n  json: {\n    resultado: `No se pudo completar la investigacion de ${txn}: ${detalle}. `\n      + `Quedo registrada como alerta y el detalle esta en la ejecucion de este workflow.`,\n  },\n}];"
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "No se pudo completar la investigación",
+        "completionMessage": "={{ 'No se pudo investigar ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + ': ' + (($('Analizar el Caso').first().json.error || {}).message || 'la API no respondió') + '. El equipo ya fue notificado.' }}",
+        "options": {}
       },
-      "id": "form-code-fallo",
+      "id": "form-fin-fallo",
       "name": "Respuesta — Fallo el Analisis",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
       "position": [
-        1260,
-        460
+        980,
+        340
       ]
     },
     {
       "parameters": {
-        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada, ademas del webhook.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Sin configurar nada:** manda el caso a la API publica del proyecto. No depende de la URL de esta instancia de n8n, que no se puede saber de antemano. Para otra API, crear la variable `API_BASE_URL`.\n\n**Tres finales posibles**, porque un formulario lo completa una persona:\n• identificador con formato invalido, sin llamar a la API\n• la API falla o no responde, tras 3 reintentos\n• la investigacion se completa\n\nEn los tres casos el formulario responde algo que se entiende. Cuando falla el\nanalisis, ademas queda registrado en el log operativo via `POST /api/alerts/`,\nigual que los errores del workflow principal.",
-        "height": 340,
+        "errorMessage": "={{ 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Analizar el Caso').first().json.error || {}).message || 'la API no respondio') }}"
+      },
+      "id": "form-stop-error",
+      "name": "Propagar → Error Handler",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1240,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Sin configurar nada:** manda el caso a la API publica del proyecto. Para otra API, crear la variable `API_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. No se notifica a nadie.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
+        "height": 400,
         "width": 420,
         "color": 5
       },
@@ -167,28 +193,6 @@
       "position": [
         180,
         120
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ $('Form Trigger — Formulario').first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ event_type: 'form_analysis_failed', severity: 'ERROR', message: 'Falló la investigación iniciada desde el formulario: ' + (($json.error && ($json.error.message || $json.error.description)) || 'la API no respondió'), source: 'n8n-form', transaction_id: ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() || null, metadata: { motivo: $('Form Trigger — Formulario').first().json['Motivo'] || '', http_code: ($json.error && $json.error.httpCode) || null } }) }}",
-        "options": {
-          "timeout": 10000
-        },
-        "sendHeaders": false
-      },
-      "id": "form-http-alerta",
-      "name": "Registrar Alerta",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "onError": "continueRegularOutput",
-      "position": [
-        1000,
-        460
       ]
     }
   ],
@@ -233,18 +237,18 @@
         ],
         [
           {
-            "node": "Registrar Alerta",
+            "node": "Respuesta — Fallo el Analisis",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Registrar Alerta": {
+    "Respuesta — Fallo el Analisis": {
       "main": [
         [
           {
-            "node": "Respuesta — Fallo el Analisis",
+            "node": "Propagar → Error Handler",
             "type": "main",
             "index": 0
           }
