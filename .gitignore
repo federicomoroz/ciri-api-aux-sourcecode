@@ -28,3 +28,6 @@ _plan_raw.md
 # La entrega es un build, no una fuente: se arma con tools/build_entrega.py
 /entregables/
 /dist/
+
+# La carpeta que se arma para el ZIP: es una copia del repo, no va en el repo
+/entrega/
