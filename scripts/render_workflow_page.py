@@ -73,10 +73,6 @@ FAMILIES = [
     ("error", "Salida de error", "Corta la ejecución y avisa."),
 ]
 
-# Numeracion de las secciones. Romana para que no se confunda con los numeros
-# de paso de cada nodo, que son arabigos.
-ROMAN = {"1": "I", "2": "II", "3": "III", "4": "IV"}
-
 SECTIONS = {
     "1": ("Entrada y validación", "Recibe el caso y verifica el formato del identificador antes de gastar un solo token."),
     "2": ("Caché y contexto", "Corta camino si el caso ya se investigó. Si no, la transacción primero y después seis consultas en paralelo."),
@@ -502,12 +498,17 @@ def build(workflow: dict) -> str:
             f'style="left:{x:.0f}px;top:{y:.0f}px">{esc(ERROR_LABEL.get(name, name))}</button>'
         )
 
+    steps_in = defaultdict(list)
+    for name in flow:
+        steps_in[a["section"][name]].append(step[name])
+
     zones = []
     for sec, y in lay["zones"]:
         title, subtitle = SECTIONS[sec]
+        rango = f"{min(steps_in[sec]):02d}–{max(steps_in[sec]):02d}"
         zones.append(
             f'<div class="zone" style="top:{y:.0f}px">'
-            f'<span class="z-n">{ROMAN.get(sec, sec)}</span>'
+            f'<span class="z-n">{rango}</span>'
             f'<span class="z-t">{esc(title)}</span>'
             f'<span class="z-s">{esc(subtitle)}</span></div>'
         )
@@ -535,7 +536,8 @@ def build(workflow: dict) -> str:
     }
 
     section_blocks = "".join(
-        f'<section class="note"><span class="n-sec">{ROMAN.get(sec, sec)}</span>'
+        f'<section class="note">'
+        f'<span class="n-sec">{min(steps_in[sec]):02d}–{max(steps_in[sec]):02d}</span>'
         f"<p>{SECTION_NOTES[sec]}</p></section>"
         for sec in SECTIONS
     )
@@ -627,7 +629,7 @@ h1 em{font-style:normal;color:var(--muted)}
 
 .zone{position:absolute;left:24px;width:176px;display:grid;
   grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
-.z-n{font-size:12px;color:var(--faint);letter-spacing:.1em;min-width:24px}
+.z-n{font-size:11.5px;color:var(--faint);letter-spacing:.04em;white-space:nowrap}
 .z-t{font-size:17.5px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
 .z-s{font-size:12.8px;color:var(--faint);grid-column:2;line-height:1.45;margin-top:6px}
 
@@ -660,7 +662,7 @@ h1 em{font-style:normal;color:var(--muted)}
 .notes{margin-bottom:72px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:30px 40px;
   margin:56px 0 0;padding-top:34px;border-top:1px solid var(--rule)}
 .note{display:grid;grid-template-columns:auto 1fr;gap:14px}
-.n-sec{font-size:12px;color:var(--faint);letter-spacing:.1em}
+.n-sec{font-size:11.5px;color:var(--faint);letter-spacing:.04em;white-space:nowrap}
 .note p{margin:0;color:var(--muted);font-size:15px}
 .note code{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink)}
 
