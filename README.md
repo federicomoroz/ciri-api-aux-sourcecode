@@ -52,11 +52,11 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 ### 1. Ver el circuito, sin ejecutar nada
 
-Dos páginas que se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
+Los dos archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
 
-**`docs/diagrams/pipeline_n8n_api.html`** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
+**«n8n y la API»** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
-**`docs/diagrams/n8n_workflow_analysis.html`** — el circuito completo. Los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+**«el circuito completo»** — el circuito completo. Los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
 
 ### 2. El panel web
 
