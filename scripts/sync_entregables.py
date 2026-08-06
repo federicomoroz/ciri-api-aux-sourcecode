@@ -27,7 +27,7 @@ FILES: list[tuple[Path, str]] = [
     (ROOT / "docs/prompts.md", "Documentacion/prompts.md"),
     (ROOT / "docs/rag_explanation.md", "Documentacion/rag_explanation.md"),
     (ROOT / "docs/workflow_diagram.html", "Documentacion/workflow_diagram.html"),
-    (ROOT / "docs/diagrams/workflow_canvas.svg", "Documentacion/workflow_canvas.svg"),
+    (ROOT / "docs/diagrams/workflow.html", "Documentacion/workflow_flujo.html"),
     (ROOT / "n8n/workflow_ciri_agent.json", "n8n/workflow_ciri_agent.json"),
     (ROOT / "n8n/workflow_ciri_errors.json", "n8n/workflow_ciri_errors.json"),
     (ROOT / "n8n/workflow_ciri_form.json", "n8n/workflow_ciri_form.json"),

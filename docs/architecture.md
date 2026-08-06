@@ -63,7 +63,7 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 ## Orquestacion Explicita con n8n
 
-**Diagrama interactivo:** [`diagrams/workflow_canvas.svg`](diagrams/workflow_canvas.svg) muestra el workflow entero en un solo archivo -- los 32 nodos, las 4 secciones y todas las conexiones -- con una ficha explicativa al pasar el mouse sobre cada nodo. Se genera desde el JSON del workflow con `scripts/render_workflow_svg.py`, asi que no puede quedar desactualizado respecto del flujo real.
+**El flujo completo, navegable:** [`diagrams/workflow.html`](diagrams/workflow.html) es una pagina autocontenida con los 29 pasos en orden de ejecucion, el endpoint de cada uno y una ficha explicativa al tocarlos. Se genera desde el JSON del workflow con `scripts/render_workflow_page.py`, asi que no puede quedar desactualizada respecto del flujo real.
 
 El workflow contiene **38 nodos (32 ejecutables + 6 sticky notes) organizados en 4 secciones**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 

@@ -14,11 +14,11 @@ Agente inteligente de resolución de contracargos. Investiga casos end-to-end: r
 
 ## El flujo de un vistazo
 
-**[`docs/diagrams/workflow_canvas.svg`](docs/diagrams/workflow_canvas.svg)** — el workflow completo en un solo archivo: los 32 nodos ejecutables, las 4 secciones y todas las conexiones. Es vectorial, así que hace zoom sin perder calidad, y **al pasar el mouse sobre cualquier nodo aparece una ficha con qué hace**.
+**[`docs/diagrams/workflow.html`](docs/diagrams/workflow.html)** — abrí ese archivo en cualquier navegador y tenés el workflow entero: los 29 pasos en orden de ejecución más las 3 salidas de error, agrupados por sección, con el endpoint que llama cada uno. Al tocar cualquier paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
 
-> Descargalo y abrilo en el navegador para que funcionen las fichas (GitHub lo muestra como imagen estática). Desde ahí, Imprimir → Guardar como PDF conserva el vector.
+No necesita conexión, ni instalar nada, ni importar el workflow. Se adapta al tema claro u oscuro del sistema y se imprime a PDF desde el navegador.
 
-Se genera desde el JSON del workflow con `python scripts/render_workflow_svg.py`, así que no se desactualiza: si cambia el flujo, se vuelve a generar.
+Se genera desde el JSON del workflow con `python scripts/render_workflow_page.py`, así que no puede quedar desfasado del flujo real.
 
 ---
 
