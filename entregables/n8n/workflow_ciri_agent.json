@@ -35,7 +35,7 @@
     },
     {
       "parameters": {
-        "content": "## 🔵 §2 — Contexto Paralelo\n\n**Qué hace:**\n• Caché de idempotencia (hit → 2s vs 113s)\n• Obtiene transacción de SQLite\n• 6 queries en paralelo → Merge\n\n**Queries paralelas:**\n• Logs de eventos (SQLite)\n• Políticas aplicables (Qdrant RAG)\n• Casos similares (Qdrant RAG)\n• Riesgo del comercio → flags\n• Historial del cliente → flags\n• SLA: LATAM 10d / no-LATAM 15d / VIP 5d\n\n**Output:** Contexto completo para LLM",
+        "content": "## 🔵 §2 — Contexto Paralelo\n\n**Qué hace:**\n• Caché de idempotencia (hit → 2s vs 113s)\n• Obtiene transacción de SQLite\n• 6 queries en paralelo → Merge\n\n**Queries paralelas (todas HTTP a FastAPI):**\n• Logs de eventos (SQLite)\n• Políticas aplicables (Qdrant RAG)\n• Casos similares (Qdrant RAG)\n• Riesgo del comercio → cb_ratio + flags\n• Historial del cliente → flags\n• SLA → POST /api/sla/check\n\n**Sin lógica de negocio acá:** los umbrales (SLA por país, cb_ratio, reincidencia) viven en `domain/constants.py`. n8n solo pide y transporta.\n\n**Output:** Contexto completo para el LLM",
         "height": 1748,
         "width": 1820,
         "color": 3
@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Responder (JSON raw data)\n• HIGH → Wait (15s) → Procesar HITL → Registrar Feedback → Restaurar Payload → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa 15s para decisión del analista\n• Procesar construye payload con decisión HITL incluida\n• Reporte final ya incluye la decisión del analista\n\n**Respuesta:**\n• Webhook responde JSON raw: { transaction, resolution, judge, ... }\n• El panel aplica el template HTML (POST /api/reports/html)\n• Otros sistemas consumen el JSON directamente\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler",
+        "content": "## 🟠 §4 — Enrutamiento por Riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Responder\n• HIGH → Wait → Procesar HITL → Registrar Feedback → Generar Reporte → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: Wait pausa para la decisión del analista\n• Procesar construye el payload con la decisión incluida\n• El reporte final ya refleja lo que decidió el analista\n\n**Respuesta:**\n• El webhook devuelve HTML listo (POST /api/reports/html con Jinja2)\n• Así lo consume cualquier cliente: browser, otro workflow, un bot\n• Atajo de caché: si hubo cache hit, el HTML ya está armado y se responde directo, sin volver a renderizar\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler",
         "height": 1728,
         "width": 1344,
         "color": 6
@@ -152,6 +152,12 @@
               "name": "cliente_vip",
               "value": "={{ Boolean($input.first().json.body?.cliente_vip || $input.first().json.cliente_vip || $input.first().json['Cliente VIP'] === 'Sí') }}",
               "type": "boolean"
+            },
+            {
+              "id": "field-api-base",
+              "name": "api_base_url",
+              "value": "={{ ($input.first().json.body?.api_base_url || $input.first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com').replace(/\\/+$/, '') }}",
+              "type": "string"
             }
           ]
         },
@@ -168,19 +174,11 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL + '/api/transactions/' + $('Validar Formato TXN').first().json.transaction_id }}",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/transactions/{{ $('Validar Formato TXN').first().json.transaction_id }}",
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "2166b7d3-830d-42e3-a847-fc01dbdc4ac8",
       "name": "Obtener Transacción",
@@ -199,19 +197,11 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL + '/api/logs/' + $('Validar Formato TXN').first().json.transaction_id }}",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/logs/{{ $('Validar Formato TXN').first().json.transaction_id }}",
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "6d9b06c0-210d-4958-aa2a-1adef2b1d04b",
       "name": "Obtener Logs",
@@ -230,7 +220,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/api/policies/search",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/policies/search",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -259,15 +249,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "5368bc15-b501-4ed2-813a-1ba352ea5f31",
       "name": "Buscar Políticas",
@@ -286,7 +268,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/api/cases/similar",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/cases/similar",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -319,15 +301,7 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "279accef-c554-442d-b8e5-c05a3f52c1f7",
       "name": "Buscar Casos Similares",
@@ -346,19 +320,11 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL + '/api/merchants/' + encodeURIComponent($('Obtener Transacción').first().json.merchant) + '/risk' }}",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/merchants/{{ encodeURIComponent($('Obtener Transacción').first().json.merchant) }}/risk",
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "8e83cfd1-9fb2-4795-9632-7d32b896a052",
       "name": "Riesgo del Comercio",
@@ -377,49 +343,11 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "field-merchant-flags",
-              "name": "flags",
-              "value": "={{ [$json.cb_ratio > 0.02 ? 'suspended_merchant' : $json.cb_ratio > 0.01 ? 'high_cb_ratio' : null].filter(x => x !== null) }}",
-              "type": "array"
-            },
-            {
-              "id": "field-merchant-strategic",
-              "name": "is_strategic",
-              "value": "={{ $json.total_volume_usd > 1000000 }}",
-              "type": "boolean"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "df3322da-1d4f-43e8-9931-f1fdf7bf29c3",
-      "name": "Evaluar Riesgo Comercio",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        54800,
-        18944
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "url": "={{ $vars.API_BASE_URL + '/api/clients/' + $('Obtener Transacción').first().json.client_id + '/history' }}",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/clients/{{ $('Obtener Transacción').first().json.client_id }}/history",
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "6e24160d-7c54-4de6-828c-42fed25270aa",
       "name": "Historial del Cliente",
@@ -438,80 +366,29 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "field-client-flags",
-              "name": "flags",
-              "value": "={{ [$json.total_chargebacks > 3 ? 'recidivist' : null, ($json.countries_used || []).length > 3 ? 'geo_anomaly' : null].filter(x => x !== null) }}",
-              "type": "array"
-            }
-          ]
+        "method": "POST",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/sla/check",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case_open_date: $('Obtener Transacción').first().json.date, country: $('Obtener Transacción').first().json.country, cliente_vip: $('Validar Formato TXN').first().json.cliente_vip }) }}",
+        "options": {
+          "timeout": 30000
         },
-        "options": {}
-      },
-      "id": "01bd4b98-343b-40ce-91a8-228ebc6d57cb",
-      "name": "Evaluar Historial Cliente",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        54784,
-        19184
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "field-days-elapsed",
-              "name": "days_elapsed",
-              "value": "={{ Math.floor((Date.now() - new Date($('Obtener Transacción').first().json.date).getTime()) / 86400000) }}",
-              "type": "number"
-            },
-            {
-              "id": "field-sla-limit",
-              "name": "sla_limit_days",
-              "value": "={{ $('Validar Formato TXN').first().json.cliente_vip ? 5 : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').first().json.country) ? 15 : 10 }}",
-              "type": "number"
-            },
-            {
-              "id": "field-sla-type",
-              "name": "sla_type",
-              "value": "={{ $('Validar Formato TXN').first().json.cliente_vip ? 'vip' : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').first().json.country) ? 'extended' : 'standard' }}",
-              "type": "string"
-            },
-            {
-              "id": "field-policy-ref",
-              "name": "policy_reference",
-              "value": "={{ $('Validar Formato TXN').first().json.cliente_vip ? 'POL-EXC-002 (5 días)' : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').first().json.country) ? 'POL-EXC-004 (15 días)' : 'POL-SLA-002 (10 días)' }}",
-              "type": "string"
-            },
-            {
-              "id": "field-within-sla",
-              "name": "within_sla",
-              "value": "={{ Math.floor((Date.now() - new Date($('Obtener Transacción').first().json.date).getTime()) / 86400000) <= ($('Validar Formato TXN').first().json.cliente_vip ? 5 : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').first().json.country) ? 15 : 10) }}",
-              "type": "boolean"
-            },
-            {
-              "id": "field-compensation",
-              "name": "compensation_applicable",
-              "value": "={{ Math.floor((Date.now() - new Date($('Obtener Transacción').first().json.date).getTime()) / 86400000) > ($('Validar Formato TXN').first().json.cliente_vip ? 5 : !['Argentina','Brasil','Chile','Colombia','México','Perú','Uruguay','Venezuela','Ecuador','Bolivia','Paraguay'].includes($('Obtener Transacción').first().json.country) ? 15 : 10) }}",
-              "type": "boolean"
-            }
-          ]
-        },
-        "options": {}
+        "sendHeaders": false
       },
       "id": "41804512-d1ba-44f7-a54c-c2924dd6a2b3",
       "name": "Verificar SLA",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         54480,
         19408
       ],
+      "settings": {
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
       "onError": "continueRegularOutput"
     },
     {
@@ -529,7 +406,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input    = $('Validar Formato TXN').first().json;\nconst txn      = $('Obtener Transacción').first().json || {};\nconst logsData = $('Obtener Logs').first().json || {};\nconst policies = $('Buscar Políticas').first().json || {};\nconst cases    = $('Buscar Casos Similares').first().json || {};\nconst sla      = $('Verificar SLA').first().json || {};\n\n// Merchant: datos crudos de FastAPI + flags evaluados en n8n\nlet merchant = {};\ntry {\n  merchant = {\n    ...$('Riesgo del Comercio').first().json,\n    ...$('Evaluar Riesgo Comercio').first().json,\n  };\n} catch (e) { merchant = { error: e.message }; }\n\n// Cliente: datos crudos de FastAPI + flags evaluados en n8n\nlet client = {};\ntry {\n  client = {\n    ...$('Historial del Cliente').first().json,\n    ...$('Evaluar Historial Cliente').first().json,\n  };\n} catch (e) { client = { error: e.message }; }\n\nconst slaStatus = sla.within_sla != null\n  ? (sla.within_sla\n    ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n    : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`)\n  : 'SLA no calculado';\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant || 'N/A'}, USD ${txn.amount_usd || 0},`,\n  `canal ${txn.channel || 'N/A'}, país ${txn.country || 'N/A'}, score fraude ${txn.fraud_score ?? 'N/A'}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
+        "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input    = $('Validar Formato TXN').first().json;\nconst txn      = $('Obtener Transacción').first().json || {};\nconst logsData = $('Obtener Logs').first().json || {};\nconst policies = $('Buscar Políticas').first().json || {};\nconst cases    = $('Buscar Casos Similares').first().json || {};\nconst sla      = $('Verificar SLA').first().json || {};\n\n// Merchant y cliente: los flags ya vienen calculados por la API.\n// Los umbrales viven en domain/constants.py, no en n8n.\nlet merchant = {};\ntry {\n  merchant = $('Riesgo del Comercio').first().json;\n} catch (e) { merchant = { error: e.message }; }\n\nlet client = {};\ntry {\n  client = $('Historial del Cliente').first().json;\n} catch (e) { client = { error: e.message }; }\n\nconst slaStatus = sla.within_sla != null\n  ? (sla.within_sla\n    ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n    : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`)\n  : 'SLA no calculado';\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant || 'N/A'}, USD ${txn.amount_usd || 0},`,\n  `canal ${txn.channel || 'N/A'}, país ${txn.country || 'N/A'}, score fraude ${txn.fraud_score ?? 'N/A'}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
       },
       "id": "eb48a1f4-c049-4001-a259-a95bb4e0ee1c",
       "name": "Compilar Contexto",
@@ -544,7 +421,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/analyze/resolve",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/analyze/resolve",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -593,15 +470,7 @@
         "options": {
           "timeout": 120000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "8d6fb87b-3fc8-4aa2-bc75-8cbe74e3ce96",
       "name": "Sintetizar Resolución",
@@ -621,7 +490,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/analyze/judge",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/analyze/judge",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -638,15 +507,7 @@
         "options": {
           "timeout": 120000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "6f341afc-f757-429d-bda6-9e1a71b39fd4",
       "name": "Juez de Calidad",
@@ -822,7 +683,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL }}/health",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/health",
         "options": {
           "timeout": 90000
         }
@@ -844,19 +705,11 @@
     },
     {
       "parameters": {
-        "url": "={{ $vars.API_BASE_URL + '/api/cache/lookup?transaction_id=' + encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) + '&cliente_vip=' + ($('Validar Formato TXN').first().json.cliente_vip || false) }}",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/cache/lookup?transaction_id={{ encodeURIComponent($('Validar Formato TXN').first().json.transaction_id) }}&cliente_vip={{ $('Validar Formato TXN').first().json.cliente_vip || false }}",
         "options": {
           "timeout": 10000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "d1aecc87-312a-400f-aa84-5719e8a9a165",
       "name": "Verificar Caché",
@@ -1025,8 +878,39 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/reports/html",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "responseCode": 200
+          "timeout": 30000
+        }
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Generar Reporte",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        58112,
+        18688
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html || $json.data || $json.body || '' }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
         }
       },
       "id": "986a1e29-874e-4ad3-9a9c-d816a6773dc8",
@@ -1066,7 +950,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/feedback",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/feedback",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -1095,15 +979,7 @@
         "options": {
           "timeout": 120000
         },
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $vars.API_KEY }}"
-            }
-          ]
-        }
+        "sendHeaders": false
       },
       "id": "798b3938-a660-443e-bf06-6802492b1d15",
       "name": "Registrar Feedback HITL",
@@ -1119,6 +995,22 @@
         "waitBetweenTries": 10000
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## ⚙️ Configuración — cero setup\n\nTodos los nodos HTTP usan `{{ $('Validar Formato TXN').first().json.api_base_url }}`: **una sola fuente de verdad**, definida en el nodo *Validar Formato TXN*.\n\nPor defecto apunta a la API pública en Render, así que **el workflow corre apenas lo importás, sin configurar nada**.\n\nPara apuntarlo a otra API, en orden de prioridad:\n1. Mandar `api_base_url` en el body del webhook  →  `{\"transaction_id\": \"TXN-00051\", \"motivo\": \"...\", \"api_base_url\": \"http://api:8000\"}`\n2. Settings → Variables → `API_BASE_URL`  (requiere n8n con licencia)\n3. Default: `https://ciri-chargeback-agent.onrender.com`\n\n### Los 7 ejes de la consigna, en este canvas\n**1. Ingesta** → §1 Webhook + IF de validación (y el workflow `form` con Form Trigger nativo)  ·  **2. RAG** → §2 Buscar Políticas + Buscar Casos Similares (Qdrant)  ·  **3. Agente** → §3 Sintetizar Resolución (prompts versionados en FastAPI)  ·  **4. Automatización** → §4 Switch por riesgo + Generar Reporte + workflow de alertas  ·  **5. Identificación de fallas** → §2 Riesgo del Comercio / Historial del Cliente / Logs → patrones de error  ·  **6. Auto-mejora** → §3 Juez de Calidad + Registrar Feedback HITL (score ≥ 8 reindexa el caso en Qdrant)  ·  **7. Observabilidad** → Langfuse en la API + Error Handler + POST /api/alerts/",
+        "height": 640,
+        "width": 6160,
+        "color": 7
+      },
+      "id": "a1c0ffee-cfg0-4b17-9e3d-000000000001",
+      "name": "Sticky Note — Configuración y Ejes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        52480,
+        19760
+      ]
     }
   ],
   "pinData": {},
@@ -1232,9 +1124,9 @@
       "main": [
         [
           {
-            "node": "Evaluar Riesgo Comercio",
+            "node": "Merge — Contexto Paralelo",
             "type": "main",
-            "index": 0
+            "index": 3
           }
         ]
       ]
@@ -1243,9 +1135,9 @@
       "main": [
         [
           {
-            "node": "Evaluar Historial Cliente",
+            "node": "Merge — Contexto Paralelo",
             "type": "main",
-            "index": 0
+            "index": 4
           }
         ]
       ]
@@ -1334,7 +1226,7 @@
       "main": [
         [
           {
-            "node": "Responder — Reporte",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
@@ -1348,18 +1240,29 @@
         ],
         [
           {
-            "node": "Responder — Reporte",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Responder — Reporte",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
         ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Reporte": {
+      "main": [
         [
           {
             "node": "Responder — Reporte",
@@ -1376,28 +1279,6 @@
             "node": "Merge — Contexto Paralelo",
             "type": "main",
             "index": 2
-          }
-        ]
-      ]
-    },
-    "Evaluar Riesgo Comercio": {
-      "main": [
-        [
-          {
-            "node": "Merge — Contexto Paralelo",
-            "type": "main",
-            "index": 3
-          }
-        ]
-      ]
-    },
-    "Evaluar Historial Cliente": {
-      "main": [
-        [
-          {
-            "node": "Merge — Contexto Paralelo",
-            "type": "main",
-            "index": 4
           }
         ]
       ]
@@ -1533,7 +1414,7 @@
       "main": [
         [
           {
-            "node": "Responder — Reporte",
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           },
@@ -1552,7 +1433,6 @@
     "binaryMode": "separate",
     "availableInMCP": false,
     "timeSavedMode": "fixed",
-    "errorWorkflow": "qXyzbubOroJt7vGs",
     "callerPolicy": "workflowsFromSameOwner"
   },
   "versionId": "edad3aa6-18be-4314-8c60-824a4fed250f",

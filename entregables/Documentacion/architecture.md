@@ -20,11 +20,11 @@
 
 **Orquestacion explicita con herramientas aumentadas por LLM** -- a veces llamado *Pipeline Agentico*.
 
-Esto no es un Agente de IA clasico. En un agente clasico, el LLM decide que herramientas llamar y en que orden. Aca, **n8n decide el flujo de forma explicita** -- 54 nodos (43 ejecutables + 11 sticky notes), siempre la misma secuencia, completamente auditable. El LLM solo razona sobre los datos que recibe; nunca controla el camino de ejecucion.
+Esto no es un Agente de IA clasico. En un agente clasico, el LLM decide que herramientas llamar y en que orden. Aca, **n8n decide el flujo de forma explicita** -- 38 nodos (32 ejecutables + 6 sticky notes), siempre la misma secuencia, completamente auditable. El LLM solo razona sobre los datos que recibe; nunca controla el camino de ejecucion.
 
 | | Agente IA clasico | Este sistema |
 |---|---|---|
-| Quien decide el flujo | El LLM | n8n (explicito, 54 nodos) |
+| Quien decide el flujo | El LLM | n8n (explicito, 38 nodos) |
 | Auditabilidad | Caja negra | Cada paso es un nodo visible |
 | Determinismo | No garantizado | Siempre la misma secuencia |
 | Debugging | Dificil | Nodo por nodo en el canvas |
@@ -37,7 +37,7 @@ El sistema se compone de capas con **una responsabilidad unica y claramente deli
 
 | Capa | Tecnologia | Responsabilidad |
 |---|---|---|
-| Orquestacion | n8n Cloud (54 nodos: 43 exec + 11 sticky) | QUE hacer y CUANDO -- webhook, secuenciamiento, logica nativa, visibilidad de guardrails, enrutamiento por riesgo |
+| Orquestacion | n8n (38 nodos: 32 exec + 6 sticky) -- Cloud o self-hosted | QUE hacer y CUANDO -- webhook, secuenciamiento, control de flujo, visibilidad de guardrails, enrutamiento por riesgo |
 | Logica de negocio | FastAPI (Render free tier) | COMO -- RAG retrieval, sintesis de resolucion con guardrails, feedback, auto-indexing |
 | Almacen semantico | Qdrant Cloud (free tier) | Verdad no estructurada -- politicas, casos historicos, cache semantico |
 | Almacen estructurado | SQLite | Verdad relacional -- transacciones, logs, feedback, audit trail |
@@ -63,56 +63,63 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 ## Orquestacion Explicita con n8n
 
-El workflow contiene **54 nodos (43 ejecutables + 11 sticky notes) organizados en 4 secciones**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n para logica deterministica, nodos HTTP Request para llamadas externas.
+El workflow contiene **38 nodos (32 ejecutables + 6 sticky notes) organizados en 4 secciones**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 
 ```
-S1 -- ENTRADA + CACHE (6 nodos)
+S1 -- ENTRADA + CACHE (8 nodos)
    [Webhook -- Entrada]              <- HTTP POST trigger (API/curl)
-   [Validar Formato -- IF]           <- IF node: valida formato TXN-XXXXX
-   [Validar Formato TXN]            <- Set node: normaliza campos
-   [Despertar API]                  <- HTTP GET /health (despierta cold-start de Render)
-   [Verificar Cache]                <- HTTP GET /api/cache/lookup
-   [Cache Hit?]                     <- IF node: si hay cache -> responder inmediatamente
+   [Validar Formato -- IF]           <- IF: valida formato TXN-XXXXX
+   [Validar Formato TXN]             <- Set: normaliza campos + resuelve api_base_url
+   [Propagar -> Error Handler -- TXN]<- Stop and Error si el formato es invalido
+   [Despertar API]                   GET  /health   (despierta el cold-start de Render)
+   [Verificar Cache]                 GET  /api/cache/lookup
+   [Cache Hit?]                      <- IF: si hay cache -> saltea todo el pipeline
+   [Formatear Cache]                 <- Code: el HTML cacheado va directo a [Responder]
 
-S2 -- ENSAMBLADO DE CONTEXTO (11 nodos)
-   [Obtener Transaccion]         GET  /api/transactions/{id}
-   [Obtener Logs]                GET  /api/logs/{tx_id}
-   [Buscar Politicas]            GET  /api/policies/search     <- RAG: Qdrant semantico
-   [Buscar Casos Similares]      GET  /api/cases/similar       <- RAG: Qdrant semantico
-   [Riesgo del Comercio]         GET  /api/merchants/{name}/risk
-   [Evaluar Riesgo Comercio]     <- Set node: is_suspended, is_high_risk, is_strategic
-   [Historial del Cliente]       GET  /api/clients/{id}/history
-   [Evaluar Historial Cliente]   <- Set node: is_recidivist, has_geo_anomaly, is_vip
-   [Verificar SLA]               <- Set node: calculo de fechas -> within_sla, sla_limit_days
-   [Merge -- Contexto Paralelo]  <- Merge node: espera las 6 ramas paralelas
+S2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP, 6 en paralelo
+   [Obtener Transaccion]             GET  /api/transactions/{id}
+   [Obtener Logs]                    GET  /api/logs/{tx_id}
+   [Buscar Politicas]                GET  /api/policies/search        <- RAG: Qdrant semantico
+   [Buscar Casos Similares]          GET  /api/cases/similar          <- RAG: Qdrant semantico
+   [Riesgo del Comercio]             GET  /api/merchants/{name}/risk  <- cb_ratio + flags
+   [Historial del Cliente]           GET  /api/clients/{id}/history   <- flags de reincidencia
+   [Verificar SLA]                   POST /api/sla/check              <- limites por pais/VIP
+   [Merge -- Contexto Paralelo]      <- Merge: espera las 6 ramas paralelas
+   [Propagar -> Error Handler -- API]<- Stop and Error si la API no responde
 
-S3 -- ANALISIS CON IA (8 nodos)
-   [Compilar Contexto]            <- Code node: fusiona todos los outputs de ramas
-   [Sintetizar Resolucion]        POST /api/analyze/resolve  <- LLM + RAG + guardrails
-   [Verificar Guardrails]         <- Code node: visibilidad de guardrails en canvas
-   [Juez de Calidad]              POST /api/analyze/judge    <- LLM-as-Judge
-   [Extraer Evaluacion -- Juez]   <- Set node: JSON.parse -> judge_evaluation
-   [Juez Aprueba? (>=7.0)]        <- IF node: score >= 7.0 pasa / < 7.0 falla
-   [Marcar -- Calidad Baja]       <- Set node: agrega flag LOW_QUALITY
-   [Preparar Informe]             <- Code node: construye payload ReportRequest
+S3 -- ANALISIS CON IA (9 nodos)
+   [Compilar Contexto]               <- Code: fusiona los outputs de todas las ramas
+   [Sintetizar Resolucion]           POST /api/analyze/resolve  <- LLM + RAG + guardrails
+   [Verificar Guardrails]            <- Code: hace visibles los guardrails en el canvas
+   [Juez de Calidad]                 POST /api/analyze/judge    <- LLM-as-Judge
+   [Extraer Evaluacion -- Juez]      <- Set: expone judge_evaluation
+   [Juez Aprueba? (>=7.0)]           <- IF: score >= 7.0 pasa / < 7.0 se marca
+   [Marcar -- Calidad Baja]          <- Set: agrega flag LOW_QUALITY
+   [Preparar Informe]                <- Code: construye el payload ReportRequest
+   [Propagar -> Error Handler -- Analisis] <- Stop and Error si falla el LLM
 
-S4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (7 nodos)
+S4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (6 nodos)
    [Switch -- Nivel de Riesgo]
-      TODOS los niveles -> [Generar Reporte] POST /api/reports/html -> [Responder -- Reporte]
-      -> [Es HIGH?]              <- IF node: verifica risk_level == HIGH
-         true  -> [Wait -- Aprobacion HITL]   <- Wait node: formulario (5s auto-approve)
-               -> [Procesar Respuesta HITL]   <- Code: fusiona decision del analista
-               -> [Registrar Feedback HITL]   <- POST /api/feedback (auto-index si score >= 8.0)
-         false -> (fin)
-   Todos los errores -> [Stop and Error] -> Error Handler workflow (workflow_ciri_errors.json)
+      BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]
+      HIGH -> [Wait -- Aprobacion HITL]    <- Wait: pausa esperando al analista
+           -> [Procesar Respuesta HITL]    <- Code: fusiona la decision del analista
+           -> [Generar Reporte]            POST /api/reports/html -> [Responder -- Reporte]
+           -> [Registrar Feedback HITL]    POST /api/feedback (auto-index si score >= 8.0)
+   Cache hit -> [Formatear Cache] -> [Responder -- Reporte]   (sin re-renderizar)
+   Errores   -> [Stop and Error] -> workflow_ciri_errors.json
 ```
+
+**Una sola fuente de verdad para la URL de la API:** los 12 nodos HTTP usan
+`{{ $('Validar Formato TXN').first().json.api_base_url }}`. Ese campo se resuelve una vez, con
+este orden de prioridad: `api_base_url` del body del webhook -> variable `API_BASE_URL` de n8n ->
+default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 
 **3 workflows n8n:**
-- `workflow_ciri_agent.json` — workflow principal (54 nodos: 43 exec + 11 sticky)
+- `workflow_ciri_agent.json` — workflow principal (38 nodos: 32 exec + 6 sticky)
 - `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL)
 - `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa al webhook)
 
-**HITL (Human-in-the-Loop):** Todos los niveles de riesgo primero responden al webhook con el reporte HTML. Despues de responder, un nodo IF verifica si `risk_level == HIGH`. Si es verdadero, un **Wait node** pausa la ejecucion y expone un formulario (APROBAR/RECHAZAR + notas del analista). Despues de que el analista envia (o timeout de 5s auto-aprueba), el feedback se registra via `POST /api/feedback`. La clave: `respondToWebhook` se ejecuta **antes** del Wait, evitando el error de n8n "unused respondToWebhook" en el resume. Los reportes HIGH tambien incluyen un formulario HITL interactivo como fallback.
+**HITL (Human-in-the-Loop):** Los casos BLOCKER, MEDIUM y LOW se resuelven solos: el Switch los manda directo a generar el reporte y responder. Los HIGH son los unicos que frenan -- el **Wait node** pausa la ejecucion y expone un formulario (APROBAR/RECHAZAR + notas del analista). Cuando el analista responde, `Procesar Respuesta HITL` fusiona su decision en el payload, de modo que el reporte que sale ya refleja lo que decidio una persona, y en paralelo el feedback se registra via `POST /api/feedback` (que reindexa el caso en Qdrant si el Juez lo puntuo >= 8.0). Los reportes HIGH ademas incluyen un formulario HITL embebido como fallback.
 
 **Camino de respuesta unificado:** Los cuatro niveles de riesgo convergen en `[Generar Reporte]` -> `[Responder -- Reporte]`. Los cache hits pasan por `[Formatear Cache]` antes del mismo responder. Los errores usan nodos `stopAndError` que propagan al Error Handler workflow.
 
@@ -446,7 +453,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Contexto:** Necesitabamos una capa de orquestacion que ofreciera un flujo visual y auditable para stakeholders no tecnicos, y que garantizara un orden de ejecucion determinista para cada investigacion de contracargo.
 
-**Decision:** Usar n8n con 54 nodos (43 ejecutables + 11 sticky notes) -- sin nodo AI Agent, sin tool calling decidido por LLM. Cada paso es un nodo visible. Nodos nativos de n8n (Set, IF, Switch, Merge) manejan toda la logica deterministica. Los nodos HTTP Request se reservan para llamadas externas. Tanto el LLM de sintesis (`/api/analyze/resolve`) como el Juez (`/api/analyze/judge`) se llaman via FastAPI -- todas las interacciones con LLMs centralizadas con versionado de prompts, manejo de errores y observabilidad Langfuse consistente. Un nodo `Responder -- Reporte` unificado sirve todos los caminos de respuesta. Errores propagan a un Error Handler workflow separado via nodos `stopAndError`.
+**Decision:** Usar n8n con 38 nodos (32 ejecutables + 6 sticky notes) -- sin nodo AI Agent, sin tool calling decidido por LLM. Cada paso es un nodo visible. Los nodos nativos de n8n (IF, Switch, Merge, Wait) manejan unicamente el control de flujo; toda la logica de negocio se resuelve por HTTP contra FastAPI. Tanto el LLM de sintesis (`/api/analyze/resolve`) como el Juez (`/api/analyze/judge`) se llaman via FastAPI -- todas las interacciones con LLMs centralizadas con versionado de prompts, manejo de errores y observabilidad Langfuse consistente. Un nodo `Responder -- Reporte` unificado sirve todos los caminos de respuesta. Errores propagan a un Error Handler workflow separado via nodos `stopAndError`.
 
 **Consecuencias:**
 - Cada investigacion ejecuta exactamente los mismos pasos en el mismo orden, siempre

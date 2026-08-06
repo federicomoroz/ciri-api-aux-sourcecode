@@ -9,10 +9,10 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   api:
     build:
@@ -32,9 +32,10 @@ services:
       - CB_DATA_FILE_PATH=/app/data/Similación_dataset_contracargos_.xlsx
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
+      interval: 10s
       timeout: 10s
-      retries: 5
+      retries: 15
+      start_period: 30s
 
   n8n:
     image: n8nio/n8n:latest
@@ -42,7 +43,8 @@ services:
       - "5678:5678"
     volumes:
       - ./n8n/data:/home/node/.n8n
-    env_file: .env           # passes CB_ANTHROPIC_API_KEY to n8n env
+    # sin env_file: n8n no necesita ninguna API key — toda la autenticación
+    # con Anthropic y Voyage AI la maneja el backend
     environment:
       - N8N_SECURE_COOKIE=false
       - WEBHOOK_URL=http://localhost:5678

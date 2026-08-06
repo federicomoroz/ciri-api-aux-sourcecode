@@ -63,7 +63,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $vars.API_BASE_URL }}/api/alerts/",
+        "url": "={{ $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ event_type: 'n8n_execution_error', severity: 'ERROR', message: 'Error en ' + $json.workflow_name + ': ' + $json.error_message, source: 'n8n', transaction_id: null, metadata: { failed_node: $json.failed_node, execution_url: $json.execution_url, workflow_name: $json.workflow_name, timestamp: $json.timestamp } }) }}",
@@ -98,17 +98,12 @@
         1000,
         300
       ],
-      "credentials": {
-        "smtp": {
-          "id": "smtp-ciri",
-          "name": "SMTP CIRI"
-        }
-      },
+      "disabled": true,
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "content": "## Error Handler\n\nCaptura errores no manejados del workflow principal.\n\n**Setup:**\n1. Workflow Principal -> Settings -> Error Workflow -> seleccionar este workflow\n2. Settings -> Variables -> crear `ALERT_EMAIL` con el email destino\n3. Settings -> Variables -> crear `API_BASE_URL` con la URL de la API\n4. (Opcional) Crear credencial SMTP 'SMTP CIRI' para envio de emails\n\n**Flujo:** Error Trigger -> Extraer Info -> POST /api/alerts/ -> Send Email",
+        "content": "## Error Handler\n\nCaptura errores no manejados del workflow principal.\n\n**Funciona sin configuracion**: la alerta se registra en la API publica por defecto.\n\n**Setup (todo opcional):**\n1. Workflow Principal -> Settings -> Error Workflow -> seleccionar este workflow\n2. Variables -> `API_BASE_URL` si usas tu propia API\n3. Para el email: crear credencial SMTP, setear la variable `ALERT_EMAIL` y habilitar el nodo (viene deshabilitado para que importe limpio)\n\n**Flujo:** Error Trigger -> Extraer Info -> POST /api/alerts/ -> Send Email",
         "height": 260,
         "width": 450,
         "color": 7

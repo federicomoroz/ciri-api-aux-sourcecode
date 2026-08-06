@@ -14,7 +14,35 @@ Agente inteligente de resolución de contracargos. Investiga casos end-to-end: r
 
 ## Para el evaluador — 3 formas de probar
 
-### Opción A — Panel web en Render (0 setup, 30 segundos)
+### Opción A — Importar el workflow en tu n8n (cero configuración)
+
+El entregable principal. Importá los 3 archivos de `n8n/` en cualquier instancia de n8n — Cloud, self-hosted o Desktop:
+
+| Archivo | Descripción |
+|---|---|
+| `workflow_ciri_agent.json` | Workflow principal — 38 nodos (32 ejecutables + 6 sticky notes) |
+| `workflow_ciri_errors.json` | Error handler (Error Trigger → POST /api/alerts/ → email opcional) |
+| `workflow_ciri_form.json` | Form trigger (formulario nativo de n8n como entrada alternativa) |
+
+**No hay que configurar nada**: los nodos apuntan por defecto a la API pública en Render. Sin variables, sin credenciales, sin API keys — toda la autenticación con Anthropic y Voyage AI la maneja el backend.
+
+Activá el workflow y disparalo:
+
+```bash
+curl -X POST https://<tu-n8n>/webhook/chargeback-agent   -H "Content-Type: application/json"   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'   -o reporte.html
+```
+
+Para apuntarlo a otra API (por ejemplo la tuya local), en orden de prioridad:
+
+| Prioridad | Cómo | Cuándo usarlo |
+|---|---|---|
+| 1 | `api_base_url` en el body del webhook | Override por request, funciona en cualquier n8n |
+| 2 | Settings → Variables → `API_BASE_URL` | n8n con licencia (Variables es feature paga) |
+| 3 | Default `https://ciri-chargeback-agent.onrender.com` | Si no configurás nada |
+
+> **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para absorber el cold start de Render automáticamente.
+
+### Opción B — Panel web en Render (0 setup, 30 segundos)
 
 1. Abrir **[ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel)**
 2. Seleccionar un escenario (ej: TXN-00051 BLOCKER) y hacer click en **Analizar**
@@ -22,9 +50,9 @@ Agente inteligente de resolución de contracargos. Investiga casos end-to-end: r
 
 > **Nota:** Render free tier tiene cold start de ~50s en la primera carga. Después responde en ~12s por caso.
 
-El panel soporta 3 modos de pipeline: **Directo** (default, SSE streaming), **n8n Test** y **n8n Producción**. Si importás el workflow en tu propio n8n, podés pegar tu URL en el campo "n8n URL" del panel para ejecutarlo desde ahí.
+El panel es un extra, no un entregable pedido: sirve para ver el pipeline paso a paso sin montar nada. Soporta 3 modos: **Directo** (default, SSE streaming), **n8n Test** y **n8n Producción** — si importaste el workflow, podés pegar tu URL de n8n y ejecutarlo desde ahí.
 
-### Opción B — Docker Compose (setup local completo, ~5 min)
+### Opción C — Docker Compose (todo local, ~5 min)
 
 ```bash
 git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
@@ -35,42 +63,20 @@ docker-compose up -d
 # Abrir http://localhost:8000/panel
 ```
 
-Todo se inicializa automáticamente: SQLite se seedea desde el Excel, Qdrant se indexa en el primer arranque. No hay paso de seed manual.
+Levanta Qdrant + FastAPI + n8n. Todo se inicializa solo: SQLite se seedea desde el Excel y Qdrant se indexa en el primer arranque, sin paso de seed manual.
 
-### Opción C — Workflow n8n (orquestación completa)
-
-Importar los 3 workflows de `n8n/` en cualquier instancia de n8n (Cloud o self-hosted):
-
-| Archivo | Descripción |
-|---|---|
-| `workflow_ciri_agent.json` | Workflow principal — 54 nodos (43 ejecutables + 11 sticky notes) |
-| `workflow_ciri_errors.json` | Error handler (Error Trigger → alerta por email + POST a API) |
-| `workflow_ciri_form.json` | Form trigger (formulario nativo de n8n) |
-
-Crear una variable en **Settings → Variables**:
-
-| Variable | Valor (Render) | Valor (local Docker) |
-|---|---|---|
-| `API_BASE_URL` | `https://ciri-chargeback-agent.onrender.com` | `http://api:8000` |
-
-> Es la única variable necesaria. No se requieren API keys en n8n — toda la autenticación con Anthropic y Voyage AI la maneja el backend.
-
-Activar el workflow y disparar:
+Para que el workflow use tu API local en vez de Render, mandá `api_base_url` en el body:
 
 ```bash
-curl -X POST https://<tu-n8n>/webhook/chargeback-agent \
-  -H "Content-Type: application/json" \
-  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'
+curl -X POST http://localhost:5678/webhook/chargeback-agent   -H "Content-Type: application/json"   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra", "api_base_url": "http://api:8000"}'   -o reporte.html
 ```
-
-> **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para manejar el cold start de Render automáticamente.
 
 ---
 
 ## Arquitectura
 
 ```
-n8n Cloud (orquestador explícito)
+n8n (orquestador explícito · Cloud o self-hosted)
     │
     ├── Webhook / Form Trigger
     │
@@ -105,7 +111,7 @@ n8n Cloud (orquestador explícito)
 
 | Componente | Servicio | Notas |
 |---|---|---|
-| Orquestador | n8n (local vía Docker o Cloud) | 54 nodos, workflow exportado en `n8n/` |
+| Orquestador | n8n (local vía Docker o Cloud) | 38 nodos, workflow exportado en `n8n/` |
 | API + Services | FastAPI (Render o Docker) | Cold start ~50s en Render free tier |
 | Vector DB | Qdrant (Cloud o local) | 3 colecciones: policies, cases, cache |
 | Embeddings | Voyage AI | `voyage-multilingual-2`, 1024 dims, free tier |
@@ -154,14 +160,15 @@ curl http://localhost:8000/health
 ### Importar workflow de n8n (opcional)
 
 1. Ir a http://localhost:5678 → Import → seleccionar los 3 archivos de `n8n/`
-2. Settings → Variables → `API_BASE_URL` = `http://api:8000`
-3. Activar los workflows
+2. Activar los workflows
+
+No hace falta configurar variables ni credenciales. Si querés que el workflow use tu API local en vez de la de Render, pasá `api_base_url` en el body:
 
 ```bash
-# Probar vía n8n
+# Probar vía n8n, contra la API local
 curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
-  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' \
+  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra", "api_base_url": "http://api:8000"}' \
   -o report_blocker.html
 ```
 
@@ -410,7 +417,7 @@ quest_ML/
         db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
-    workflow_ciri_agent.json  # Workflow principal (54 nodos: 43 exec + 11 sticky)
+    workflow_ciri_agent.json  # Workflow principal (38 nodos: 32 exec + 6 sticky)
     workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/

@@ -54,7 +54,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $vars.N8N_WEBHOOK_URL }}/webhook/chargeback-agent",
+        "url": "={{ $vars.N8N_WEBHOOK_URL || 'http://localhost:5678' }}/webhook/chargeback-agent",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ transaction_id: $json['Transaction ID'], motivo: $json['Motivo'], cliente_vip: $json['Cliente VIP'] === 'Sí' }) }}",

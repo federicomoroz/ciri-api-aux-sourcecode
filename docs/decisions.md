@@ -10,11 +10,11 @@ Una nota sobre el stack: este proyecto fue construido con las restricciones real
 
 **Contexto:** El sistema necesita un orquestador para las investigaciones de contracargos. n8n tiene un nodo "AI Agent" que le da al LLM control sobre qué tools llamar y en qué orden. La alternativa es orquestación explícita con nodos nombrados.
 
-**Decisión:** Usar 54 nodos explícitos en n8n (43 ejecutables + 11 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
+**Decisión:** Usar 38 nodos explícitos en n8n (32 ejecutables + 6 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
 
 **Razonamiento:** En una fintech, un regulador o un oficial de compliance necesita ver exactamente qué pasó, en qué orden, para cada caso. Un AI Agent es una caja negra — el LLM decide el flujo en runtime, lo que lo hace no-determinístico e imposible de auditar. Con nodos explícitos, cada investigación sigue los mismos pasos en el mismo orden: 7 llamadas de contexto → evaluación de políticas → síntesis de resolución → Judge → ruteo por riesgo. El flujo queda visible en el canvas de n8n, versionado como JSON, y es reproducible.
 
-Elegí n8n porque CIRI lo usa como herramienta diaria. Traté de usar la mayor cantidad de nodos nativos posible (Switch, Wait, Set, IF, Code) en lugar de depender solo de HTTP Requests.
+Elegí n8n porque CIRI lo usa como herramienta diaria. Los nodos nativos (Switch, Wait, IF, Merge, Code) se usan para el control de flujo y el armado de payloads; ninguna regla de negocio vive en el canvas. Cuando un paso implica una decisión de negocio — el SLA que aplica según país, si un comercio está suspendido, si un cliente es reincidente — es un HTTP Request a FastAPI, que lee los umbrales de `domain/constants.py`. Es la única forma de que editar una política no implique editar el workflow.
 
 **Trade-offs:**
 - (+) Cada paso es visible y auditable en el canvas

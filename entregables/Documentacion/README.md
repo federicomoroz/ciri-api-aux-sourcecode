@@ -1,4 +1,4 @@
-# CIRI Chargeback Agent
+# Agente de Investigación de Contracargos
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![Tests](https://img.shields.io/badge/tests-277%20passed-brightgreen)
@@ -8,61 +8,75 @@
 ![Qdrant](https://img.shields.io/badge/Qdrant-vector%20DB-dc382c)
 ![Judge](https://img.shields.io/badge/Judge%20Score-9.1%2F10-gold)
 
-Agente inteligente de resolución de contracargos construido para la evaluación técnica de CIRI (Continuous Improvement & Risk Intelligence). El sistema investiga casos de contracargo end-to-end: recupera políticas aplicables vía RAG, las evalúa contra la transacción, sintetiza una resolución con razonamiento analítico, y se auto-mejora a través de un feedback loop con Judge.
-
-> **Demo en vivo:** [Panel de Testing en Render](https://ciri-chargeback-agent.onrender.com/panel) — interfaz interactiva para correr investigaciones. Requiere una API key de Anthropic propia (BYOK).
->
-> **Nota:** Render free tier tiene cold starts de ~50 segundos. La primera carga puede demorar.
+Agente inteligente de resolución de contracargos. Investiga casos end-to-end: recupera políticas aplicables vía RAG, las evalúa contra la transacción, sintetiza una resolución con razonamiento analítico, y se auto-mejora a través de un feedback loop con LLM-as-Judge.
 
 ---
 
-## Probar sin setup local
+## Para el evaluador — 3 formas de probar
 
-La forma más rápida de probar el sistema completo:
+### Opción A — Importar el workflow en tu n8n (cero configuración)
 
-### Opción 1 — Panel web (sin n8n)
+El entregable principal. Importá los 3 archivos de `n8n/` en cualquier instancia de n8n — Cloud, self-hosted o Desktop:
 
-Abrir [https://ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel), ingresar tu API key de Anthropic, seleccionar una transacción y hacer clic en "Analizar".
+| Archivo | Descripción |
+|---|---|
+| `workflow_ciri_agent.json` | Workflow principal — 38 nodos (32 ejecutables + 6 sticky notes) |
+| `workflow_ciri_errors.json` | Error handler (Error Trigger → POST /api/alerts/ → email opcional) |
+| `workflow_ciri_form.json` | Form trigger (formulario nativo de n8n como entrada alternativa) |
 
-**BYOK (Bring Your Own Key):** El panel requiere que cada visitante ingrese su propia [API key de Anthropic](https://console.anthropic.com/settings/keys). La key se usa solo para esa sesión — no se almacena en ningún lado (ni localStorage, ni servidor, ni logs). Cada usuario consume sus propios créditos.
+**No hay que configurar nada**: los nodos apuntan por defecto a la API pública en Render. Sin variables, sin credenciales, sin API keys — toda la autenticación con Anthropic y Voyage AI la maneja el backend.
 
-El panel tiene 3 modos de pipeline:
-
-- **Directo (sin n8n)** (default) — ejecuta el pipeline completo via SSE streaming (`POST /api/panel/analyze-stream`), mostrando progreso en tiempo real con datos reales de cada paso (nombre del comercio, cantidad de políticas, desglose de veredictos, score del juez, etc.)
-- **n8n Test** — envía el request al webhook de n8n en entorno de test
-- **n8n Production** — envía el request al webhook de n8n en producción
-
-En modo directo, cada paso del pipeline se muestra en tiempo real a medida que se completa. En modo n8n, se muestra un spinner simple con "Esperando respuesta de n8n...".
-
-### Opción 2 — Workflow n8n (orquestación completa)
-
-1. Importar los 3 workflows de `n8n/` en cualquier cuenta de n8n (Cloud o self-hosted):
-   - `workflow_ciri_agent.json` — workflow principal (54 nodos)
-   - `workflow_ciri_errors.json` — error handler (recibe errores de Stop and Error)
-   - `workflow_ciri_form.json` — form trigger (formulario nativo n8n)
-2. Ir a **Settings → Variables** y crear dos variables:
-   - **`API_BASE_URL`** = `https://ciri-chargeback-agent.onrender.com`
-   - **`ALERT_EMAIL`** = email destino para alertas de error (el error handler envía notificaciones por email + POST a la API)
-3. (Opcional) Crear credencial SMTP "SMTP CIRI" en n8n para habilitar el envío de emails de alerta
-4. Activar los workflows
-4. Enviar un request al webhook:
+Activá el workflow y disparalo:
 
 ```bash
-curl -X POST https://<tu-instancia-n8n>/webhook/chargeback-agent \
-  -H "Content-Type: application/json" \
-  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'
+curl -X POST https://<tu-n8n>/webhook/chargeback-agent   -H "Content-Type: application/json"   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'   -o reporte.html
 ```
 
-No se necesitan API keys de Voyage ni Qdrant — todo corre en el backend ya desplegado en Render. Solo se requiere una API key de Anthropic para el panel (BYOK).
+Para apuntarlo a otra API (por ejemplo la tuya local), en orden de prioridad:
 
-> **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para manejar el cold start de Render automáticamente.
+| Prioridad | Cómo | Cuándo usarlo |
+|---|---|---|
+| 1 | `api_base_url` en el body del webhook | Override por request, funciona en cualquier n8n |
+| 2 | Settings → Variables → `API_BASE_URL` | n8n con licencia (Variables es feature paga) |
+| 3 | Default `https://ciri-chargeback-agent.onrender.com` | Si no configurás nada |
+
+> **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para absorber el cold start de Render automáticamente.
+
+### Opción B — Panel web en Render (0 setup, 30 segundos)
+
+1. Abrir **[ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel)**
+2. Seleccionar un escenario (ej: TXN-00051 BLOCKER) y hacer click en **Analizar**
+3. Ver el pipeline ejecutarse en tiempo real vía SSE streaming
+
+> **Nota:** Render free tier tiene cold start de ~50s en la primera carga. Después responde en ~12s por caso.
+
+El panel es un extra, no un entregable pedido: sirve para ver el pipeline paso a paso sin montar nada. Soporta 3 modos: **Directo** (default, SSE streaming), **n8n Test** y **n8n Producción** — si importaste el workflow, podés pegar tu URL de n8n y ejecutarlo desde ahí.
+
+### Opción C — Docker Compose (todo local, ~5 min)
+
+```bash
+git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
+cd ciri-chargeback-agent
+cp .env.example .env
+# Editar .env → poner CB_ANTHROPIC_API_KEY y CB_VOYAGE_API_KEY
+docker-compose up -d
+# Abrir http://localhost:8000/panel
+```
+
+Levanta Qdrant + FastAPI + n8n. Todo se inicializa solo: SQLite se seedea desde el Excel y Qdrant se indexa en el primer arranque, sin paso de seed manual.
+
+Para que el workflow use tu API local en vez de Render, mandá `api_base_url` en el body:
+
+```bash
+curl -X POST http://localhost:5678/webhook/chargeback-agent   -H "Content-Type: application/json"   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra", "api_base_url": "http://api:8000"}'   -o reporte.html
+```
 
 ---
 
 ## Arquitectura
 
 ```
-n8n Cloud (orquestador explícito)
+n8n (orquestador explícito · Cloud o self-hosted)
     │
     ├── Webhook / Form Trigger
     │
@@ -93,90 +107,69 @@ n8n Cloud (orquestador explícito)
 
 **Principio de resolución:** "El código decide, el LLM explica" — 6 de 11 campos de la resolución son calculados determinísticamente por Python y siempre sobreescriben la salida del LLM.
 
-### Stack y restricciones
+### Stack
 
-| Componente | Servicio | Tier |
+| Componente | Servicio | Notas |
 |---|---|---|
-| Orquestador | n8n Cloud | Trial |
-| API + Services | Render | Free (cold starts ~50s) |
-| Vector DB | Qdrant Cloud | Free (1GB) |
-| Embeddings | Voyage AI | Free |
-| LLM | Anthropic (Haiku + Sonnet) | Pago por uso |
-| Observabilidad | Langfuse Cloud | Free |
-| DB estructurada | SQLite (efímero en Render) | — |
+| Orquestador | n8n (local vía Docker o Cloud) | 38 nodos, workflow exportado en `n8n/` |
+| API + Services | FastAPI (Render o Docker) | Cold start ~50s en Render free tier |
+| Vector DB | Qdrant (Cloud o local) | 3 colecciones: policies, cases, cache |
+| Embeddings | Voyage AI | `voyage-multilingual-2`, 1024 dims, free tier |
+| LLM | Anthropic (Haiku + Sonnet) | Haiku: policy eval · Sonnet: resolución + judge |
+| Observabilidad | Langfuse | Opcional, se activa con `CB_LANGFUSE_ENABLED=true` |
+| DB estructurada | SQLite | Auto-seedeado desde Excel en primer arranque |
 
 ---
 
-## Prerequisitos
+## Prerequisitos (solo para setup local)
 
-| Dependencia | Versión | Notas |
-|---|---|---|
-| Docker + Docker Compose | >= 24.x | Para correr Qdrant, FastAPI, n8n localmente |
-| Python | 3.11+ | Solo necesario fuera de Docker |
-| Anthropic API Key | — | Claude Haiku + Sonnet |
-| Voyage AI API Key | — | Free tier en https://dash.voyageai.com/ |
-| Langfuse account | — | Opcional; para observabilidad |
+| Dependencia | Notas |
+|---|---|
+| Docker + Docker Compose | Para correr Qdrant + FastAPI + n8n localmente |
+| [Anthropic API Key](https://console.anthropic.com/settings/keys) | Claude Haiku + Sonnet |
+| [Voyage AI API Key](https://dash.voyageai.com/) | Free tier, registro en 1 minuto |
+
+> **Langfuse** es opcional. Solo se activa si configurás `CB_LANGFUSE_ENABLED=true`.
 
 ---
 
-## Inicio Rápido
-
-### 1. Clonar y configurar
+## Inicio Rápido (Docker)
 
 ```bash
-git clone <repo-url>
-cd quest_ML
+git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
+cd ciri-chargeback-agent
 cp .env.example .env
-# Editar .env — configurar CB_ANTHROPIC_API_KEY y CB_VOYAGE_API_KEY como mínimo
-```
-
-### 2. Iniciar servicios
-
-```bash
+# Editar .env → poner CB_ANTHROPIC_API_KEY y CB_VOYAGE_API_KEY
 docker-compose up -d
 ```
 
-Servicios levantados:
-- Qdrant → http://localhost:6333
-- FastAPI → http://localhost:8000
-- n8n → http://localhost:5678
+**Eso es todo.** Al arrancar:
+1. Qdrant se levanta → http://localhost:6333
+2. FastAPI detecta que SQLite no existe → lo crea desde el Excel (100 TXN, 60 casos, 17 políticas, 150 logs)
+3. FastAPI detecta que Qdrant está vacío → indexa políticas y casos automáticamente
+4. n8n se levanta → http://localhost:5678 (importar workflows manualmente)
+5. Panel listo → **http://localhost:8000/panel**
 
-### 3. Seed de datos
-
-```bash
-docker-compose exec api python -m app.seed_data
-```
-
-Carga 100 transacciones, 60 casos históricos, 17 políticas y 150 logs en SQLite, luego indexa políticas y casos en Qdrant.
-
-### 4. Verificar health
+Verificar:
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"healthy","sqlite":"ok","qdrant":"ok","collections":{"policies":17,"historical_cases":60,"_semantic_cache":0}}
+# {"status":"healthy","sqlite":"ok","qdrant":"ok","collections":{"policies":17,"historical_cases":60}}
 ```
 
-### 5. Importar workflow de n8n
+### Importar workflow de n8n (opcional)
 
-Navegar a http://localhost:5678 e importar los 3 workflows:
+1. Ir a http://localhost:5678 → Import → seleccionar los 3 archivos de `n8n/`
+2. Activar los workflows
 
-- `n8n/workflow_ciri_agent.json` — workflow principal (54 nodos)
-- `n8n/workflow_ciri_errors.json` — error handler
-- `n8n/workflow_ciri_form.json` — form trigger
-
-Crear la variable `API_BASE_URL` en **Settings → Variables** con valor `http://host.docker.internal:8000` (o la URL de Render si se usa remotamente). Activar los workflows.
-
-### 6. Correr un análisis demo
+No hace falta configurar variables ni credenciales. Si querés que el workflow use tu API local en vez de la de Render, pasá `api_base_url` en el body:
 
 ```bash
-# Vía webhook de n8n
+# Probar vía n8n, contra la API local
 curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -H "Content-Type: application/json" \
-  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' \
+  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra", "api_base_url": "http://api:8000"}' \
   -o report_blocker.html
-
-# Vía panel de testing de FastAPI (funciona sin n8n)
-# http://localhost:8000/panel
 ```
 
 ---
@@ -232,9 +225,10 @@ Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
 | Método | Endpoint | Descripción |
 |---|---|---|
 | `GET` | `/panel` | Panel interactivo de testing (3 modos: directo, n8n test, n8n prod) |
-| `POST` | `/api/panel/analyze` | Análisis via n8n webhook (o fallback directo) |
+| `POST` | `/api/panel/analyze` | Análisis via n8n webhook (o fallback directo). Acepta `?n8n_base_url=` para usar tu propia instancia |
 | `POST` | `/api/panel/analyze-stream` | Pipeline completo via SSE streaming con progreso en tiempo real |
 | `GET` | `/api/panel/n8n-status` | Liveness check de n8n (badge del panel) |
+| `GET` | `/api/panel/server-key-status` | Indica si el servidor tiene API key propia (BYOK opcional vs requerido) |
 
 ### Observabilidad y alertas
 
@@ -253,39 +247,30 @@ Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
 Todas las settings se leen de `.env` con prefijo `CB_` (via pydantic-settings).
 
 ```env
-# Requeridos
-CB_ANTHROPIC_API_KEY=sk-ant-...
-CB_VOYAGE_API_KEY=pa-...
+# ── Requeridos ─────────────────────────────────────────────
+CB_ANTHROPIC_API_KEY=sk-ant-...          # Claude Haiku + Sonnet
+CB_VOYAGE_API_KEY=pa-...                 # Voyage AI (free tier)
 
-# LLM (opcionales — defaults mostrados)
-CB_LLM_MODEL=claude-haiku-4-5-20251001
-CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6    # modelo más fuerte para síntesis + judge
+# ── LLM (opcionales, defaults mostrados) ──────────────────
+CB_LLM_MODEL=claude-haiku-4-5-20251001  # policy eval
+CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6  # resolución + judge
 CB_LLM_TEMPERATURE=0.3
 CB_LLM_MAX_TOKENS=4096
 
-# Qdrant (opcionales)
-CB_QDRANT_URL=http://localhost:6333
-CB_QDRANT_POLICIES_COLLECTION=policies
-CB_QDRANT_CASES_COLLECTION=historical_cases
-CB_QDRANT_CACHE_COLLECTION=_semantic_cache
+# ── Seguridad (opcional) ──────────────────────────────────
+CB_ADMIN_API_KEY=                        # Si vacío = dev mode (sin auth)
+                                         # Si seteado = todos los /api/* requieren X-API-Key header
+                                         # Endpoints públicos: /panel, /api/panel/*, /health
 
-# Embeddings (opcionales)
-CB_EMBEDDING_MODEL=voyage-multilingual-2
-CB_EMBEDDING_DIM=1024
+# ── Qdrant (opcionales) ──────────────────────────────────
+CB_QDRANT_URL=http://localhost:6333      # docker-compose usa http://qdrant:6333
 
-# SQLite (opcionales)
-CB_SQLITE_PATH=data/chargeback.db
-CB_DATA_FILE_PATH=data/Similación_dataset_contracargos_.xlsx
-
-# Caché semántico (opcionales)
+# ── Caché semántico (opcional) ────────────────────────────
 CB_SEMANTIC_CACHE_ENABLED=true
 CB_SEMANTIC_CACHE_THRESHOLD=0.92
 
-# Gate de auto-mejora (opcional)
-CB_JUDGE_AUTO_INDEX_THRESHOLD=8.0
-
-# Observabilidad Langfuse (opcionales)
-CB_LANGFUSE_ENABLED=false
+# ── Observabilidad Langfuse (opcional) ────────────────────
+CB_LANGFUSE_ENABLED=false                # Activar para ver trazas LLM
 CB_LANGFUSE_PUBLIC_KEY=pk-lf-...
 CB_LANGFUSE_SECRET_KEY=sk-lf-...
 CB_LANGFUSE_HOST=https://cloud.langfuse.com
@@ -432,7 +417,7 @@ quest_ML/
         db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
-    workflow_ciri_agent.json  # Workflow principal (54 nodos: 43 exec + 11 sticky)
+    workflow_ciri_agent.json  # Workflow principal (38 nodos: 32 exec + 6 sticky)
     workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/
@@ -464,6 +449,8 @@ quest_ML/
 
 ---
 
-## Herramientas de desarrollo
+## Autor
 
-Este proyecto fue construido utilizando **Claude Opus 4.6** (Anthropic) como asistente de desarrollo.
+**Federico Palatnik Moroz**
+
+Construido con **Claude Opus 4.6** (Anthropic) como asistente de desarrollo.
