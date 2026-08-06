@@ -56,10 +56,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/panel/analyze?direct=true",
+        "url": "={{ $json.n8n_base_url || $vars.N8N_BASE_URL || 'http://localhost:5678' }}/webhook/chargeback-agent",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ transaction_id: $json['Transaction ID'], motivo: $json['Motivo'], cliente_vip: $json['Cliente VIP'] === 'Sí' }) }}",
+        "jsonBody": "={{ JSON.stringify({ transaction_id: $json['Transaction ID'], motivo: $json['Motivo'], cliente_vip: $json['Cliente VIP'] === 'Sí', api_base_url: $json.api_base_url }) }}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -70,7 +70,7 @@
         }
       },
       "id": "form-http-001",
-      "name": "Analizar el Caso",
+      "name": "Disparar el Orquestador",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -120,7 +120,7 @@
         "operation": "completion",
         "respondWith": "text",
         "completionTitle": "Investigación completada",
-        "completionMessage": "={{ 'Se investigó ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '. El informe completo quedó en la ejecución de este workflow.' }}",
+        "completionMessage": "={{ 'Se investigó ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '. Corrió el workflow orquestador completo: el informe quedó en su ejecución, en la pestaña Executions.' }}",
         "options": {}
       },
       "id": "form-fin-ok",
@@ -154,7 +154,7 @@
         "operation": "completion",
         "respondWith": "text",
         "completionTitle": "No se pudo completar la investigación",
-        "completionMessage": "={{ 'No se pudo investigar ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + ': ' + (($('Analizar el Caso').first().json.error || {}).message || 'la API no respondió') + '. El equipo ya fue notificado.' }}",
+        "completionMessage": "={{ 'No se pudo investigar ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'el orquestador no respondió') + '. El equipo ya fue notificado.' }}",
         "options": {}
       },
       "id": "form-fin-fallo",
@@ -168,7 +168,7 @@
     },
     {
       "parameters": {
-        "errorMessage": "={{ 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Analizar el Caso').first().json.error || {}).message || 'la API no respondio') }}"
+        "errorMessage": "={{ 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'la API no respondio') }}"
       },
       "id": "form-stop-error",
       "name": "Propagar → Error Handler",
@@ -181,7 +181,7 @@
     },
     {
       "parameters": {
-        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Sin configurar nada:** manda el caso a la API publica del proyecto. Para otra API, crear la variable `API_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. **No pasa por el error handler**: alertar por cada tipeo marcaria la ejecucion como fallida y mandaria un mail, enterrando las fallas reales. Queda registrado como `WARN` en el log operativo, que es donde sirve para ver si el formulario se entiende.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
+        "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Que hace:** dispara el webhook del workflow orquestador (`/webhook/chargeback-agent`) sobre esta misma instancia. No llama a la API por su cuenta: el formulario es una segunda via de entrada **al agente**, asi que corre los 29 nodos de orquestacion igual que el webhook.\n\n**Sin configurar nada** apunta a `http://localhost:5678`, que es esta instancia. Si tu n8n escucha en otro puerto, crear la variable `N8N_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. **No pasa por el error handler**: alertar por cada tipeo marcaria la ejecucion como fallida y mandaria un mail, enterrando las fallas reales. Queda registrado como `WARN` en el log operativo, que es donde sirve para ver si el formulario se entiende.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
         "height": 460,
         "width": 420,
         "color": 5
@@ -234,7 +234,7 @@
       "main": [
         [
           {
-            "node": "Analizar el Caso",
+            "node": "Disparar el Orquestador",
             "type": "main",
             "index": 0
           }
@@ -242,24 +242,6 @@
         [
           {
             "node": "Respuesta — Formato Invalido",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Analizar el Caso": {
-      "main": [
-        [
-          {
-            "node": "Respuesta — Listo",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respuesta — Fallo el Analisis",
             "type": "main",
             "index": 0
           }
@@ -282,6 +264,24 @@
         [
           {
             "node": "Registrar Entrada Rechazada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disparar el Orquestador": {
+      "main": [
+        [
+          {
+            "node": "Respuesta — Listo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta — Fallo el Analisis",
             "type": "main",
             "index": 0
           }
