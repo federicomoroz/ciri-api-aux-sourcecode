@@ -9,8 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from api.app.services.langfuse_stats import LangfuseStatsService
 from api.app.observability.tracer import NoOpTracer
+from api.app.services.langfuse_stats import LangfuseStatsService
 
 
 class TestLangfuseStatsDisabled:

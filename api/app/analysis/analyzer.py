@@ -5,23 +5,23 @@ These produce structured data used by the LLM resolution prompt.
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from ..data.db import Database
 from ..domain.constants import (
-    LATAM_COUNTRIES,
-    MERCHANT_TIMEOUT_PATTERN_MIN_COUNT,
-    SLA_VIP_DAYS,
-    SLA_STANDARD_DAYS,
-    SLA_EXTENDED_DAYS,
-    SLA_TYPE_VIP,
-    SLA_TYPE_EXTENDED,
-    SLA_TYPE_STANDARD,
-    CLIENT_RECIDIVIST_THRESHOLD,
     CLIENT_GEO_ANOMALY_THRESHOLD,
-    MERCHANT_SUSPENDED_CB_RATIO,
+    CLIENT_RECIDIVIST_THRESHOLD,
+    LATAM_COUNTRIES,
     MERCHANT_HIGH_CB_RATIO,
     MERCHANT_STRATEGIC_VOLUME,
+    MERCHANT_SUSPENDED_CB_RATIO,
+    MERCHANT_TIMEOUT_PATTERN_MIN_COUNT,
+    SLA_EXTENDED_DAYS,
+    SLA_STANDARD_DAYS,
+    SLA_TYPE_EXTENDED,
+    SLA_TYPE_STANDARD,
+    SLA_TYPE_VIP,
+    SLA_VIP_DAYS,
 )
 from ..domain.enums import ClientFlag, ErrorPattern, LogEventType, MerchantFlag, Severity, TransactionStatus
 
@@ -188,7 +188,7 @@ class Analyzer:
 
         If NOT within SLA -> compensation_applicable = True (POL-SLA-004: max USD 15)
         """
-        today = today or datetime.now(timezone.utc).date()
+        today = today or datetime.now(UTC).date()
         try:
             open_date = datetime.strptime(case_open_date[:10], "%Y-%m-%d").date()
         except (ValueError, TypeError):

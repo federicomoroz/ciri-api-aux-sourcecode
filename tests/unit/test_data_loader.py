@@ -4,6 +4,7 @@ Tests the real dataset file to verify parsing is correct.
 """
 
 import pytest
+
 from api.app.domain.enums import PaymentMethod
 
 EXCEL_PATH = "data/Similación_dataset_contracargos_.xlsx"

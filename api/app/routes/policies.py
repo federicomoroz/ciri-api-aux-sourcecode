@@ -8,7 +8,6 @@ from ..rag.formatter import envolver_resultados, format_policies_for_prompt
 from ..rag.retriever import QdrantRetriever
 from ..rag.updater import RAGUpdater
 
-
 router = APIRouter(prefix="/api/policies", tags=["policies"])
 
 

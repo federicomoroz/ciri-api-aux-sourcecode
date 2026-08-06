@@ -12,8 +12,8 @@ import json
 
 import httpx
 import pytest
-from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity, VerdictType
 
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 # ──────────────────────────────────────────────────────────────
 # Health & infrastructure

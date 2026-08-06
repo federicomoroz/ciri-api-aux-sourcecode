@@ -1,7 +1,7 @@
 import pytest
 
-from api.app.llm.client import LLMResult
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity, VerdictType
+from api.app.llm.client import LLMResult
 
 
 class MockLLMClient:

@@ -92,7 +92,7 @@ class LangfuseTracer:
         if not self._enabled:
             return
         try:
-            end_time = datetime.datetime.now(datetime.timezone.utc)
+            end_time = datetime.datetime.now(datetime.UTC)
             start_time = end_time - datetime.timedelta(milliseconds=latency_ms)
             self.langfuse.generation(
                 name=name,

@@ -19,6 +19,7 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
+
 from ..domain.constants import EMBEDDING_DIM
 from .embedder import FastEmbedder
 
@@ -116,7 +117,7 @@ class QdrantIndexer:
         texts = [_policy_to_markdown(p) for p in policies]
         vectors = self.embedder.encode(texts)
 
-        for policy, vector in zip(policies, vectors):
+        for policy, vector in zip(policies, vectors, strict=True):
             points.append(PointStruct(
                 id=_make_id(policy["code"]),
                 vector=vector.tolist(),
@@ -148,7 +149,7 @@ class QdrantIndexer:
         texts = [_case_to_text(c, tx_map.get(c["transaction_id"])) for c in cases]
         vectors = self.embedder.encode(texts)
 
-        for case, text, vector in zip(cases, texts, vectors):
+        for case, text, vector in zip(cases, texts, vectors, strict=True):
             tx = tx_map.get(case["transaction_id"], {})
             points.append(PointStruct(
                 id=_make_id(case["case_id"]),

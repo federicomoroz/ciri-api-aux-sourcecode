@@ -7,9 +7,9 @@ no protegia de nada y con un cache que leia pero nunca escribia.
 
 import pytest
 
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity
 from api.app.domain.models import AnalyzeRequest
 from api.app.services.pipeline import PipelineService
-from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity
 
 TX = {
     "id": "TXN-00051", "client_id": "CLI-0003", "merchant": "Airbnb",

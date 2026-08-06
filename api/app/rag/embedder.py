@@ -103,5 +103,5 @@ class FastEmbedder:
         # proceso largo no deberia crecer sin limite.
         if len(self._cache) + len(textos) > EMBEDDING_CACHE_MAX:
             self._cache.clear()
-        for texto, vector in zip(textos, vectores):
+        for texto, vector in zip(textos, vectores, strict=True):
             self._cache[texto] = np.array(vector, dtype=np.float32)

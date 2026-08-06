@@ -15,16 +15,16 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
 from ..config import Settings
-from ..dependencies import (
-    get_pipeline_service,
-    get_report_generator,
-    get_settings,
-)
 from ..data.precomputados import (
     USO_DEMO,
     casos_demo,
     informe_de_ejemplo,
     informe_demo,
+)
+from ..dependencies import (
+    get_pipeline_service,
+    get_report_generator,
+    get_settings,
 )
 from ..domain.constants import (
     LLM_BAD_KEY_MARKER,

@@ -2,13 +2,13 @@
 
 import json
 
-from api.app.llm.parsing import parse_json_safely, validate_llm_output
+from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
 from api.app.domain.models import (
     JudgeEvaluationOutput,
     PolicyVerdictOutput,
     ResolutionOutput,
 )
-from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
+from api.app.llm.parsing import parse_json_safely, validate_llm_output
 
 
 class TestParseJsonSafely:

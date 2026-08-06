@@ -4,8 +4,8 @@ Unit tests for ReportGenerator — Jinja2 HTML rendering.
 
 import pytest
 
-from api.app.reports.generator import ReportGenerator
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
+from api.app.reports.generator import ReportGenerator
 
 
 @pytest.fixture

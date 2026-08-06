@@ -11,21 +11,21 @@ import logging
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
-from .embedder import FastEmbedder
 
 from ..domain.constants import (
     FRAUD_SCORE_DEFAULT,
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     LATAM_COUNTRIES,
-    POLICIES_TOP_K,
     POLICIES_SCORE_THRESHOLD,
+    POLICIES_TOP_K,
     RERANK_COUNTRY_BOOST,
     RERANK_MAX_SCORE,
     RERANK_PAYMENT_METHOD_BOOST,
-    SIMILAR_CASES_TOP_K,
     SIMILAR_CASES_SCORE_THRESHOLD,
+    SIMILAR_CASES_TOP_K,
 )
 from ..domain.enums import Channel, PaymentMethod
+from .embedder import FastEmbedder
 
 logger = logging.getLogger(__name__)
 

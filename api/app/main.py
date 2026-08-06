@@ -17,8 +17,8 @@ from .domain.constants import (
 from .rag.embedder import EmbeddingRateLimit
 from .routes import (
     alerts,
-    analyze,
     analytics,
+    analyze,
     cache,
     cases,
     clients,

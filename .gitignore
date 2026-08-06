@@ -43,3 +43,8 @@ CLAUDE.md
 /.vscode/
 /.devcontainer/
 /api.http
+
+# Artefactos de cobertura
+.coverage
+htmlcov/
+coverage.xml

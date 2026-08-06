@@ -4,6 +4,8 @@ Cada una reemplazo codigo que estaba escrito dos o mas veces en lugares
 distintos. Los tests fijan que sigan siendo una sola.
 """
 
+from dataclasses import FrozenInstanceError
+
 import pytest
 
 from api.app.domain.context import CaseContext
@@ -111,7 +113,7 @@ class TestCaseContext:
     def test_es_inmutable(self):
         """El contexto se arma una vez y viaja; nadie deberia reescribirlo."""
         ctx = CaseContext(transaction={"id": "TXN-1"})
-        with pytest.raises(Exception):
+        with pytest.raises(FrozenInstanceError):
             ctx.transaction = {}
 
 

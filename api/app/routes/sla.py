@@ -4,7 +4,6 @@ from ..analysis.analyzer import Analyzer
 from ..dependencies import get_analyzer
 from ..domain.models import SLACheckRequest
 
-
 router = APIRouter(prefix="/api/sla", tags=["sla"])
 
 

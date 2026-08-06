@@ -5,7 +5,7 @@ HTML report generator using Jinja2 templates.
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # cierra el bloque es la secuencia de cierre literal. Escapando estos caracteres
 # a su forma \uXXXX, el bloque no se puede cerrar desde los datos; y como los
 # parsers de JSON los devuelven tal cual, el contenido no cambia al recuperarlo.
-_ESCAPES_EN_SCRIPT = {c: "\\u%04x" % ord(c) for c in "<>&"}
+_ESCAPES_EN_SCRIPT = {c: f"\\u{ord(c):04x}" for c in "<>&"}
 
 
 def _json_para_html(data: dict) -> str:
@@ -47,7 +47,7 @@ class ReportGenerator:
         El cartel de demo se pasa desde aca y no se escribe en la plantilla para
         que el texto viva en un solo lugar: el mismo que usa el panel.
         """
-        generado = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        generado = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         return self.template.render(
             **data,
             generated_at=generado,

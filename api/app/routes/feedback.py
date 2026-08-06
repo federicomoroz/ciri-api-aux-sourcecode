@@ -10,7 +10,6 @@ from ..dependencies import get_feedback_service
 from ..domain.models import FeedbackRequest, FeedbackResponse
 from ..services.feedback import FeedbackService
 
-
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 

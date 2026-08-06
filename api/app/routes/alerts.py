@@ -6,7 +6,7 @@ GET  /api/alerts    — return recent alerts for the panel log section
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query
 
@@ -41,7 +41,7 @@ def create_alert(
         message=req.message,
         source=req.source,
         transaction_id=req.transaction_id,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
 
 

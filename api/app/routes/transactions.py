@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..data.db import Database
 from ..dependencies import get_db
 
-
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 

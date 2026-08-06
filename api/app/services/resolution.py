@@ -29,8 +29,8 @@ from ..domain.constants import (
 from ..domain.context import CaseContext
 from ..domain.enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 from ..domain.models import JudgeEvaluationOutput, PolicyVerdictOutput, ResolutionOutput
-from ..llm.client import LLMClient, LLMResult
 from ..llm import prompts
+from ..llm.client import LLMClient, LLMResult
 from ..llm.parsing import validate_llm_output
 from ..observability.tracer import Tracer
 from ..rag.formatter import annotate_by_motivo, format_cases_for_prompt, format_policies_for_prompt

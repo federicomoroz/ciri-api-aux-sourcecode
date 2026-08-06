@@ -5,7 +5,7 @@ Extracts orchestration logic from routes/feedback.py.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..data.db import Database
 from ..domain.constants import (
@@ -53,7 +53,7 @@ class FeedbackService:
 
         auto_indexed = False
         if resolution:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
             case_dict = {
                 "case_id": f"{FEEDBACK_CASE_ID_PREFIX}-{feedback_id}",
                 "transaction_id": transaction_id,

@@ -11,8 +11,8 @@ Covers scenarios not in test_guardrails.py:
 """
 
 
-from api.app.services.resolution import ResolutionService
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
+from api.app.services.resolution import ResolutionService
 
 
 class TestGuardrailEdgeCases:

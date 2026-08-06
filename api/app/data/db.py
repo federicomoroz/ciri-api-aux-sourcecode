@@ -3,7 +3,7 @@ import logging
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..domain.constants import DASHBOARD_TOP_N, JUDGE_AUTO_INDEX_THRESHOLD, SQLITE_TIMEOUT_S
 
@@ -137,20 +137,20 @@ class Database:
 
     def create_policy_record(self, fields: dict) -> dict:
         """Build a policy dict with timestamps and persist it. Returns the full dict."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         policy = {**fields, "created_at": now, "updated_at": now}
         self.upsert_policy(policy)
         return policy
 
     def merge_policy_update(self, existing: dict, updates: dict) -> dict:
         """Merge partial updates into an existing policy and persist. Returns the merged dict."""
-        merged = {**existing, **updates, "updated_at": datetime.now(timezone.utc).isoformat()}
+        merged = {**existing, **updates, "updated_at": datetime.now(UTC).isoformat()}
         self.upsert_policy(merged)
         return merged
 
     def upsert_policy(self, policy: dict) -> None:
         """Reemplaza la politica conservando su fecha de creacion original."""
-        ahora = datetime.now(timezone.utc).isoformat()
+        ahora = datetime.now(UTC).isoformat()
         previa = self._uno(
             "SELECT created_at FROM policies WHERE code = ?", (policy["code"],),
         )
@@ -177,7 +177,7 @@ class Database:
             (
                 feedback["transaction_id"], feedback["analyst_decision"],
                 feedback["analyst_notes"], feedback["final_outcome"],
-                feedback["judge_score"], datetime.now(timezone.utc).isoformat(),
+                feedback["judge_score"], datetime.now(UTC).isoformat(),
             ),
         ).lastrowid
 
@@ -235,7 +235,7 @@ class Database:
         self._escribir(
             """INSERT OR REPLACE INTO report_cache (cache_key, html, created_at)
                VALUES (?, ?, ?)""",
-            (cache_key, html, datetime.now(timezone.utc).isoformat()),
+            (cache_key, html, datetime.now(UTC).isoformat()),
         )
 
     # --- Alerts (operational event log) ---
@@ -265,7 +265,7 @@ class Database:
                 alert["message"], alert.get("source", ""),
                 alert.get("transaction_id"),
                 json.dumps(alert.get("metadata", {}), ensure_ascii=False),
-                datetime.now(timezone.utc).isoformat(),
+                datetime.now(UTC).isoformat(),
             ),
         ).lastrowid
 

@@ -1,0 +1,63 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    name: Tests y lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./api
+          # La version de ruff se fija: sin eso, cada release nueva puede
+          # ampliar su conjunto de reglas y romper el build sin que nadie
+          # haya tocado el codigo.
+          pip install pytest pytest-asyncio pytest-cov "ruff==0.15.14"
+
+      - name: Lint
+        run: ruff check api/ tests/ --config api/pyproject.toml
+
+      # Los E2E quedan fuera a proposito: llaman a la API desplegada y al
+      # modelo, asi que dependen de que Render este despierto y de que haya
+      # saldo. Un test que falla por algo ajeno al codigo no informa nada.
+      - name: Tests
+        run: pytest tests/unit tests/integration -q --cov=api/app --cov-report=term-missing
+
+      - name: Verificar que el workflow de n8n sea importable
+        run: |
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          for f in sorted(Path("n8n").glob("*.json")):
+              w = json.loads(f.read_text(encoding="utf-8"))
+              nombres = {n["name"] for n in w["nodes"]}
+              rotas = [
+                  f'{origen} -> {c["node"]}'
+                  for origen, salidas in w["connections"].items()
+                  for rama in salidas.get("main", [])
+                  for c in (rama or [])
+                  if c["node"] not in nombres
+              ]
+              if origen_faltante := [o for o in w["connections"] if o not in nombres]:
+                  rotas += [f"origen inexistente: {o}" for o in origen_faltante]
+              if rotas:
+                  sys.exit(f"{f.name}: conexiones rotas -> {rotas}")
+              print(f"  {f.name}: {len(w['nodes'])} nodos, conexiones consistentes")
+          PY

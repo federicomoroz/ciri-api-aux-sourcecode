@@ -6,8 +6,9 @@ These tests are pure Python — no Qdrant required.
 from unittest.mock import MagicMock
 
 import pytest
-from api.app.rag.retriever import QdrantRetriever, QueryBuilder
+
 from api.app.domain.enums import PaymentMethod
+from api.app.rag.retriever import QdrantRetriever, QueryBuilder
 
 
 class TestQueryBuilder:

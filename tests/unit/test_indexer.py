@@ -13,15 +13,14 @@ from unittest.mock import MagicMock, create_autospec
 import numpy as np
 import pytest
 
+from api.app.domain.enums import PaymentMethod
+from api.app.rag.embedder import FastEmbedder
 from api.app.rag.indexer import (
     QdrantIndexer,
     _case_to_text,
     _make_id,
     _policy_to_markdown,
 )
-from api.app.domain.enums import PaymentMethod
-from api.app.rag.embedder import FastEmbedder
-
 
 # ---- Helpers ----
 

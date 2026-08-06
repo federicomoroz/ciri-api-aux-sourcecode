@@ -6,7 +6,6 @@ from ..data.db import Database
 from ..dependencies import get_db
 from ..domain.models import DashboardResponse
 
-
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 

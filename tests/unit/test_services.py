@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, create_autospec
 
 import pytest
 
-from api.app.llm.client import LLMResult
+from api.app.data.db import Database
 from api.app.domain.constants import (
     FALLBACK_TX_ID,
     FEEDBACK_CASE_ID_PREFIX,
@@ -20,13 +20,12 @@ from api.app.domain.constants import (
     TRACE_JUDGE,
     TRACE_RESOLVE,
 )
-from api.app.services.feedback import FeedbackService
 from api.app.domain.context import CaseContext
-from api.app.services.resolution import ResolutionService
 from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
+from api.app.llm.client import LLMResult
 from api.app.rag.updater import RAGUpdater
-from api.app.data.db import Database
-
+from api.app.services.feedback import FeedbackService
+from api.app.services.resolution import ResolutionService
 
 # ---- Fixtures ----
 

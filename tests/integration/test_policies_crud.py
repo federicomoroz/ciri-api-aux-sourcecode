@@ -3,13 +3,14 @@ Integration tests for the Policy CRUD API.
 Requires: SQLite (in-memory via fixture). Qdrant mocked.
 """
 
-import pytest
 from unittest.mock import MagicMock, create_autospec
+
+import pytest
 from fastapi.testclient import TestClient
 
-from api.app.main import app
-from api.app.data.db import Database
 from api.app.analysis.analyzer import Analyzer
+from api.app.data.db import Database
+from api.app.main import app
 from api.app.rag.embedder import FastEmbedder
 from api.app.rag.indexer import QdrantIndexer
 from api.app.rag.retriever import QdrantRetriever

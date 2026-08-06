@@ -9,7 +9,6 @@ in docs/prompts.md and flow as plain dicts through the pipeline.
 from pydantic import BaseModel, ConfigDict, Field
 
 from .context import CaseContext
-
 from .enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 

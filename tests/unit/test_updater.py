@@ -12,10 +12,10 @@ from unittest.mock import MagicMock, create_autospec
 
 import pytest
 
-from api.app.domain.constants import JUDGE_AUTO_INDEX_THRESHOLD
-from api.app.rag.updater import RAGUpdater
-from api.app.domain.enums import PaymentMethod
 from api.app.data.db import Database
+from api.app.domain.constants import JUDGE_AUTO_INDEX_THRESHOLD
+from api.app.domain.enums import PaymentMethod
+from api.app.rag.updater import RAGUpdater
 
 
 @pytest.fixture

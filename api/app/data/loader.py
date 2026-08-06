@@ -13,7 +13,7 @@ Dataset quirks:
 
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import openpyxl
 
@@ -53,7 +53,7 @@ def _parse_sheet(wb: openpyxl.Workbook, keyword: str, columns: list[str]) -> lis
         values = [ws.cell(row=row_num, column=c).value for c in range(1, len(columns) + 1)]
         if all(v is None for v in values):
             continue
-        row_dict = dict(zip(columns, values))
+        row_dict = dict(zip(columns, values, strict=True))
 
         # Type coercions
         if "amount_usd" in row_dict and row_dict["amount_usd"] is not None:
@@ -214,7 +214,7 @@ def _insertar(conn: sqlite3.Connection, data: dict) -> None:
     que solo salen del Excel y nadie escribe en runtime. Sin esto, cada corrida
     del seed volvia a insertar las 150 filas y falseaba la deteccion de patrones.
     """
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     conn.executemany(
         "INSERT OR IGNORE INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",

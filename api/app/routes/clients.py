@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..analysis.analyzer import Analyzer
 from ..dependencies import get_analyzer
 
-
 router = APIRouter(prefix="/api/clients", tags=["clients"])
 
 

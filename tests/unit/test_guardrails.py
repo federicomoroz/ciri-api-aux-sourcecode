@@ -1,8 +1,8 @@
 """Unit tests for ResolutionService guardrails and deterministic outcome."""
 
 from api.app.domain.context import CaseContext
-from api.app.services.resolution import ResolutionService
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
+from api.app.services.resolution import ResolutionService
 
 
 class TestDetectDivergence:

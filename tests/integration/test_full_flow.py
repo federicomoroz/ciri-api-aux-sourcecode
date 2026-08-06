@@ -3,16 +3,17 @@ Integration tests for the full analysis flow.
 Uses MockLLMClient + real SQLite + mocked Qdrant.
 """
 
-import pytest
 from unittest.mock import MagicMock, create_autospec
+
+import pytest
 from fastapi.testclient import TestClient
 
-from api.app.main import app
 from api.app.data.db import Database
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
+from api.app.main import app
 from api.app.rag.embedder import FastEmbedder
-from api.app.rag.updater import RAGUpdater
 from api.app.rag.retriever import QdrantRetriever
+from api.app.rag.updater import RAGUpdater
 
 
 @pytest.fixture
@@ -28,8 +29,8 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
 
     from api.app.analysis.analyzer import Analyzer
     from api.app.reports.generator import ReportGenerator
-    from api.app.services.resolution import ResolutionService
     from api.app.services.feedback import FeedbackService
+    from api.app.services.resolution import ResolutionService
 
     # Mock retriever to return pre-set results
     retriever = create_autospec(QdrantRetriever, instance=True)

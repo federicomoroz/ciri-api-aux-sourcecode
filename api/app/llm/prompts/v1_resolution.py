@@ -4,7 +4,6 @@
 
 from ._shared import bloque_json
 
-
 SYSTEM = """Eres un analista senior de contracargos en una fintech latinoamericana.
 
 IMPORTANTE: La decision (recommended_action, risk_level, requires_hitl) ya fue determinada por el sistema de guardrails basado en los veredictos de politica. Tu tarea NO es decidir — es JUSTIFICAR y EXPLICAR la decision usando la evidencia disponible.

@@ -1,5 +1,6 @@
 # Agente de Investigación de Contracargos
 
+[![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
 ![Tests](https://img.shields.io/badge/tests-463%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)

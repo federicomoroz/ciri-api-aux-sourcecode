@@ -5,7 +5,6 @@ from ..domain.constants import SIMILAR_CASES_TOP_K
 from ..rag.formatter import envolver_resultados, format_cases_for_prompt
 from ..rag.retriever import QdrantRetriever
 
-
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
 

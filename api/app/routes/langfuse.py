@@ -6,7 +6,6 @@ GET /api/langfuse/stats — returns trace/token/cost/score stats for the test pa
 
 from fastapi import APIRouter, Depends
 
-
 from ..dependencies import get_langfuse_stats_service
 from ..domain.models import LangfuseStatsResponse
 from ..services.langfuse_stats import LangfuseStatsService

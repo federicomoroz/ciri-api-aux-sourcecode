@@ -13,8 +13,8 @@ from ..data.db import Database, cache_key
 from ..domain.constants import PIPELINE_MAX_WORKERS, PIPELINE_THREAD_TIMEOUT_S
 from ..domain.context import CaseContext
 from ..domain.enums import VerdictType
-from ..llm.pricing import estimar_costo_usd
 from ..domain.models import AnalyzeRequest
+from ..llm.pricing import estimar_costo_usd
 from ..rag.retriever import QdrantRetriever
 from ..reports.generator import ReportGenerator
 from ..services.resolution import ResolutionService

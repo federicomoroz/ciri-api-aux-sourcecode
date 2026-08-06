@@ -34,3 +34,29 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+# Las reglas se fijan aca a proposito. Sin esto, cada version de ruff aplica su
+# propio conjunto por defecto y el mismo codigo pasa o falla segun quien lo
+# corra — que es justo lo que no puede pasar en integracion continua.
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle
+    "F",      # pyflakes: nombres sin definir, imports muertos
+    "I",      # imports ordenados
+    "UP",     # sintaxis vieja que ya tiene reemplazo
+    "B",      # bugbear: trampas comunes
+    "C4",     # comprensiones innecesarias
+]
+ignore = [
+    "E501",   # el largo de linea lo controla line-length, no el linter
+    "B008",   # Depends() en los defaults es el idioma de FastAPI
+]
+
+[tool.ruff.lint.per-file-ignores]
+# En los tests, un import adentro de la funcion suele ser deliberado: acota el
+# monkeypatch o evita importar la app antes de armar su estado.
+"tests/**" = ["E402"]
