@@ -42,7 +42,7 @@ Investigar un caso cuesta dinero real —dos modelos, varias llamadas—. Evalua
 
 Un informe prearmado nunca se hace pasar por uno recién hecho. Se declara en cuatro lugares: el cartel **DEMO (Caso prearmado)** que abre el HTML, la cabecera `X-Modo-Demo`, el uso que informa `cost_usd: 0.0`, y un warning en el log del servidor.
 
-Esto vale también para el workflow de n8n: corre entero en modo demo, con las siete consultas de contexto reales y el informe generado de verdad. Lo único pregrabado es lo que hubiera contestado el modelo. El porqué y los trade-offs, en [`docs/decisions.md`](docs/decisions.md), decisión 14.
+Esto vale también para el workflow de n8n: corre entero en modo demo, con las siete consultas de contexto reales y el informe generado de verdad. Lo único pregrabado es lo que hubiera contestado el modelo. El porqué y los trade-offs, en `docs/decisions.md`, decisión 14.
 
 Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA e informes. El default del servidor se cambia con `CB_DEMO_MODE=false`.
 
@@ -54,9 +54,9 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 Dos páginas que se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
 
-**[`docs/diagrams/pipeline_n8n_api.html`](docs/diagrams/pipeline_n8n_api.html)** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
+**`docs/diagrams/pipeline_n8n_api.html`** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
-**[`docs/diagrams/n8n_workflow_analysis.html`](docs/diagrams/n8n_workflow_analysis.html)** — el circuito completo. Los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+**`docs/diagrams/n8n_workflow_analysis.html`** — el circuito completo. Los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
 
 ### 2. El panel web
 
@@ -113,7 +113,7 @@ Para apuntarlo a otra API, en orden de prioridad:
 
 ### 4. La API directa
 
-Todo lo que hace el workflow está disponible como endpoints. La referencia completa, con ejemplos que se pueden pegar en una terminal, está en **[`docs/api.md`](docs/api.md)**. Documentación interactiva en **[/docs](https://ciri-chargeback-agent.onrender.com/docs)**.
+Todo lo que hace el workflow está disponible como endpoints. La referencia completa, con ejemplos que se pueden pegar en una terminal, está en **`docs/api.md`**. Documentación interactiva en **[/docs](https://ciri-chargeback-agent.onrender.com/docs)**.
 
 El camino más corto, una sola llamada que corre el pipeline completo y devuelve el informe:
 
@@ -127,8 +127,8 @@ curl -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze?direc
 ### Todo local con Docker
 
 ```bash
-git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
-cd ciri-chargeback-agent
+git clone https://github.com/federicomoroz/ciri-api-aux-sourcecode.git
+cd ciri-api-aux-sourcecode
 cp .env.example .env          # dos claves, las de acá abajo
 docker-compose up -d
 ```
@@ -174,7 +174,7 @@ SQLite     la verdad exacta. Transacciones, logs, historial del cliente, para
 
 **Las políticas son datos, no código.** Viven como documentos en Qdrant y se editan por API: `PUT /api/policies/{code}` reindexa en el momento, sin deploy. Por eso quien las evalúa también es el modelo y no una función Python — si las reglas se pueden cambiar en caliente, su evaluación tiene que poder cambiar con ellas.
 
-El detalle —las capas, el flujo de datos, la escalabilidad y las decisiones— está en [`docs/architecture.md`](docs/architecture.md).
+El detalle —las capas, el flujo de datos, la escalabilidad y las decisiones— está en `docs/architecture.md`.
 
 ---
 
@@ -182,7 +182,7 @@ El detalle —las capas, el flujo de datos, la escalabilidad y las decisiones—
 
 Cada endpoint es una herramienta que el orquestador llama por su nombre. La referencia
 completa, agrupada por para qué sirve cada uno y con ejemplos que se pegan en una terminal,
-está en **[`docs/api.md`](docs/api.md)**.
+está en **`docs/api.md`**.
 
 Documentación interactiva generada por FastAPI: **[/docs](https://ciri-chargeback-agent.onrender.com/docs)**.
 
@@ -190,17 +190,20 @@ Documentación interactiva generada por FastAPI: **[/docs](https://ciri-chargeba
 
 ## Dónde está cada cosa
 
+La documentación completa viaja en la entrega, en la carpeta `docs/` — este repositorio tiene
+sólo el código que la API necesita para funcionar.
+
 | Documento | Qué responde |
 |---|---|
-| [`docs/ejes.md`](docs/ejes.md) | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
-| [`docs/architecture.md`](docs/architecture.md) | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
-| [`docs/decisions.md`](docs/decisions.md) | 14 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
-| [`docs/prompts.md`](docs/prompts.md) | Los prompts, versionados, y por qué cambiaron |
-| [`docs/rag_explanation.md`](docs/rag_explanation.md) | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
-| [`docs/mejora_continua.md`](docs/mejora_continua.md) | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
-| [`docs/demo_scenarios.md`](docs/demo_scenarios.md) | Los tres escenarios, paso a paso, con los comandos |
-| [`docs/api.md`](docs/api.md) | Los 28 endpoints, agrupados por para qué sirven |
-| [`docs/examples/`](docs/examples/) | Informes HTML ya generados, uno por escenario |
+| `docs/ejes.md` | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
+| `docs/architecture.md` | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
+| `docs/decisions.md` | 14 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
+| `docs/prompts.md` | Los prompts, versionados, y por qué cambiaron |
+| `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
+| `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
+| `docs/demo_scenarios.md` | Los tres escenarios, paso a paso, con los comandos |
+| `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
+| `docs/examples/` | Informes HTML ya generados, uno por escenario |
 
 **Configuración:** todo se lee de `.env` con prefijo `CB_`. Las variables, con sus valores por
 defecto y para qué sirve cada una, están comentadas en
@@ -208,7 +211,7 @@ defecto y para qué sirve cada una, están comentadas en
 
 **Tests:** `pytest tests/ -v`. Son 463 en 26 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados. El desglose está en
-[`docs/architecture.md`](docs/architecture.md#la-suite-de-tests).
+`docs/architecture.md`.
 
 ---
 
