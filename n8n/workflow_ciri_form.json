@@ -290,7 +290,6 @@
     "binaryMode": "separate",
     "availableInMCP": false,
     "timeSavedMode": "fixed",
-    "errorWorkflow": "teWDCm7Y2erv1u3f",
     "callerPolicy": "workflowsFromSameOwner"
   },
   "versionId": "5f50cb14-a0d8-4fa5-bfb6-bea659e8d0f9",
