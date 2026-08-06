@@ -22,6 +22,7 @@ FILES: list[tuple[Path, str]] = [
     (ROOT / "docs/architecture.md", "Documentacion/architecture.md"),
     (ROOT / "docs/decisions.md", "Documentacion/decisions.md"),
     (ROOT / "docs/demo_scenarios.md", "Documentacion/demo_scenarios.md"),
+    (ROOT / "docs/ejes.md", "Documentacion/ejes.md"),
     (ROOT / "docs/mejora_continua.md", "Documentacion/mejora_continua.md"),
     (ROOT / "docs/prompts.md", "Documentacion/prompts.md"),
     (ROOT / "docs/rag_explanation.md", "Documentacion/rag_explanation.md"),

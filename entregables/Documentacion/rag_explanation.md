@@ -16,6 +16,43 @@ Estas restricciones guiaron decisiones clave: corpus pequenos (17 politicas, ~60
 
 ---
 
+## Estrategia de chunking
+
+**No se hace chunking. Cada documento se indexa entero, y es una decision, no una omision.**
+
+El chunking existe para resolver un problema que este corpus no tiene: documentos mas largos
+que la ventana util del modelo de embeddings, donde un vector promediado sobre miles de tokens
+deja de representar cualquier cosa en particular.
+
+Los numeros reales del dataset:
+
+| Coleccion | Tamano por documento | Total |
+|---|---|---|
+| `policies` | 60–90 tokens (descripciones de 121 a 191 caracteres) | 17 documentos |
+| `historical_cases` | 80–120 tokens (caso + contexto de su transaccion) | 60 documentos |
+
+Con documentos de ese tamano, partirlos solo tiene costos:
+
+1. **Rompe la unidad de decision.** Una politica es una terna indivisible: condicion, umbral y
+   excepcion. "Las transacciones con criptomonedas son irreversibles" separado de "salvo que el
+   comercio haya incumplido su obligacion de entrega" produce dos chunks que, recuperados por
+   separado, llevan al LLM a veredictos opuestos. El veredicto correcto necesita la politica
+   completa en el contexto.
+2. **Rompe la citabilidad.** El reporte cita `POL-EXC-003` como unidad. Si el retrieval devuelve
+   "el fragmento 2 de 3 de POL-EXC-003", la cita deja de ser verificable por un analista.
+3. **Rompe la idempotencia del re-indexado.** El ID de punto es `uuid5(NAMESPACE_DNS, code)`:
+   un codigo, un punto, `upsert` idempotente. Con chunks habria que versionar y limpiar N puntos
+   por cada edicion de politica — justo lo que `PUT /api/policies/{code}` tiene que hacer barato.
+
+**Cuando habria que cambiarlo:** si las politicas pasaran a ser PDFs de varias paginas (la
+consigna las describe como "PDF/MD", y en produccion probablemente lo sean), la estrategia seria
+chunking por seccion con solapamiento, manteniendo el codigo de politica y el titulo de seccion
+en el payload de cada chunk para no perder ni la cita ni el re-indexado por codigo. La frontera
+de chunk seria el encabezado, nunca un conteo fijo de tokens: el limite natural de estos
+documentos es semantico, no de longitud.
+
+---
+
 ## Que se indexa (y por que)
 
 ### 1. Politicas — coleccion `policies`

@@ -73,6 +73,27 @@ curl -X POST http://localhost:5678/webhook/chargeback-agent   -H "Content-Type: 
 
 ---
 
+## Los 7 ejes de la consigna
+
+Mapeo completo con evidencia y comandos de verificación en [`docs/ejes.md`](docs/ejes.md).
+
+| Eje | Dónde está | Verificación rápida |
+|---|---|---|
+| **1. Ingesta** | Webhook + Form Trigger (n8n), API directa, Excel → SQLite | `POST /webhook/chargeback-agent` |
+| **2. RAG** | 3 colecciones Qdrant, embeddings Voyage, QueryBuilder determinístico, sin chunking (y [por qué](docs/rag_explanation.md#estrategia-de-chunking)) | `GET /api/policies/search` devuelve la `query_used` |
+| **3. Agente** | 7 tools HTTP determinísticas · memoria = precedentes + caché semántico · 3 prompts versionados | [`docs/prompts.md`](docs/prompts.md) |
+| **4. Automatización** | Switch por `risk_level`, HITL con Wait, reportes Jinja2, workflow de alertas | `docs/examples/*.html` |
+| **5. Identificación de fallas** | 8 patrones de error sobre logs, `cb_ratio` por comercio, flags de cliente | `GET /api/merchants/Airbnb/risk` |
+| **6. Auto-mejora** | Feedback loop, 5 guardrails anti-alucinación, reindexado del RAG, versionado de prompts | `PUT /api/policies/{code}` reindexa al instante |
+| **7. Observabilidad** | Langfuse (tokens, costo, latencia, score del Judge), alertas, error handler | `GET /api/langfuse/stats` |
+
+> **Sobre el eje 3:** el agente no usa el nodo AI Agent de n8n. El tool calling es determinístico
+> —7 herramientas, siempre las mismas, siempre en el mismo orden— porque en una fintech regulada
+> un auditor tiene que poder reconstruir qué se consultó en cada caso. El trade-off está
+> argumentado en [`docs/decisions.md`](docs/decisions.md#1-orquestación-explícita-con-n8n-no-ai-agent).
+
+---
+
 ## Arquitectura
 
 ```
@@ -440,6 +461,7 @@ quest_ML/
 
 | Documento | Descripción |
 |---|---|
+| [`docs/ejes.md`](docs/ejes.md) | Los 7 ejes de la consigna, uno por uno, con evidencia y verificación |
 | [`docs/architecture.md`](docs/architecture.md) | Arquitectura del sistema, flujo n8n, diagramas |
 | [`docs/decisions.md`](docs/decisions.md) | 10 decisiones técnicas con razonamiento y trade-offs |
 | [`docs/prompts.md`](docs/prompts.md) | Prompts documentados con versionado y evolución |

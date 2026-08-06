@@ -12,6 +12,20 @@ Mapa de lo que pide la consigna y dónde está cada cosa.
 | Explicación del proceso de mejora continua | `Documentacion/mejora_continua.md` |
 | HTML mostrando resultados | `Reports Examples/` (3 casos: BLOCKER, HIGH con HITL, MEDIUM) |
 
+## Los 7 ejes, uno por uno
+
+Detalle completo con evidencia y comandos de verificación en `Documentacion/ejes.md`.
+
+| Eje | Dónde está |
+|---|---|
+| **1. Ingesta** | Webhook + Form Trigger en n8n, API directa, Excel → SQLite |
+| **2. RAG** | 3 colecciones Qdrant, embeddings Voyage AI, QueryBuilder determinístico, sin chunking (argumentado en `rag_explanation.md`) |
+| **3. Agente** | 7 tools HTTP determinísticas, memoria = precedentes + caché semántico, 3 prompts versionados |
+| **4. Automatización** | Switch por nivel de riesgo, HITL con nodo Wait, reportes Jinja2, workflow de alertas |
+| **5. Identificación de fallas** | 8 patrones de error sobre logs, ratio de contracargos por comercio, flags de cliente |
+| **6. Auto-mejora** | Feedback loop, 5 guardrails anti-alucinación, reindexado del RAG en caliente, versionado de prompts |
+| **7. Observabilidad** | Langfuse (tokens, costo, latencia, score del Judge), alertas, error handler |
+
 Extras, no pedidos por la consigna:
 
 | Qué | Dónde |
