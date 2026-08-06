@@ -155,8 +155,8 @@ curl -X POST http://localhost:5678/webhook/chargeback-agent \
 Cuatro piezas, con una división que se sostiene en todo el sistema:
 
 ```
-n8n        el orquestador. Decide QUÉ se hace y CUÁNDO. 38 nodos, todos visibles.
-           No hay nodo de agente: ningún modelo elige qué herramienta llamar.
+n8n        el orquestador. Decide QUÉ se hace y CUÁNDO. Cada paso es un nodo
+           visible; no hay nodo de agente eligiendo qué herramienta llamar.
 
 FastAPI    la ejecución. CÓMO se hace. Cada endpoint es una herramienta con
            nombre; toda la lógica de negocio vive acá, ninguna en el canvas.
@@ -170,7 +170,7 @@ SQLite     la verdad exacta. Transacciones, logs, historial del cliente, para
 
 **Unir las dos fuentes es el punto.** Una investigación necesita los hechos exactos del caso *y* el contexto de lo que aplica: SQLite responde lo primero, el RAG sobre Qdrant lo segundo, y ambos entran juntos al contexto del modelo. Por eso la resolución puede citar la política concreta y el precedente concreto.
 
-**El código decide, el modelo explica.** Seis de los once campos de la resolución —la acción, el nivel de riesgo, si hace falta una persona— los calcula Python a partir de los veredictos, y sobrescriben lo que proponga el modelo. Si el modelo contradice a la evidencia, la contradicción queda registrada en vez de corregirse en silencio.
+**El código decide, el modelo explica.** La acción recomendada, el nivel de riesgo y la necesidad de revisión humana los calcula Python a partir de los veredictos de política, y sobrescriben lo que proponga el modelo. El modelo escribe el razonamiento, no el veredicto. Si contradice a la evidencia, la contradicción queda registrada en vez de corregirse en silencio.
 
 **Las políticas son datos, no código.** Viven como documentos en Qdrant y se editan por API: `PUT /api/policies/{code}` reindexa en el momento, sin deploy. Por eso quien las evalúa también es el modelo y no una función Python — si las reglas se pueden cambiar en caliente, su evaluación tiene que poder cambiar con ellas.
 
