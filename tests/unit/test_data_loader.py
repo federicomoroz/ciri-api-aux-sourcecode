@@ -103,3 +103,34 @@ def test_transaction_ids_format(loaded_data):
     pattern = re.compile(r"^TXN-\d{5}$")
     for tx in loaded_data["transactions"]:
         assert pattern.match(tx["id"]), f"Invalid TXN ID format: {tx['id']}"
+
+
+def test_seed_is_idempotent(loaded_data, tmp_path):
+    """Sembrar dos veces tiene que dejar la base igual que sembrar una.
+
+    Los logs no tienen clave de negocio con la que deduplicar, asi que una
+    segunda corrida los duplicaba y falseaba la deteccion de patrones de error.
+    """
+    import sqlite3
+
+    from api.app.data.loader import init_sqlite
+
+    db = str(tmp_path / "seed.db")
+    init_sqlite(db, loaded_data)
+    conn = sqlite3.connect(db)
+    first = {
+        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        for table in ("transactions", "cases", "policies", "logs")
+    }
+    conn.close()
+
+    init_sqlite(db, loaded_data)
+    conn = sqlite3.connect(db)
+    second = {
+        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        for table in ("transactions", "cases", "policies", "logs")
+    }
+    conn.close()
+
+    assert first == second, f"la segunda corrida cambio los conteos: {first} -> {second}"
+    assert first["logs"] == len(loaded_data["logs"])

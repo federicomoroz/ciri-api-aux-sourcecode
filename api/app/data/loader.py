@@ -136,7 +136,12 @@ def load_excel(file_path: str) -> dict:
 
 
 def init_sqlite(db_path: str, data: dict) -> None:
-    """Create all tables and insert data. Idempotent (INSERT OR IGNORE)."""
+    """Create all tables and insert data.
+
+    Idempotente: transacciones, casos y politicas se deduplican por su clave de
+    negocio con INSERT OR IGNORE; los logs, que no tienen una, se reemplazan.
+    Correr el seed dos veces deja la base igual que correrlo una.
+    """
     conn = sqlite3.connect(db_path)
     try:
         conn.execute("PRAGMA journal_mode=WAL")
@@ -246,7 +251,12 @@ def init_sqlite(db_path: str, data: dict) -> None:
             ) for p in data["policies"]],
         )
 
-        # Logs
+        # Logs. A diferencia del resto no tienen una clave de negocio con la que
+        # deduplicar, asi que se reemplazan enteros: son datos de referencia que
+        # solo salen del Excel y nadie escribe en runtime. Sin esto, cada corrida
+        # del seed volvia a insertar las 150 filas y duplicaba los eventos de
+        # cada transaccion, falseando la deteccion de patrones de error.
+        conn.execute("DELETE FROM logs")
         conn.executemany(
             "INSERT INTO logs (timestamp, transaction_id, event, service, code, detail, severity) VALUES (?,?,?,?,?,?,?)",
             [(
