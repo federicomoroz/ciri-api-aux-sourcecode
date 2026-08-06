@@ -31,3 +31,6 @@ _plan_raw.md
 
 # La carpeta que se arma para el ZIP: es una copia del repo, no va en el repo
 /entrega/
+
+# Instrucciones para el asistente de codigo: herramienta de desarrollo
+CLAUDE.md
