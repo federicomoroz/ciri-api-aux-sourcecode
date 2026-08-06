@@ -37,7 +37,7 @@ Documento completo: [`rag_explanation.md`](rag_explanation.md).
 
 | Sub-eje | Resolución |
 |---|---|
-| Indexación | `api/app/rag/indexer.py` — 3 colecciones Qdrant: `policies` (17, dinámica), `historical_cases` (60, autocrece), `_semantic_cache` |
+| Indexación | `api/app/rag/indexer.py` — 2 colecciones Qdrant: `policies` (17, dinámica) e `historical_cases` (60, autocrece) |
 | Chunking | **1 política = 1 documento, sin partir.** Las 17 políticas miden entre 60 y 90 tokens cada una: partirlas rompería la unidad semántica (condición + umbral + excepción) sin ganar nada. Ver [`rag_explanation.md#estrategia-de-chunking`](rag_explanation.md#estrategia-de-chunking) |
 | Embeddings | `voyage-multilingual-2`, 1024 dims — elegido por rendimiento en español (`decisions.md#5`) |
 | Búsqueda semántica | `api/app/rag/retriever.py` — QueryBuilder determinístico + 4 reglas de enriquecimiento + reranking por boosts |
@@ -76,8 +76,7 @@ ataca el problema del enunciado ("poca reutilización del conocimiento generado"
 | Mecanismo | Dónde | Efecto |
 |---|---|---|
 | Precedentes | `historical_cases` en Qdrant | Cada caso resuelto con Judge ≥ 8.0 se reindexa y queda disponible para el siguiente |
-| Caché semántico | `_semantic_cache`, umbral 0.92 | Casos parecidos no vuelven a pagar el costo de LLM |
-| Caché de idempotencia | `GET /api/cache/lookup` (SQLite) | La misma TXN dos veces devuelve el reporte ya generado |
+| Caché de idempotencia | `report_cache` en SQLite, clave (transacción, VIP) | Repetir un caso devuelve el informe ya generado, sin volver a pagar el LLM |
 
 **Prompt engineering:** 3 prompts versionados en `api/app/llm/prompts/`, cada uno con su
 cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.md).
@@ -132,7 +131,7 @@ Documento completo: [`mejora_continua.md`](mejora_continua.md).
 | Sub-eje | Resolución |
 |---|---|
 | Captura de feedback | `POST /api/feedback` — el analista corrige la resolución; el nodo `Registrar Feedback HITL` lo dispara desde n8n |
-| Detección de alucinaciones | 5 guardrails post-LLM en `resolution.py::_validate_resolution`. El caso canónico: APPROVE con un veredicto BLOCKER activo se autocorrige a REJECT y se registra el warning |
+| Detección de alucinaciones | `resolution.py::_detect_divergence` compara lo que propuso el modelo contra la decisión determinística **antes** de sobrescribirla, que es la única ventana en que la contradicción es observable, y la deja registrada en `guardrail_warnings`. Más `_validate_resolution` sobre los campos que el modelo sí controla (compensación, confianza) |
 | Actualización del RAG | Dos caminos: Judge ≥ 8.0 reindexa el caso como precedente, y `PUT /api/policies/{code}` reindexa la política al instante, sin deploy |
 | Versionado de prompts | Cabecera de versión + changelog en cada archivo de `llm/prompts/`; la evolución 8.2 → 9.1 del Judge score está trazada en `prompts.md` |
 
@@ -171,7 +170,7 @@ rompe el pipeline ni los tests.
 | Human-in-the-Loop | Nodo `Wait` para casos HIGH + formulario embebido en el reporte |
 | LLM-as-a-Judge | `POST /api/analyze/judge`, 5 criterios con rúbricas, prompt v2.0 |
 | Observabilidad | Langfuse (traces, tokens, costo, scores) |
-| Caché semántico | Colección `_semantic_cache` en Qdrant, umbral 0.92 |
-| Guardrails | 5 guardrails post-LLM con autocorrección |
+| Caché semántico | **No implementado, y es deliberado.** Hay caché de idempotencia exact-match; cachear por similitud arriesga devolver la resolución de otro caso. Ver `decisions.md#9` |
+| Guardrails | 5: tres registran contradicciones del modelo con la evidencia, dos validan los campos que el modelo sí controla |
 | Trazabilidad completa | Cada paso es un nodo nombrado en el canvas + traza en Langfuse + audit trail en SQLite |
 | Multi-Agent | **No implementado como tal.** Hay 3 roles de LLM separados (evaluador de políticas, sintetizador, juez) con modelos y prompts distintos, pero orquestados explícitamente por n8n, no negociando entre sí |

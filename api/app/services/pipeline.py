@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 from ..analysis.analyzer import Analyzer
-from ..data.db import Database
+from ..data.db import Database, cache_key
 from ..domain.constants import (
     LLM_PRICING,
     LLM_PRICING_PER_MTOK,
@@ -148,8 +148,8 @@ class PipelineService:
         txn_id = req.transaction_id
 
         # Step 0 — cache check
-        cache_key = f"{txn_id}|{req.cliente_vip}"
-        cached_html = self.db.get_cached_report(cache_key)
+        key = cache_key(txn_id, req.cliente_vip)
+        cached_html = self.db.get_cached_report(key)
         if cached_html:
             logger.info("Pipeline cache HIT for %s", txn_id)
             return cached_html, {"cache_hit": True}
@@ -159,14 +159,15 @@ class PipelineService:
         if not tx:
             raise ValueError(f"Transaction {txn_id} not found in database.")
 
-        # Steps 2-6 — parallel context gathering
+        # Steps 2-6 — parallel context gathering.
+        # Los resultados se recogen DENTRO del with: al salir, el executor hace
+        # shutdown(wait=True) y espera sin limite. Con la recoleccion afuera, el
+        # timeout no protegia de nada porque los futures ya habian terminado.
+        futures_results = {}
         with ThreadPoolExecutor(max_workers=PIPELINE_MAX_WORKERS) as executor:
             futures = self._submit_context_futures(executor, tx, req)
-
-        futures_results = {}
-        for future in futures:
-            name = futures[future]
-            futures_results[name] = future.result(timeout=PIPELINE_THREAD_TIMEOUT_S)
+            for future in as_completed(futures, timeout=PIPELINE_THREAD_TIMEOUT_S):
+                futures_results[futures[future]] = future.result()
 
         policies, similar_cases = futures_results["rag"]
         ctx = _PipelineContext(
@@ -185,6 +186,7 @@ class PipelineService:
         # Step 9 — html report
         report_data = self._build_report_data(ctx, resolution, judge, txn_id)
         html = self.report_gen.render(report_data)
+        self._cache_report(key, html, txn_id)
         usage = self._aggregate_usage(resolution, judge, model_name)
         return html, usage
 
@@ -196,8 +198,8 @@ class PipelineService:
         yield ("start", {"transaction_id": txn_id})
 
         # Cache check
-        cache_key = f"{txn_id}|{req.cliente_vip}"
-        cached_html = self.db.get_cached_report(cache_key)
+        key = cache_key(txn_id, req.cliente_vip)
+        cached_html = self.db.get_cached_report(key)
         if cached_html:
             yield ("done", {"html": cached_html, "usage": {"cache_hit": True}})
             return
@@ -282,8 +284,20 @@ class PipelineService:
         # Render HTML report
         report_data = self._build_report_data(ctx, resolution, judge, txn_id)
         html = self.report_gen.render(report_data)
+        self._cache_report(key, html, txn_id)
         usage = self._aggregate_usage(resolution, judge, model_name)
         yield ("done", {"html": html, "usage": usage})
+
+    def _cache_report(self, key: str, html: str, txn_id: str) -> None:
+        """Guarda el informe para que la proxima consulta del mismo caso no pague LLM.
+
+        Best-effort: si el cache falla, el informe ya esta generado y no hay razon
+        para tirar la respuesta.
+        """
+        try:
+            self.db.store_cached_report(key, html)
+        except Exception:
+            logger.warning("No se pudo cachear el informe de %s", txn_id, exc_info=True)
 
     @staticmethod
     def _aggregate_usage(resolution: dict, judge: dict, model_name: str) -> dict:

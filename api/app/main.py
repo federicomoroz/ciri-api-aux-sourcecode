@@ -1,3 +1,4 @@
+import hmac
 import logging
 import uuid
 
@@ -6,15 +7,6 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-
-# Structured JSON logging — parseable by log aggregators (ELK, Datadog, CloudWatch)
-logging.basicConfig(
-    level=logging.INFO,
-    format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
-
-logger = logging.getLogger(__name__)
 
 from .dependencies import lifespan
 from .domain.constants import FALLBACK_REQUEST_ID
@@ -36,6 +28,15 @@ from .routes import (
     sla,
     transactions,
 )
+
+# Structured JSON logging — parseable by log aggregators (ELK, Datadog, CloudWatch)
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="CIRI Chargeback Agent API",
@@ -71,8 +72,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
-        key = getattr(request.app.state, "settings", None)
-        admin_key = getattr(key, "admin_api_key", "") if key else ""
+        settings = getattr(request.app.state, "settings", None)
+        admin_key = getattr(settings, "admin_api_key", "") if settings else ""
 
         if not admin_key:
             return await call_next(request)
@@ -82,7 +83,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         provided = request.headers.get("X-API-Key", "")
-        if provided != admin_key:
+        # compare_digest: el tiempo de comparacion no revela cuantos caracteres
+        # de la clave se acertaron.
+        if not hmac.compare_digest(provided, admin_key):
             return JSONResponse(status_code=401, content={"error": "Invalid or missing API key"})
 
         return await call_next(request)

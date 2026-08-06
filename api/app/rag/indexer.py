@@ -4,7 +4,6 @@ Qdrant indexer for policies and historical cases.
 Collections:
 - policies: 17+ policy documents (Markdown, dynamic via CRUD API)
 - historical_cases: 60+ case documents (auto-grows when Judge score >= threshold)
-- _semantic_cache: cached analysis results
 
 Point IDs: deterministic uuid5 from document code/id to allow upserts.
 """
@@ -66,17 +65,15 @@ class QdrantIndexer:
         embedder: FastEmbedder,
         policies_collection: str = "policies",
         cases_collection: str = "historical_cases",
-        cache_collection: str = "_semantic_cache",
     ):
         self.client = client
         self.embedder = embedder
         self.policies_collection = policies_collection
         self.cases_collection = cases_collection
-        self.cache_collection = cache_collection
 
     def ensure_collections(self) -> None:
-        """Create (or recreate if dim changed) the 3 Qdrant collections."""
-        for name in [self.policies_collection, self.cases_collection, self.cache_collection]:
+        """Create (or recreate if dim changed) the Qdrant collections."""
+        for name in [self.policies_collection, self.cases_collection]:
             try:
                 if self.client.collection_exists(name):
                     info = self.client.get_collection(name)
@@ -117,7 +114,7 @@ class QdrantIndexer:
         """Index all policies as Markdown documents. Returns count indexed."""
         points = []
         texts = [_policy_to_markdown(p) for p in policies]
-        vectors = self.embedder.encode(texts, show_progress_bar=False)
+        vectors = self.embedder.encode(texts)
 
         for policy, vector in zip(policies, vectors):
             points.append(PointStruct(
@@ -149,7 +146,7 @@ class QdrantIndexer:
         tx_map = {t["id"]: t for t in transactions}
         points = []
         texts = [_case_to_text(c, tx_map.get(c["transaction_id"])) for c in cases]
-        vectors = self.embedder.encode(texts, show_progress_bar=False)
+        vectors = self.embedder.encode(texts)
 
         for case, text, vector in zip(cases, texts, vectors):
             tx = tx_map.get(case["transaction_id"], {})

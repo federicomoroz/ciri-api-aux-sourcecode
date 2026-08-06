@@ -39,7 +39,7 @@ class FastEmbedder:
                     logger.info("Voyage AI client initialized with model=%s", self._model_name)
         return self._client
 
-    def encode(self, texts: list[str], show_progress_bar: bool = False) -> np.ndarray:
+    def encode(self, texts: list[str]) -> np.ndarray:
         client = self._ensure_loaded()
         try:
             result = client.embed(texts, model=self._model_name)

@@ -2,7 +2,17 @@
 Unit tests for rag/formatter.py — prompt formatting for policies and cases.
 """
 
-from api.app.rag.formatter import format_cases_for_prompt, format_policies_for_prompt, _motivo_matches, motivo_match_label
+from api.app.rag.formatter import (
+    annotate_by_motivo,
+    format_cases_for_prompt,
+    format_policies_for_prompt,
+    motivo_match_label,
+)
+
+
+def _motivo_matches(a: str, b: str) -> bool:
+    """Predicado sobre el matcher publico: el envoltorio privado ya no existe."""
+    return motivo_match_label(a, b) is not None
 
 
 class TestFormatPoliciesForPrompt:
@@ -148,3 +158,34 @@ class TestMotivoMatching:
         ]
         result = format_cases_for_prompt(cases, current_motivo=None)
         assert "[MOTIVO SIMILAR]" not in result
+
+
+class TestAnnotateByMotivo:
+    """Un solo criterio de anotacion para el prompt y para el resumen."""
+
+    CASOS = [
+        {"case_id": "CB-001", "motivo": "Producto defectuoso", "observations": ""},
+        {"case_id": "CB-002", "motivo": "Monto incorrecto",
+         "observations": "cargo doble por timeout"},
+        {"case_id": "CB-003", "motivo": "Cargo duplicado", "observations": ""},
+    ]
+
+    def test_los_que_matchean_van_primero(self):
+        ids = [c["case_id"] for c, _, _ in annotate_by_motivo(self.CASOS, "Cargo duplicado")]
+        assert ids[-1] == "CB-001"
+        assert set(ids[:2]) == {"CB-002", "CB-003"}
+
+    def test_distingue_match_directo_de_indirecto(self):
+        origenes = {
+            c["case_id"]: origen
+            for c, etiqueta, origen in annotate_by_motivo(self.CASOS, "Cargo duplicado")
+        }
+        assert origenes["CB-003"] == "motivo"
+        assert origenes["CB-002"] == "observaciones"
+        assert origenes["CB-001"] is None
+
+    def test_sin_motivo_no_anota(self):
+        assert all(e is None for _, e, _ in annotate_by_motivo(self.CASOS, None))
+
+    def test_no_pierde_casos(self):
+        assert len(annotate_by_motivo(self.CASOS, "Cargo duplicado")) == len(self.CASOS)

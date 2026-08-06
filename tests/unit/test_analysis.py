@@ -56,14 +56,32 @@ class TestSLACheck:
         assert result["compensation_applicable"] is True
 
     def test_vip_breach_before_standard(self, analyzer):
-        """VIP SLA is stricter: 6 days should breach VIP but not standard."""
-        date_6_days_ago = (date.today() - timedelta(days=6)).isoformat()
+        """El SLA VIP es mas estricto: 6 habiles incumplen VIP pero no el estandar."""
+        apertura = date(2024, 1, 1)          # lunes
+        hoy = date(2024, 1, 9)               # martes siguiente: 6 dias habiles
 
-        vip_result = analyzer.check_sla(date_6_days_ago, "ARG", cliente_vip=True)
-        standard_result = analyzer.check_sla(date_6_days_ago, "ARG", cliente_vip=False)
+        vip = analyzer.check_sla(apertura.isoformat(), "ARG", cliente_vip=True, today=hoy)
+        estandar = analyzer.check_sla(apertura.isoformat(), "ARG", cliente_vip=False, today=hoy)
 
-        assert vip_result["within_sla"] is False   # 6 > 5
-        assert standard_result["within_sla"] is True  # 6 <= 10
+        assert vip["days_elapsed"] == 6
+        assert vip["within_sla"] is False      # 6 > 5
+        assert estandar["within_sla"] is True  # 6 <= 10
+
+    def test_cuenta_habiles_no_corridos(self, analyzer):
+        """Los limites de las politicas son en dias habiles."""
+        apertura = date(2024, 1, 1)   # lunes
+        hoy = date(2024, 1, 15)       # lunes, dos semanas despues
+
+        r = analyzer.check_sla(apertura.isoformat(), "ARG", today=hoy)
+        assert (hoy - apertura).days == 14   # corridos
+        assert r["days_elapsed"] == 10       # habiles
+        assert r["within_sla"] is True       # con corridos habria dado incumplimiento
+
+    def test_fin_de_semana_no_suma(self, analyzer):
+        apertura = date(2024, 1, 5)   # viernes
+        hoy = date(2024, 1, 8)        # lunes
+        r = analyzer.check_sla(apertura.isoformat(), "ARG", today=hoy)
+        assert r["days_elapsed"] == 1
 
 
 class TestErrorPatterns:
@@ -208,3 +226,42 @@ class TestClientFlags:
         """Unknown client should return zero counts."""
         result = analyzer.client_flags("CLI-9999")
         assert result["total_transactions"] == 0
+
+
+class TestPatronesEnElResumenDeLogs:
+    """Los patrones detectados tienen que llegar al prompt, no quedarse en la funcion.
+
+    Regresion: detect_error_patterns existia y estaba probado, pero ningun camino
+    de la aplicacion lo llamaba. El modelo nunca veia los patrones.
+    """
+
+    LOGS = [
+        {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
+         "timestamp": "2024-01-01", "code": "504"},
+        {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
+         "timestamp": "2024-01-01", "code": "504"},
+        {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
+         "timestamp": "2024-01-01", "code": "504"},
+        {"severity": "WARN", "event": "DOUBLE_CHARGE_DETECT", "detail": "doble cobro",
+         "timestamp": "2024-01-01", "code": "200"},
+    ]
+
+    def test_el_resumen_incluye_los_patrones(self):
+        from api.app.services.resolution import ResolutionService
+
+        resumen = ResolutionService._summarize_logs(self.LOGS)
+        assert "Patrones detectados" in resumen
+        assert "systematic_merchant_timeout" in resumen
+        assert "duplicate_charge" in resumen
+
+    def test_sin_patrones_no_agrega_la_linea(self):
+        from api.app.services.resolution import ResolutionService
+
+        limpios = [{"severity": "INFO", "event": "PAYMENT_INITIATED", "detail": "ok",
+                    "timestamp": "2024-01-01", "code": "200"}]
+        assert "Patrones detectados" not in ResolutionService._summarize_logs(limpios)
+
+    def test_sin_logs_no_rompe(self):
+        from api.app.services.resolution import ResolutionService
+
+        assert "Total: 0 eventos" in ResolutionService._summarize_logs([])

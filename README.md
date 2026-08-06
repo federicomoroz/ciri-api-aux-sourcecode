@@ -95,10 +95,10 @@ Mapeo completo con evidencia y comandos de verificación en [`docs/ejes.md`](doc
 |---|---|---|
 | **1. Ingesta** | Webhook + Form Trigger (n8n), API directa, Excel → SQLite | `POST /webhook/chargeback-agent` |
 | **2. RAG** | 3 colecciones Qdrant, embeddings Voyage, QueryBuilder determinístico, sin chunking (y [por qué](docs/rag_explanation.md#estrategia-de-chunking)) | `GET /api/policies/search` devuelve la `query_used` |
-| **3. Agente** | 7 tools HTTP determinísticas · memoria = precedentes + caché semántico · 3 prompts versionados | [`docs/prompts.md`](docs/prompts.md) |
+| **3. Agente** | 7 tools HTTP determinísticas · memoria = precedentes reindexados + caché de informes · 3 prompts versionados | [`docs/prompts.md`](docs/prompts.md) |
 | **4. Automatización** | Switch por `risk_level`, HITL con Wait, reportes Jinja2, workflow de alertas | `docs/examples/*.html` |
 | **5. Identificación de fallas** | 8 patrones de error sobre logs, `cb_ratio` por comercio, flags de cliente | `GET /api/merchants/Airbnb/risk` |
-| **6. Auto-mejora** | Feedback loop, 5 guardrails anti-alucinación, reindexado del RAG, versionado de prompts | `PUT /api/policies/{code}` reindexa al instante |
+| **6. Auto-mejora** | Feedback loop, 5 guardrails (3 detectan alucinación, 2 validan valores), reindexado del RAG, versionado de prompts | `PUT /api/policies/{code}` reindexa al instante |
 | **7. Observabilidad** | Langfuse (tokens, costo, latencia, score del Judge), alertas, error handler | `GET /api/langfuse/stats` |
 
 > **Sobre el eje 3:** el agente no usa el nodo AI Agent de n8n. El tool calling es determinístico
@@ -300,9 +300,8 @@ CB_ADMIN_API_KEY=                        # Si vacío = dev mode (sin auth)
 # ── Qdrant (opcionales) ──────────────────────────────────
 CB_QDRANT_URL=http://localhost:6333      # docker-compose usa http://qdrant:6333
 
-# ── Caché semántico (opcional) ────────────────────────────
-CB_SEMANTIC_CACHE_ENABLED=true
-CB_SEMANTIC_CACHE_THRESHOLD=0.92
+# ── Caché de informes (opcional) ──────────────────────────
+CB_REPORT_CACHE_ENABLED=true              # idempotencia por (transacción, VIP)
 
 # ── Observabilidad Langfuse (opcional) ────────────────────
 CB_LANGFUSE_ENABLED=false                # Activar para ver trazas LLM
@@ -390,7 +389,7 @@ CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
 | 6 | SQLite sobre Postgres | Self-contained para evaluación, migración limpia |
 | 7 | Guardrails post-LLM + overrides | "El código decide, el LLM explica" |
 | 8 | Judge a través de FastAPI | Versionado de prompts + observabilidad Langfuse |
-| 9 | Caché semántico en Qdrant | ~20% reducción de costo LLM |
+| 9 | Caché de idempotencia, no semántico | Repetir un caso no vuelve a pagar el LLM, sin arriesgar respuestas cruzadas |
 | 10 | Modelo dual Haiku + Sonnet | 9.1/10 Judge score vs 8.2 con Haiku solo |
 | 11 | Data Tables de n8n descartadas | Sin agregaciones ni joins: la lógica volvería al canvas |
 

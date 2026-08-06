@@ -29,7 +29,6 @@ __all__ = [
     "SIMILAR_CASES_TOP_K",
     "POLICIES_TOP_K",
     "POLICIES_SCORE_THRESHOLD",
-    "SEMANTIC_CACHE_THRESHOLD",
     "EMBEDDING_DIM",
     # LLM
     "LLM_TRUNCATION_LENGTH",
@@ -48,6 +47,7 @@ __all__ = [
     # LLM context limits
     "LLM_MAX_CRITICAL_LOGS",
     # Feedback / auto-index
+    "FEEDBACK_MOTIVO_DESCONOCIDO",
     "FEEDBACK_MOTIVO_MAX_CHARS",
     "FEEDBACK_AUTO_RESOLUTION_DAYS",
     "FEEDBACK_AUTO_ANALYST_TAG",
@@ -55,6 +55,7 @@ __all__ = [
     "N8N_WEBHOOK_PATH",
     "N8N_WEBHOOK_TEST_PATH",
     "N8N_HEALTHZ_PATH",
+    "LLM_TIMEOUT_S",
     "N8N_TIMEOUT_S",
     "N8N_PING_TIMEOUT_S",
     # Trace / observability names
@@ -152,7 +153,6 @@ SIMILAR_CASES_SCORE_THRESHOLD: float = 0.40  # min cosine similarity for case re
 SIMILAR_CASES_TOP_K: int = 5
 POLICIES_TOP_K: int = 17                     # retrieve all; LLM filters relevance
 POLICIES_SCORE_THRESHOLD: float = 0.0        # no floor — return everything, rank later
-SEMANTIC_CACHE_THRESHOLD: float = 0.92       # min similarity to consider a cache hit
 EMBEDDING_DIM: int = 1024                    # voyage-multilingual-2 (Voyage AI API)
 
 # ── LLM ─────────────────────────────────────────────────────────────────────
@@ -187,6 +187,7 @@ LLM_MAX_CRITICAL_LOGS: int = 5  # max ERROR/WARN logs forwarded to LLM in summar
 
 # ── Feedback / auto-index ─────────────────────────────────────────────────────
 FEEDBACK_MOTIVO_MAX_CHARS: int = 200     # max chars for motivo in auto-indexed cases
+FEEDBACK_MOTIVO_DESCONOCIDO: str = "Motivo no informado"  # cuando el feedback no lo trae
 FEEDBACK_AUTO_RESOLUTION_DAYS: int = 1  # default resolution_days for auto-indexed cases
 FEEDBACK_AUTO_ANALYST_TAG: str = "auto-index"  # analyst field for auto-indexed cases
 
@@ -194,6 +195,7 @@ FEEDBACK_AUTO_ANALYST_TAG: str = "auto-index"  # analyst field for auto-indexed 
 N8N_WEBHOOK_PATH: str = "/webhook/chargeback-agent"
 N8N_WEBHOOK_TEST_PATH: str = "/webhook-test/chargeback-agent"
 N8N_HEALTHZ_PATH: str = "/healthz"
+LLM_TIMEOUT_S: float = 300.0                  # timeout de una llamada al modelo
 N8N_TIMEOUT_S: float = 300.0
 N8N_PING_TIMEOUT_S: float = 3.0
 

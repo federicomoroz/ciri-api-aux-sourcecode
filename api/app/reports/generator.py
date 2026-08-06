@@ -23,6 +23,9 @@ class ReportGenerator:
         self.template = self.env.get_template(REPORT_TEMPLATE_NAME)
 
     def render(self, data: dict) -> str:
-        """Render the HTML report template with all case data."""
-        data["generated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        return self.template.render(**data)
+        """Render the HTML report template with all case data.
+
+        No toca el dict que recibe: el llamador suele reusarlo despues.
+        """
+        generado = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        return self.template.render(**data, generated_at=generado)

@@ -25,7 +25,7 @@ def generate_html_report(
 
     # Auto-cache: store HTML keyed by (transaction_id, cliente_vip)
     tx_id = req.transaction.get("id", "")
-    if settings.semantic_cache_enabled and tx_id:
+    if settings.report_cache_enabled and tx_id:
         try:
             key = cache_key(tx_id, req.cliente_vip)
             db.store_cached_report(key, html)

@@ -5,7 +5,7 @@ These produce structured data used by the LLM resolution prompt.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from ..data.db import Database
 from ..domain.constants import (
@@ -88,7 +88,8 @@ class Analyzer:
             counts[sev] = counts.get(sev, 0) + 1
         return counts
 
-    def detect_error_patterns(self, logs: list[dict]) -> dict:
+    @staticmethod
+    def detect_error_patterns(logs: list[dict]) -> dict:
         """Deterministic pattern detection from log events.
 
         Returns:
@@ -105,7 +106,7 @@ class Analyzer:
                 "critical_events": [],
             }
 
-        severity_counts = self.count_severities(logs)
+        severity_counts = Analyzer.count_severities(logs)
         event_counts: dict[str, int] = {}
 
         for log in logs:
@@ -151,11 +152,29 @@ class Analyzer:
             "critical_events": critical_events,
         }
 
+    @staticmethod
+    def _business_days_between(start: date, end: date) -> int:
+        """Dias habiles transcurridos, sin contar el dia de apertura.
+
+        No modela feriados: no hay calendario de feriados en el dataset y
+        inventarlo daria una precision falsa. Contar solo dias de semana ya
+        acerca mucho mas a la regla que contar dias corridos.
+        """
+        if end <= start:
+            return 0
+        semanas, resto = divmod((end - start).days, 7)
+        habiles = semanas * 5
+        for i in range(1, resto + 1):
+            if (start + timedelta(days=i)).weekday() < 5:
+                habiles += 1
+        return habiles
+
     def check_sla(
         self,
         case_open_date: str,
         country: str,
         cliente_vip: bool = False,
+        today: date | None = None,
     ) -> dict:
         """Check SLA compliance based on policy rules.
 
@@ -164,16 +183,19 @@ class Analyzer:
         - POL-SLA-002 (standard LATAM): 10 business days
         - POL-EXC-004 (non-LATAM merchants): 15 business days
 
+        Los limites son en dias habiles, asi que se cuentan dias habiles.
+        `today` existe para que los tests no dependan del dia en que corren.
+
         If NOT within SLA -> compensation_applicable = True (POL-SLA-004: max USD 15)
         """
+        today = today or datetime.now(timezone.utc).date()
         try:
             open_date = datetime.strptime(case_open_date[:10], "%Y-%m-%d").date()
         except (ValueError, TypeError):
             logger.warning("Invalid case_open_date '%s', defaulting to today", case_open_date)
-            open_date = datetime.now(timezone.utc).date()
+            open_date = today
 
-        today = datetime.now(timezone.utc).date()
-        days_elapsed = (today - open_date).days
+        days_elapsed = self._business_days_between(open_date, today)
 
         if cliente_vip:
             sla_limit = SLA_VIP_DAYS

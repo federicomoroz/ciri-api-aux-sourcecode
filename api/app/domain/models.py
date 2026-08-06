@@ -13,7 +13,6 @@ from .enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 class ResolveRequest(BaseModel):
     transaction_id: str = Field(min_length=1)
-    agent_analysis: str
     tx_data: dict
     policies: list[dict]
     similar_cases: list[dict]
@@ -36,6 +35,7 @@ class FeedbackRequest(BaseModel):
     final_outcome: str = Field(min_length=1)
     judge_score: float = Field(ge=0.0, le=10.0)
     resolution: dict | None = None
+    motivo: str | None = None  # motivo del contracargo, para indexar el precedente
 
 
 class SLACheckRequest(BaseModel):

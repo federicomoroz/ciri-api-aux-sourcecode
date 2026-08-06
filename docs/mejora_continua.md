@@ -283,17 +283,28 @@ El criterio `policy_consistency` detecta la alucinacion mas peligrosa: recomenda
 
 ## Deteccion de alucinaciones — Guardrails
 
-Cinco guardrails post-LLM corren en `_validate_resolution()` dentro de `ResolutionService.resolve()`, aplicados al JSON de resolucion antes de devolverlo a n8n.
+Cinco guardrails corren dentro de `ResolutionService.resolve()`, y estan en dos lugares
+distintos a proposito.
+
+**Tres detectan que el modelo se contradijo con la evidencia** (`_detect_divergence`). Corren
+**antes** del override determinista, porque despues la propuesta del modelo ya fue reemplazada y
+la contradiccion deja de ser observable: el sistema seguiria estando protegido, pero la
+alucinacion se corregiria en silencio y no quedaria registrada en ningun lado. Al correr antes,
+el warning viaja en `guardrail_warnings` hasta el informe y hasta el audit trail.
+
+**Dos validan campos que el codigo no sobrescribe** (`_validate_resolution`): la compensacion y
+la confianza salen del modelo tal cual, asi que ahi si hay algo que comprobar sobre el valor
+final.
 
 ### Guardrail 1: APPROVE con BLOCKER activo
 
 **Condicion:** `recommended_action == "APPROVE"` Y al menos un veredicto de politica tiene `verdict == "BLOCKER"`
 
-**Accion:** Auto-correccion — forzar `recommended_action = "REJECT"` y `risk_level = "BLOCKER"`
+**Accion:** El override determinista ya fija `REJECT` + `BLOCKER` a partir de los veredictos. El guardrail no corrige: **registra** que el modelo propuso lo contrario.
 
 **Warning agregado:**
 ```
-"GUARDRAIL: APPROVE con BLOCKER activo — auto-corregido a REJECT (posible alucinacion)"
+"GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
 ```
 
 **Por que importa:** Esta es la alucinacion mas peligrosa posible. Aprobar un contracargo para una transaccion de criptomonedas (irreversible por diseño) o un caso de fraude confirmado resultaria en perdida financiera. El guardrail lo atrapa incluso cuando el LLM produce output contradictorio.

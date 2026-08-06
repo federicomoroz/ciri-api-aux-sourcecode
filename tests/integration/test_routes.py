@@ -62,10 +62,9 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.report_generator = report_gen
     app.state.settings = MagicMock()
     app.state.settings.admin_api_key = ""
-    app.state.settings.semantic_cache_enabled = True
+    app.state.settings.report_cache_enabled = True
     app.state.settings.qdrant_policies_collection = "policies"
     app.state.settings.qdrant_cases_collection = "historical_cases"
-    app.state.settings.qdrant_cache_collection = "_semantic_cache"
 
     mock_collection_info = MagicMock()
     mock_collection_info.points_count = 0
@@ -298,7 +297,7 @@ def test_logs_empty_returns_zero_count(test_client_routes):
 # ---- Report with auto-cache ----
 
 def test_report_html_caches_when_enabled(test_client_routes):
-    """POST /api/reports/html should auto-cache when semantic_cache_enabled=True."""
+    """POST /api/reports/html should auto-cache when report_cache_enabled=True."""
     client, db, _ = test_client_routes
     payload = {
         "transaction": {

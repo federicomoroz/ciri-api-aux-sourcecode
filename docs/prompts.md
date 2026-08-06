@@ -570,14 +570,16 @@ Todos los prompts instruyen al LLM: "Responde UNICAMENTE con JSON valido. Sin te
 
 ### Guardrails post-LLM como red de seguridad
 
-Independientemente de lo que el LLM devuelva, `ResolutionService._validate_resolution()` aplica correcciones automaticas:
+Independientemente de lo que el LLM devuelva, el codigo fija los campos criticos a partir de los veredictos de politica. Lo que hacen los guardrails es dejar constancia de la discrepancia:
 
-| Condicion detectada | Correccion |
-|---|---|
-| APPROVE con BLOCKER activo | Auto-corregido a REJECT + risk BLOCKER (posible alucinacion) |
-| risk_level=BLOCKER sin veredictos BLOCKER | Auto-corregido a HIGH + PENDING_HITL |
-| REJECT sin veredictos BLOCKER | Auto-corregido a PENDING_HITL (requiere revision humana) |
-| Compensacion excede monto original en >10% | Warning registrado |
-| Confianza > 0.95 con 2+ violaciones de politica | Warning registrado |
+| Condicion detectada | Donde | Que hace |
+|---|---|---|
+| El modelo propuso APPROVE con un BLOCKER activo | `_detect_divergence` | Registra la contradiccion; el override ya fijo REJECT |
+| El modelo propuso risk_level=BLOCKER sin veredictos BLOCKER | `_detect_divergence` | Registra; el override ya fijo el riesgo real |
+| El modelo propuso REJECT sin veredictos BLOCKER | `_detect_divergence` | Registra; el override ya derivo a revision humana |
+| Compensacion excede el monto original en >10% | `_validate_resolution` | Warning sobre un campo que el modelo si controla |
+| Confianza > 0.95 con 2+ violaciones de politica | `_validate_resolution` | Warning sobre un campo que el modelo si controla |
 
-Estas correcciones son el ultimo nivel de defensa y, gracias a la arquitectura v3.0 donde el codigo decide los campos criticos, se activan cada vez con menor frecuencia.
+Los tres primeros corren **antes** del override determinista. Es la unica ventana en la que la
+propuesta del modelo existe: despues, la contradiccion ya fue reemplazada por la decision del
+codigo y no habria nada que detectar.

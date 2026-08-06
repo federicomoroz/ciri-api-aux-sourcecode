@@ -30,4 +30,5 @@ def submit_feedback(
         final_outcome=req.final_outcome,
         judge_score=req.judge_score,
         resolution=req.resolution,
+        motivo=req.motivo,
     )

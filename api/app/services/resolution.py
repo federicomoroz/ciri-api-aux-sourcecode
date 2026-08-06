@@ -32,7 +32,7 @@ from ..llm.client import LLMClient, LLMResult
 from ..llm import prompts
 from ..llm.parsing import validate_llm_output
 from ..observability.tracer import Tracer
-from ..rag.formatter import format_cases_for_prompt, format_policies_for_prompt, motivo_match_label
+from ..rag.formatter import annotate_by_motivo, format_cases_for_prompt, format_policies_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,10 @@ class ResolutionService:
             determined_outcome=outcome,
         )
 
+        # Detectar la alucinacion ANTES de corregirla: una vez aplicado el
+        # override determinista, lo que propuso el modelo ya no es observable.
+        warnings = self._detect_divergence(resolution, outcome, policy_verdicts)
+
         # Override LLM decisions with deterministic values (always).
         resolution["policy_verdicts"] = policy_verdicts
         resolution["recommended_action"] = outcome["recommended_action"]
@@ -94,7 +98,7 @@ class ResolutionService:
         if outcome["hitl_reason"]:
             resolution["hitl_reason"] = outcome["hitl_reason"]
 
-        warnings = self._validate_resolution(resolution, tx_data)
+        warnings += self._validate_resolution(resolution, tx_data)
         usage = {
             "input_tokens": eval_result.input_tokens + synth_result.input_tokens,
             "output_tokens": eval_result.output_tokens + synth_result.output_tokens,
@@ -227,18 +231,85 @@ class ResolutionService:
 
     @staticmethod
     def _summarize_logs(logs: list[dict]) -> str:
-        severity_counts = Analyzer.count_severities(logs)
+        """Resume los logs para el prompt: conteos, patrones y eventos criticos.
+
+        Los patrones los detecta `Analyzer.detect_error_patterns`, sin LLM. Es lo
+        que convierte una lista de eventos sueltos en una senal aprovechable:
+        "timeout sistematico del comercio" dice bastante mas que seis lineas
+        repetidas de MERCHANT_NO_RESPONSE.
+        """
+        analysis = Analyzer.detect_error_patterns(logs)
+        severity_counts = analysis["severity_counts"]
         text = (
             f"Total: {len(logs)} eventos | "
             f"ERROR: {severity_counts[Severity.ERROR]} | "
             f"WARN: {severity_counts[Severity.WARN]} | "
             f"INFO: {severity_counts[Severity.INFO]}\n"
         )
-        if logs:
-            critical = [log for log in logs if log.get("severity") in (Severity.ERROR, Severity.WARN)]
-            for log in critical[:LLM_MAX_CRITICAL_LOGS]:
-                text += f"- [{log['severity']}] {log['event']}: {log['detail']}\n"
+        if analysis["patterns"]:
+            text += f"Patrones detectados: {', '.join(analysis['patterns'])}\n"
+        for log in analysis["critical_events"][:LLM_MAX_CRITICAL_LOGS]:
+            text += f"- [{log['severity']}] {log['event']}: {log['detail']}\n"
         return text
+
+    # Que implica cada tipo de resolucion previa, para no dejarselo interpretar
+    # al modelo. Se evalua en orden: la primera coincidencia gana.
+    _IMPLICACION_POR_RESOLUCION: tuple[tuple[tuple[str, ...], str], ...] = (
+        (("sin resolucion", "pendiente"),
+         "caso similar permanece sin resolver — sugiere que este tipo de caso requiere "
+         "investigacion adicional antes de decidir"),
+        (("cerrado",),
+         "caso similar fue cerrado sin resolucion explicita — riesgo de que el caso actual "
+         "siga el mismo camino si no se investiga la causa raiz antes de decidir"),
+        (("aprobado", "a favor"),
+         "precedente fue aprobado — patron favorable al cliente para este tipo de caso"),
+        (("rechazado", "denegado"),
+         "precedente fue rechazado — patron desfavorable al cliente para este tipo de caso"),
+        (("parcial",),
+         "precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso"),
+    )
+
+    @staticmethod
+    def _describe_precedent(
+        case: dict,
+        label: str | None,
+        match_source: str | None,
+        tx_merchant: str,
+    ) -> str:
+        """Una linea por precedente, con sus etiquetas y su implicacion."""
+        case_merchant = case.get("merchant", "")
+        motivo = case.get("motivo", "?")
+        resolution = case.get("resolution", "?")
+
+        tags = []
+        if label:
+            tags.append("[MOTIVO SIMILAR]")
+        if tx_merchant and case_merchant and case_merchant.lower() == tx_merchant.lower():
+            tags.append("[MISMO MERCHANT]")
+
+        linea = (
+            f"{case.get('case_id', '?')}{' ' + ' '.join(tags) if tags else ''}: "
+            f"{motivo}, {resolution} en {case.get('resolution_days', '?')}d"
+        )
+        if case_merchant:
+            linea += f", merchant={case_merchant}"
+        if not label:
+            return linea
+
+        obs = case.get("observations", "")
+        if obs:
+            linea += f". Obs: {obs}"
+        origen = (
+            f" (match por {match_source}, motivo registrado: {motivo})"
+            if match_source == "observaciones" else ""
+        )
+        linea += f". Relevancia: mismo patron de {label}{origen}"
+
+        res_lower = resolution.lower()
+        for claves, implicacion in ResolutionService._IMPLICACION_POR_RESOLUCION:
+            if any(k in res_lower for k in claves):
+                return f"{linea}. Nota: {implicacion}"
+        return linea
 
     @staticmethod
     def _build_precedent_summary(
@@ -255,63 +326,12 @@ class ResolutionService:
         if not similar_cases:
             return "Sin precedentes relevantes."
 
-        annotated = []
-        for c in similar_cases:
-            case_motivo = c.get("motivo", "")
-            case_obs = c.get("observations", "")
-            case_text = f"{case_motivo} {case_obs}"
-            label = motivo_match_label(current_motivo, case_text) if current_motivo else None
-            # Track if match is from observations (indirect) vs motivo field (direct).
-            match_source = None
-            if label and current_motivo:
-                direct = motivo_match_label(current_motivo, case_motivo)
-                match_source = "motivo" if direct else "observaciones"
-            annotated.append((c, label, match_source))
+        annotated = annotate_by_motivo(similar_cases, current_motivo)
 
-        # Matches first (label is not None), then rest.
-        annotated.sort(key=lambda x: (x[1] is None,))
-
-        parts = []
-        for c, label, match_source in annotated:
-            tags = []
-            if label:
-                tags.append("[MOTIVO SIMILAR]")
-            case_merchant = c.get("merchant", "")
-            if tx_merchant and case_merchant and case_merchant.lower() == tx_merchant.lower():
-                tags.append("[MISMO MERCHANT]")
-            tag = " " + " ".join(tags) if tags else ""
-            case_id = c.get("case_id", "?")
-            motivo = c.get("motivo", "?")
-            resolution = c.get("resolution", "?")
-            days = c.get("resolution_days", "?")
-            merchant = case_merchant
-            obs = c.get("observations", "")
-
-            line = f"{case_id}{tag}: {motivo}, {resolution} en {days}d"
-            if merchant:
-                line += f", merchant={merchant}"
-            if label and obs:
-                line += f". Obs: {obs}"
-            if label:
-                source_note = (
-                    f" (match por {match_source}, motivo registrado: {motivo})"
-                    if match_source == "observaciones" else ""
-                )
-                line += f". Relevancia: mismo patron de {label}{source_note}"
-                # Deterministic outcome note — map resolution to implication.
-                res_lower = resolution.lower()
-                if "sin resolucion" in res_lower or "pendiente" in res_lower:
-                    line += f". Nota: caso similar permanece sin resolver — sugiere que este tipo de caso requiere investigacion adicional antes de decidir"
-                elif "cerrado" in res_lower:
-                    days_val = c.get("resolution_days", "?")
-                    line += f". Nota: caso similar fue cerrado sin resolucion explicita en {days_val}d — riesgo de que caso actual siga mismo camino si no se investiga causa raiz antes de decidir"
-                elif "aprobado" in res_lower or "a favor" in res_lower:
-                    line += f". Nota: precedente fue aprobado — patron favorable al cliente para este tipo de caso"
-                elif "rechazado" in res_lower or "denegado" in res_lower:
-                    line += f". Nota: precedente fue rechazado — patron desfavorable al cliente para este tipo de caso"
-                elif "parcial" in res_lower:
-                    line += f". Nota: precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso"
-            parts.append(line)
+        parts = [
+            ResolutionService._describe_precedent(c, label, match_source, tx_merchant)
+            for c, label, match_source in annotated
+        ]
 
         # Deterministic pattern analysis across ALL precedents.
         outcomes_all = [c.get("resolution", "").lower() for c, _, _ in annotated]
@@ -429,38 +449,56 @@ class ResolutionService:
         }
 
     @staticmethod
-    def _validate_resolution(resolution: dict, transaction: dict) -> list[str]:
-        """Post-LLM guardrails. Returns list of warning strings. Critical violations are auto-corrected."""
+    def _detect_divergence(
+        llm_proposal: dict,
+        outcome: dict,
+        policy_verdicts: list[dict],
+    ) -> list[str]:
+        """Compara lo que propuso el modelo con lo que decidio el codigo.
+
+        Se ejecuta antes del override determinista, que es la unica ventana en la
+        que la propuesta del modelo todavia existe. Las tres divergencias que
+        detecta son contradicciones con la evidencia, no diferencias de criterio:
+        el modelo afirma algo que sus propios veredictos desmienten.
+
+        No corrige nada — de eso ya se encarga el override. Deja constancia, que
+        es lo que un auditor necesita para saber que el modelo se equivoco.
+        """
         warnings = []
-
         has_blocker = any(
-            v.get("verdict") == VerdictType.BLOCKER
-            for v in resolution.get("policy_verdicts", [])
+            v.get("verdict") == VerdictType.BLOCKER for v in policy_verdicts
         )
-        if resolution.get("recommended_action") == ResolutionOutcome.APPROVE and has_blocker:
-            warnings.append(
-                "GUARDRAIL: APPROVE con BLOCKER activo — auto-corregido a REJECT (posible alucinacion)"
-            )
-            resolution["recommended_action"] = ResolutionOutcome.REJECT
-            resolution["risk_level"] = RiskLevel.BLOCKER
-            resolution["requires_hitl"] = False
+        propuesta = llm_proposal.get("recommended_action")
+        riesgo = llm_proposal.get("risk_level")
 
-        if resolution.get("risk_level") == RiskLevel.BLOCKER and not has_blocker:
+        if propuesta == ResolutionOutcome.APPROVE and has_blocker:
             warnings.append(
-                "GUARDRAIL: risk_level=BLOCKER sin veredictos BLOCKER reales — auto-corregido a HIGH + PENDING_HITL"
+                f"GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — "
+                f"corregido a {outcome['recommended_action']} (posible alucinacion)"
             )
-            resolution["risk_level"] = RiskLevel.HIGH
-            resolution["requires_hitl"] = True
-            if resolution.get("recommended_action") == ResolutionOutcome.REJECT:
-                resolution["recommended_action"] = ResolutionOutcome.PENDING_HITL
-                resolution["hitl_reason"] = f"{GUARDRAIL_AUTO_CORRECTED_PREFIX}: REJECT sin BLOCKER requiere confirmacion de analista"
+        if riesgo == RiskLevel.BLOCKER and not has_blocker:
+            warnings.append(
+                f"GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — "
+                f"corregido a {outcome['risk_level']}"
+            )
+        if propuesta == ResolutionOutcome.REJECT and not has_blocker:
+            warnings.append(
+                f"GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — "
+                f"corregido a {outcome['recommended_action']} (requiere revision humana)"
+            )
 
-        if resolution.get("recommended_action") == ResolutionOutcome.REJECT and not has_blocker:
-            warnings.append(
-                "GUARDRAIL: REJECT sin veredictos BLOCKER — auto-corregido a PENDING_HITL (requiere revision humana)"
-            )
-            resolution["recommended_action"] = ResolutionOutcome.PENDING_HITL
-            resolution["requires_hitl"] = True
+        for w in warnings:
+            logger.warning("%s", w)
+        return warnings
+
+    @staticmethod
+    def _validate_resolution(resolution: dict, transaction: dict) -> list[str]:
+        """Guardrails sobre los campos que el override no toca.
+
+        La accion y el nivel de riesgo los fija el codigo, asi que no hay nada que
+        validar ahi. Estos dos campos, en cambio, salen del modelo tal cual.
+        """
+        warnings = []
 
         comp = resolution.get("compensation_amount_usd", 0)
         tx_amount = transaction.get("amount_usd", 0)

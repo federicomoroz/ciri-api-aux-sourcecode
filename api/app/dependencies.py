@@ -9,11 +9,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-logger = logging.getLogger(__name__)
-
 from fastapi import FastAPI, Request
 from qdrant_client import QdrantClient
-from .rag.embedder import FastEmbedder
 
 from .analysis.analyzer import Analyzer
 from .config import Settings
@@ -21,6 +18,7 @@ from .data.db import Database
 from .data.loader import init_sqlite, load_excel
 from .llm.client import AnthropicClient
 from .observability.tracer import LangfuseTracer, NoOpTracer
+from .rag.embedder import FastEmbedder
 from .rag.indexer import QdrantIndexer
 from .rag.retriever import QdrantRetriever
 from .rag.updater import RAGUpdater
@@ -30,11 +28,21 @@ from .services.langfuse_stats import LangfuseStatsService
 from .services.pipeline import PipelineService
 from .services.resolution import ResolutionService
 
+logger = logging.getLogger(__name__)
+
+
+def _ya_cableado(app: FastAPI) -> bool:
+    """Si alguien ya dejo los servicios en app.state, no hay nada que construir.
+
+    Lo usan los tests, pero no es un atajo para tests: es el punto de extension
+    para montar la app con dependencias propias sin tocar este modulo.
+    """
+    return hasattr(app.state, "db")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tests pre-populate app.state before TestClient starts — skip auto-init
-    if hasattr(app.state, "db"):
+    if _ya_cableado(app):
         yield
         return
 
@@ -95,14 +103,12 @@ async def lifespan(app: FastAPI):
         embedder,
         policies_collection=settings.qdrant_policies_collection,
         cases_collection=settings.qdrant_cases_collection,
-        cache_collection=settings.qdrant_cache_collection,
     )
     retriever = QdrantRetriever(
         qdrant,
         embedder,
         policies_collection=settings.qdrant_policies_collection,
         cases_collection=settings.qdrant_cases_collection,
-        cache_collection=settings.qdrant_cache_collection,
     )
     updater = RAGUpdater(indexer, db, judge_threshold=settings.judge_auto_index_threshold)
 

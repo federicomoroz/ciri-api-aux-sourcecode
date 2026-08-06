@@ -128,7 +128,6 @@ Each "Generar Reporte" node is identical — same endpoint, same payload shape (
 |------------|------|-------|
 | `policies` | 17+ (dynamic) | Markdown docs, editable via API, auto-reindexed |
 | `historical_cases` | 60+ (auto-grows) | New cases indexed when Judge score ≥ 8.0 |
-| `_semantic_cache` | N | Reduces LLM cost for similar queries (threshold 0.92) |
 
 **What is NOT indexed in Qdrant**: Transactions (exact ID lookup only) and Logs (retrieved complete by transaction_id — no useful similarity).
 
@@ -165,7 +164,7 @@ CB_QDRANT_URL=http://localhost:6333
 CB_SQLITE_PATH=data/chargeback.db
 CB_DATA_FILE_PATH=data/Similación_dataset_contracargos_.xlsx
 CB_LANGFUSE_ENABLED=false                # set true for observability
-CB_SEMANTIC_CACHE_ENABLED=true
+CB_REPORT_CACHE_ENABLED=true
 CB_JUDGE_AUTO_INDEX_THRESHOLD=8.0
 ```
 

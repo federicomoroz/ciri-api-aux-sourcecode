@@ -35,7 +35,6 @@ def health(
         for name in [
             settings.qdrant_policies_collection,
             settings.qdrant_cases_collection,
-            settings.qdrant_cache_collection,
         ]:
             info = qdrant.get_collection(name)
             collections[name] = info.points_count

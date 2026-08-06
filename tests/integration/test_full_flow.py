@@ -68,10 +68,9 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
     app.state.report_generator = report_gen
     app.state.settings = MagicMock()
     app.state.settings.admin_api_key = ""  # no auth in tests
-    app.state.settings.semantic_cache_enabled = False
+    app.state.settings.report_cache_enabled = False
     app.state.settings.qdrant_policies_collection = "policies"
     app.state.settings.qdrant_cases_collection = "historical_cases"
-    app.state.settings.qdrant_cache_collection = "_semantic_cache"
 
     # Configure mock Qdrant for health check
     mock_collection_info = MagicMock()

@@ -25,7 +25,7 @@ def cache_lookup(
     settings: Settings = Depends(get_settings),
 ) -> dict:
     """Check if a cached HTML report exists for this exact request."""
-    if not settings.semantic_cache_enabled:
+    if not settings.report_cache_enabled:
         return {"cached": False}
 
     key = cache_key(transaction_id, cliente_vip=cliente_vip)

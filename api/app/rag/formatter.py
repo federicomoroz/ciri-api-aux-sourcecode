@@ -20,11 +20,6 @@ _MOTIVO_SYNONYM_GROUPS: list[tuple[str, set[str]]] = [
 ]
 
 
-def _motivo_matches(motivo_a: str, motivo_b: str) -> bool:
-    """Check if two motivos share a synonym group keyword. Pure string matching."""
-    return motivo_match_label(motivo_a, motivo_b) is not None
-
-
 def motivo_match_label(motivo_a: str, motivo_b: str) -> str | None:
     """Return the synonym group label if motivos match, else None."""
     a = motivo_a.lower()
@@ -35,6 +30,33 @@ def motivo_match_label(motivo_a: str, motivo_b: str) -> str | None:
         if a_match and b_match:
             return label
     return None
+
+
+def annotate_by_motivo(
+    cases: list[dict],
+    current_motivo: str | None,
+) -> list[tuple[dict, str | None, str | None]]:
+    """Anota cada precedente segun comparta patron de motivo con el caso actual.
+
+    Devuelve (caso, etiqueta, origen) con los que matchean primero. `origen` dice
+    si el match vino del campo motivo o de las observaciones: un match indirecto
+    vale menos y conviene poder decirlo.
+
+    Fuente unica del criterio: la formateaban por separado el prompt de precedentes
+    y el resumen deterministico, con riesgo de divergir.
+    """
+    anotados = []
+    for c in cases:
+        texto_completo = f"{c.get('motivo', '')} {c.get('observations', '')}"
+        etiqueta = motivo_match_label(current_motivo, texto_completo) if current_motivo else None
+        origen = None
+        if etiqueta and current_motivo:
+            directo = motivo_match_label(current_motivo, c.get("motivo", ""))
+            origen = "motivo" if directo else "observaciones"
+        anotados.append((c, etiqueta, origen))
+
+    anotados.sort(key=lambda x: (x[1] is None,))
+    return anotados
 
 
 def format_policies_for_prompt(policies: list[dict]) -> str:
@@ -63,19 +85,9 @@ def format_cases_for_prompt(cases: list[dict], current_motivo: str | None = None
     if not cases:
         return f"(No se encontraron precedentes similares con similitud >= {SIMILAR_CASES_SCORE_THRESHOLD})"
 
-    # Annotate matches deterministically.
-    annotated = []
-    for c in cases:
-        case_text = f"{c.get('motivo', '')} {c.get('observations', '')}"
-        is_match = bool(current_motivo) and _motivo_matches(current_motivo, case_text)
-        annotated.append((c, is_match))
-
-    # Sort: matches first, then by original order.
-    annotated.sort(key=lambda x: (not x[1],))
-
     lines = []
-    for i, (c, is_match) in enumerate(annotated, 1):
-        tag = " [MOTIVO SIMILAR]" if is_match else ""
+    for i, (c, etiqueta, _origen) in enumerate(annotate_by_motivo(cases, current_motivo), 1):
+        tag = " [MOTIVO SIMILAR]" if etiqueta else ""
         score_pct = int(c.get("score", 0) * 100)
         lines.append(f"### Precedente {i}{tag} (similitud: {score_pct}%)")
         lines.append(f"- Caso: {c.get('case_id', DISPLAY_FALLBACK)} | Motivo: {c.get('motivo', DISPLAY_FALLBACK)}")

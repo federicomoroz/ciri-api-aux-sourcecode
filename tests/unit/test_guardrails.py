@@ -4,131 +4,75 @@ import pytest
 from api.app.services.resolution import ResolutionService
 
 
-class TestGuardrailApproveWithBlocker:
-    """Guardrail 1: APPROVE + BLOCKER active → auto-correct to REJECT."""
+class TestDetectDivergence:
+    """El modelo contradice a sus propios veredictos: hay que dejar constancia.
 
-    def test_approve_with_blocker_corrected_to_reject(self):
-        resolution = {
-            "recommended_action": "APPROVE",
-            "risk_level": "MEDIUM",
-            "requires_hitl": True,
-            "policy_verdicts": [
-                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            ],
-        }
-        tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+    Se comprueba sobre la propuesta del modelo, antes del override determinista.
+    Despues del override la contradiccion ya no es observable.
+    """
 
+    BLOCKER_VERDICTS = [
+        {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+    ]
+    FAIL_VERDICTS = [
+        {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+        {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio"},
+    ]
+
+    def test_approve_con_blocker_queda_registrado(self):
+        propuesta = {"recommended_action": "APPROVE", "risk_level": "MEDIUM"}
+        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        warnings = ResolutionService._detect_divergence(
+            propuesta, outcome, self.BLOCKER_VERDICTS,
+        )
         assert len(warnings) == 1
-        assert "GUARDRAIL" in warnings[0]
+        assert "APPROVE" in warnings[0]
         assert "BLOCKER" in warnings[0]
-        assert resolution["recommended_action"] == "REJECT"
-        assert resolution["risk_level"] == "BLOCKER"
-        assert resolution["requires_hitl"] is False
+        assert "alucinacion" in warnings[0]
 
-    def test_reject_with_blocker_no_correction(self):
-        resolution = {
-            "recommended_action": "REJECT",
-            "risk_level": "BLOCKER",
-            "policy_verdicts": [
-                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            ],
-        }
-        tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-        assert len(warnings) == 0
+    def test_reject_con_blocker_es_coherente(self):
+        propuesta = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        warnings = ResolutionService._detect_divergence(
+            propuesta, outcome, self.BLOCKER_VERDICTS,
+        )
+        assert warnings == []
 
-    def test_approve_without_blocker_no_correction(self):
-        resolution = {
-            "recommended_action": "APPROVE",
-            "risk_level": "LOW",
-            "policy_verdicts": [
-                {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
-            ],
-        }
-        tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-        assert len(warnings) == 0
+    def test_approve_sin_blocker_es_coherente(self):
+        propuesta = {"recommended_action": "APPROVE", "risk_level": "LOW"}
+        outcome = {"recommended_action": "APPROVE", "risk_level": "LOW"}
+        verdicts = [{"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "ok"}]
+        assert ResolutionService._detect_divergence(propuesta, outcome, verdicts) == []
 
-
-class TestGuardrailBlockerWithoutBlockerVerdicts:
-    """Guardrail 4: risk_level=BLOCKER without actual BLOCKER verdicts → auto-correct to HIGH."""
-
-    def test_blocker_risk_without_blocker_verdicts_corrected_to_high_hitl(self):
-        resolution = {
-            "recommended_action": "REJECT",
-            "risk_level": "BLOCKER",
-            "requires_hitl": False,
-            "policy_verdicts": [
-                {"policy_code": "POL-CB-005", "verdict": "FAIL", "reasoning": "Requiere aprobacion"},
-                {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio alto"},
-            ],
-        }
-        tx = {"amount_usd": 500.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-
+    def test_riesgo_blocker_inventado_queda_registrado(self):
+        propuesta = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        outcome = {"recommended_action": "PENDING_HITL", "risk_level": "HIGH"}
+        warnings = ResolutionService._detect_divergence(
+            propuesta, outcome, self.FAIL_VERDICTS,
+        )
         assert any("risk_level=BLOCKER sin veredictos BLOCKER" in w for w in warnings)
-        assert resolution["risk_level"] == "HIGH"
-        assert resolution["recommended_action"] == "PENDING_HITL"
-        assert resolution["requires_hitl"] is True
+        assert any("corregido a HIGH" in w for w in warnings)
 
-    def test_blocker_risk_with_blocker_verdicts_no_correction(self):
-        resolution = {
-            "recommended_action": "REJECT",
-            "risk_level": "BLOCKER",
-            "policy_verdicts": [
-                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            ],
-        }
-        tx = {"amount_usd": 500.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-        assert not any("risk_level=BLOCKER sin veredictos" in w for w in warnings)
-
-    def test_high_risk_without_blocker_verdicts_no_correction(self):
-        resolution = {
-            "recommended_action": "PENDING_HITL",
-            "risk_level": "HIGH",
-            "policy_verdicts": [
-                {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
-            ],
-        }
-        tx = {"amount_usd": 500.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-        assert not any("risk_level=BLOCKER" in w for w in warnings)
-
-
-class TestGuardrailRejectWithoutBlocker:
-    """Guardrail 5: REJECT without BLOCKER verdicts → auto-correct to PENDING_HITL."""
-
-    def test_reject_without_blocker_corrected_to_hitl(self):
-        resolution = {
-            "recommended_action": "REJECT",
-            "risk_level": "HIGH",
-            "requires_hitl": False,
-            "policy_verdicts": [
-                {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
-                {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio"},
-            ],
-        }
-        tx = {"amount_usd": 500.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-
+    def test_reject_sin_blocker_queda_registrado(self):
+        propuesta = {"recommended_action": "REJECT", "risk_level": "HIGH"}
+        outcome = {"recommended_action": "PENDING_HITL", "risk_level": "HIGH"}
+        warnings = ResolutionService._detect_divergence(
+            propuesta, outcome, self.FAIL_VERDICTS,
+        )
         assert any("REJECT sin veredictos BLOCKER" in w for w in warnings)
-        assert resolution["recommended_action"] == "PENDING_HITL"
-        assert resolution["requires_hitl"] is True
+        assert any("corregido a PENDING_HITL" in w for w in warnings)
 
-    def test_reject_with_blocker_no_correction(self):
-        resolution = {
-            "recommended_action": "REJECT",
-            "risk_level": "BLOCKER",
-            "policy_verdicts": [
-                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            ],
-        }
-        tx = {"amount_usd": 500.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
-        assert not any("REJECT sin veredictos BLOCKER" in w for w in warnings)
-        assert resolution["recommended_action"] == "REJECT"
+    def test_sin_veredictos_no_inventa_advertencias(self):
+        propuesta = {"recommended_action": "APPROVE", "risk_level": "LOW"}
+        outcome = {"recommended_action": "APPROVE", "risk_level": "LOW"}
+        assert ResolutionService._detect_divergence(propuesta, outcome, []) == []
+
+    def test_no_muta_la_propuesta(self):
+        """Detectar no es corregir: de eso se encarga el override."""
+        propuesta = {"recommended_action": "APPROVE", "risk_level": "MEDIUM"}
+        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        ResolutionService._detect_divergence(propuesta, outcome, self.BLOCKER_VERDICTS)
+        assert propuesta == {"recommended_action": "APPROVE", "risk_level": "MEDIUM"}
 
 
 class TestGuardrailCompensation:
@@ -402,3 +346,80 @@ class TestBuildPrecedentSummary:
         ]
         result = ResolutionService._build_precedent_summary(cases, "Fraude")
         assert "merchant=MercadoLibre" in result
+
+
+class TestGuardrailsEnElPipelineCompleto:
+    """El guardrail tiene que dispararse en resolve(), no solo en aislamiento.
+
+    Regresion: las comprobaciones vivian despues del override determinista, que
+    ya habia reescrito la accion y el riesgo. Eran inalcanzables — la alucinacion
+    se corregia en silencio y no quedaba registrada en ningun lado.
+    """
+
+    TX = {
+        "id": "TXN-00051", "merchant": "Airbnb", "amount_usd": 100.0,
+        "fraud_score": 8, "country": "COL", "payment_method": "Cripto", "channel": "POS",
+    }
+    POLICIES = [{
+        "code": "POL-EXC-003", "name": "Exclusion cripto", "category": "EXCEPCION",
+        "description": "Las transacciones con criptomonedas son irreversibles.",
+        "reference": "Reg. Fintech 2024/03",
+    }]
+
+    @staticmethod
+    def _servicio(sintesis: dict, veredicto: str = "BLOCKER"):
+        import json
+
+        from api.app.llm.client import LLMResult
+        from api.app.observability.tracer import NoOpTracer
+
+        class LLMGuionado:
+            def __init__(self):
+                self.llamadas = 0
+
+            def complete(self, system, user, trace_id="", **kwargs):
+                self.llamadas += 1
+                payload = (
+                    [{"policy_code": "POL-EXC-003", "verdict": veredicto,
+                      "reasoning": "cripto irreversible", "requires_human_review": False}]
+                    if self.llamadas == 1 else sintesis
+                )
+                return LLMResult(text=json.dumps(payload), input_tokens=1, output_tokens=1)
+
+        return ResolutionService(llm=LLMGuionado(), tracer=NoOpTracer())
+
+    def _resolver(self, sintesis: dict, veredicto: str = "BLOCKER") -> dict:
+        return self._servicio(sintesis, veredicto).resolve(
+            tx_data=self.TX, policies=self.POLICIES, similar_cases=[], logs=[],
+            merchant_risk={}, client_history={},
+            motivo="No reconoce la compra", cliente_vip=False,
+        )
+
+    def test_approve_alucinado_sobre_blocker_queda_registrado(self):
+        r = self._resolver({
+            "recommended_action": "APPROVE", "risk_level": "LOW",
+            "confidence": 0.99, "justification": "todo bien",
+        })
+        assert r["recommended_action"] == "REJECT"
+        assert r["risk_level"] == "BLOCKER"
+        assert any("APPROVE" in w and "alucinacion" in w for w in r["guardrail_warnings"]), (
+            "la alucinacion se corrigio pero no quedo registrada"
+        )
+
+    def test_reject_inventado_sin_blocker_queda_registrado(self):
+        r = self._resolver(
+            {"recommended_action": "REJECT", "risk_level": "BLOCKER",
+             "confidence": 0.9, "justification": "x"},
+            veredicto="FAIL",
+        )
+        assert r["recommended_action"] == "PENDING_HITL"
+        assert any("REJECT sin veredictos BLOCKER" in w for w in r["guardrail_warnings"])
+        assert any("risk_level=BLOCKER" in w for w in r["guardrail_warnings"])
+
+    def test_propuesta_coherente_no_genera_ruido(self):
+        r = self._resolver({
+            "recommended_action": "REJECT", "risk_level": "BLOCKER",
+            "confidence": 0.8, "justification": "cripto irreversible",
+        })
+        assert r["recommended_action"] == "REJECT"
+        assert r["guardrail_warnings"] == []

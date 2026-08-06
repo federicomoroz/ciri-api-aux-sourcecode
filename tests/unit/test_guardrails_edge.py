@@ -17,22 +17,17 @@ from api.app.services.resolution import ResolutionService
 
 class TestGuardrailEdgeCases:
 
-    def test_multiple_blockers_still_corrects(self):
-        """APPROVE with 2+ BLOCKERs should still auto-correct."""
-        resolution = {
-            "recommended_action": "APPROVE",
-            "risk_level": "LOW",
-            "requires_hitl": True,
-            "policy_verdicts": [
-                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-                {"policy_code": "POL-EXC-005", "verdict": "BLOCKER", "reasoning": "Sanction"},
-            ],
-        }
-        tx = {"amount_usd": 500.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+    def test_varios_blockers_una_sola_advertencia(self):
+        """Dos BLOCKER y aun asi APPROVE: una advertencia, no una por veredicto."""
+        propuesta = {"recommended_action": "APPROVE", "risk_level": "LOW"}
+        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        verdicts = [
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+            {"policy_code": "POL-EXC-005", "verdict": "BLOCKER", "reasoning": "Sanction"},
+        ]
+        warnings = ResolutionService._detect_divergence(propuesta, outcome, verdicts)
         assert len(warnings) == 1
-        assert resolution["recommended_action"] == "REJECT"
-        assert resolution["risk_level"] == "BLOCKER"
+        assert "APPROVE" in warnings[0]
 
     def test_compensation_at_exact_boundary(self):
         """Compensation at exactly 110% should NOT trigger warning (> not >=)."""
@@ -120,19 +115,23 @@ class TestGuardrailEdgeCases:
         warnings = ResolutionService._validate_resolution(resolution, tx)
         assert not any("Confianza excesiva" in w for w in warnings)
 
-    def test_combined_blocker_and_compensation(self):
-        """APPROVE+BLOCKER + excessive compensation should produce 2 warnings."""
-        resolution = {
+    def test_divergencia_y_compensacion_se_acumulan(self):
+        """Las dos familias de guardrail conviven en la misma resolucion."""
+        verdicts = [
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+        ]
+        propuesta = {
             "recommended_action": "APPROVE",
             "risk_level": "MEDIUM",
-            "requires_hitl": True,
             "compensation_amount_usd": 200.0,
-            "policy_verdicts": [
-                {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            ],
         }
+        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
         tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+
+        warnings = ResolutionService._detect_divergence(propuesta, outcome, verdicts)
+        warnings += ResolutionService._validate_resolution(
+            {**propuesta, "policy_verdicts": verdicts}, tx,
+        )
         assert len(warnings) == 2
         assert any("BLOCKER" in w for w in warnings)
         assert any("Compensacion" in w for w in warnings)

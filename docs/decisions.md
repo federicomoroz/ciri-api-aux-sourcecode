@@ -189,22 +189,26 @@ Esto también me permitió iterar rápido en el prompt del Judge. La versión 2.
 
 ---
 
-## 9. Caché semántico en Qdrant
+## 9. Caché de idempotencia exacto, no semántico
 
-**Contexto:** Casos de contracargo similares (mismo comercio, mismo método de pago, montos similares) frecuentemente producen resoluciones LLM idénticas. Llamar al LLM para cada caso es caro y lento.
+**Contexto:** Repetir la investigación del mismo contracargo cuesta dos llamadas a Sonnet y más de cien segundos. Hace falta no volver a pagar por un caso ya resuelto. La opción atractiva es un caché semántico: embeber la consulta, buscar en Qdrant y, si hay algo por encima de cierta similitud, devolver esa resolución.
 
-**Decisión:** Usar una colección `_semantic_cache` en Qdrant. Antes de llamar al LLM para resolución, embedear el query y buscar en el cache (threshold 0.92). Si hay hit, devolver la resolución cacheada inmediatamente — sin llamada LLM.
+**Decisión:** Caché exact-match en SQLite, con clave `(transaction_id, cliente_vip)`. Sin caché semántico.
 
-**Razonamiento:** Con Sonnet para synthesis y Judge, el costo por investigación no es trivial. El umbral de 0.92 balancea tasa de hit contra precisión. A 0.92, solo casos casi idénticos matchean — mismo tipo de comercio, mismo método de pago, montos similares. Esto es seguro porque las políticas que aplican a estos casos son las mismas. El cache usa la misma instancia de Qdrant que ya está corriendo para RAG, así que no hay infraestructura adicional.
+**Razonamiento:** El caché semántico responde una pregunta distinta de la que hay que responder. Dos contracargos pueden ser 0.95 similares —mismo comercio, mismo método de pago, montos parecidos— y merecer resoluciones opuestas, porque lo que decide el caso son los veredictos de política sobre *esa* transacción y el historial de *ese* cliente. Devolver la resolución de otro caso porque se parece es exactamente el tipo de error que no se puede cometer en un contracargo: el informe llevaría el identificador correcto y el razonamiento de otro.
+
+El umbral no arregla eso. Subirlo hasta que sea seguro lo convierte, en la práctica, en una comparación exacta — que es lo que ya hace SQLite, sin costo de embedding, sin latencia de búsqueda vectorial y sin la posibilidad de equivocarse.
+
+La ganancia real —no repetir trabajo— la da igual el caché exacto: la misma transacción consultada dos veces devuelve el informe ya generado en milisegundos.
 
 **Trade-offs:**
-- (+) Reduce costos LLM ~20% para patrones recurrentes de comercio
-- (+) Respuesta sub-100ms para cache hits vs 3-5s para llamadas LLM
-- (+) Sin infraestructura adicional — reutiliza Qdrant existente
-- (-) Invalidación de cache es implícita — nuevas políticas no invalidan automáticamente resoluciones cacheadas
-- (-) Umbral 0.92 puede ser muy agresivo o muy conservador según el landscape de políticas
+- (+) Un acierto no puede devolver la resolución de otro caso: la clave es la transacción
+- (+) Cero llamadas a la API de embeddings y cero latencia de búsqueda vectorial
+- (+) La invalidación es trivial y explícita: la clave es el caso
+- (-) No aprovecha casos parecidos, que es justamente lo que un caché semántico prometía
+- (-) La tasa de acierto depende de que se repitan consultas sobre la misma transacción
 
-**En producción:** Invalidación explícita de cache cuando se actualizan políticas. TTL (ej: 7 días) para que resoluciones cacheadas no persistan indefinidamente. Métricas de hit/miss en Langfuse.
+**En producción:** TTL sobre las entradas para que un cambio de política no siga sirviendo informes viejos, e invalidación explícita al editar una política. Si algún día se quisiera aprovechar casos parecidos, el lugar correcto no es la resolución final sino la evaluación de políticas, que sí depende del texto de la política y no de la transacción — y aun ahí habría que versionar el caché por hash de la política.
 
 ---
 

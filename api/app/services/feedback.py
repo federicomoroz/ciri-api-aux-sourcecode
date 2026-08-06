@@ -12,6 +12,7 @@ from ..domain.constants import (
     FEEDBACK_AUTO_ANALYST_TAG,
     FEEDBACK_AUTO_RESOLUTION_DAYS,
     FEEDBACK_CASE_ID_PREFIX,
+    FEEDBACK_MOTIVO_DESCONOCIDO,
     FEEDBACK_MOTIVO_MAX_CHARS,
     FEEDBACK_STATUS_RECORDED,
     JUDGE_NEEDS_REVIEW_THRESHOLD,
@@ -38,6 +39,7 @@ class FeedbackService:
         final_outcome: str | None,
         judge_score: float,
         resolution: dict | None,
+        motivo: str | None = None,
     ) -> dict:
         """Record analyst feedback. Auto-indexes high-quality resolutions as new precedents."""
         feedback_id = self.db.save_feedback({
@@ -55,11 +57,16 @@ class FeedbackService:
             case_dict = {
                 "case_id": f"{FEEDBACK_CASE_ID_PREFIX}-{feedback_id}",
                 "transaction_id": transaction_id,
-                "motivo": resolution.get("justification", "")[:FEEDBACK_MOTIVO_MAX_CHARS],
+                # El motivo tiene que ser un motivo: es el campo contra el que se
+                # matchean los precedentes futuros. Meter aca la justificacion del
+                # modelo degradaba ese matcheo caso a caso.
+                "motivo": (motivo or FEEDBACK_MOTIVO_DESCONOCIDO)[:FEEDBACK_MOTIVO_MAX_CHARS],
                 "resolution": final_outcome,
                 "resolution_days": FEEDBACK_AUTO_RESOLUTION_DAYS,
                 "analyst": FEEDBACK_AUTO_ANALYST_TAG,
-                "observations": analyst_notes,
+                "observations": " | ".join(
+                    p for p in (analyst_notes, resolution.get("justification", "")) if p
+                ),
                 "open_date": now,
                 "close_date": now,
             }

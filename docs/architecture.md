@@ -39,7 +39,7 @@ El sistema se compone de capas con **una responsabilidad unica y claramente deli
 |---|---|---|
 | Orquestacion | n8n (38 nodos: 32 exec + 6 sticky) -- Cloud o self-hosted | QUE hacer y CUANDO -- webhook, secuenciamiento, control de flujo, visibilidad de guardrails, enrutamiento por riesgo |
 | Logica de negocio | FastAPI (Render free tier) | COMO -- RAG retrieval, sintesis de resolucion con guardrails, feedback, auto-indexing |
-| Almacen semantico | Qdrant Cloud (free tier) | Verdad no estructurada -- politicas, casos historicos, cache semantico |
+| Almacen semantico | Qdrant Cloud (free tier) | Verdad no estructurada -- politicas y casos historicos |
 | Almacen estructurado | SQLite | Verdad relacional -- transacciones, logs, feedback, audit trail |
 | LLM (eval. politicas) | Claude Haiku 4.5 via FastAPI | Evaluacion de cumplimiento de politicas (rapido, economico) |
 | LLM (sintesis + juez) | Claude Sonnet via FastAPI | Sintesis de resolucion + Judge de calidad 1-10 (razonamiento fuerte) |
@@ -187,7 +187,6 @@ flowchart TD
 
     SEARCH_POL -.->|Voyage AI| Q_POL[(policies)]
     SEARCH_CASES -.->|Voyage AI| Q_CASES[(historical_cases)]
-    RESOLVE -.-> Q_CACHE[(_semantic_cache)]
     GET_TX -.-> DB_TX[(SQLite: transacciones)]
     GET_LOGS -.-> DB_LOGS[(SQLite: logs)]
     RESOLVE -.->|trace| LANGFUSE([Langfuse])
@@ -358,11 +357,15 @@ POST /api/policies/
 
 Disponible para la proxima resolucion. Sin cambio de codigo.
 
-### Cache semantico reduce costo LLM a escala
+### El cache es exacto, no semantico
 
-La coleccion `_semantic_cache` almacena embeddings de resoluciones recientes. Si una solicitud entrante es semanticamente similar (coseno >= 0.92) a una cacheada, la llamada LLM se omite por completo. En una fintech procesando miles de casos similares por dia, esto reduce dramaticamente el costo de API.
+Repetir la investigacion de un mismo contracargo cuesta dos llamadas al modelo. El cache de
+idempotencia en SQLite, con clave `(transaction_id, cliente_vip)`, devuelve el informe ya
+generado en milisegundos.
 
-En nuestras pruebas, el segundo run de un caso identico baja de ~113 segundos a ~2 segundos.
+Se descarto el cache semantico a proposito: dos contracargos pueden parecerse mucho y merecer
+resoluciones opuestas, porque lo que decide el caso son los veredictos sobre *esa* transaccion.
+El razonamiento completo esta en `decisions.md#9`.
 
 ### Prompts versionados para iteracion segura
 
@@ -400,7 +403,7 @@ Las 6 ramas paralelas convergen en `[Merge -- Contexto Paralelo]` (nodo Merge, i
 
 `[Compilar Contexto]` fusiona todos los outputs de las ramas -- incluyendo tanto datos crudos HTTP como flags evaluados por n8n -- en un solo objeto estructurado. `POST /api/analyze/resolve` ejecuta internamente:
 
-1. Verifica `_semantic_cache` -- si hay hit (similitud >= 0.92), devuelve resolucion cacheada inmediatamente
+1. Verifica el cache de idempotencia -- si esa transaccion ya se investigo, devuelve el informe cacheado
 2. **Evaluacion de politicas** (Haiku): evalua cada politica contra la transaccion, genera lista de verdicts
 3. **Sanitizacion de verdicts**: la whitelist de BLOCKER degrada verdicts invalidos
 4. **Outcome determinista**: Python calcula action, risk_level, requires_hitl desde los verdicts

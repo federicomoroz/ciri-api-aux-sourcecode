@@ -8,6 +8,7 @@ POST /api/panel/analyze        — runs analysis via n8n (or direct pipeline fal
 
 import json
 import logging
+from contextlib import contextmanager
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
@@ -37,19 +38,57 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["panel"])
 
 
-def _byok_pipeline(api_key: str, base: PipelineService, settings: Settings, request: Request) -> PipelineService:
-    """Build a temporary pipeline using the visitor's own Anthropic API key."""
+@contextmanager
+def _byok_pipeline(api_key: str, base: PipelineService, settings: Settings, request: Request):
+    """Pipeline efimero con la API key del visitante.
+
+    Los clientes se cierran al salir: son de un solo uso y cada uno abre su
+    propio pool de conexiones. Sin esto, cada request con BYOK dejaba dos pools
+    colgados hasta que pasara el recolector.
+    """
     tracer = request.app.state.tracer
     llm = AnthropicClient(api_key=api_key, model=settings.llm_model, tracer=tracer)
     llm_res = (
         AnthropicClient(api_key=api_key, model=settings.llm_model_resolution, tracer=tracer)
         if settings.llm_model_resolution else llm
     )
-    resolution_svc = ResolutionService(llm, tracer, llm_resolution=llm_res)
-    return PipelineService(
-        db=base.db, retriever=base.retriever, analyzer=base.analyzer,
-        resolution_svc=resolution_svc, report_gen=base.report_gen,
-    )
+    try:
+        yield PipelineService(
+            db=base.db, retriever=base.retriever, analyzer=base.analyzer,
+            resolution_svc=ResolutionService(llm, tracer, llm_resolution=llm_res),
+            report_gen=base.report_gen,
+        )
+    finally:
+        llm.close()
+        if llm_res is not llm:
+            llm_res.close()
+
+
+def _correr_directo(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings) -> HTMLResponse:
+    """Ejecuta el pipeline directo y devuelve el informe, o una pagina de error."""
+    try:
+        html, usage = pipeline.run(req, model_name=settings.llm_model)
+        response = HTMLResponse(content=html, status_code=200)
+        response.headers["X-Usage-JSON"] = json.dumps(usage)
+        return response
+    except Exception as exc:
+        logger.error("Direct pipeline failed for %s: %s", req.transaction_id, exc, exc_info=True)
+        return HTMLResponse(
+            content=(
+                "<html><body style='font-family:monospace;padding:2em'>"
+                "<h2>Pipeline Error</h2>"
+                f"<p><b>Transaction:</b> {req.transaction_id}</p>"
+                "<p>An internal error occurred. Check server logs for details.</p>"
+                "</body></html>"
+            ),
+            status_code=500,
+        )
+
+
+def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
+    """Traduce los eventos del pipeline a lineas SSE."""
+    for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
+        yield f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
 
 
 @router.get("/panel", response_class=HTMLResponse, include_in_schema=False)
@@ -135,27 +174,14 @@ async def panel_analyze(
 
     # ── Direct pipeline fallback ──────────────────────────────────────────
     if req.api_key:
-        pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
-    elif not settings.anthropic_api_key:
+        with _byok_pipeline(req.api_key, pipeline, settings, request) as propio:
+            return _correr_directo(propio, req, settings)
+    if not settings.anthropic_api_key:
         return HTMLResponse(
             content="<html><body><h2>API key requerida</h2><p>Ingresa tu Anthropic API Key en el panel.</p></body></html>",
             status_code=400,
         )
-    try:
-        html, usage = pipeline.run(req, model_name=settings.llm_model)
-        response = HTMLResponse(content=html, status_code=200)
-        response.headers["X-Usage-JSON"] = json.dumps(usage)
-        return response
-    except Exception as exc:
-        logger.error("Direct pipeline failed for %s: %s", req.transaction_id, exc, exc_info=True)
-        error_html = (
-            f"<html><body style='font-family:monospace;padding:2em'>"
-            f"<h2>Pipeline Error</h2>"
-            f"<p><b>Transaction:</b> {req.transaction_id}</p>"
-            f"<p>An internal error occurred. Check server logs for details.</p>"
-            f"</body></html>"
-        )
-        return HTMLResponse(content=error_html, status_code=500)
+    return _correr_directo(pipeline, req, settings)
 
 
 @router.post("/api/panel/analyze-stream")
@@ -170,18 +196,22 @@ def panel_analyze_stream(
     BYOK: visitors must provide their own Anthropic API key.
     The server key is reserved for n8n and direct API endpoints.
     """
-    if req.api_key:
-        pipeline = _byok_pipeline(req.api_key, pipeline, settings, request)
-    elif not settings.anthropic_api_key:
+    if not req.api_key and not settings.anthropic_api_key:
         return StreamingResponse(
             iter([f"data: {json.dumps({'step': 'error', 'message': 'API key requerida. Ingresa tu Anthropic API Key.'})}\n\n"]),
             media_type="text/event-stream",
         )
 
     def generate():
+        # El pipeline BYOK vive dentro del generador: la respuesta se consume
+        # despues de que esta funcion retorna, asi que cerrarlo antes dejaria
+        # al stream sin cliente con el que trabajar.
         try:
-            for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
-                yield f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
+            if req.api_key:
+                with _byok_pipeline(req.api_key, pipeline, settings, request) as propio:
+                    yield from _emitir(propio, req, settings)
+            else:
+                yield from _emitir(pipeline, req, settings)
         except Exception as exc:
             logger.error("Streaming pipeline failed: %s", exc, exc_info=True)
             yield f"data: {json.dumps({'step': 'error', 'message': 'Error interno del pipeline. Revisa que tu API key sea valida.'})}\n\n"

@@ -265,6 +265,16 @@ def init_sqlite(db_path: str, data: dict) -> None:
             ) for l in data["logs"]],
         )
 
+        # Indices de las columnas por las que filtra el pipeline. Con 100 filas
+        # da igual; con volumen real, no. Y declararlos documenta como se consulta.
+        for ddl in (
+            "CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)",
+            "CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)",
+            "CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)",
+            "CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)",
+        ):
+            conn.execute(ddl)
+
         conn.commit()
     finally:
         conn.close()

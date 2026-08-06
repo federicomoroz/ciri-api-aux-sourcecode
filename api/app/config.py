@@ -6,7 +6,6 @@ from .domain.constants import (
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_TEMPERATURE,
-    SEMANTIC_CACHE_THRESHOLD,
 )
 
 
@@ -24,7 +23,6 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     qdrant_policies_collection: str = "policies"
     qdrant_cases_collection: str = "historical_cases"
-    qdrant_cache_collection: str = "_semantic_cache"
 
     # Embeddings (Voyage AI)
     voyage_api_key: str = ""
@@ -42,8 +40,7 @@ class Settings(BaseSettings):
     langfuse_enabled: bool = False
 
     # Semantic cache
-    semantic_cache_enabled: bool = True
-    semantic_cache_threshold: float = SEMANTIC_CACHE_THRESHOLD
+    report_cache_enabled: bool = True
 
     # Judge
     judge_auto_index_threshold: float = JUDGE_AUTO_INDEX_THRESHOLD
@@ -63,7 +60,3 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "env_prefix": "CB_", "extra": "ignore"}
 
-
-def create_settings() -> Settings:
-    """Factory for Settings. Named differently from dependencies.get_settings to avoid confusion."""
-    return Settings()

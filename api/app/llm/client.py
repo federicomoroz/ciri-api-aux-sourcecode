@@ -17,8 +17,8 @@ from ..domain.constants import (
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_TEMPERATURE,
+    LLM_TIMEOUT_S,
     LLM_TRUNCATION_LENGTH,
-    N8N_TIMEOUT_S,
     SECONDS_TO_MS,
     TRACE_LLM_CALL,
 )
@@ -55,7 +55,7 @@ class AnthropicClient:
         self.client = anthropic.Anthropic(
             api_key=api_key,
             max_retries=max_retries,
-            timeout=httpx.Timeout(N8N_TIMEOUT_S, connect=10.0),
+            timeout=httpx.Timeout(LLM_TIMEOUT_S, connect=10.0),
         )
         self.model = model
         self.tracer = tracer
@@ -87,17 +87,16 @@ class AnthropicClient:
         latency_ms = (time.time() - start) * SECONDS_TO_MS
         text = response.content[0].text
 
-        if self.tracer:
-            self.tracer.generation(
-                name=TRACE_LLM_CALL,
-                model=self.model,
-                input=user[:LLM_TRUNCATION_LENGTH],
-                output=text[:LLM_TRUNCATION_LENGTH],
-                tokens_in=response.usage.input_tokens,
-                tokens_out=response.usage.output_tokens,
-                latency_ms=latency_ms,
-                trace_id=trace_id,
-            )
+        self.tracer.generation(
+            name=TRACE_LLM_CALL,
+            model=self.model,
+            input=user[:LLM_TRUNCATION_LENGTH],
+            output=text[:LLM_TRUNCATION_LENGTH],
+            tokens_in=response.usage.input_tokens,
+            tokens_out=response.usage.output_tokens,
+            latency_ms=latency_ms,
+            trace_id=trace_id,
+        )
 
         logger.info(
             "LLM call completed: model=%s tokens_in=%d tokens_out=%d latency=%.0fms",
@@ -108,3 +107,10 @@ class AnthropicClient:
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
         )
+
+    def close(self) -> None:
+        """Cierra el pool de conexiones. Solo hace falta para clientes efimeros."""
+        try:
+            self.client.close()
+        except Exception:
+            logger.debug("No se pudo cerrar el cliente Anthropic", exc_info=True)

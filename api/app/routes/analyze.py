@@ -68,7 +68,7 @@ def resolve(
         cliente_vip=req.cliente_vip,
     )
 
-    tx_id = req.tx_data.get("id", "") if req.tx_data else ""
+    tx_id = req.transaction_id or (req.tx_data.get("id", "") if req.tx_data else "")
     _emit_resolve_alerts(result, tx_id, db)
 
     return result
