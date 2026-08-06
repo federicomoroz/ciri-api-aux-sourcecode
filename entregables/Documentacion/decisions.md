@@ -231,3 +231,38 @@ El costo adicional de Sonnet es manejable: Call 2 y Call 3 juntos son ~3-4K toke
 - (-) Más costoso que Haiku puro (~3x para Calls 2+3)
 
 **En producción:** Consideraría Haiku para los 3 calls en modo "alto volumen" (donde el costo importa más que la calidad individual) y Sonnet para casos de alto valor o cuando el Judge previo dio score bajo. La configuración ya es una env var, así que el switch es instantáneo.
+
+---
+
+## 11. Data Tables de n8n descartadas para el dataset estructurado
+
+**Contexto:** n8n incorporó Data Tables: almacenamiento tabular dentro de la propia instancia, con import por CSV, nodo dedicado y API. Es la opción natural para alguien que trabaja en n8n a diario, y la alternativa obvia a cargar el Excel en SQLite desde Python. La evalué explícitamente antes de descartarla.
+
+**Decisión:** Mantener SQLite como almacén estructurado, seedeado por `api/app/data/loader.py` desde el Excel. No usar Data Tables.
+
+**Razonamiento:** Data Tables soporta CRUD por fila y filtros con operadores de comparación (`Equals`, `Not Equals`, `Greater Than`, `Less Than`, `Is Empty`…). No soporta agregaciones ni joins. Tres de las herramientas del agente son justamente agregaciones:
+
+| Herramienta | Qué calcula |
+|---|---|
+| `GET /api/merchants/{name}/risk` | `cb_ratio` = contracargos / transacciones del comercio, volumen total, flags |
+| `GET /api/clients/{id}/history` | Reincidencia, países distintos usados, métodos de pago |
+| `GET /api/logs/{tx_id}` + `detect_error_patterns` | Conteo por severidad y detección de 8 patrones sobre el set de eventos |
+
+Sin `COUNT` ni `GROUP BY`, la única salida sería traer las 100 transacciones al workflow y agregarlas en un Code node. Eso reintroduce lógica de negocio en el canvas — precisamente lo contrario a la decisión #1 y a lo que la consigna pide.
+
+Hay tres razones más, todas prácticas:
+
+1. **Las Data Tables no viajan en el JSON exportado.** El entregable es un flujo importable; quien lo importe recibiría tablas vacías y tendría que cargar 4 CSVs a mano antes de poder disparar un caso. Hoy el workflow se importa y corre. El dataset viaja en el repo y se seedea solo en el primer arranque.
+2. **FastAPI dejaría de poder leer los datos.** Los servicios, el panel y los tests consultan SQLite directo. Con Data Tables la verdad estructurada queda dentro de n8n y todo tendría que salir y volver por su API, para terminar en el mismo lugar con un salto de red más.
+3. **El import es por CSV, no por Excel.** El dataset tiene una fila 1 decorativa y nombres de hoja con emojis. Exportar 4 CSVs a mano es un paso manual y no reproducible; `loader.py` lo resuelve determinísticamente y está cubierto por `test_data_loader.py`.
+
+**Dónde sí encajarían:** el caché de idempotencia. "Guardar marcadores para evitar ejecuciones duplicadas" es un caso de uso textual de la feature, y es exactamente lo que hace `GET /api/cache/lookup`. No lo moví porque partiría el estado entre n8n y la API sin ganar nada: hoy el caché vive junto al resto de la verdad estructurada, en la misma transacción y con los mismos tests.
+
+**Trade-offs:**
+- (+) Las agregaciones se resuelven donde corresponde, en SQL, no en el canvas
+- (+) El workflow se importa y corre sin cargar datos a mano
+- (+) El dataset queda versionado en el repo, no en el estado de una instancia
+- (-) Una feature nativa de n8n sin usar, en un puesto donde n8n es la herramienta del día a día
+- (-) Un componente más (SQLite) que si todo viviera dentro de n8n
+
+**En producción:** el argumento se refuerza. El almacén estructurado sería Postgres con las agregaciones como vistas materializadas o índices, no un almacén interno de la herramienta de orquestación limitado a 200 MiB por instancia. Data Tables las usaría para lo que están pensadas: estado operativo del propio workflow — marcadores de deduplicación, flags de feature, datos de evaluación — no como base de datos del dominio.
