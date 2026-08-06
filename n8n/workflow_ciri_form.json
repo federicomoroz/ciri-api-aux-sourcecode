@@ -6,7 +6,6 @@
         "path": "chargeback-form",
         "formTitle": "CIRI — Investigación de Contracargo",
         "formDescription": "Ingresa los datos para iniciar una investigación de contracargo.\nEl análisis toma ~30 segundos (incluye evaluación LLM + RAG).",
-        "respondMode": "lastNode",
         "formFields": {
           "values": [
             {
@@ -38,15 +37,13 @@
             }
           ]
         },
-        "options": {
-          "buttonLabel": "Iniciar Investigación"
-        },
+        "options": {},
         "responseMode": "lastNode"
       },
       "id": "form-trigger-001",
       "name": "Form Trigger — Formulario",
       "type": "n8n-nodes-base.formTrigger",
-      "typeVersion": 2.2,
+      "typeVersion": 2.1,
       "position": [
         480,
         300
