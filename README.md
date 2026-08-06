@@ -203,7 +203,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
 | `docs/demo_scenarios.md` | Los tres escenarios, paso a paso, con los comandos |
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
-| `docs/examples/` | Informes HTML ya generados, uno por escenario |
+| `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
 **Configuración:** todo se lee de `.env` con prefijo `CB_`. Las variables, con sus valores por
 defecto y para qué sirve cada una, están comentadas en
