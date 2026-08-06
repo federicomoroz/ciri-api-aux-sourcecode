@@ -1777,7 +1777,7 @@
         <div class="api-key-input-wrap">
           <input type="text" id="inp-n8n-url" placeholder="https://tu-instancia.app.n8n.cloud" oninput="onN8nUrlChange()" autocomplete="off" spellcheck="false" />
         </div>
-        <p class="form-hint">Si importaste el workflow en tu n8n, pega la URL base para ejecutarlo desde aca. Dejalo vacio para usar pipeline directo.</p>
+        <p class="form-hint" id="n8n-url-hint">Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.</p>
       </div>
 
       <!-- Submit -->
@@ -2307,22 +2307,66 @@ async function checkServerKey() {
 }
 
 // ─── BYON8N (Bring Your Own n8n) ─────────────────────────
-function getN8nUrl() {
-  return ($('inp-n8n-url')?.value || '').trim().replace(/\/+$/, '');
+// Lo que se pega suele ser la URL del editor, no la base. De ahi salen rutas
+// como .../workflow/xVAt/webhook/chargeback-agent, que no existen.
+const RUTAS_DE_N8N = /\/(workflow|form|form-test|webhook|webhook-test|home|projects|signin)(\/.*)?$/;
+
+function normalizarUrlN8n(valor) {
+  let u = (valor || '').trim();
+  if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) u = 'http://' + u;
+  try {
+    const parsed = new URL(u);
+    return (parsed.origin + parsed.pathname.replace(RUTAS_DE_N8N, '')).replace(/\/+$/, '');
+  } catch {
+    return u.replace(RUTAS_DE_N8N, '').replace(/\/+$/, '');
+  }
 }
 
-function onN8nUrlChange() {
-  const url = getN8nUrl();
+function getN8nUrl() {
+  return normalizarUrlN8n($('inp-n8n-url')?.value);
+}
+
+function marcarN8n(texto, clase, ayuda) {
   const badge = $('n8n-url-badge');
-  const mode  = $('pipeline-mode');
-  if (url) {
-    badge.textContent = 'ok';
-    badge.className   = 'api-key-badge ok';
-    // Auto-switch to n8n test mode when URL is entered
-    if (mode.value === 'direct') mode.value = 'test';
-  } else {
-    badge.textContent = 'opcional';
-    badge.className   = 'api-key-badge';
+  badge.textContent = texto;
+  badge.className   = 'api-key-badge' + (clase ? ' ' + clase : '');
+  $('n8n-url-hint').textContent = ayuda;
+}
+
+let verificacionN8n = null;
+
+function onN8nUrlChange() {
+  const url  = getN8nUrl();
+  const mode = $('pipeline-mode');
+  clearTimeout(verificacionN8n);
+
+  if (!url) {
+    marcarN8n('opcional', '', 'Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.');
+    return;
+  }
+  if (mode.value === 'direct') mode.value = 'test';
+
+  const crudo = ($('inp-n8n-url').value || '').trim().replace(/\/+$/, '');
+  const aviso = (crudo && normalizarUrlN8n(crudo) !== crudo) ? ' Se usa la base: ' + url : '';
+  marcarN8n('verificando', '', 'Probando si responde...' + aviso);
+  verificacionN8n = setTimeout(() => verificarN8n(url, aviso), 600);
+}
+
+// La instancia suele estar en la maquina de quien mira, no en internet, asi que
+// la prueba la hace el navegador. Con no-cors no se puede leer la respuesta,
+// pero alcanza para distinguir "algo contesta" de "no hay nada escuchando".
+async function verificarN8n(url, aviso) {
+  const corte = new AbortController();
+  const reloj = setTimeout(() => corte.abort(), 4000);
+  try {
+    await fetch(url + '/healthz', { mode: 'no-cors', signal: corte.signal, cache: 'no-store' });
+    marcarN8n('responde', 'ok', 'Hay algo escuchando en ' + url + '.' + aviso);
+  } catch {
+    marcarN8n('no responde', 'required',
+      'No se pudo contactar ' + url + '. Revisa que n8n este corriendo y que la URL sea la base, no la del editor.' + aviso);
+  } finally {
+    clearTimeout(reloj);
   }
 }
 
