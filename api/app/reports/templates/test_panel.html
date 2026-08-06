@@ -1778,6 +1778,7 @@
           <input type="text" id="inp-n8n-url" placeholder="https://tu-instancia.app.n8n.cloud" oninput="onN8nUrlChange()" autocomplete="off" spellcheck="false" />
         </div>
         <p class="form-hint" id="n8n-url-hint">Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.</p>
+        <p class="contacto-n8n" id="contacto-n8n"></p>
       </div>
 
       <!-- Submit -->
@@ -2304,6 +2305,29 @@ async function checkServerKey() {
     }
     onApiKeyChange();
   } catch { /* ignore */ }
+}
+
+// El workflow marca su primera llamada con una cabecera. Si la API la vio hace
+// poco, es que la automatizacion importada llega de verdad hasta aca — que es
+// justo lo que no se puede comprobar desde el otro lado.
+function mostrarContactoN8n(hace) {
+  const el = $('contacto-n8n');
+  if (!el) return;
+  if (hace === null || hace === undefined || hace > 900) {
+    el.classList.remove('visible');
+    return;
+  }
+  el.innerHTML = '<b>Tu n8n llego hasta esta API</b> hace ' + describirAntiguedad(hace)
+    + '. La automatizacion importada esta funcionando.';
+  el.classList.add('visible');
+}
+
+function describirAntiguedad(seg) {
+  const s = Math.round(seg);
+  if (s < 10) return 'unos segundos';
+  if (s < 90) return s + ' segundos';
+  const m = Math.round(s / 60);
+  return m + (m === 1 ? ' minuto' : ' minutos');
 }
 
 // ─── BYON8N (Bring Your Own n8n) ─────────────────────────

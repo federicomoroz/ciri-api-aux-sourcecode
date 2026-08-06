@@ -57,6 +57,7 @@ __all__ = [
     "N8N_WEBHOOK_PATH",
     "N8N_WEBHOOK_TEST_PATH",
     "N8N_HEALTHZ_PATH",
+    "N8N_ORIGIN_HEADER",
     "LLM_TIMEOUT_S",
     "N8N_TIMEOUT_S",
     "N8N_PING_TIMEOUT_S",
@@ -202,6 +203,9 @@ FEEDBACK_AUTO_ANALYST_TAG: str = "auto-index"  # analyst field for auto-indexed 
 N8N_WEBHOOK_PATH: str = "/webhook/chargeback-agent"
 N8N_WEBHOOK_TEST_PATH: str = "/webhook-test/chargeback-agent"
 N8N_HEALTHZ_PATH: str = "/healthz"
+# La pone el workflow en su primera llamada. Sirve para que el panel confirme
+# "tu n8n llego hasta aca"; no lleva la URL de nadie.
+N8N_ORIGIN_HEADER: str = "X-Origen-n8n"
 LLM_TIMEOUT_S: float = 300.0                  # timeout de una llamada al modelo
 N8N_TIMEOUT_S: float = 300.0
 N8N_PING_TIMEOUT_S: float = 3.0

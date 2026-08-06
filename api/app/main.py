@@ -9,7 +9,11 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .dependencies import lifespan
-from .domain.constants import FALLBACK_REQUEST_ID, LLM_CREDIT_EXHAUSTED_MARKER
+from .domain.constants import (
+    FALLBACK_REQUEST_ID,
+    LLM_CREDIT_EXHAUSTED_MARKER,
+    N8N_ORIGIN_HEADER,
+)
 from .rag.embedder import EmbeddingRateLimit
 from .routes import (
     alerts,
@@ -48,6 +52,22 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+class ContactoN8nMiddleware(BaseHTTPMiddleware):
+    """Anota que una orquestacion de n8n llego, para que el panel lo confirme.
+
+    Se mira una cabecera que pone el workflow, no el User-Agent: n8n usa el de
+    axios, que tambien manda cualquier script, y confirmar de mas seria peor que
+    no confirmar nada.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if request.headers.get(N8N_ORIGIN_HEADER):
+            registro = getattr(request.app.state, "contacto_n8n", None)
+            if registro is not None:
+                registro.registrar()
+        return await call_next(request)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
@@ -94,6 +114,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(ContactoN8nMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

@@ -357,15 +357,23 @@ def demo_status(settings: Settings = Depends(get_settings)) -> JSONResponse:
 
 
 @router.get("/api/panel/n8n-status")
-async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
+async def n8n_status(request: Request, settings: Settings = Depends(get_settings)) -> dict:
     """Quick liveness check for n8n — used by the panel UI to show a status badge.
 
     Without CB_N8N_BASE_URL there is no instance to point at: the panel asks the
     user for one instead of advertising a URL that leads nowhere.
     """
+    # Cuanto hace que una orquestacion de n8n toco esta API. Es la confirmacion
+    # de que el workflow importado llega: no dice de donde vino, solo que paso.
+    registro = getattr(request.app.state, "contacto_n8n", None)
+    contacto = {
+        "ultimo_contacto_hace_s": registro.hace_cuanto() if registro else None,
+        "contactos": registro.total if registro else 0,
+    }
+
     base = settings.n8n_base_url.rstrip("/")
     if not base:
-        return {"configured": False, "available": False}
+        return {"configured": False, "available": False, **contacto}
     url = base + N8N_HEALTHZ_PATH
     # Derive form URLs only when configured
     form_urls: dict[str, str] = {}
@@ -380,6 +388,7 @@ async def n8n_status(settings: Settings = Depends(get_settings)) -> dict:
         "webhook_url": base + N8N_WEBHOOK_PATH,
         "webhook_test_url": base + N8N_WEBHOOK_TEST_PATH,
         **form_urls,
+        **contacto,
     }
     try:
         async with httpx.AsyncClient(timeout=N8N_PING_TIMEOUT_S) as client:

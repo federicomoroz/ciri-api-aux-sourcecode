@@ -17,6 +17,7 @@ from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
 from .llm.client import AnthropicClient
+from .observability.contacto_n8n import ContactoN8n
 from .observability.tracer import LangfuseTracer, NoOpTracer
 from .rag.embedder import FastEmbedder
 from .rag.indexer import QdrantIndexer
@@ -169,6 +170,7 @@ async def lifespan(app: FastAPI):
         db, retriever, analyzer, resolution_service, report_generator,
     )
     app.state.langfuse_stats_service = LangfuseStatsService(tracer, settings.llm_model)
+    app.state.contacto_n8n = ContactoN8n()
 
     yield
 

@@ -178,7 +178,15 @@
         "options": {
           "timeout": 30000
         },
-        "sendHeaders": false
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Origen-n8n",
+              "value": "orquestador"
+            }
+          ]
+        }
       },
       "id": "2166b7d3-830d-42e3-a847-fc01dbdc4ac8",
       "name": "Obtener Transacción",
