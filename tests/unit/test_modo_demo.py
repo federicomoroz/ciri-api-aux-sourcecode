@@ -17,7 +17,10 @@ from api.app.data.precomputados import (
     ETIQUETA,
     USO_DEMO,
     analisis_demo,
+    caso_mas_cercano_en_riesgo,
     casos_demo,
+    distancia_de_riesgo,
+    informe_de_ejemplo,
     informe_demo,
 )
 from api.app.routes.panel import (
@@ -155,8 +158,25 @@ class TestLoDeclaraSiempre:
 
 
 class TestUnCasoSinInforme:
-    def test_no_devuelve_el_informe_de_otro_caso(self, settings):
-        assert _respuesta_demo(SIN_INFORME, settings) is None
+    """Antes devolvia un error. Ahora devuelve el ejemplo mas cercano en riesgo.
+
+    Cambio a proposito: quien prueba un caso cualquiera tiene que recibir algo
+    que mire, no una pagina de error — siempre que quede dicho de que caso es.
+    """
+
+    def test_responde_con_un_ejemplo_en_vez_de_nada(self, settings):
+        assert _respuesta_demo(SIN_INFORME, settings) is not None
+
+    def test_el_ejemplo_declara_que_no_es_el_caso_pedido(self, settings):
+        html = _respuesta_demo(SIN_INFORME, settings).body.decode("utf-8")
+        assert SIN_INFORME in html
+        assert "no tiene un analisis guardado" in html
+
+    def test_sin_ningun_informe_guardado_si_explica_en_vez_de_inventar(self, tmp_path):
+        vacia = tmp_path / "sin_nada"
+        vacia.mkdir()
+        cfg = SimpleNamespace(demo_mode=True, demo_reports_path=str(vacia))
+        assert _respuesta_demo(SIN_INFORME, cfg) is None
 
     def test_la_pagina_explica_el_modo_demo(self, settings):
         assert "modo demo" in _pagina_sin_caso_demo(SIN_INFORME, settings)
@@ -189,11 +209,19 @@ class TestElStream:
     def test_el_uso_del_stream_tambien_informa_costo_cero(self, settings):
         assert self._eventos(_peticion(), settings)[-1]["usage"] == USO_DEMO
 
-    def test_un_caso_sin_informe_termina_en_error_explicado(self, settings):
+    def test_un_caso_sin_informe_termina_igual_con_un_ejemplo(self, settings):
         final = self._eventos(_peticion(txn=SIN_INFORME), settings)[-1]
+        assert final["step"] == "done"
+        assert SIN_INFORME in final["html"]
+        assert "no tiene un analisis guardado" in final["html"]
+
+    def test_sin_ningun_informe_guardado_el_stream_explica(self, tmp_path):
+        vacia = tmp_path / "sin_nada"
+        vacia.mkdir()
+        cfg = SimpleNamespace(demo_mode=True, demo_reports_path=str(vacia))
+        final = self._eventos(_peticion(txn=SIN_INFORME), cfg)[-1]
         assert final["step"] == "error"
         assert "API key" in final["message"]
-        assert TXN_DEMO in final["message"]
 
 
 class TestLosErroresSeNombran:
@@ -416,3 +444,100 @@ class TestElInformeSeMarca:
     def test_el_texto_del_cartel_es_el_mismo_del_panel(self):
         """Una sola fuente: si cambia el texto, cambia en los dos lados."""
         assert CARTEL in self._render(True)
+
+
+class TestElEjemploMasCercanoEnRiesgo:
+    """Un caso sin análisis guardado recibe el más parecido en riesgo, declarado.
+
+    La comparación es por score antifraude y nada más: es la única medida de
+    riesgo disponible sin correr el pipeline, y es la que decide POL-FRD-001.
+    """
+
+    CASOS = {
+        "TXN-00051": {"fraud_score": 8, "risk_level": "BLOCKER"},
+        "TXN-00042": {"fraud_score": 4, "risk_level": "HIGH"},
+        "TXN-00089": {"fraud_score": 80, "risk_level": "HIGH"},
+    }
+
+    @pytest.fixture
+    def carpeta(self, tmp_path):
+        c = tmp_path / "informes"
+        c.mkdir()
+        for txn, caso in self.CASOS.items():
+            (c / f"report_x_{txn}.html").write_text(
+                f"<html><body><h1>{txn}</h1></body></html>", encoding="utf-8"
+            )
+            (c / f"analisis_{txn}.json").write_text(
+                json.dumps({"resolution": {"transaction_id": txn}, "judge": {},
+                            "caso": {**caso, "transaction_id": txn}}),
+                encoding="utf-8",
+            )
+        return str(c)
+
+    def test_elige_el_de_score_mas_cercano(self, carpeta):
+        assert caso_mas_cercano_en_riesgo(carpeta, {"fraud_score": 7}) == "TXN-00051"
+        assert caso_mas_cercano_en_riesgo(carpeta, {"fraud_score": 3}) == "TXN-00042"
+        assert caso_mas_cercano_en_riesgo(carpeta, {"fraud_score": 75}) == "TXN-00089"
+
+    def test_solo_mira_el_riesgo(self, carpeta):
+        """Ni el metodo de pago ni el pais entran en la cuenta."""
+        cripto = {"fraud_score": 79, "payment_method": "Cripto", "country": "COL"}
+        assert caso_mas_cercano_en_riesgo(carpeta, cripto) == "TXN-00089"
+
+    def test_a_igual_distancia_la_eleccion_es_reproducible(self, carpeta):
+        """Score 6: a 2 de TXN-00051 y a 2 de TXN-00042. Siempre el mismo."""
+        elegidos = {caso_mas_cercano_en_riesgo(carpeta, {"fraud_score": 6}) for _ in range(5)}
+        assert len(elegidos) == 1
+
+    def test_sin_score_no_se_rompe(self, carpeta):
+        assert caso_mas_cercano_en_riesgo(carpeta, {}) is not None
+
+    def test_una_carpeta_vacia_no_inventa_un_caso(self, tmp_path):
+        vacia = tmp_path / "sin_nada"
+        vacia.mkdir()
+        assert caso_mas_cercano_en_riesgo(str(vacia), {"fraud_score": 5}) is None
+        assert informe_de_ejemplo(str(vacia), {"fraud_score": 5}) is None
+
+    def test_la_distancia_es_la_del_score(self):
+        assert distancia_de_riesgo({"fraud_score": 27}, {"fraud_score": 8}) == 19
+
+    def test_un_score_ilegible_manda_el_caso_al_final(self):
+        assert distancia_de_riesgo({"fraud_score": "n/d"}, {"fraud_score": 8}) == float("inf")
+
+
+class TestElEjemploSeDeclara:
+    CASOS = TestElEjemploMasCercanoEnRiesgo.CASOS
+
+    def _carpeta(self, tmp_path):
+        c = tmp_path / "informes"
+        c.mkdir()
+        for txn, caso in self.CASOS.items():
+            (c / f"report_x_{txn}.html").write_text(
+                f"<html><body><h1>{txn}</h1></body></html>", encoding="utf-8"
+            )
+            (c / f"analisis_{txn}.json").write_text(
+                json.dumps({"resolution": {"transaction_id": txn}, "judge": {},
+                            "caso": {**caso, "transaction_id": txn}}), encoding="utf-8",
+            )
+        return str(c)
+
+    def test_el_cartel_nombra_las_dos_transacciones(self, tmp_path):
+        html, txn = informe_de_ejemplo(self._carpeta(tmp_path),
+                                       {"id": "TXN-00004", "fraud_score": 7})
+        assert "TXN-00004" in html and txn in html
+
+    def test_dice_que_los_datos_son_del_otro_caso(self, tmp_path):
+        html, txn = informe_de_ejemplo(self._carpeta(tmp_path),
+                                       {"id": "TXN-00004", "fraud_score": 7})
+        assert "no de TXN-00004" in html
+
+    def test_devuelve_el_informe_entero_del_ejemplo(self, tmp_path):
+        """Jamas los datos de una transaccion con la resolucion de otra."""
+        html, txn = informe_de_ejemplo(self._carpeta(tmp_path),
+                                       {"id": "TXN-00004", "fraud_score": 7})
+        assert f"<h1>{txn}</h1>" in html
+
+    def test_pedir_un_caso_guardado_usa_el_cartel_normal(self, tmp_path):
+        html = informe_demo(self._carpeta(tmp_path), "TXN-00051")
+        assert CARTEL in html
+        assert "Pediste" not in html

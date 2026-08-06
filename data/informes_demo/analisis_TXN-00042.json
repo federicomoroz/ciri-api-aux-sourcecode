@@ -127,5 +127,15 @@
       "El precedente CB-0058 es catalogado en el precedent_summary como 'patrón favorable al cliente' cuando en realidad fue resuelto 'A favor del comercio' — esta contradicción interna en el resumen de precedentes reduce la fiabilidad del análisis, aunque la justificación principal lo menciona correctamente como 'patrón mixto'.",
       "Los next_steps, aunque concretos y bien referenciados a políticas, no establecen responsables explícitos ni plazos para cada acción (ej. quién verifica el fraud_score con el equipo de modelos, en qué plazo debe el cliente aportar documentación según POL-CB-002), lo que limita su accionabilidad operativa inmediata."
     ]
+  },
+  "caso": {
+    "transaction_id": "TXN-00042",
+    "payment_method": "Crédito Visa",
+    "fraud_score": 4,
+    "country": "BRA",
+    "channel": "Web",
+    "merchant": "Airbnb",
+    "amount_usd": 2055.76,
+    "risk_level": "HIGH"
   }
 }

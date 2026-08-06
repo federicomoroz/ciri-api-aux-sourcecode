@@ -127,5 +127,15 @@
       "POL-CB-003 se marca como FAIL argumentando que el comercio suspendido 'no puede presentar defensa', pero la política en sí no establece ese impedimento explícitamente — la conexión entre suspensión y incapacidad de respuesta es una inferencia razonable pero no está respaldada textualmente por la política, lo que debería haberse señalado como interpretación y no como violación directa.",
       "Los next_steps, aunque concretos y bien referenciados, no establecen responsables específicos ni secuencia de prioridad entre pasos (ej: la solicitud de documentación POL-CB-002 debería preceder lógicamente a la escalación al jefe de área de POL-CB-005, pero ambos aparecen sin orden de dependencia explícito)."
     ]
+  },
+  "caso": {
+    "transaction_id": "TXN-00089",
+    "payment_method": "Débito Visa",
+    "fraud_score": 8,
+    "country": "USA",
+    "channel": "App Móvil",
+    "merchant": "Booking",
+    "amount_usd": 889.02,
+    "risk_level": "HIGH"
   }
 }

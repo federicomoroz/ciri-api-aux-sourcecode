@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 
 from ..config import Settings
 from ..data.db import Database
-from ..data.precomputados import analisis_demo
+from ..data.precomputados import analisis_demo, casos_demo, distancia_de_riesgo
 from ..dependencies import get_db, get_resolution_service, get_settings
 from ..domain.constants import (
     ALERT_EVENT_BLOCKER_REJECT,
@@ -52,23 +52,52 @@ def _emit_resolve_alerts(result: dict, tx_id: str, db: Database) -> None:
         logger.warning("Failed to save alert for %s", tx_id, exc_info=True)
 
 
-def _demo_de(settings: Settings, tx_id: str, parte: str) -> dict | None:
-    """Lo que el modelo respondio la ultima vez para ese caso, si esta guardado.
+def _caso_mas_cercano(carpeta: str, tx_data: dict | None) -> str | None:
+    """De los casos guardados, el mas cercano en riesgo al que se pidio."""
+    guardados = casos_demo(carpeta)
+    if not guardados:
+        return None
+    pedida = tx_data or {}
+    distancias = [
+        (distancia_de_riesgo(pedida, (analisis_demo(carpeta, t) or {}).get("caso", {})), t)
+        for t in guardados
+    ]
+    return min(distancias)[1]
+
+
+def _demo_de(
+    settings: Settings, tx_id: str, parte: str, tx_data: dict | None = None
+) -> dict | None:
+    """Lo que el modelo respondio para ese caso, o para el mas parecido en riesgo.
 
     Solo aplica en modo demo. Sirve para que el workflow de n8n se pueda correr
     entero sin gastar: el contexto y el informe se hacen de verdad, y esta es la
     unica pieza pregrabada.
+
+    Si el caso pedido no esta guardado, se responde con el mas cercano en riesgo
+    y se marca cual era el pedido, para que el informe no mezcle los dos.
     """
     if not settings.demo_mode:
         return None
-    guardado = analisis_demo(settings.demo_reports_path, tx_id)
+    carpeta = settings.demo_reports_path
+
+    guardado = analisis_demo(carpeta, tx_id)
+    if guardado and parte in guardado:
+        logger.warning(
+            "MODO DEMO: %s de %s se responde con el analisis guardado. No se llamo al modelo.",
+            parte, tx_id,
+        )
+        return {**guardado[parte], "demo": True}
+
+    ejemplo = _caso_mas_cercano(carpeta, tx_data)
+    guardado = analisis_demo(carpeta, ejemplo) if ejemplo else None
     if not guardado or parte not in guardado:
         return None
     logger.warning(
-        "MODO DEMO: %s de %s se responde con el analisis guardado. No se llamo al modelo.",
-        parte, tx_id,
+        "MODO DEMO: %s no esta guardado; %s se responde con el de %s, el caso de "
+        "ejemplo mas cercano en riesgo.", tx_id, parte, ejemplo,
     )
-    return {**guardado[parte], "demo": True}
+    return {**guardado[parte], "demo": True, "demo_ejemplo_de": tx_id}
 
 
 @router.post("/resolve", status_code=200)
@@ -80,7 +109,7 @@ def resolve(
 ) -> ResolveResponse:
     """Full resolution pipeline: policy eval -> log summary -> resolution synthesis -> guardrails."""
     tx_id_demo = req.transaction_id or (req.tx_data.get("id", "") if req.tx_data else "")
-    guardado = _demo_de(settings, tx_id_demo, "resolution")
+    guardado = _demo_de(settings, tx_id_demo, "resolution", req.tx_data)
     if guardado is not None:
         _emit_resolve_alerts(guardado, tx_id_demo, db)
         return guardado

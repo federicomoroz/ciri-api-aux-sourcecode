@@ -127,5 +127,15 @@
       "El log FRAUD_ALERT menciona 'Score por debajo del umbral mínimo (57)' pero la resolución lo equipara al fraud_score=8 de la transacción sin explicar la discrepancia entre ambos valores (57 en el log vs 8 en el campo de transacción), lo que podría ser un dato relevante para auditoría que queda sin resolver.",
       "El veredicto de POL-CB-003 como FAIL por 'comercio suspendido no puede responder' es cuestionable: los logs muestran que el comercio fue notificado (MERCHANT_NOTIFIED) y no respondió (MERCHANT_NO_RESPONSE), lo que en realidad es un PASS técnico de la política (el plazo venció sin respuesta, lo que según POL-CB-003 resuelve a favor del cliente). Sin embargo, dado el BLOCKER de POL-EXC-003, este error de clasificación no afecta la decisión final pero reduce la precisión del análisis."
     ]
+  },
+  "caso": {
+    "transaction_id": "TXN-00051",
+    "payment_method": "Cripto",
+    "fraud_score": 8,
+    "country": "COL",
+    "channel": "POS",
+    "merchant": "Airbnb",
+    "amount_usd": 2095.9,
+    "risk_level": "BLOCKER"
   }
 }

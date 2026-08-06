@@ -20,7 +20,12 @@ from ..dependencies import (
     get_report_generator,
     get_settings,
 )
-from ..data.precomputados import USO_DEMO, casos_demo, informe_demo
+from ..data.precomputados import (
+    USO_DEMO,
+    casos_demo,
+    informe_de_ejemplo,
+    informe_demo,
+)
 from ..domain.constants import (
     LLM_BAD_KEY_MARKER,
     LLM_CREDIT_EXHAUSTED_MARKER,
@@ -86,15 +91,34 @@ def _en_modo_demo(req: AnalyzeRequest, settings: Settings) -> bool:
     return settings.demo_mode if req.demo_mode is None else req.demo_mode
 
 
+def _html_demo(txn_id: str, settings: Settings, db=None) -> str | None:
+    """El informe del caso, o el del guardado mas cercano en riesgo.
+
+    Nunca devuelve un error cuando hay algo que mostrar: si el caso pedido no
+    tiene analisis guardado, sale el ejemplo mas parecido en riesgo, y el propio
+    informe aclara de que transaccion es.
+    """
+    exacto = informe_demo(settings.demo_reports_path, txn_id)
+    if exacto is not None:
+        return exacto
+
+    # El score antifraude sale de SQLite, que no cuesta nada consultar.
+    pedida = {"id": txn_id}
+    if db is not None:
+        pedida = {**(db.get_transaction(txn_id) or {}), "id": txn_id}
+    ejemplo = informe_de_ejemplo(settings.demo_reports_path, pedida)
+    return ejemplo[0] if ejemplo else None
+
+
 def _respuesta_demo(
-    txn_id: str, settings: Settings, *, por_falta_de_saldo: bool = False
+    txn_id: str, settings: Settings, db=None, *, por_falta_de_saldo: bool = False
 ) -> HTMLResponse | None:
-    """El informe prearmado del caso. None si ese caso no tiene uno.
+    """El informe prearmado del caso. None solo si no hay ninguno guardado.
 
     Los dos caminos que llegan aca no son lo mismo y el log los distingue: en
     modo demo no se llamo al modelo; en el respaldo se llamo y no habia saldo.
     """
-    html = informe_demo(settings.demo_reports_path, txn_id)
+    html = _html_demo(txn_id, settings, db)
     if html is None:
         return None
 
@@ -189,7 +213,9 @@ def _correr_directo(pipeline: PipelineService, req: AnalyzeRequest, settings: Se
         # entrega el trabajo igual, con su cartel. Es lo que el panel advierte
         # antes de correr.
         if _es_falta_de_saldo(exc):
-            demo = _respuesta_demo(req.transaction_id, settings, por_falta_de_saldo=True)
+            demo = _respuesta_demo(
+            req.transaction_id, settings, pipeline.db, por_falta_de_saldo=True
+        )
             if demo is not None:
                 return demo
         return HTMLResponse(
@@ -209,7 +235,7 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
     lo muestra igual que un analisis real pero con su cartel.
     """
     if _en_modo_demo(req, settings):
-        yield from _emitir_demo(req, settings)
+        yield from _emitir_demo(req, settings, pipeline)
         return
     try:
         for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
@@ -224,7 +250,7 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
             )})
             return
         if _es_falta_de_saldo(exc):
-            html = informe_demo(settings.demo_reports_path, req.transaction_id)
+            html = _html_demo(req.transaction_id, settings, getattr(pipeline, "db", None))
             if html is not None:
                 logger.warning(
                     "SIN SALDO: %s se responde con su informe prearmado. La API key usada "
@@ -240,10 +266,10 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
         yield _sse("error", {"message": "El analisis se interrumpio. Revisar los logs del servidor."})
 
 
-def _emitir_demo(req: AnalyzeRequest, settings: Settings):
+def _emitir_demo(req: AnalyzeRequest, settings: Settings, pipeline=None):
     """El caso prearmado, anunciado como tal desde el primer evento."""
     yield _sse("start", {"transaction_id": req.transaction_id, "demo": True})
-    html = informe_demo(settings.demo_reports_path, req.transaction_id)
+    html = _html_demo(req.transaction_id, settings, getattr(pipeline, "db", None))
     if html is None:
         casos = ", ".join(casos_demo(settings.demo_reports_path))
         yield _sse("error", {"message": (
@@ -350,7 +376,7 @@ async def panel_analyze(
     """
     # Modo demo: el caso ya resuelto sale sin pasar por el modelo ni por n8n.
     if _en_modo_demo(req, settings):
-        demo = _respuesta_demo(req.transaction_id, settings)
+        demo = _respuesta_demo(req.transaction_id, settings, pipeline.db)
         if demo is not None:
             return demo
         return HTMLResponse(

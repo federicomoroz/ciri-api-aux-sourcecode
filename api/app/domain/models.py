@@ -173,6 +173,10 @@ class ResolveResponse(BaseModel):
     # True cuando la respuesta salio del analisis guardado en vez del modelo.
     # Viaja hasta el informe, que lo muestra como "DEMO (Caso prearmado)".
     demo: bool = False
+    # Cuando el caso pedido no tenia analisis guardado, aca va SU id: esta
+    # resolucion es de otra transaccion, servida como ejemplo. El informe lo
+    # usa para responder con el ejemplo entero en vez de mezclar los dos.
+    demo_ejemplo_de: str | None = None
 
 
 class JudgeResponse(BaseModel):
