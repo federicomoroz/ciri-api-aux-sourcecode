@@ -97,6 +97,8 @@ class AnalyzeRequest(BaseModel):
     motivo: str = Field(min_length=1)
     cliente_vip: bool = False
     api_key: str | None = Field(default=None, exclude=True)
+    # El toggle del panel manda su eleccion aca. Si no viene, decide el servidor.
+    demo_mode: bool | None = None
 
 
 # ---- LLM Output Validation Models ----

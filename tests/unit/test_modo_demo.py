@@ -15,7 +15,10 @@ import pytest
 from api.app.data.precomputados import CARTEL, ETIQUETA, USO_DEMO, casos_demo, informe_demo
 from api.app.routes.panel import (
     _emitir_demo,
-    _hay_que_ahorrar,
+    _en_modo_demo,
+    _es_clave_invalida,
+    _es_falta_de_saldo,
+    _pagina_de_error,
     _pagina_sin_caso_demo,
     _respuesta_demo,
 )
@@ -36,25 +39,33 @@ def settings(tmp_path):
     return SimpleNamespace(demo_mode=True, demo_reports_path=str(c), llm_model="haiku")
 
 
-def _peticion(txn=TXN_DEMO, api_key=""):
-    return SimpleNamespace(transaction_id=txn, api_key=api_key, motivo="No reconoce", cliente_vip=False)
+def _peticion(txn=TXN_DEMO, api_key="", demo_mode=None):
+    return SimpleNamespace(
+        transaction_id=txn, api_key=api_key, motivo="No reconoce",
+        cliente_vip=False, demo_mode=demo_mode,
+    )
 
 
-class TestCuandoNoSeGasta:
-    def test_en_modo_demo_sin_clave_propia_no_se_llama_al_modelo(self, settings):
-        assert _hay_que_ahorrar(_peticion(), settings)
-
-    def test_con_clave_propia_corre_el_pipeline_completo(self, settings):
-        """Quien pone su clave paga lo suyo: el modo demo no le aplica."""
-        assert not _hay_que_ahorrar(_peticion(api_key=CLAVE_PROPIA), settings)
-
-    def test_con_el_modo_demo_apagado_corre_normal(self, settings):
+class TestQuienDecideElModo:
+    def test_sin_indicacion_manda_la_configuracion_del_servidor(self, settings):
+        assert _en_modo_demo(_peticion(), settings)
         settings.demo_mode = False
-        assert not _hay_que_ahorrar(_peticion(), settings)
+        assert not _en_modo_demo(_peticion(), settings)
 
-    def test_el_modo_demo_apagado_manda_aunque_no_haya_clave(self, settings):
+    def test_el_toggle_del_panel_puede_encenderlo(self, settings):
         settings.demo_mode = False
-        assert not _hay_que_ahorrar(_peticion(api_key=""), settings)
+        assert _en_modo_demo(_peticion(demo_mode=True), settings)
+
+    def test_el_toggle_del_panel_puede_apagarlo(self, settings):
+        assert not _en_modo_demo(_peticion(demo_mode=False), settings)
+
+    def test_pedir_modo_demo_teniendo_clave_es_legitimo(self, settings):
+        """Es justamente como se mira un caso sin gastar."""
+        assert _en_modo_demo(_peticion(api_key=CLAVE_PROPIA, demo_mode=True), settings)
+
+    def test_la_clave_sola_no_apaga_el_modo_demo(self, settings):
+        """Tener clave no obliga a gastarla: para eso esta el toggle."""
+        assert _en_modo_demo(_peticion(api_key=CLAVE_PROPIA), settings)
 
 
 class TestQueCasosCubre:
@@ -121,6 +132,14 @@ class TestLoDeclaraSiempre:
         assert "MODO DEMO" in caplog.text
         assert TXN_DEMO in caplog.text
 
+    def test_el_log_distingue_el_respaldo_por_falta_de_saldo(self, settings, caplog):
+        """En modo demo no se llamo al modelo; en el respaldo se llamo y fallo."""
+        import logging
+        with caplog.at_level(logging.WARNING):
+            _respuesta_demo(TXN_DEMO, settings, por_falta_de_saldo=True)
+        assert "SIN SALDO" in caplog.text
+        assert "MODO DEMO" not in caplog.text
+
     def test_el_archivo_en_disco_queda_limpio(self, settings):
         """Los mismos HTML son ejemplos de la documentacion: ahi el cartel sobra."""
         from pathlib import Path
@@ -168,3 +187,95 @@ class TestElStream:
         assert final["step"] == "error"
         assert "API key" in final["message"]
         assert TXN_DEMO in final["message"]
+
+
+class TestLosErroresSeNombran:
+    """Quien evalua no tiene los logs: el error tiene que decir que hacer."""
+
+    SIN_SALDO = Exception("Error 400: Your credit balance is too low to access the API")
+    CLAVE_MALA = Exception("Error 401: {'type': 'authentication_error', 'message': 'invalid x-api-key'}")
+    OTRO = Exception("Connection reset by peer")
+
+    def test_distingue_falta_de_saldo(self):
+        assert _es_falta_de_saldo(self.SIN_SALDO)
+        assert not _es_falta_de_saldo(self.CLAVE_MALA)
+        assert not _es_falta_de_saldo(self.OTRO)
+
+    def test_distingue_clave_invalida(self):
+        assert _es_clave_invalida(self.CLAVE_MALA)
+        assert not _es_clave_invalida(self.SIN_SALDO)
+        assert not _es_clave_invalida(self.OTRO)
+
+    def test_sin_saldo_ofrece_el_modo_demo_como_salida(self, settings):
+        assert "modo demo" in _pagina_de_error(SIN_INFORME, self.SIN_SALDO, settings)
+
+    def test_clave_invalida_dice_como_es_una_clave_valida(self, settings):
+        pagina = _pagina_de_error(SIN_INFORME, self.CLAVE_MALA, settings)
+        assert "sk-ant-" in pagina
+        assert "console.anthropic.com" in pagina
+
+    def test_un_fallo_desconocido_no_promete_nada(self, settings):
+        """Inventar una causa seria peor que decir que hay que mirar los logs."""
+        pagina = _pagina_de_error(SIN_INFORME, self.OTRO, settings)
+        assert "sk-ant-" not in pagina
+        assert "saldo" not in pagina
+
+
+class TestLaClaveDelVisitanteManda:
+    """En modo produccion, la clave de la peticion reemplaza a la del servidor.
+
+    Es lo que hace que evaluar el sistema a fondo no le cueste nada al dueño del
+    repositorio: quien trae su clave gasta de su cuenta.
+    """
+
+    def test_el_pipeline_efimero_usa_la_clave_de_la_peticion(self, monkeypatch):
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        import api.app.routes.panel as panel
+
+        claves_usadas = []
+
+        def cliente_falso(api_key, model, tracer):
+            claves_usadas.append(api_key)
+            return MagicMock()
+
+        monkeypatch.setattr(panel, "AnthropicClient", cliente_falso)
+        monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
+        monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
+
+        base = SimpleNamespace(db=None, retriever=None, analyzer=None, report_gen=None)
+        cfg = SimpleNamespace(llm_model="haiku", llm_model_resolution="sonnet")
+        peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(tracer=MagicMock())))
+
+        with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
+            pass
+
+        assert claves_usadas == [CLAVE_PROPIA, CLAVE_PROPIA]
+
+    def test_los_clientes_se_cierran_al_terminar(self, monkeypatch):
+        """Cada uno abre su pool de conexiones: sin cerrar, quedan colgados."""
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+
+        import api.app.routes.panel as panel
+
+        creados = []
+
+        def cliente_falso(api_key, model, tracer):
+            c = MagicMock()
+            creados.append(c)
+            return c
+
+        monkeypatch.setattr(panel, "AnthropicClient", cliente_falso)
+        monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
+        monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
+
+        base = SimpleNamespace(db=None, retriever=None, analyzer=None, report_gen=None)
+        cfg = SimpleNamespace(llm_model="haiku", llm_model_resolution="sonnet")
+        peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(tracer=MagicMock())))
+
+        with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
+            pass
+
+        assert all(c.close.called for c in creados)

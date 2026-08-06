@@ -22,6 +22,7 @@ from ..dependencies import (
 )
 from ..data.precomputados import USO_DEMO, casos_demo, informe_demo
 from ..domain.constants import (
+    LLM_BAD_KEY_MARKER,
     LLM_CREDIT_EXHAUSTED_MARKER,
     N8N_HEALTHZ_PATH,
     N8N_PING_TIMEOUT_S,
@@ -70,26 +71,46 @@ def _es_falta_de_saldo(exc: Exception) -> bool:
     return LLM_CREDIT_EXHAUSTED_MARKER in str(exc).lower()
 
 
-def _hay_que_ahorrar(req: AnalyzeRequest, settings: Settings) -> bool:
-    """Si corresponde servir el caso ya resuelto en vez de gastar en el modelo.
+def _es_clave_invalida(exc: Exception) -> bool:
+    """Pegar mal la clave es el error mas probable de quien trae la suya."""
+    return LLM_BAD_KEY_MARKER in str(exc).lower()
 
-    Quien trae su propia clave paga lo suyo y corre el pipeline completo: el modo
-    demo no le aplica.
+
+def _en_modo_demo(req: AnalyzeRequest, settings: Settings) -> bool:
+    """Si esta peticion tiene que resolverse sin llamar al modelo.
+
+    Manda el toggle del panel; si la peticion no dice nada, decide el servidor.
+    Nota: aca no interviene la API key. Pedir modo demo teniendo clave es
+    legitimo — es justamente como se mira un caso sin gastar.
     """
-    return settings.demo_mode and not req.api_key
+    return settings.demo_mode if req.demo_mode is None else req.demo_mode
 
 
-def _respuesta_demo(txn_id: str, settings: Settings) -> HTMLResponse | None:
-    """El informe prearmado del caso. None si ese caso no tiene uno."""
+def _respuesta_demo(
+    txn_id: str, settings: Settings, *, por_falta_de_saldo: bool = False
+) -> HTMLResponse | None:
+    """El informe prearmado del caso. None si ese caso no tiene uno.
+
+    Los dos caminos que llegan aca no son lo mismo y el log los distingue: en
+    modo demo no se llamo al modelo; en el respaldo se llamo y no habia saldo.
+    """
     html = informe_demo(settings.demo_reports_path, txn_id)
     if html is None:
         return None
 
-    logger.warning(
-        "MODO DEMO: %s se responde con su informe prearmado. No se llamo al modelo "
-        "y no se gasto nada. Con una API key propia el pipeline corre completo.",
-        txn_id,
-    )
+    if por_falta_de_saldo:
+        logger.warning(
+            "SIN SALDO: %s se responde con su informe prearmado. La API key usada no "
+            "tiene credito, asi que el analisis no pudo correr.",
+            txn_id,
+        )
+    else:
+        logger.warning(
+            "MODO DEMO: %s se responde con su informe prearmado. No se llamo al modelo "
+            "y no se gasto nada. Con el modo demo apagado y una API key con saldo, el "
+            "pipeline corre completo.",
+            txn_id,
+        )
     respuesta = HTMLResponse(content=html, status_code=200)
     respuesta.headers["X-Modo-Demo"] = "true"
     respuesta.headers["X-Usage-JSON"] = json.dumps(USO_DEMO)
@@ -123,7 +144,18 @@ def _pagina_de_error(txn_id: str, exc: Exception, settings: Settings) -> str:
         return _pagina(
             "Sin saldo en esa API key",
             "<p>La clave de Anthropic usada para este analisis se quedo sin credito.</p>"
-            "<p>Con otra clave con saldo, el caso se investiga normalmente.</p>",
+            "<p>Con otra clave con saldo, el caso se investiga normalmente. Y con el "
+            "<b>modo demo</b> encendido, los casos de ejemplo se ven igual, sin gastar.</p>",
+            txn_id,
+        )
+    if _es_clave_invalida(exc):
+        return _pagina(
+            "Esa API key no es valida",
+            "<p>Anthropic rechazo la clave. Suele ser que quedo cortada al pegarla, o que "
+            "es de otro proveedor: las de Anthropic empiezan con <code>sk-ant-</code>.</p>"
+            "<p>Se saca en <a href=\"https://console.anthropic.com/settings/keys\" "
+            "target=\"_blank\">console.anthropic.com</a>. Sin clave, el <b>modo demo</b> "
+            "muestra los casos de ejemplo igual.</p>",
             txn_id,
         )
     return _pagina(
@@ -153,6 +185,13 @@ def _correr_directo(pipeline: PipelineService, req: AnalyzeRequest, settings: Se
         return response
     except Exception as exc:
         logger.error("Direct pipeline failed for %s: %s", req.transaction_id, exc, exc_info=True)
+        # Sin saldo, el informe prearmado es mejor que una pagina de error: se
+        # entrega el trabajo igual, con su cartel. Es lo que el panel advierte
+        # antes de correr.
+        if _es_falta_de_saldo(exc):
+            demo = _respuesta_demo(req.transaction_id, settings, por_falta_de_saldo=True)
+            if demo is not None:
+                return demo
         return HTMLResponse(
             content=_pagina_de_error(req.transaction_id, exc, settings),
             status_code=500,
@@ -169,7 +208,7 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
     En modo demo no se ejecuta nada: el caso prearmado sale directo, y el panel
     lo muestra igual que un analisis real pero con su cartel.
     """
-    if _hay_que_ahorrar(req, settings):
+    if _en_modo_demo(req, settings):
         yield from _emitir_demo(req, settings)
         return
     try:
@@ -177,13 +216,28 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
             yield _sse(step, data)
     except Exception as exc:
         logger.error("Pipeline SSE fallo para %s: %s", req.transaction_id, exc, exc_info=True)
-        mensaje = (
-            "La API key usada se quedo sin saldo. Con otra clave con credito, el caso "
-            "se investiga normalmente."
-            if _es_falta_de_saldo(exc)
-            else "El analisis se interrumpio. Revisar los logs del servidor."
-        )
-        yield _sse("error", {"message": mensaje})
+        if _es_clave_invalida(exc):
+            yield _sse("error", {"message": (
+                "Anthropic rechazo esa API key. Revisá que este completa y que empiece "
+                "con 'sk-ant-'. Con el modo demo encendido, los casos de ejemplo se ven "
+                "igual sin necesidad de clave."
+            )})
+            return
+        if _es_falta_de_saldo(exc):
+            html = informe_demo(settings.demo_reports_path, req.transaction_id)
+            if html is not None:
+                logger.warning(
+                    "SIN SALDO: %s se responde con su informe prearmado. La API key usada "
+                    "no tiene credito.", req.transaction_id,
+                )
+                yield _sse("done", {"html": html, "usage": USO_DEMO})
+                return
+            yield _sse("error", {"message": (
+                "La API key usada se quedo sin saldo, y este caso no tiene informe "
+                "prearmado. Con una clave con credito se investiga normalmente."
+            )})
+            return
+        yield _sse("error", {"message": "El analisis se interrumpio. Revisar los logs del servidor."})
 
 
 def _emitir_demo(req: AnalyzeRequest, settings: Settings):
@@ -222,6 +276,19 @@ def server_key_status(settings: Settings = Depends(get_settings)) -> JSONRespons
     When False, visitors must provide their own key (BYOK required).
     """
     return JSONResponse({"has_server_key": bool(settings.anthropic_api_key)})
+
+
+@router.get("/api/panel/demo-status")
+def demo_status(settings: Settings = Depends(get_settings)) -> JSONResponse:
+    """Que casos se pueden ver sin gastar, y como arranca el toggle del panel.
+
+    Los casos salen de la carpeta de informes, no de una lista escrita a mano:
+    agregar un informe alcanza para que el panel lo ofrezca.
+    """
+    return JSONResponse({
+        "demo_mode": settings.demo_mode,
+        "casos": casos_demo(settings.demo_reports_path),
+    })
 
 
 # ─── Panel analyze endpoint ───────────────────────────────────────────────────
@@ -282,7 +349,7 @@ async def panel_analyze(
     2. If n8n is unavailable or direct=true, use the direct FastAPI pipeline.
     """
     # Modo demo: el caso ya resuelto sale sin pasar por el modelo ni por n8n.
-    if _hay_que_ahorrar(req, settings):
+    if _en_modo_demo(req, settings):
         demo = _respuesta_demo(req.transaction_id, settings)
         if demo is not None:
             return demo
@@ -295,13 +362,22 @@ async def panel_analyze(
         if html is not None:
             return HTMLResponse(content=html, status_code=200)
 
-    # ── Direct pipeline fallback ──────────────────────────────────────────
+    # ── Modo produccion: el pipeline corre de verdad ──────────────────────
+    # La clave que venga en la peticion reemplaza a la del servidor. Quien trae
+    # la suya gasta de su cuenta, no de la de nadie mas.
     if req.api_key:
         with _byok_pipeline(req.api_key, pipeline, settings, request) as propio:
             return _correr_directo(propio, req, settings)
     if not settings.anthropic_api_key:
         return HTMLResponse(
-            content="<html><body><h2>API key requerida</h2><p>Ingresa tu Anthropic API Key en el panel.</p></body></html>",
+            content=_pagina(
+                "Hace falta una API key",
+                "<p>El modo produccion ejecuta el analisis de verdad, y este servidor no "
+                "tiene una clave propia configurada.</p>"
+                "<p>Cargá la tuya en el campo <b>API key</b> del panel, o volvé al "
+                "<b>modo demo</b> para ver los casos de ejemplo sin necesitar clave.</p>",
+                req.transaction_id,
+            ),
             status_code=400,
         )
     return _correr_directo(pipeline, req, settings)

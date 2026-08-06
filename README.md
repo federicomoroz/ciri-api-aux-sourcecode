@@ -25,17 +25,24 @@ Hay **cuatro formas de usar el sistema**, y todas hacen lo mismo por dentro. Cam
 
 Ninguna requiere instalar nada ni configurar claves. Si preferís correr todo en tu máquina, está en [Todo local con Docker](#todo-local-con-docker).
 
-### Modo demo: probalo sin gastar
+### Dos modos, con un toggle en el panel
 
-La instancia publicada corre en **modo demo**. Investigar un caso cuesta dinero real —dos modelos, varias llamadas—, y probar una entrega no debería consumir la cuenta de nadie. Así que:
+Investigar un caso cuesta dinero real —dos modelos, varias llamadas—. Evaluar una entrega no debería consumir la cuenta de nadie, así que el panel arranca en **modo demo** y el toggle cambia al otro:
 
-| | |
-|---|---|
-| **Los tres casos de ejemplo** | Se sirven con su informe ya generado, al instante. El HTML abre con un cartel **DEMO (Caso prearmado)**, la respuesta trae la cabecera `X-Modo-Demo` y el servidor deja un warning en el log. Un informe prearmado nunca se hace pasar por un análisis recién hecho. |
-| **Cualquier otro caso** | Necesita una clave de Anthropic. Cargala en el campo **API key** del panel y el pipeline corre completo, con tu cuenta. |
-| **Todo lo que no cuesta** | Sigue funcionando igual: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA, informes. |
+| | **Modo demo** (por defecto) | **Modo producción** |
+|---|---|---|
+| **Qué casos** | Los 3 de ejemplo | Cualquier transacción del dataset |
+| **Llama al modelo** | **No.** No es que intente y falle: no gasta | Sí, el pipeline completo |
+| **Hace falta clave** | No | Sí — la del panel, o la del servidor si tiene |
+| **Qué devuelve** | El informe ya generado, al instante | El análisis recién hecho |
 
-En modo demo **no se llama al modelo**. No es que lo intente y falle: no gasta. Se apaga con `CB_DEMO_MODE=false`.
+**Si cargás tu API key, se usa la tuya y no la del servidor.** Esa es la forma de ver el sistema trabajando de verdad sobre cualquier caso, gastando de tu cuenta.
+
+Un informe prearmado nunca se hace pasar por uno recién hecho: el HTML abre con un cartel **DEMO (Caso prearmado)**, la respuesta trae la cabecera `X-Modo-Demo` y el servidor deja un warning en el log.
+
+En modo producción, si la clave usada se quedó sin crédito y el caso es uno de los tres de ejemplo, se devuelve su informe demo —marcado como tal— en vez de un error. El panel lo advierte antes de correr.
+
+Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA e informes. El default del servidor se cambia con `CB_DEMO_MODE=false`.
 
 > **Sobre la primera llamada:** la API está en el free tier de Render, que duerme tras 15 minutos sin uso. La primera petición puede tardar ~50 segundos en despertarla; las siguientes responden en ~12. El workflow de n8n ya contempla esto con un nodo que la despierta antes de empezar.
 

@@ -408,6 +408,44 @@
       margin-top: 3px;
     }
 
+    /* Modo demo */
+    .demo-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      background: var(--bg-subtle, rgba(255,255,255,.02));
+    }
+    .demo-card.on {
+      border-color: #e8a33d;
+      background: rgba(232,163,61,.08);
+    }
+    .demo-hint {
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-muted);
+      margin: 6px 0 0;
+    }
+    .demo-hint b { color: var(--text); }
+    /* La consulta personalizada no aplica en modo demo: solo hay 3 casos guardados. */
+    .form-card.bloqueado {
+      opacity: .45;
+      pointer-events: none;
+      filter: grayscale(.4);
+    }
+    .aviso-sin-saldo {
+      display: none;
+      font-size: 11px;
+      line-height: 1.5;
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border-left: 3px solid #e8a33d;
+      background: rgba(232,163,61,.10);
+      color: var(--text-muted);
+    }
+    .aviso-sin-saldo.visible { display: block; }
+
     /* API Key (BYOK) */
     .api-key-section {
       background: var(--surface-alt);
@@ -1548,6 +1586,16 @@
     <!-- ─────────────── LEFT PANEL ─────────────── -->
     <aside class="left-panel">
 
+      <!-- Modo demo -->
+      <div class="demo-card" id="demo-card">
+        <label class="toggle-row" for="inp-demo">
+          <input type="checkbox" id="inp-demo" onchange="onDemoToggle()" />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          <span class="toggle-label" id="demo-label">Modo demo</span>
+        </label>
+        <p class="demo-hint" id="demo-hint"></p>
+      </div>
+
       <!-- Scenarios -->
       <p class="panel-label">Escenarios de prueba</p>
 
@@ -1712,6 +1760,12 @@
           <button class="api-key-toggle" onclick="toggleApiKeyVisibility()" title="Mostrar/ocultar" type="button">&#128065;</button>
         </div>
         <p class="form-hint" id="api-key-hint">Usa tu propia key — cada usuario consume sus creditos. <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent)">Obtener key</a></p>
+        <p class="aviso-sin-saldo" id="aviso-sin-saldo">
+          <b>Si esa cuenta no tiene creditos</b>, el analisis no puede correr. Cuando el caso
+          es uno de los tres de ejemplo, se devuelve su <b>informe demo</b> en vez de un error
+          — llega con el cartel <b>DEMO (Caso prearmado)</b> arriba, asi que no se confunde con
+          un analisis recien hecho.
+        </p>
       </div>
 
       <!-- n8n URL (BYON8N) -->
@@ -2158,6 +2212,52 @@ function deactivateCustom() {
   if (selectedIdx === null) disableSubmit('Seleccionar escenario');
 }
 
+// ─── MODO DEMO ───────────────────────────────────────────
+// Encendido: los casos guardados salen al instante y no se llama al modelo.
+// Apagado: corre el pipeline de verdad y hace falta una API key con saldo.
+let demoMode  = true;
+let casosDemo = [];
+
+async function loadDemoStatus() {
+  try {
+    const r = await fetch(API_BASE + '/api/panel/demo-status');
+    const d = await r.json();
+    demoMode  = !!d.demo_mode;
+    casosDemo = d.casos || [];
+  } catch { /* el default alcanza */ }
+  $('inp-demo').checked = demoMode;
+  applyDemoMode();
+}
+
+function onDemoToggle() {
+  demoMode = $('inp-demo').checked;
+  applyDemoMode();
+}
+
+function applyDemoMode() {
+  $('demo-card').classList.toggle('on', demoMode);
+  $('demo-label').textContent = demoMode ? 'Modo demo' : 'Modo produccion';
+  $('demo-hint').innerHTML = demoMode
+    ? 'Solo los <b>' + casosDemo.length + ' casos de ejemplo</b>, con su informe ya generado. '
+      + 'No se llama al modelo: no consume la cuenta de nadie. '
+      + 'El informe llega marcado como <b>DEMO (Caso prearmado)</b>.'
+    : 'El pipeline corre <b>de verdad</b>, sobre cualquier transaccion del dataset. '
+      + 'Si cargas tu API key, se usa la tuya y no la del servidor.';
+
+  // La consulta personalizada no aplica: en demo solo existen los casos guardados.
+  const custom = document.querySelector('.form-card');
+  if (custom) custom.classList.toggle('bloqueado', demoMode);
+  if (demoMode && isCustom) {
+    isCustom = false;
+    document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
+    selectedIdx = null;
+    disableSubmit('Seleccionar escenario');
+  }
+
+  $('aviso-sin-saldo').classList.toggle('visible', !demoMode);
+  onApiKeyChange();
+}
+
 // ─── BYOK (Bring Your Own Key) ──────────────────────────
 let serverHasKey = false;
 
@@ -2170,12 +2270,16 @@ function hasApiKey() {
 }
 
 function byokSatisfied() {
-  return hasApiKey() || serverHasKey;
+  // En modo demo no se llama al modelo, asi que no hay clave que exigir.
+  return demoMode || hasApiKey() || serverHasKey;
 }
 
 function onApiKeyChange() {
   const badge = $('api-key-badge');
-  if (hasApiKey()) {
+  if (demoMode) {
+    badge.textContent = 'no hace falta';
+    badge.className   = 'api-key-badge ok';
+  } else if (hasApiKey()) {
     badge.textContent = 'ok';
     badge.className   = 'api-key-badge ok';
   } else if (serverHasKey) {
@@ -2284,6 +2388,7 @@ function buildPayload() {
     base = { transaction_id: s.transaction_id, motivo: s.motivo, cliente_vip: s.cliente_vip };
   }
   if (!base) return null;
+  base.demo_mode = demoMode;
   const key = getApiKey();
   if (key) base.api_key = key;
   return base;
@@ -3101,6 +3206,7 @@ showPanel('idle');
 disableSubmit('Seleccionar escenario');
 checkHealth();
 checkServerKey();
+loadDemoStatus();
 setInterval(checkHealth, 30_000);
 loadTransactions();
 renderHistory();

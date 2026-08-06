@@ -16,11 +16,17 @@ La instancia publicada corre en modo demo: **no llama al modelo**, para que prob
 la cuenta de nadie. Sólo afecta a los dos endpoints que gastan (`resolve` y `judge`, y el
 pipeline que los usa). Todo el resto responde normalmente.
 
+El campo `demo_mode` del body elige el modo por petición; si no viene, decide el servidor.
+
 | Petición | Qué pasa |
 |---|---|
-| Un caso de ejemplo (`TXN-00051`, `TXN-00042`, `TXN-00089`) | Devuelve su informe ya generado. `X-Modo-Demo: true`, costo cero, y el HTML abre con el cartel **DEMO (Caso prearmado)** |
-| Cualquier otro caso | Explica que hace falta una clave propia |
-| Cualquier caso **con `api_key` en el body** | Corre el pipeline completo, con esa cuenta |
+| `demo_mode: true` · caso de ejemplo (`TXN-00051`, `TXN-00042`, `TXN-00089`) | Devuelve su informe ya generado. `X-Modo-Demo: true`, costo cero, y el HTML abre con el cartel **DEMO (Caso prearmado)** |
+| `demo_mode: true` · cualquier otro caso | Explica que hace falta una clave propia |
+| `demo_mode: false` · con `api_key` | Corre el pipeline completo **con esa clave**, que reemplaza a la del servidor |
+| `demo_mode: false` · sin saldo · caso de ejemplo | Devuelve su informe demo marcado, en vez de un error |
+| `demo_mode: false` · sin saldo · otro caso | `500` con el motivo dicho: sin saldo, o clave inválida |
+
+`GET /api/panel/demo-status` dice en qué modo arranca el servidor y qué casos tienen informe.
 
 ```bash
 # Modo demo: informe al instante, sin costo

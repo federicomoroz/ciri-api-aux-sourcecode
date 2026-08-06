@@ -32,6 +32,7 @@ __all__ = [
     "EMBEDDING_DIM",
     # LLM
     "LLM_TRUNCATION_LENGTH",
+    "LLM_BAD_KEY_MARKER",
     "LLM_CREDIT_EXHAUSTED_MARKER",
     "LLM_DEFAULT_MAX_TOKENS",
     "LLM_DEFAULT_MAX_RETRIES",
@@ -161,7 +162,8 @@ EMBEDDING_DIM: int = 1024                    # voyage-multilingual-2 (Voyage AI 
 
 # ── LLM ─────────────────────────────────────────────────────────────────────
 LLM_TRUNCATION_LENGTH: int = 200    # chars to log to tracer (not to LLM)
-LLM_CREDIT_EXHAUSTED_MARKER: str = "credit balance is too low"  # texto de Anthropic al agotarse el saldo
+LLM_CREDIT_EXHAUSTED_MARKER: str = "credit balance is too low"  # Anthropic, al agotarse el saldo
+LLM_BAD_KEY_MARKER: str = "authentication_error"                # Anthropic, clave invalida
 LLM_DEFAULT_MAX_TOKENS: int = 4096
 LLM_DEFAULT_MAX_RETRIES: int = 2
 LLM_DEFAULT_TEMPERATURE: float = 0.3
