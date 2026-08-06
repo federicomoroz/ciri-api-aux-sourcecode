@@ -92,7 +92,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 | Archivo | Qué es |
 |---|---|
 | `workflow_ciri_agent.json` | El orquestador: 38 nodos, 32 ejecutables |
-| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Dispara el mismo webhook que el orquestador, así que corre los 29 pasos igual |
+| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 29 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 
 Tres pasos manuales al importar, inevitables porque n8n reasigna identificadores al recibir un workflow:
