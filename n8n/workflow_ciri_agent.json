@@ -694,6 +694,15 @@
         "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/health",
         "options": {
           "timeout": 90000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Origen-n8n",
+              "value": "orquestador"
+            }
+          ]
         }
       },
       "id": "3121a68a-2dec-494b-8a84-ee1ab13cea04",
