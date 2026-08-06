@@ -113,3 +113,50 @@ class TestCaseContext:
         ctx = CaseContext(transaction={"id": "TXN-1"})
         with pytest.raises(Exception):
             ctx.transaction = {}
+
+
+class TestClasificarResolucion:
+    """Las mismas palabras deciden la nota al modelo y el conteo de la tendencia.
+
+    Estaban escritas en tres lugares del mismo metodo: la tabla de implicaciones,
+    el conteo de aprobados/rechazados y el conteo sobre los que matchean motivo.
+    """
+
+    @staticmethod
+    def _clasificar(texto):
+        from api.app.services.resolution import ResolutionService
+
+        return ResolutionService._clasificar_resolucion(texto)
+
+    def test_reconoce_las_cinco_clases(self):
+        casos = {
+            "Reembolso aprobado": "aprobado",
+            "Resuelto a favor del cliente": "aprobado",
+            "Contracargo rechazado": "rechazado",
+            "Denegado por falta de pruebas": "rechazado",
+            "Reembolso parcial": "parcial",
+            "Sin resolucion": "sin_resolver",
+            "Pendiente de revision": "sin_resolver",
+            "Cerrado": "cerrado",
+        }
+        for texto, esperada in casos.items():
+            assert self._clasificar(texto)[0] == esperada, texto
+
+    def test_toda_clase_conocida_trae_su_implicacion(self):
+        clase, implicacion = self._clasificar("Reembolso aprobado")
+        assert clase == "aprobado"
+        assert "favorable al cliente" in implicacion
+
+    def test_resolucion_desconocida_no_inventa_clase(self):
+        assert self._clasificar("Escalado a legales") == (None, None)
+
+    def test_no_se_rompe_con_vacio(self):
+        assert self._clasificar("") == (None, None)
+        assert self._clasificar(None) == (None, None)
+
+    def test_es_insensible_a_mayusculas(self):
+        assert self._clasificar("APROBADO")[0] == "aprobado"
+
+    def test_gana_la_primera_coincidencia(self):
+        """El orden de la tabla define la precedencia cuando hay ambiguedad."""
+        assert self._clasificar("Pendiente, luego aprobado")[0] == "sin_resolver"

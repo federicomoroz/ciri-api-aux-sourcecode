@@ -49,35 +49,29 @@ class ResolutionService:
 
         Raises on LLM failure — never produces incomplete resolutions silently.
         """
-        tx_data, motivo, cliente_vip = ctx.transaction, ctx.motivo, ctx.cliente_vip
-        policies, similar_cases, logs = ctx.policies, ctx.similar_cases, ctx.logs
-        merchant_risk, client_history = ctx.merchant_risk, ctx.client_history
-
         tx_id = ctx.transaction_id or FALLBACK_TX_ID
         trace_id = self.tracer.trace(
             TRACE_RESOLVE,
-            input={"transaction_id": tx_id, "motivo": motivo, "cliente_vip": cliente_vip},
+            input={"transaction_id": tx_id, "motivo": ctx.motivo, "cliente_vip": ctx.cliente_vip},
             output={},
-            metadata={"merchant": tx_data.get("merchant", ""), "amount_usd": tx_data.get("amount_usd", 0)},
+            metadata={
+                "merchant": ctx.transaction.get("merchant", ""),
+                "amount_usd": ctx.transaction.get("amount_usd", 0),
+            },
         )
 
-        policy_verdicts, eval_result = self._eval_policies(
-            tx_data, policies, trace_id,
-            merchant_risk=merchant_risk, client_history=client_history,
-        )
-        log_summary_text = self._summarize_logs(logs)
+        policy_verdicts, eval_result = self._eval_policies(ctx, trace_id)
 
         # Deterministic outcome — code decides, LLM explains.
-        outcome = self._determine_outcome(policy_verdicts, tx_data)
+        outcome = self._determine_outcome(policy_verdicts, ctx.transaction)
         precedent_summary = self._build_precedent_summary(
-            similar_cases, motivo, tx_merchant=tx_data.get("merchant", ""),
+            ctx.similar_cases, ctx.motivo,
+            tx_merchant=ctx.transaction.get("merchant", ""),
         )
         outcome["precedent_summary"] = precedent_summary
 
         resolution, synth_result = self._synthesize_resolution(
-            tx_data, policy_verdicts, similar_cases, log_summary_text,
-            merchant_risk, client_history, motivo, cliente_vip, logs, trace_id,
-            determined_outcome=outcome,
+            ctx, policy_verdicts, self._summarize_logs(ctx.logs), trace_id, outcome,
         )
 
         # Detectar la alucinacion ANTES de corregirla: una vez aplicado el
@@ -93,7 +87,7 @@ class ResolutionService:
         if outcome["hitl_reason"]:
             resolution["hitl_reason"] = outcome["hitl_reason"]
 
-        warnings += self._validate_resolution(resolution, tx_data)
+        warnings += self._validate_resolution(resolution, ctx.transaction)
         usage = {
             "input_tokens": eval_result.input_tokens + synth_result.input_tokens,
             "output_tokens": eval_result.output_tokens + synth_result.output_tokens,
@@ -101,22 +95,14 @@ class ResolutionService:
         }
         return {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id, "_usage": usage}
 
-    def _eval_policies(
-        self,
-        tx_data: dict,
-        policies: list[dict],
-        trace_id: str,
-        merchant_risk: dict | None = None,
-        client_history: dict | None = None,
-    ) -> tuple[list[dict], LLMResult]:
+    def _eval_policies(self, ctx: CaseContext, trace_id: str) -> tuple[list[dict], LLMResult]:
         """Step 1: LLM policy evaluation. Raises on failure."""
-        policies_formatted = format_policies_for_prompt(policies)
         sys_eval, usr_eval = prompts.v1_policy_eval.render(
-            transaction=tx_data,
-            policies_text=policies_formatted,
-            policy_count=len(policies),
-            merchant_risk=merchant_risk or {},
-            client_history=client_history or {},
+            transaction=ctx.transaction,
+            policies_text=format_policies_for_prompt(ctx.policies),
+            policy_count=len(ctx.policies),
+            merchant_risk=ctx.merchant_risk,
+            client_history=ctx.client_history,
         )
         result = self.llm.complete(sys_eval, usr_eval, trace_id=trace_id)
         verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])
@@ -145,31 +131,24 @@ class ResolutionService:
 
     def _synthesize_resolution(
         self,
-        tx_data: dict,
+        ctx: CaseContext,
         policy_verdicts: list[dict],
-        similar_cases: list[dict],
         log_summary: str,
-        merchant_risk: dict,
-        client_history: dict,
-        motivo: str | None,
-        cliente_vip: bool,
-        logs: list[dict],
         trace_id: str,
         determined_outcome: dict | None = None,
     ) -> tuple[dict, LLMResult]:
         """Step 4: LLM resolution synthesis. Raises on failure."""
-        cases_formatted = format_cases_for_prompt(similar_cases, current_motivo=motivo)
         sys_res, usr_res = prompts.v1_resolution.render(
-            transaction=tx_data,
+            transaction=ctx.transaction,
             policy_verdicts=json.dumps(policy_verdicts, ensure_ascii=False, indent=2),
-            similar_cases=cases_formatted,
+            similar_cases=format_cases_for_prompt(ctx.similar_cases, current_motivo=ctx.motivo),
             log_summary=log_summary,
-            merchant_risk=merchant_risk,
-            client_history=client_history,
-            motivo=motivo,
-            cliente_vip=cliente_vip,
-            precedent_count=len(similar_cases),
-            log_count=len(logs),
+            merchant_risk=ctx.merchant_risk,
+            client_history=ctx.client_history,
+            motivo=ctx.motivo,
+            cliente_vip=ctx.cliente_vip,
+            precedent_count=len(ctx.similar_cases),
+            log_count=len(ctx.logs),
             determined_outcome=determined_outcome,
         )
         result = self.llm_resolution.complete(sys_res, usr_res, trace_id=trace_id)
@@ -247,22 +226,32 @@ class ResolutionService:
             text += f"- [{log['severity']}] {log['event']}: {log['detail']}\n"
         return text
 
-    # Que implica cada tipo de resolucion previa, para no dejarselo interpretar
-    # al modelo. Se evalua en orden: la primera coincidencia gana.
-    _IMPLICACION_POR_RESOLUCION: tuple[tuple[tuple[str, ...], str], ...] = (
-        (("sin resolucion", "pendiente"),
+    # Como se lee una resolucion previa. Fuente unica: las mismas palabras deciden
+    # la implicacion que se le cuenta al modelo y el conteo de la tendencia. Estaban
+    # escritas en tres lugares del mismo metodo. Se evalua en orden.
+    _CLASES_DE_RESOLUCION: tuple[tuple[str, tuple[str, ...], str], ...] = (
+        ("sin_resolver", ("sin resolucion", "pendiente"),
          "caso similar permanece sin resolver — sugiere que este tipo de caso requiere "
          "investigacion adicional antes de decidir"),
-        (("cerrado",),
+        ("cerrado", ("cerrado",),
          "caso similar fue cerrado sin resolucion explicita — riesgo de que el caso actual "
          "siga el mismo camino si no se investiga la causa raiz antes de decidir"),
-        (("aprobado", "a favor"),
+        ("aprobado", ("aprobado", "a favor"),
          "precedente fue aprobado — patron favorable al cliente para este tipo de caso"),
-        (("rechazado", "denegado"),
+        ("rechazado", ("rechazado", "denegado"),
          "precedente fue rechazado — patron desfavorable al cliente para este tipo de caso"),
-        (("parcial",),
+        ("parcial", ("parcial",),
          "precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso"),
     )
+
+    @staticmethod
+    def _clasificar_resolucion(resolution: str) -> tuple[str | None, str | None]:
+        """(clase, implicacion) de como se resolvio un precedente."""
+        texto = (resolution or "").lower()
+        for clase, claves, implicacion in ResolutionService._CLASES_DE_RESOLUCION:
+            if any(k in texto for k in claves):
+                return clase, implicacion
+        return None, None
 
     @staticmethod
     def _describe_precedent(
@@ -300,11 +289,8 @@ class ResolutionService:
         )
         linea += f". Relevancia: mismo patron de {label}{origen}"
 
-        res_lower = resolution.lower()
-        for claves, implicacion in ResolutionService._IMPLICACION_POR_RESOLUCION:
-            if any(k in res_lower for k in claves):
-                return f"{linea}. Nota: {implicacion}"
-        return linea
+        _, implicacion = ResolutionService._clasificar_resolucion(resolution)
+        return f"{linea}. Nota: {implicacion}" if implicacion else linea
 
     @staticmethod
     def _build_precedent_summary(
@@ -328,30 +314,37 @@ class ResolutionService:
             for c, label, match_source in annotated
         ]
 
-        # Deterministic pattern analysis across ALL precedents.
-        outcomes_all = [c.get("resolution", "").lower() for c, _, _ in annotated]
-        approved_all = sum(1 for o in outcomes_all if "aprobado" in o or "a favor" in o)
-        rejected_all = sum(1 for o in outcomes_all if "rechazado" in o or "denegado" in o)
-        total_all = len(annotated)
-        matching = [(c, label) for c, label, _ in annotated if label is not None]
+        # Tendencia sobre TODOS los precedentes, con el mismo criterio que las notas.
+        clases = [
+            ResolutionService._clasificar_resolucion(c.get("resolution", ""))[0]
+            for c, _, _ in annotated
+        ]
+        aprobados = clases.count("aprobado")
+        rechazados = clases.count("rechazado")
+        total = len(annotated)
 
-        # Strategic pattern implication.
-        if approved_all > rejected_all:
-            trend = "tendencia favorable al cliente"
-        elif rejected_all > approved_all:
-            trend = "tendencia desfavorable al cliente"
+        if aprobados > rechazados:
+            tendencia = "tendencia favorable al cliente"
+        elif rechazados > aprobados:
+            tendencia = "tendencia desfavorable al cliente"
         else:
-            trend = "sin tendencia clara"
+            tendencia = "sin tendencia clara"
 
-        pattern = f"Patron: de {total_all} precedentes, {approved_all} aprobados, {rejected_all} rechazados — {trend}"
-        if matching:
-            approved_match = sum(
-                1 for c, _ in matching
-                if "aprobado" in c.get("resolution", "").lower()
-                or "a favor" in c.get("resolution", "").lower()
+        patron = (
+            f"Patron: de {total} precedentes, {aprobados} aprobados, "
+            f"{rechazados} rechazados — {tendencia}"
+        )
+
+        con_motivo = [c for c, label, _ in annotated if label is not None]
+        if con_motivo:
+            aprobados_motivo = sum(
+                1 for c in con_motivo
+                if ResolutionService._clasificar_resolucion(c.get("resolution", ""))[0] == "aprobado"
             )
-            pattern += f". Motivo similar: {len(matching)}/{total_all}, {approved_match} aprobados"
-        parts.append(pattern)
+            patron += (
+                f". Motivo similar: {len(con_motivo)}/{total}, {aprobados_motivo} aprobados"
+            )
+        parts.append(patron)
 
         return " | ".join(parts)
 
