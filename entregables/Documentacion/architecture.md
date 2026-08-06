@@ -65,10 +65,10 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 **El flujo completo, navegable:** [`diagrams/workflow.html`](diagrams/workflow.html) es una pagina autocontenida con los 29 pasos en orden de ejecucion, el endpoint de cada uno y una ficha explicativa al tocarlos. Se genera desde el JSON del workflow con `scripts/render_workflow_page.py`, asi que no puede quedar desactualizada respecto del flujo real.
 
-El workflow contiene **38 nodos (32 ejecutables + 6 sticky notes) organizados en 4 secciones**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
+El workflow contiene **38 nodos (32 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 
 ```
-S1 -- ENTRADA + CACHE (8 nodos)
+ETAPA 1 -- ENTRADA + CACHE (8 nodos)
    [Webhook -- Entrada]              <- HTTP POST trigger (API/curl)
    [Validar Formato -- IF]           <- IF: valida formato TXN-XXXXX
    [Validar Formato TXN]             <- Set: normaliza campos + resuelve api_base_url
@@ -78,7 +78,7 @@ S1 -- ENTRADA + CACHE (8 nodos)
    [Cache Hit?]                      <- IF: si hay cache -> saltea todo el pipeline
    [Formatear Cache]                 <- Code: el HTML cacheado va directo a [Responder]
 
-S2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP, 6 en paralelo
+ETAPA 2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP, 6 en paralelo
    [Obtener Transaccion]             GET  /api/transactions/{id}
    [Obtener Logs]                    GET  /api/logs/{tx_id}
    [Buscar Politicas]                GET  /api/policies/search        <- RAG: Qdrant semantico
@@ -89,7 +89,7 @@ S2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP, 6 en paralelo
    [Merge -- Contexto Paralelo]      <- Merge: espera las 6 ramas paralelas
    [Propagar -> Error Handler -- API]<- Stop and Error si la API no responde
 
-S3 -- ANALISIS CON IA (9 nodos)
+ETAPA 3 -- ANALISIS CON IA (9 nodos)
    [Compilar Contexto]               <- Code: fusiona los outputs de todas las ramas
    [Sintetizar Resolucion]           POST /api/analyze/resolve  <- LLM + RAG + guardrails
    [Verificar Guardrails]            <- Code: hace visibles los guardrails en el canvas
@@ -100,7 +100,7 @@ S3 -- ANALISIS CON IA (9 nodos)
    [Preparar Informe]                <- Code: construye el payload ReportRequest
    [Propagar -> Error Handler -- Analisis] <- Stop and Error si falla el LLM
 
-S4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (6 nodos)
+ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (6 nodos)
    [Switch -- Nivel de Riesgo]
       BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]
       HIGH -> [Wait -- Aprobacion HITL]    <- Wait: pausa esperando al analista

@@ -209,7 +209,7 @@ def analyse(workflow: dict) -> dict:
             continue
         content = s["parameters"].get("content", "")
         first = content.strip().splitlines()[0] if content.strip() else ""
-        m = re.search(r"§\s*(\d)", first)
+        m = re.search(r"[Ee]tapa\s*(\d)", first)
         if m:
             x, y = s["position"]
             bands.append((m.group(1), x, y, x + s["parameters"]["width"], y + s["parameters"]["height"]))

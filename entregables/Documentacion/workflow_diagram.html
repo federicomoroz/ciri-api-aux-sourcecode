@@ -996,10 +996,10 @@ body {
        ═════════════════════════════════════════════ -->
   <div class="flowchart">
 
-    <!-- ═══ §1 — ENTRADA + CACHÉ ═══ -->
+    <!-- ═══ ETAPA 1 — ENTRADA + CACHÉ ═══ -->
     <div class="flow-section">
       <div class="section-tag" style="background:rgba(52,211,153,0.08);color:var(--s1);border:1px solid rgba(52,211,153,0.2);border-bottom:none">
-        §1 Entrada + Caché <span class="tag-info">6 nodos</span>
+        Etapa 1 · Entrada + Caché <span class="tag-info">6 nodos</span>
       </div>
       <div class="section-body" style="border-color:rgba(52,211,153,0.2)">
 
@@ -1059,7 +1059,7 @@ body {
             <div class="node" style="border-color:var(--green);border-style:dashed;font-size:0.78rem">
               Formatear Caché → Responder
             </div>
-            <div class="flow-note">skip §2–§4</div>
+            <div class="flow-note">saltea las etapas 2 a 4</div>
           </div>
           <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
             <div style="font-family:'JetBrains Mono',monospace;font-size:0.65rem;color:var(--dim);font-weight:600">MISS</div>
@@ -1076,13 +1076,13 @@ body {
       </div>
     </div>
 
-    <!-- Connector §1 → §2 -->
+    <!-- Connector Etapa 1 · → Etapa 2 · -->
     <div class="section-connector"></div>
 
-    <!-- ═══ §2 — CONTEXTO PARALELO ═══ -->
+    <!-- ═══ ETAPA 2 — CONTEXTO PARALELO ═══ -->
     <div class="flow-section">
       <div class="section-tag" style="background:rgba(56,189,248,0.08);color:var(--s2);border:1px solid rgba(56,189,248,0.2);border-bottom:none">
-        §2 Contexto paralelo <span class="tag-info">7 queries HTTP en paralelo → Merge</span>
+        Etapa 2 · Contexto paralelo <span class="tag-info">7 queries HTTP en paralelo → Merge</span>
       </div>
       <div class="section-body" style="border-color:rgba(56,189,248,0.2)">
 
@@ -1177,13 +1177,13 @@ body {
       </div>
     </div>
 
-    <!-- Connector §2 → §3 -->
+    <!-- Connector Etapa 2 · → Etapa 3 · -->
     <div class="section-connector"></div>
 
-    <!-- ═══ §3 — ANÁLISIS CON IA ═══ -->
+    <!-- ═══ ETAPA 3 — ANÁLISIS CON IA ═══ -->
     <div class="flow-section">
       <div class="section-tag" style="background:rgba(129,140,248,0.08);color:var(--s3);border:1px solid rgba(129,140,248,0.2);border-bottom:none">
-        §3 Análisis con IA <span class="tag-info">Haiku (eval) + Sonnet (síntesis + judge) + Guardrails</span>
+        Etapa 3 · Análisis con IA <span class="tag-info">Haiku (eval) + Sonnet (síntesis + judge) + Guardrails</span>
       </div>
       <div class="section-body" style="border-color:rgba(129,140,248,0.2)">
 
@@ -1192,7 +1192,7 @@ body {
           <div class="node">
             <span class="badge badge-n8n">CODE</span>
             Compilar Contexto
-            <span class="ep" style="font-size:0.65rem">fusiona resultados de §2</span>
+            <span class="ep" style="font-size:0.65rem">fusiona los resultados de la etapa 2</span>
           </div>
 
           <div class="arrow-down" style="margin:0 auto"></div>
@@ -1260,13 +1260,13 @@ body {
       </div>
     </div>
 
-    <!-- Connector §3 → §4 -->
+    <!-- Connector Etapa 3 · → Etapa 4 · -->
     <div class="section-connector"></div>
 
-    <!-- ═══ §4 — ROUTING + RESPUESTA ═══ -->
+    <!-- ═══ ETAPA 4 — ROUTING + RESPUESTA ═══ -->
     <div class="flow-section">
       <div class="section-tag" style="background:rgba(251,191,36,0.08);color:var(--s4);border:1px solid rgba(251,191,36,0.2);border-bottom:none">
-        §4 Routing + Respuesta + HITL <span class="tag-info">7 nodos</span>
+        Etapa 4 · Routing + Respuesta + HITL <span class="tag-info">7 nodos</span>
       </div>
       <div class="section-body" style="border-color:rgba(251,191,36,0.2)">
 
