@@ -29,7 +29,19 @@ docker-compose up -d
 python scripts/seed_data.py    # Excel → SQLite + Qdrant (ejecutar solo la primera vez)
 ```
 
-El panel de pruebas está disponible en `http://localhost:8000/panel`. Para que el stack local ejecute siempre de verdad en vez de arrancar en demo, poné `CB_DEMO_MODE=false` en el `.env`.
+El panel de pruebas está disponible en `http://localhost:8000/panel`.
+
+### El formulario, como segunda vía de entrada
+
+`http://localhost:5678/form/chargeback-form` — dispara el mismo webhook que el orquestador, así que corre los 29 pasos igual.
+
+Para probarlo sin navegador hay un detalle: n8n nombra los inputs `field-0`, `field-1`, `field-2` por posición, no por su etiqueta.
+
+```bash
+curl -X POST http://localhost:5678/form/chargeback-form   -F "field-0=TXN-00051" -F "field-1=No reconoce la compra"
+```
+
+Con un identificador mal formado (`ABC-123`) la ejecución toma la rama de validación, responde explicando el formato y registra un `WARN` en el log operativo — sin pasar por el error handler, porque un tipeo no es una falla del sistema. Para que el stack local ejecute siempre de verdad en vez de arrancar en demo, poné `CB_DEMO_MODE=false` en el `.env`.
 
 ### Panel de pruebas (`/panel`)
 

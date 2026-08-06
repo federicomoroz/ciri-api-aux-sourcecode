@@ -1,7 +1,7 @@
 # Agente de Investigación de Contracargos
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-362%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-430%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -64,6 +64,10 @@ Elegís un caso del dataset, apretás **Analizar** y ves el pipeline ejecutarse 
 
 Es la forma más rápida de ver el sistema funcionando de punta a punta. No es un entregable de la consigna: es una herramienta para poder probarlo sin montar nada.
 
+El panel puede ejecutar de dos maneras: **Directo**, que corre el pipeline dentro de la API, o **a través de tu n8n**. Si elegís n8n hay que pegar la URL de tu instancia —este servidor no puede adivinar dónde corre—, y **si no responde te lo dice en vez de correr el pipeline directo por lo bajo**: un informe idéntico al real haciéndose pasar por una ejecución de la orquestación sería peor que un error.
+
+Y al revés: cuando tu n8n llama a esta API, el panel lo confirma —*"tu n8n llegó hasta esta API hace 40 segundos"*—. Es la única forma de saber, desde tu lado, que el workflow importado llega. No guarda de dónde vino: la API es pública y compartida.
+
 Tres casos que muestran comportamientos distintos:
 
 | Caso | Qué tiene de particular | Cómo termina |
@@ -88,13 +92,14 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 | Archivo | Qué es |
 |---|---|
 | `workflow_ciri_agent.json` | El orquestador: 38 nodos, 32 ejecutables |
-| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada, en `/form/chargeback-form` |
+| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Dispara el mismo webhook que el orquestador, así que corre los 29 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 
-Dos pasos manuales al importar, inevitables porque n8n reasigna los identificadores:
+Tres pasos manuales al importar, inevitables porque n8n reasigna identificadores al recibir un workflow:
 
 1. **Activar los workflows.** n8n los importa desactivados siempre.
 2. En el orquestador **y** en el del formulario: **Settings → Error Workflow → `workflow_ciri_errors`**. Sin eso, los fallos quedan sólo en la ejecución y no llegan al log de alertas.
+3. **En el formulario, poner el Form Path.** Al importar desde la interfaz, n8n reemplaza el path del archivo por un identificador propio. Abrí el nodo **Form Trigger**, escribí `chargeback-form` en el campo **Form Path** y guardá. Ahí el formulario queda en `/form/chargeback-form`; si preferís el que generó n8n, la URL también está a la vista en ese mismo nodo.
 
 Para apuntarlo a otra API, en orden de prioridad:
 

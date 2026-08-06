@@ -21,22 +21,49 @@ El campo `demo_mode` del body elige el modo por petición; si no viene, decide e
 | Petición | Qué pasa |
 |---|---|
 | `demo_mode: true` · caso de ejemplo (`TXN-00051`, `TXN-00042`, `TXN-00089`) | Devuelve su informe ya generado. `X-Modo-Demo: true`, costo cero, y el HTML abre con el cartel **DEMO (Caso prearmado)** |
-
-| `demo_mode: false` · con `api_key` | Corre el pipeline completo **con esa clave**, que reemplaza a la del servidor |
 | `demo_mode: true` · cualquier otro caso | Devuelve el ejemplo **más cercano en riesgo**, con el cartel nombrando las dos transacciones |
+| `demo_mode: false` · con `api_key` | Corre el pipeline completo **con esa clave**, que reemplaza a la del servidor |
 | `demo_mode: false` · sin saldo | Devuelve el informe demo marcado, en vez de un error |
 | `demo_mode: false` · clave inválida | `500` diciendo que la clave no sirve y cómo es una válida |
 
 `GET /api/panel/demo-status` dice en qué modo arranca el servidor y qué casos tienen informe.
 
+### `GET /api/panel/n8n-status`
+
+Estado de la integración con n8n, y una señal que no se puede obtener de otro modo:
+
+```json
+{"configured": false, "available": false, "ultimo_contacto_hace_s": 40.2, "contactos": 3}
+```
+
+`ultimo_contacto_hace_s` dice cuánto hace que **una orquestación de n8n llamó a esta API**. El workflow marca su primera petición con la cabecera `X-Origen-n8n`; quien importó el workflow y lo disparó no tiene forma, desde su lado, de saber si la llamada llegó, y esto se lo confirma.
+
+No registra de dónde vino: la API es pública y compartida, así que anotar la instancia de quien la prueba y mostrársela a otro sería filtrarla. Vive en memoria y se pierde al reiniciar — es una señal de *"recién pasó esto"*, no un registro histórico.
+
+### Ejecutar a través de tu n8n
+
+`POST /api/panel/analyze` acepta `?n8n_base_url=` para ejecutar contra tu instancia en vez del pipeline directo.
+
+| | |
+|---|---|
+| Sin URL | `400` — el servidor no puede adivinar dónde corre tu n8n |
+| Tu n8n no responde | `502` diciendo a qué dirección se llamó y qué revisar |
+
+En los dos casos **no se ejecuta el pipeline directo en su lugar**. El informe sería idéntico al de una corrida real, y quien evalúa creería que pasó por los 29 nodos de orquestación sin haber pasado.
+
 **El modo demo alcanza al workflow de n8n.** `resolve` y `judge` responden con el análisis guardado, así que el flujo corre entero: las siete consultas de contexto son reales, el compilado es real y el informe se genera de verdad. Cuando la resolución es la de otro caso, `/api/reports/html` responde con el informe completo de ese caso en vez de mezclar los dos.
 
 ```bash
 # Modo demo: informe al instante, sin costo
-curl -i -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze"   -H "Content-Type: application/json"   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' | grep -i x-modo-demo
+curl -i -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' | grep -i x-modo-demo
 
 # Con tu clave: el pipeline corre de verdad
-curl -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze?direct=true"   -H "Content-Type: application/json"   -d '{"transaction_id": "TXN-00007", "motivo": "Cargo duplicado", "api_key": "sk-ant-..."}'   -o reporte.html
+curl -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze?direct=true" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_id": "TXN-00007", "motivo": "Cargo duplicado", "api_key": "sk-ant-..."}' \
+  -o reporte.html
 ```
 
 ---

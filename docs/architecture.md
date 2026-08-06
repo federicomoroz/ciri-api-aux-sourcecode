@@ -120,7 +120,11 @@ default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 **3 workflows n8n:**
 - `workflow_ciri_agent.json` — workflow principal (38 nodos: 32 exec + 6 sticky)
 - `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL)
-- `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa al webhook)
+- `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa)
+
+**El formulario no llama a la API por su cuenta:** dispara el webhook del orquestador (`/webhook/chargeback-agent`) sobre la misma instancia. Es una segunda via de entrada **al agente**, no un atajo que lo esquive, asi que corre los 29 pasos igual que el webhook. Un formulario que llamara directo a un endpoint REST haria irrelevante la orquestacion, que es justamente el entregable.
+
+Al importar desde la interfaz, n8n reemplaza el path del formulario por un identificador propio: hay que escribir `chargeback-form` en el campo **Form Path** del nodo. El nodo esta en `typeVersion` 2.1 a proposito — de 2.2 en adelante ese campo no existe y la URL del formulario queda fuera de control de quien importa.
 
 **HITL (Human-in-the-Loop):** Los casos BLOCKER, MEDIUM y LOW se resuelven solos: el Switch los manda directo a generar el reporte y responder. Los HIGH son los unicos que frenan -- el **Wait node** pausa la ejecucion y expone un formulario (APROBAR/RECHAZAR + notas del analista). Cuando el analista responde, `Procesar Respuesta HITL` fusiona su decision en el payload, de modo que el reporte que sale ya refleja lo que decidio una persona, y en paralelo el feedback se registra via `POST /api/feedback` (que reindexa el caso en Qdrant si el Juez lo puntuo >= 8.0). Los reportes HIGH ademas incluyen un formulario HITL embebido como fallback.
 
