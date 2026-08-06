@@ -170,6 +170,9 @@ class ResolveResponse(BaseModel):
     hitl_reason: str | None = None
     guardrail_warnings: list[str] = []
     trace_id: str = ""
+    # True cuando la respuesta salio del analisis guardado en vez del modelo.
+    # Viaja hasta el informe, que lo muestra como "DEMO (Caso prearmado)".
+    demo: bool = False
 
 
 class JudgeResponse(BaseModel):
@@ -179,6 +182,7 @@ class JudgeResponse(BaseModel):
     approved: bool
     strengths: list[str] = []
     weaknesses: list[str] = []
+    demo: bool = False
 
 
 class FeedbackResponse(BaseModel):

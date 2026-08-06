@@ -1,0 +1,131 @@
+{
+  "resolution": {
+    "risk_level": "HIGH",
+    "recommended_action": "PENDING_HITL",
+    "confidence": 0.73,
+    "justification": "Riesgo HIGH por 4 violaciones de política, no por fraude sofisticado: el riesgo proviene de incumplimientos estructurales del comercio y del perfil del cliente, más que de un fraude puntual. POL-FRD-001 FAIL: fraud_score=8 vs umbral mínimo de 30, lo que obliga a revisión manual. POL-CB-004 FAIL: Booking tiene cb_ratio=33.33% (umbral de suspensión >2%) y flag 'suspended_merchant', lo que impide que el comercio presente defensa según POL-CB-003 FAIL. POL-CB-005 FAIL: CLI-0029 acumula 3 chargebacks previos; el caso actual sería el 4º, superando el umbral de >3 CBs, aunque sin timestamps no se puede confirmar la ventana de 6 meses. CB-0031 [MISMO MERCHANT, Booking, monto idéntico USD 889.02] fue resuelto con reembolso parcial en 28 días tras desistimiento del cliente — conexión crítica que sugiere que Booking tiene historial de disputas por montos similares. CB-0032 [MOTIVO SIMILAR, cargo duplicado] fue resuelto a favor del comercio por tarjeta clonada derivada a fraude, lo que advierte que no todos los cargos duplicados favorecen al cliente. CB-0043 [MOTIVO SIMILAR] resultó en reembolso parcial. Patrón: 1/2 precedentes de motivo similar aprobados — tendencia no concluyente. Dado el comercio suspendido, la reincidencia del cliente y el fraud_score bajo, la decisión PENDING_HITL es adecuada para que un analista determine si el CB se resuelve automáticamente a favor del cliente por suspensión del comercio.",
+    "precedent_summary": "CB-0032 [MOTIVO SIMILAR]: Cargo duplicado, A favor del comercio en 13d, merchant=Uber. Obs: Tarjeta clonada — se derivó a área de fraude.. Relevancia: mismo patron de cargo duplicado. Nota: precedente fue aprobado — patron favorable al cliente para este tipo de caso | CB-0043 [MOTIVO SIMILAR]: Cargo duplicado, Reembolso parcial en 12d, merchant=Rappi. Obs: Canal no habitual para el cliente — geolocalización distinta.. Relevancia: mismo patron de cargo duplicado. Nota: precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso | CB-0031 [MISMO MERCHANT]: Monto incorrecto, Reembolso parcial en 28d, merchant=Booking | CB-0048: Producto no recibido, Reembolso parcial en 15d, merchant=Rappi | CB-0022: Cargo post-cancelación, En escalación en 17d, merchant=Steam | Patron: de 5 precedentes, 1 aprobados, 0 rechazados — tendencia favorable al cliente. Motivo similar: 2/5, 1 aprobados",
+    "compensation_applicable": false,
+    "compensation_amount_usd": 0.0,
+    "next_steps": [
+      "Escalar a supervisor/analista para revisión manual — requires_hitl=true por 4 violaciones de política (POL-FRD-001, POL-CB-004, POL-CB-003, POL-CB-005)",
+      "Verificar si el comercio Booking (flag: suspended_merchant, cb_ratio=33.33%) habilita resolución automática a favor del cliente según POL-CB-003 — confirmar con área de operaciones de contracargos",
+      "Solicitar aprobación del jefe de área para continuar con el caso de CLI-0029 — cliente alcanza 4º contracargo según POL-CB-005, umbral >3 CBs superado",
+      "Solicitar timestamps de los 3 chargebacks previos de CLI-0029 para confirmar si ocurrieron dentro de ventana de 6 meses — dato faltante que podría agravar o moderar el veredicto de POL-CB-005; si se confirman en 6 meses, mantener FAIL; si no, revisar clasificación",
+      "Solicitar documentación obligatoria faltante al cliente: comprobante de transacción, comunicación con Booking y evidencia del cargo duplicado — requisito previo a resolución definitiva según POL-CB-002 WARNING; plazo extendido 15 días hábiles por comercio internacional según POL-EXC-004"
+    ],
+    "policy_verdicts": [
+      {
+        "policy_code": "POL-CB-001",
+        "verdict": "PASS",
+        "reasoning": "Transacción fecha 2024-01-27, contracargo iniciado en la misma fecha (status='Contracargo iniciado'). Plazo permitido: 120 días corridos. El reclamo está dentro del término. PASS."
+      },
+      {
+        "policy_code": "POL-FRD-003",
+        "verdict": "PASS",
+        "reasoning": "Canal: App Móvil, monto=USD 889.02, límite diario por cliente=USD 3,000. 889.02 < 3,000 → PASS. Nota: sin datos de otras transacciones del cliente en el mismo día, se asume que este es el único registro evaluable."
+      },
+      {
+        "policy_code": "POL-FRD-001",
+        "verdict": "FAIL",
+        "reasoning": "fraud_score=8, umbral mínimo=30. 8 < 30 → transacción debe ser rechazada automáticamente o derivada a revisión manual. FAIL: violación de score mínimo de aprobación."
+      },
+      {
+        "policy_code": "POL-CB-004",
+        "verdict": "FAIL",
+        "reasoning": "Comercio Booking: total_transactions=9, total_chargebacks=3, cb_ratio=0.3333 (33.33%). Umbral de revisión: >1% (0.01), umbral de suspensión: >2% (0.02). 0.3333 > 0.02 → comercio supera 2%, debe ser suspendido preventivamente. Adicionalmente, flags=['suspended_merchant'] confirma suspensión. FAIL: comercio ya suspendido por exceso de CBs."
+      },
+      {
+        "policy_code": "POL-EXC-004",
+        "verdict": "NOT_APPLICABLE",
+        "reasoning": "country=USA (no-LATAM). Sin embargo, POL-EXC-004 aplica a 'comercios fuera de LATAM' — se refiere al país del comercio (merchant), no al país de la transacción. Booking es un comercio internacional con sede fuera de LATAM. Política SÍ aplica: plazo extendido de 15 días hábiles para respuesta del comercio. Evaluación: APLICA pero es una excepción procesal, no un criterio de rechazo/aprobación del CB. Se marca NOT_APPLICABLE en contexto de VIOLACIÓN, ya que es un beneficio procesal, no una restricción."
+      },
+      {
+        "policy_code": "POL-FRD-002",
+        "verdict": "WARNING",
+        "reasoning": "Cliente CLI-0029 ha usado 3 países: USA, COL, URY. Condición: >3 países en <24h. Total de países=3, umbral=>3 (más de 3). 3 no supera >3 → condición numérica NO se cumple. Sin embargo, NO hay timestamps en el historial para confirmar si estas transacciones ocurrieron en ventanas de 24h. Aunque el conteo no alcanza el umbral, la ausencia de timestamps impide verificar la ventana temporal. PASS en términos numéricos (3 no supera >3), pero se reporta como WARNING por falta de datos temporales para auditoría completa."
+      },
+      {
+        "policy_code": "POL-CB-003",
+        "verdict": "FAIL",
+        "reasoning": "Comercio Booking está suspendido (flags=['suspended_merchant']). POL-CB-003 requiere que el comercio responda en 10 días hábiles. Un comercio suspendido no puede presentar defensa. FAIL: comercio suspendido no puede cumplir plazo de respuesta. Requiere revisión HITL para determinar si el CB se resuelve automáticamente a favor del cliente o si se requiere escalación."
+      },
+      {
+        "policy_code": "POL-CB-005",
+        "verdict": "FAIL",
+        "reasoning": "Cliente CLI-0029: total_chargebacks=3 (previos, sin contar actual). Contracargo actual sería el 4º. Umbral: >3 CBs en 6 meses. 3 previos no supera >3, pero el contracargo actual (4º) SÍ supera >3. Condición: 'más de 3 CBs en 6 meses' = cliente alcanza 4 CBs con este reclamo. Sin timestamps en el historial del cliente, no se puede confirmar que los 3 previos ocurrieron en los últimos 6 meses. FAIL: cliente marcado como alto riesgo (4º CB), requiere aprobación del jefe de área. Nota: falta confirmación de ventana de 6 meses, pero la reincidencia es evidente."
+      },
+      {
+        "policy_code": "POL-CB-002",
+        "verdict": "WARNING",
+        "reasoning": "Documentación requerida: (a) comprobante de transacción, (b) comunicación con comercio, (c) evidencia del cliente. En los datos proporcionados NO se encuentran estos documentos. Campo 'notes' solo menciona 'Alto riesgo detectado', sin evidencia de documentación. Documentos faltantes: comprobante de transacción, comunicación con Booking, evidencia del cliente. WARNING: caso no puede avanzar sin estos tres elementos. Requisito previo a cualquier resolución definitiva."
+      },
+      {
+        "policy_code": "POL-EXC-001",
+        "verdict": "NOT_APPLICABLE",
+        "reasoning": "Comercio Booking: total_volume_usd=21,865.43 (volumen total histórico, no mensual). Umbral: >USD 1M en volumen mensual. Sin desglose de volumen mensual, no se puede confirmar si supera USD 1M/mes. Dado que el volumen total histórico es ~USD 21.8K y hay 9 transacciones, el promedio mensual sería muy inferior a USD 1M. NOT_APPLICABLE: comercio no califica como estratégico."
+      },
+      {
+        "policy_code": "POL-EXC-003",
+        "verdict": "PASS",
+        "reasoning": "payment_method='Débito Visa' (no cripto). POL-EXC-003 aplica SOLO a transacciones con criptomonedas. PASS: política no aplica a este caso."
+      },
+      {
+        "policy_code": "POL-EXC-002",
+        "verdict": "NOT_APPLICABLE",
+        "reasoning": "Cliente CLI-0029: no hay información de nivel de fidelidad (Platinum/Gold VIP) en el historial. POL-EXC-002 aplica SOLO a clientes VIP. NOT_APPLICABLE: cliente no identificado como VIP."
+      },
+      {
+        "policy_code": "POL-FRD-004",
+        "verdict": "WARNING",
+        "reasoning": "Política requiere información sobre si la tarjeta (Débito Visa) fue reportada como robada o extraviada. En los datos proporcionados NO hay registro de denuncia de tarjeta. Sin información sobre estado de reporte de la tarjeta, no se puede evaluar si la transacción es posterior a una denuncia. WARNING: falta dato crítico (fecha de denuncia de tarjeta, si aplica). No bloquea decisión actual pero es requisito para auditoría completa de elegibilidad de reembolso."
+      },
+      {
+        "policy_code": "POL-SLA-002",
+        "verdict": "PASS",
+        "reasoning": "POL-SLA-002 define SLA de resolución (10 días estándar, 20 días complejos). Este es un criterio de tiempo objetivo, no de violación/rechazo. Contracargo fue iniciado el 2024-01-27. Sin fecha actual de evaluación, se asume que el caso está en proceso. PASS: política es procedural, no restrictiva. Se evaluará cumplimiento al momento de resolución."
+      },
+      {
+        "policy_code": "POL-SLA-004",
+        "verdict": "PASS",
+        "reasoning": "POL-SLA-004 define compensación por incumplimiento de SLA (USD 15 si se supera plazo). Este es un criterio de remediación, no de violación. PASS: política es procedural. Se aplicará compensación si se incumple SLA de resolución."
+      },
+      {
+        "policy_code": "POL-SLA-001",
+        "verdict": "PASS",
+        "reasoning": "POL-SLA-001 requiere primera respuesta al cliente dentro de 48 horas hábiles desde apertura. Contracargo iniciado 2024-01-27. Sin fecha actual de evaluación, se asume que el caso está en proceso. PASS: política es procedural. Se evaluará cumplimiento al momento de respuesta inicial."
+      },
+      {
+        "policy_code": "POL-SLA-003",
+        "verdict": "PASS",
+        "reasoning": "POL-SLA-003 requiere escalación automática si no hay resolución tras 15 días hábiles. Contracargo iniciado 2024-01-27. Sin fecha actual de evaluación, se asume que el caso está en proceso. PASS: política es procedural. Se aplicará escalación si se alcanza el umbral de 15 días sin resolución."
+      }
+    ],
+    "requires_hitl": true,
+    "hitl_reason": "4 violacion(es) de politica — requiere revision de analista",
+    "guardrail_warnings": [],
+    "log_summary": "",
+    "transaction_id": "TXN-00089"
+  },
+  "judge": {
+    "overall_score": 8.7,
+    "approved": true,
+    "criteria": {
+      "policy_consistency": 9.1,
+      "justification_quality": 8.8,
+      "precedent_usage": 8.6,
+      "risk_assessment": 8.9,
+      "actionability": 8.3
+    },
+    "strengths": [
+      "Evaluación exhaustiva de todas las políticas disponibles (17 códigos evaluados), con razonamiento específico para cada veredicto incluyendo valores numéricos exactos comparados contra umbrales (fraud_score=8 vs umbral 30, cb_ratio=33.33% vs umbral 2%), lo que demuestra rigor analítico superior.",
+      "Uso correcto de la semántica del fraud_score: la resolución interpreta correctamente que score=8 representa alto riesgo de fraude (no seguridad), y lo conecta apropiadamente con POL-FRD-001 como violación FAIL con requires_human_review=true, justificando PENDING_HITL sin BLOCKERs formales.",
+      "Análisis de precedentes con diferenciación por relevancia: distingue CB-0031 (mismo merchant, monto idéntico USD 889.02) de CB-0032 y CB-0043 (motivo similar), extrae implicaciones concretas de cada uno (tarjeta clonada en CB-0032 como advertencia, reembolso parcial en CB-0043 como patrón intermedio) y concluye correctamente que la tendencia no es concluyente."
+    ],
+    "weaknesses": [
+      "El precedent_summary contiene un error de interpretación: CB-0032 fue resuelto 'A favor del comercio' pero la nota lo describe como 'precedente fue aprobado — patrón favorable al cliente', lo cual es incorrecto y contradictorio con el outcome real; esto introduce ruido analítico en el resumen de patrones.",
+      "POL-CB-003 se marca como FAIL argumentando que el comercio suspendido 'no puede presentar defensa', pero la política en sí no establece ese impedimento explícitamente — la conexión entre suspensión y incapacidad de respuesta es una inferencia razonable pero no está respaldada textualmente por la política, lo que debería haberse señalado como interpretación y no como violación directa.",
+      "Los next_steps, aunque concretos y bien referenciados, no establecen responsables específicos ni secuencia de prioridad entre pasos (ej: la solicitud de documentación POL-CB-002 debería preceder lógicamente a la escalación al jefe de área de POL-CB-005, pero ambos aparecen sin orden de dependencia explícito)."
+    ]
+  }
+}

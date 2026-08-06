@@ -17,6 +17,7 @@ por un analisis recien hecho:
   - el servidor deja un warning en el log
 """
 
+import json
 import logging
 import os
 import re
@@ -25,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 # El nombre del archivo lleva el caso: report_<riesgo>_<TXN>.html
 _PATRON = re.compile(r"^report_[a-z]+_(TXN-\d+)\.html$", re.IGNORECASE)
+# El JSON de la resolucion y del juez, junto al informe del mismo caso
+_PREFIJO_ANALISIS = "analisis_"
 
 ETIQUETA = "DEMO (Caso prearmado)"
 
@@ -90,6 +93,26 @@ def informe_demo(carpeta: str, transaction_id: str) -> str | None:
             logger.warning("No se pudo leer el informe demo %s", nombre, exc_info=True)
             return None
     return None
+
+
+def analisis_demo(carpeta: str, transaction_id: str) -> dict | None:
+    """La resolucion y la evaluacion del juez guardadas de ese caso.
+
+    Devuelve {"resolution": {...}, "judge": {...}} o None si no hay.
+
+    Con esto el workflow de n8n corre entero sin gastar: las siete consultas de
+    contexto son reales, el compilado es real y el informe se genera de verdad;
+    lo unico pregrabado es lo que hubiera respondido el modelo.
+    """
+    ruta = os.path.join(carpeta, f"{_PREFIJO_ANALISIS}{(transaction_id or '').upper()}.json")
+    if not os.path.isfile(ruta):
+        return None
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        logger.warning("No se pudo leer el analisis demo de %s", transaction_id, exc_info=True)
+        return None
 
 
 def _con_cartel(html: str) -> str:

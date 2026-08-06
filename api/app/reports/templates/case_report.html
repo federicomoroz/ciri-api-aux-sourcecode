@@ -22,7 +22,8 @@
         .score-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #22c55e, #3b82f6); }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen" data-risk-level="{{ resolution.risk_level if resolution else '' }}">
+<body class="bg-gray-50 min-h-screen" data-risk-level="{{ resolution.risk_level if resolution else '' }}"{% if resolution and resolution.demo %} data-demo="true"{% endif %}>
+{% if resolution and resolution.demo %}{{ cartel_demo | safe }}{% endif %}
 <div class="max-w-5xl mx-auto px-4 py-8">
 
     <!-- SECTION 1: Header -->
@@ -467,5 +468,13 @@
     </footer>
 
 </div>
+
+<!--
+  Los datos que produjeron este informe, embebidos para que el HTML se baste solo.
+  Sin esto, la unica forma de recuperar la resolucion de un informe viejo era
+  volver a pagarle al modelo o parsear el HTML renderizado.
+    JSON.parse(document.getElementById("datos-del-caso").textContent)
+-->
+<script type="application/json" id="datos-del-caso">{{ datos_del_caso | safe }}</script>
 </body>
 </html>

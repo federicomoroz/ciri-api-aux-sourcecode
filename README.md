@@ -50,7 +50,7 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 ### 1. Ver el circuito, sin ejecutar nada
 
-Abrí **[`docs/diagrams/workflow.html`](docs/diagrams/workflow.html)** en cualquier navegador.
+Abrí **[`docs/diagrams/n8n_workflow_analysis.html`](docs/diagrams/n8n_workflow_analysis.html)** en cualquier navegador.
 
 Es el workflow entero en una página: los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint que llama cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue. No necesita conexión ni instalar nada, y se imprime a PDF.
 

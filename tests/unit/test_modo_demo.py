@@ -12,7 +12,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.app.data.precomputados import CARTEL, ETIQUETA, USO_DEMO, casos_demo, informe_demo
+from api.app.data.precomputados import (
+    CARTEL,
+    ETIQUETA,
+    USO_DEMO,
+    analisis_demo,
+    casos_demo,
+    informe_demo,
+)
 from api.app.routes.panel import (
     _emitir_demo,
     _en_modo_demo,
@@ -279,3 +286,133 @@ class TestLaClaveDelVisitanteManda:
             pass
 
         assert all(c.close.called for c in creados)
+
+
+class TestElAnalisisGuardado:
+    """La resolucion y el juez pregrabados, que hacen correr el workflow de n8n.
+
+    Sin esto, n8n se quedaba sin respuesta en el paso de sintesis. Con esto el
+    flujo corre entero: las 7 consultas de contexto y el informe son reales, y
+    lo unico pregrabado es lo que hubiera contestado el modelo.
+    """
+
+    ANALISIS = {
+        "resolution": {"transaction_id": TXN_DEMO, "recommended_action": "REJECT",
+                       "risk_level": "BLOCKER", "confidence": 0.95},
+        "judge": {"overall_score": 8.6, "approved": True},
+    }
+
+    @pytest.fixture
+    def settings(self, tmp_path):
+        c = tmp_path / "informes"
+        c.mkdir()
+        (c / f"report_blocker_{TXN_DEMO}.html").write_text(CUERPO, encoding="utf-8")
+        (c / f"analisis_{TXN_DEMO}.json").write_text(
+            json.dumps(self.ANALISIS, ensure_ascii=False), encoding="utf-8"
+        )
+        return SimpleNamespace(demo_mode=True, demo_reports_path=str(c))
+
+    def test_devuelve_la_resolucion_guardada(self, settings):
+        d = analisis_demo(settings.demo_reports_path, TXN_DEMO)
+        assert d["resolution"]["recommended_action"] == "REJECT"
+
+    def test_devuelve_la_evaluacion_del_juez(self, settings):
+        assert analisis_demo(settings.demo_reports_path, TXN_DEMO)["judge"]["overall_score"] == 8.6
+
+    def test_un_caso_sin_analisis_no_inventa_nada(self, settings):
+        assert analisis_demo(settings.demo_reports_path, SIN_INFORME) is None
+
+    def test_es_indiferente_a_mayusculas(self, settings):
+        assert analisis_demo(settings.demo_reports_path, TXN_DEMO.lower()) is not None
+
+    def test_no_se_rompe_sin_transaccion(self, settings):
+        assert analisis_demo(settings.demo_reports_path, "") is None
+
+    def test_un_json_corrupto_no_tumba_la_api(self, settings, tmp_path):
+        from pathlib import Path
+        Path(settings.demo_reports_path, f"analisis_{SIN_INFORME}.json").write_text(
+            "{roto", encoding="utf-8"
+        )
+        assert analisis_demo(settings.demo_reports_path, SIN_INFORME) is None
+
+
+class TestLaPuertaDeResolveYJudge:
+    ANALISIS = TestElAnalisisGuardado.ANALISIS
+
+    @pytest.fixture
+    def settings(self, tmp_path):
+        c = tmp_path / "informes"
+        c.mkdir()
+        (c / f"analisis_{TXN_DEMO}.json").write_text(
+            json.dumps(self.ANALISIS, ensure_ascii=False), encoding="utf-8"
+        )
+        return SimpleNamespace(demo_mode=True, demo_reports_path=str(c))
+
+    def _demo(self, settings, txn, parte):
+        from api.app.routes.analyze import _demo_de
+        return _demo_de(settings, txn, parte)
+
+    def test_en_modo_demo_devuelve_lo_guardado(self, settings):
+        assert self._demo(settings, TXN_DEMO, "resolution")["recommended_action"] == "REJECT"
+
+    def test_marca_la_respuesta_como_demo(self, settings):
+        """La marca viaja hasta el informe, que la muestra como cartel."""
+        assert self._demo(settings, TXN_DEMO, "resolution")["demo"] is True
+        assert self._demo(settings, TXN_DEMO, "judge")["demo"] is True
+
+    def test_con_el_modo_demo_apagado_no_intercepta(self, settings):
+        """Si el modo esta apagado, tiene que llamar al modelo de verdad."""
+        settings.demo_mode = False
+        assert self._demo(settings, TXN_DEMO, "resolution") is None
+
+    def test_un_caso_sin_guardar_pasa_al_modelo(self, settings):
+        assert self._demo(settings, SIN_INFORME, "resolution") is None
+
+    def test_una_parte_que_no_esta_pasa_al_modelo(self, settings, tmp_path):
+        from pathlib import Path
+        Path(settings.demo_reports_path, f"analisis_{OTRO_DEMO}.json").write_text(
+            json.dumps({"resolution": {}}), encoding="utf-8"
+        )
+        assert self._demo(settings, OTRO_DEMO, "judge") is None
+
+    def test_deja_warning_en_el_log(self, settings, caplog):
+        import logging
+        with caplog.at_level(logging.WARNING):
+            self._demo(settings, TXN_DEMO, "resolution")
+        assert "MODO DEMO" in caplog.text
+
+
+class TestElInformeSeMarca:
+    """Un informe armado con analisis guardado tiene que decirlo."""
+
+    BASE = {
+        "transaction": {"id": "TXN-1", "merchant": "x", "date": "2024-01-01", "amount_usd": 1.0,
+                        "client_id": "c", "payment_method": "Cripto", "country": "COL",
+                        "channel": "POS", "device": "d", "status": "s", "fraud_score": 8, "notes": ""},
+        "judge_evaluation": {}, "agent_analysis": "", "merchant_risk": {}, "client_profile": {},
+        "logs": [], "policies_evaluated": [], "similar_cases": [], "guardrail_warnings": [],
+    }
+    RESOLUCION = {"risk_level": "BLOCKER", "recommended_action": "REJECT",
+                  "confidence": 0.9, "policy_verdicts": [], "next_steps": []}
+
+    @staticmethod
+    def _render(demo: bool) -> str:
+        from api.app.reports.generator import ReportGenerator
+        return ReportGenerator().render({
+            **TestElInformeSeMarca.BASE,
+            "resolution": {**TestElInformeSeMarca.RESOLUCION, "demo": demo},
+        })
+
+    def test_con_analisis_guardado_lleva_el_cartel(self):
+        assert ETIQUETA in self._render(True)
+
+    def test_un_analisis_real_no_lo_lleva(self):
+        assert ETIQUETA not in self._render(False)
+
+    def test_el_body_queda_marcado_para_estilos_y_scripts(self):
+        assert 'data-demo="true"' in self._render(True)
+        assert 'data-demo="true"' not in self._render(False)
+
+    def test_el_texto_del_cartel_es_el_mismo_del_panel(self):
+        """Una sola fuente: si cambia el texto, cambia en los dos lados."""
+        assert CARTEL in self._render(True)
