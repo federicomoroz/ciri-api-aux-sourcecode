@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # SQLite
     sqlite_path: str = "data/chargeback.db"
     data_file_path: str = "data/Similación_dataset_contracargos_.xlsx"
+    # Modo demo: los casos de ejemplo se sirven ya resueltos y NO se llama al
+    # modelo, para que evaluar el sistema no consuma la cuenta de nadie. Quien
+    # trae su propia API key corre el pipeline completo igual.
+    demo_mode: bool = True
+    demo_reports_path: str = "data/informes_demo"
 
     # Langfuse
     langfuse_public_key: str = ""

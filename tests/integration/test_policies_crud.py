@@ -4,37 +4,38 @@ Requires: SQLite (in-memory via fixture). Qdrant mocked.
 """
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 from fastapi.testclient import TestClient
 
 from api.app.main import app
 from api.app.data.db import Database
+from api.app.analysis.analyzer import Analyzer
+from api.app.rag.embedder import FastEmbedder
+from api.app.rag.indexer import QdrantIndexer
+from api.app.rag.retriever import QdrantRetriever
+from api.app.rag.updater import RAGUpdater
+from api.app.reports.generator import ReportGenerator
+from api.app.services.feedback import FeedbackService
+from api.app.services.resolution import ResolutionService
 
 
 @pytest.fixture
 def test_client(in_memory_db_path):
     """FastAPI test client with mocked RAG components."""
     mock_qdrant = MagicMock()
-    mock_embedder = MagicMock()
+    # autospec: el doble respeta la FIRMA real de encode(). Con MagicMock pelado,
+    # una llamada con un argumento que ya no existe pasa el test y falla en produccion.
+    mock_embedder = create_autospec(FastEmbedder, instance=True)
     mock_embedder.encode.return_value = [[0.1] * 1024]
     mock_llm = MagicMock()
     mock_tracer = MagicMock()
     mock_tracer.trace.return_value = ""
-    mock_report_gen = MagicMock()
-
-    from api.app.rag.indexer import QdrantIndexer
-    from api.app.rag.retriever import QdrantRetriever
-    from api.app.rag.updater import RAGUpdater
-    from api.app.analysis.analyzer import Analyzer
-    from api.app.reports.generator import ReportGenerator
-    from api.app.services.resolution import ResolutionService
-    from api.app.services.feedback import FeedbackService
 
     db = Database(in_memory_db_path)
-    indexer = MagicMock()
-    retriever = MagicMock()
+    indexer = create_autospec(QdrantIndexer, instance=True)
+    retriever = create_autospec(QdrantRetriever, instance=True)
     retriever.search_policies.return_value = []
-    updater = MagicMock()
+    updater = create_autospec(RAGUpdater, instance=True)
     analyzer = Analyzer(db)
 
     resolution_service = ResolutionService(mock_llm, mock_tracer)
@@ -48,7 +49,7 @@ def test_client(in_memory_db_path):
     app.state.updater = updater
     app.state.analyzer = analyzer
     app.state.tracer = mock_tracer
-    app.state.report_generator = MagicMock()
+    app.state.report_generator = create_autospec(ReportGenerator, instance=True)
     app.state.settings = MagicMock()
     app.state.settings.admin_api_key = ""
     app.state.embedder = mock_embedder

@@ -9,11 +9,12 @@ import pytest
 
 from api.app.domain.models import AnalyzeRequest
 from api.app.services.pipeline import PipelineService
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity
 
 TX = {
     "id": "TXN-00051", "client_id": "CLI-0003", "merchant": "Airbnb",
     "amount_usd": 100.0, "fraud_score": 8, "country": "COL",
-    "payment_method": "Cripto", "channel": "POS",
+    "payment_method": PaymentMethod.CRYPTO, "channel": "POS",
 }
 
 
@@ -33,7 +34,7 @@ class DBFalsa:
         return TX if txn_id == TX["id"] else None
 
     def get_logs_for_transaction(self, tx_id):
-        return [{"severity": "INFO", "event": "PAYMENT_INITIATED", "detail": "ok",
+        return [{"severity": Severity.INFO, "event": "PAYMENT_INITIATED", "detail": "ok",
                  "timestamp": "2024-01-01", "code": "200"}]
 
 
@@ -52,7 +53,7 @@ class AnalyzerFalso:
 
 class ResolucionFalsa:
     def resolve(self, ctx):
-        return {"recommended_action": "REJECT", "risk_level": "BLOCKER",
+        return {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER,
                 "policy_verdicts": [], "guardrail_warnings": [],
                 "_usage": {"input_tokens": 10, "output_tokens": 5, "call_count": 2}}
 

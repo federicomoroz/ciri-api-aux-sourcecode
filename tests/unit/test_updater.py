@@ -8,12 +8,14 @@ Covers:
 - Policy CRUD delegation to indexer
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 
 from api.app.domain.constants import JUDGE_AUTO_INDEX_THRESHOLD
 from api.app.rag.updater import RAGUpdater
+from api.app.domain.enums import PaymentMethod
+from api.app.data.db import Database
 
 
 @pytest.fixture
@@ -23,12 +25,12 @@ def mock_indexer():
 
 @pytest.fixture
 def mock_db():
-    db = MagicMock()
+    db = create_autospec(Database, instance=True)
     db.get_transaction.return_value = {
         "id": "TXN-00051",
         "merchant": "Airbnb",
         "amount_usd": 2095.90,
-        "payment_method": "Cripto",
+        "payment_method": PaymentMethod.CRYPTO,
         "country": "COL",
         "fraud_score": 8,
     }
@@ -45,7 +47,7 @@ class TestOnCaseResolved:
 
     def test_indexes_case_when_score_above_threshold(self, updater, mock_indexer, mock_db):
         """Judge score >= 8.0 should trigger indexing."""
-        case = {"case_id": "FB-42", "transaction_id": "TXN-00051", "motivo": "Cripto"}
+        case = {"case_id": "FB-42", "transaction_id": "TXN-00051", "motivo": PaymentMethod.CRYPTO}
         result = updater.on_case_resolved(case, judge_score=9.0)
         assert result is True
         mock_db.get_transaction.assert_called_once_with("TXN-00051")

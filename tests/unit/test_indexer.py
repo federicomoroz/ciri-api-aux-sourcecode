@@ -8,7 +8,7 @@ Covers:
 - Helper functions (_make_id, _policy_to_markdown, _case_to_text)
 """
 
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, create_autospec
 
 import numpy as np
 import pytest
@@ -19,6 +19,8 @@ from api.app.rag.indexer import (
     _make_id,
     _policy_to_markdown,
 )
+from api.app.domain.enums import PaymentMethod
+from api.app.rag.embedder import FastEmbedder
 
 
 # ---- Helpers ----
@@ -79,7 +81,7 @@ class TestCaseToText:
         }
         tx = {
             "merchant": "Amazon",
-            "payment_method": "Credito Visa",
+            "payment_method": PaymentMethod.CREDIT_VISA,
             "country": "MEX",
             "amount_usd": 150.0,
             "fraud_score": 25,
@@ -121,7 +123,9 @@ def mock_qdrant():
 
 @pytest.fixture
 def mock_embedder():
-    embedder = MagicMock()
+    # autospec: el doble respeta la FIRMA real de encode(). Con MagicMock pelado,
+    # una llamada con un argumento que ya no existe pasa el test y falla en produccion.
+    embedder = create_autospec(FastEmbedder, instance=True)
     embedder.encode.return_value = [np.array([0.1] * 1024), np.array([0.2] * 1024), np.array([0.3] * 1024)]
     return embedder
 
@@ -192,12 +196,12 @@ class TestIndexSingleCase:
     def test_indexes_case_with_tx(self, indexer, mock_qdrant, mock_embedder):
         mock_embedder.encode.return_value = [np.array([0.1] * 1024)]
         case = {"case_id": "CB-001", "motivo": "Fraude", "resolution": "Rechazo"}
-        tx = {"merchant": "Airbnb", "amount_usd": 500.0, "payment_method": "Cripto", "country": "COL", "fraud_score": 8}
+        tx = {"merchant": "Airbnb", "amount_usd": 500.0, "payment_method": PaymentMethod.CRYPTO, "country": "COL", "fraud_score": 8}
         indexer.index_single_case(case, tx)
         mock_qdrant.upsert.assert_called_once()
         point = mock_qdrant.upsert.call_args[1]["points"][0]
         assert point.payload["merchant"] == "Airbnb"
-        assert point.payload["payment_method"] == "Cripto"
+        assert point.payload["payment_method"] == PaymentMethod.CRYPTO
 
 
 class TestIndexHistoricalCases:

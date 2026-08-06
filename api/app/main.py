@@ -9,7 +9,8 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .dependencies import lifespan
-from .domain.constants import FALLBACK_REQUEST_ID
+from .domain.constants import FALLBACK_REQUEST_ID, LLM_CREDIT_EXHAUSTED_MARKER
+from .rag.embedder import EmbeddingRateLimit
 from .routes import (
     alerts,
     analyze,
@@ -109,15 +110,54 @@ app.add_middleware(
 
 @app.exception_handler(anthropic.APIError)
 async def anthropic_error_handler(request: Request, exc: anthropic.APIError):
-    """Surface Anthropic API errors (credit exhaustion, rate limits) with actionable detail."""
+    """Surface Anthropic API errors (credit exhaustion, rate limits) with actionable detail.
+
+    El saldo agotado se distingue del resto: es el unico caso que quien esta
+    probando el sistema puede resolver por su cuenta, trayendo su propia clave.
+    """
     request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
     logger.error("Anthropic API error [request_id=%s]: %s %s", request_id, type(exc).__name__, exc)
     status = exc.status_code if hasattr(exc, "status_code") else 502
+
+    if LLM_CREDIT_EXHAUSTED_MARKER in str(exc).lower():
+        return JSONResponse(
+            status_code=status,
+            content={
+                "error": "LLM provider: sin saldo",
+                "detail": (
+                    "La clave de Anthropic del servidor se quedo sin credito, asi que el "
+                    "analisis no puede correr. Se puede seguir probando con una clave propia: "
+                    "en el panel, campo 'API key', o mandando api_key en el body de la peticion. "
+                    "El resto del sistema — consultas, RAG, informes — no depende de esto."
+                ),
+                "request_id": request_id,
+            },
+        )
+
     return JSONResponse(
         status_code=status,
         content={
             "error": f"LLM provider error: {type(exc).__name__}",
             "detail": "LLM service error — check server logs",
+            "request_id": request_id,
+        },
+    )
+
+
+@app.exception_handler(EmbeddingRateLimit)
+async def embedding_rate_limit_handler(request: Request, exc: EmbeddingRateLimit):
+    """El proveedor de embeddings corto la peticion: 429 explicado, no un 500 mudo."""
+    request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
+    logger.warning("Embedding rate limit [request_id=%s]", request_id)
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Embedding provider rate limit",
+            "detail": (
+                "El proveedor de embeddings (Voyage AI) rechazo la consulta por limite "
+                "de peticiones. Las busquedas semanticas — politicas y casos similares — "
+                "quedan sin servicio hasta que se libere la cuota. Reintentar en un minuto."
+            ),
             "request_id": request_id,
         },
     )

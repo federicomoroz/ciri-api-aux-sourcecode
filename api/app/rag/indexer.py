@@ -176,7 +176,7 @@ class QdrantIndexer:
     def index_single_case(self, case: dict, tx: dict) -> None:
         """Index one newly resolved case as a precedent."""
         text = _case_to_text(case, tx)
-        vector = self.embedder.encode([text], show_progress_bar=False)[0]
+        vector = self.embedder.encode([text])[0]
         point = PointStruct(
             id=_make_id(case["case_id"]),
             vector=vector.tolist(),
@@ -200,7 +200,7 @@ class QdrantIndexer:
     def index_single_policy(self, policy: dict) -> None:
         """Index or re-index one policy."""
         text = _policy_to_markdown(policy)
-        vector = self.embedder.encode([text], show_progress_bar=False)[0]
+        vector = self.embedder.encode([text])[0]
         point = PointStruct(
             id=_make_id(policy["code"]),
             vector=vector.tolist(),

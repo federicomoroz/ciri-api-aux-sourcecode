@@ -5,6 +5,7 @@ Unit tests for ReportGenerator — Jinja2 HTML rendering.
 import pytest
 
 from api.app.reports.generator import ReportGenerator
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
 
 
 @pytest.fixture
@@ -18,16 +19,16 @@ def minimal_report_data():
     return {
         "transaction": {
             "id": "TXN-00051", "client_id": "CLI-0003", "merchant": "Airbnb",
-            "amount_usd": 2095.90, "date": "2024-09-23", "payment_method": "Cripto",
+            "amount_usd": 2095.90, "date": "2024-09-23", "payment_method": PaymentMethod.CRYPTO,
             "country": "COL", "channel": "POS", "device": "Firefox/Mac",
             "fraud_score": 8, "status": "Contracargo iniciado", "notes": None,
         },
         "resolution": {
-            "transaction_id": "TXN-00051", "recommended_action": "REJECT",
+            "transaction_id": "TXN-00051", "recommended_action": ResolutionOutcome.REJECT,
             "confidence": 0.99, "justification": "BLOCKER cripto",
-            "policy_verdicts": [{"policy_code": "POL-EXC-003", "verdict": "BLOCKER",
-                                 "reasoning": "Cripto", "requires_human_review": False}],
-            "precedent_summary": "", "log_summary": "", "risk_level": "BLOCKER",
+            "policy_verdicts": [{"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER,
+                                 "reasoning": PaymentMethod.CRYPTO, "requires_human_review": False}],
+            "precedent_summary": "", "log_summary": "", "risk_level": RiskLevel.BLOCKER,
             "compensation_applicable": False, "compensation_amount_usd": 0.0,
             "next_steps": ["Notificar al cliente"], "requires_hitl": False, "hitl_reason": None,
         },
@@ -43,10 +44,10 @@ def minimal_report_data():
                           "flags": [], "is_strategic": False},
         "client_profile": {"client_id": "CLI-0003", "total_transactions": 5, "total_chargebacks": 1,
                            "rejected_transactions": 0, "countries_used": ["COL"],
-                           "payment_methods_used": ["Cripto"], "flags": []},
+                           "payment_methods_used": [PaymentMethod.CRYPTO], "flags": []},
         "logs": [],
-        "policies_evaluated": [{"policy_code": "POL-EXC-003", "verdict": "BLOCKER",
-                                "reasoning": "Cripto", "requires_human_review": False}],
+        "policies_evaluated": [{"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER,
+                                "reasoning": PaymentMethod.CRYPTO, "requires_human_review": False}],
         "similar_cases": [],
         "hitl_decision": None,
         "cache_hit": False,
@@ -67,7 +68,7 @@ class TestReportGenerator:
 
     def test_html_contains_risk_level(self, generator, minimal_report_data):
         html = generator.render(minimal_report_data)
-        assert "BLOCKER" in html
+        assert RiskLevel.BLOCKER in html
 
     def test_html_contains_merchant(self, generator, minimal_report_data):
         html = generator.render(minimal_report_data)

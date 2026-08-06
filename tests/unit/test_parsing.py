@@ -2,13 +2,13 @@
 
 import json
 
-import pytest
 from api.app.llm.parsing import parse_json_safely, validate_llm_output
 from api.app.domain.models import (
     JudgeEvaluationOutput,
     PolicyVerdictOutput,
     ResolutionOutput,
 )
+from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
 
 
 class TestParseJsonSafely:
@@ -35,7 +35,7 @@ class TestParseJsonSafely:
     def test_array_with_surrounding_text(self):
         text = 'The analysis:\n[{"code": "POL-001", "verdict": "PASS"}]\nDone.'
         result = parse_json_safely(text, [])
-        assert result == [{"code": "POL-001", "verdict": "PASS"}]
+        assert result == [{"code": "POL-001", "verdict": VerdictType.PASS}]
 
     def test_invalid_json_returns_fallback_dict(self):
         result = parse_json_safely("this is not json at all", {"default": True})
@@ -52,7 +52,7 @@ class TestParseJsonSafely:
     def test_nested_json(self):
         text = '{"resolution": {"action": "REJECT", "confidence": 0.95}}'
         result = parse_json_safely(text, {})
-        assert result["resolution"]["action"] == "REJECT"
+        assert result["resolution"]["action"] == ResolutionOutcome.REJECT
 
     def test_whitespace_padded(self):
         text = '   \n  {"key": "value"}  \n  '
@@ -66,26 +66,26 @@ class TestValidateLLMOutput:
     def test_valid_resolution(self):
         raw = json.dumps({
             "transaction_id": "TXN-001",
-            "recommended_action": "REJECT",
+            "recommended_action": ResolutionOutcome.REJECT,
             "confidence": 0.95,
             "justification": "Crypto transaction blocked by policy.",
-            "risk_level": "BLOCKER",
+            "risk_level": RiskLevel.BLOCKER,
             "compensation_applicable": False,
             "compensation_amount_usd": 0.0,
             "next_steps": ["Notify client"],
             "requires_hitl": False,
         })
         result = validate_llm_output(raw, ResolutionOutput, {})
-        assert result["recommended_action"] == "REJECT"
+        assert result["recommended_action"] == ResolutionOutcome.REJECT
         assert result["confidence"] == 0.95
-        assert result["risk_level"] == "BLOCKER"
+        assert result["risk_level"] == RiskLevel.BLOCKER
 
     def test_invalid_enum_returns_raw_parsed(self):
         """Invalid enum value → logs warning, returns raw parsed dict (non-breaking)."""
         raw = json.dumps({
             "recommended_action": "BANANA",
             "confidence": 0.5,
-            "risk_level": "MEDIUM",
+            "risk_level": RiskLevel.MEDIUM,
         })
         result = validate_llm_output(raw, ResolutionOutput, {})
         # Should return the raw parsed dict, not the fallback
@@ -99,13 +99,13 @@ class TestValidateLLMOutput:
     def test_list_of_verdicts(self):
         """Valid list of PolicyVerdictOutput → typed list."""
         raw = json.dumps([
-            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Crypto blocked"},
-            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Low fraud score"},
+            {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": "Crypto blocked"},
+            {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Low fraud score"},
         ])
         result = validate_llm_output(raw, PolicyVerdictOutput, [])
         assert len(result) == 2
-        assert result[0]["verdict"] == "BLOCKER"
-        assert result[1]["verdict"] == "FAIL"
+        assert result[0]["verdict"] == VerdictType.BLOCKER
+        assert result[1]["verdict"] == VerdictType.FAIL
 
     def test_extra_fields_ignored(self):
         """LLM may return unexpected fields — extra='ignore' drops them silently."""

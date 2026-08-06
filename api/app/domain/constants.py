@@ -32,6 +32,7 @@ __all__ = [
     "EMBEDDING_DIM",
     # LLM
     "LLM_TRUNCATION_LENGTH",
+    "LLM_CREDIT_EXHAUSTED_MARKER",
     "LLM_DEFAULT_MAX_TOKENS",
     "LLM_DEFAULT_MAX_RETRIES",
     "LLM_DEFAULT_TEMPERATURE",
@@ -83,6 +84,9 @@ __all__ = [
     # Reranking
     "RERANK_PAYMENT_METHOD_BOOST",
     "RERANK_COUNTRY_BOOST",
+    "EMBEDDING_CACHE_MAX",
+    "EMBEDDING_RATE_LIMIT_RETRIES",
+    "EMBEDDING_RATE_LIMIT_WAIT_S",
     "RERANK_MAX_SCORE",
     # Dashboard
     "DASHBOARD_TOP_N",
@@ -157,6 +161,7 @@ EMBEDDING_DIM: int = 1024                    # voyage-multilingual-2 (Voyage AI 
 
 # ── LLM ─────────────────────────────────────────────────────────────────────
 LLM_TRUNCATION_LENGTH: int = 200    # chars to log to tracer (not to LLM)
+LLM_CREDIT_EXHAUSTED_MARKER: str = "credit balance is too low"  # texto de Anthropic al agotarse el saldo
 LLM_DEFAULT_MAX_TOKENS: int = 4096
 LLM_DEFAULT_MAX_RETRIES: int = 2
 LLM_DEFAULT_TEMPERATURE: float = 0.3
@@ -222,6 +227,11 @@ SLA_TYPE_STANDARD: str = "standard"
 HEALTH_OK: str = "ok"
 HEALTH_HEALTHY: str = "healthy"
 HEALTH_DEGRADED: str = "degraded"
+
+# ── Embeddings ────────────────────────────────────────
+EMBEDDING_CACHE_MAX: int = 512             # textos cacheados en proceso
+EMBEDDING_RATE_LIMIT_RETRIES: int = 1      # reintentos al topar el limite del proveedor
+EMBEDDING_RATE_LIMIT_WAIT_S: int = 21      # espera entre reintentos (free tier: 3 RPM)
 
 # ── Reranking ────────────────────────────────────────────────────────────
 RERANK_PAYMENT_METHOD_BOOST: float = 0.05  # score boost for matching payment method

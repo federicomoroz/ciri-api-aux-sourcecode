@@ -4,6 +4,7 @@ Tests the real dataset file to verify parsing is correct.
 """
 
 import pytest
+from api.app.domain.enums import PaymentMethod
 
 EXCEL_PATH = "data/Similación_dataset_contracargos_.xlsx"
 
@@ -51,7 +52,7 @@ def test_txn_00051_crypto_blocker(loaded_data):
     txns = {t["id"]: t for t in loaded_data["transactions"]}
     assert "TXN-00051" in txns, "TXN-00051 must exist in dataset"
     tx = txns["TXN-00051"]
-    assert tx["payment_method"] == "Cripto", f"Expected 'Cripto', got '{tx['payment_method']}'"
+    assert tx["payment_method"] == PaymentMethod.CRYPTO, f"Expected 'Cripto', got '{tx['payment_method']}'"
     assert tx["fraud_score"] == 8, f"Expected score=8, got {tx['fraud_score']}"
     assert tx["country"] == "COL", f"Expected 'COL', got '{tx['country']}'"
 

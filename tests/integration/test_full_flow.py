@@ -4,11 +4,15 @@ Uses MockLLMClient + real SQLite + mocked Qdrant.
 """
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 from fastapi.testclient import TestClient
 
 from api.app.main import app
 from api.app.data.db import Database
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
+from api.app.rag.embedder import FastEmbedder
+from api.app.rag.updater import RAGUpdater
+from api.app.rag.retriever import QdrantRetriever
 
 
 @pytest.fixture
@@ -17,17 +21,18 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
     db = Database(in_memory_db_path)
 
     mock_qdrant = MagicMock()
-    mock_embedder = MagicMock()
+    # autospec: el doble respeta la FIRMA real de encode(). Con MagicMock pelado,
+    # una llamada con un argumento que ya no existe pasa el test y falla en produccion.
+    mock_embedder = create_autospec(FastEmbedder, instance=True)
     mock_embedder.encode.return_value = [[0.1] * 1024]
 
-    from api.app.rag.retriever import QdrantRetriever
     from api.app.analysis.analyzer import Analyzer
     from api.app.reports.generator import ReportGenerator
     from api.app.services.resolution import ResolutionService
     from api.app.services.feedback import FeedbackService
 
     # Mock retriever to return pre-set results
-    retriever = MagicMock()
+    retriever = create_autospec(QdrantRetriever, instance=True)
     retriever.search_policies.return_value = [
         {
             "code": "POL-EXC-003",
@@ -52,7 +57,7 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
     report_gen = ReportGenerator()
     mock_tracer = MagicMock()
     mock_tracer.trace.return_value = ""
-    mock_updater = MagicMock()
+    mock_updater = create_autospec(RAGUpdater, instance=True)
     mock_updater.on_case_resolved.return_value = False
     resolution_service = ResolutionService(mock_llm_blocker, mock_tracer)
     feedback_service = FeedbackService(db, mock_updater, mock_tracer)
@@ -92,7 +97,7 @@ def test_get_transaction(test_client_full_flow):
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == "TXN-00051"
-    assert data["payment_method"] == "Cripto"
+    assert data["payment_method"] == PaymentMethod.CRYPTO
     assert data["fraud_score"] == 8
 
 
@@ -120,7 +125,7 @@ def test_find_similar_cases(test_client_full_flow):
     resp = client.get("/api/cases/similar", params={
         "merchant": "Airbnb",
         "amount": 2095.90,
-        "payment_method": "Cripto",
+        "payment_method": PaymentMethod.CRYPTO,
         "country": "COL",
         "fraud_score": 8,
         "motivo": "No reconoce la compra",
@@ -163,12 +168,12 @@ def test_resolve_blocker_scenario(test_client_full_flow):
         "transaction_id": "TXN-00051",
         "agent_analysis": "Cripto con score 8 — BLOCKER",
         "tx_data": {
-            "id": "TXN-00051", "payment_method": "Cripto",
+            "id": "TXN-00051", "payment_method": PaymentMethod.CRYPTO,
             "fraud_score": 8, "amount_usd": 2095.90,
             "country": "COL", "merchant": "Airbnb", "channel": "POS",
         },
         "policies": [
-            {"code": "POL-EXC-003", "description": "BLOCKER cripto", "category": "EXCEPCION", "name": "Cripto", "reference": ""},
+            {"code": "POL-EXC-003", "description": "BLOCKER cripto", "category": "EXCEPCION", "name": PaymentMethod.CRYPTO, "reference": ""},
         ],
         "similar_cases": [],
         "logs": [],
@@ -180,8 +185,8 @@ def test_resolve_blocker_scenario(test_client_full_flow):
     resp = client.post("/api/analyze/resolve", json=payload)
     assert resp.status_code == 200
     data = resp.json()
-    assert data["recommended_action"] == "REJECT"
-    assert data["risk_level"] == "BLOCKER"
+    assert data["recommended_action"] == ResolutionOutcome.REJECT
+    assert data["risk_level"] == RiskLevel.BLOCKER
 
 
 def test_judge_evaluation(test_client_full_flow):
@@ -190,8 +195,8 @@ def test_judge_evaluation(test_client_full_flow):
     payload = {
         "resolution": {
             "transaction_id": "TXN-00051",
-            "recommended_action": "REJECT",
-            "risk_level": "BLOCKER",
+            "recommended_action": ResolutionOutcome.REJECT,
+            "risk_level": RiskLevel.BLOCKER,
             "confidence": 0.99,
             "justification": "BLOCKER por POL-EXC-003",
             "policy_verdicts": [],
@@ -199,7 +204,7 @@ def test_judge_evaluation(test_client_full_flow):
             "log_summary": "",
             "next_steps": [],
         },
-        "full_context": {"transaction": {"id": "TXN-00051", "payment_method": "Cripto"}},
+        "full_context": {"transaction": {"id": "TXN-00051", "payment_method": PaymentMethod.CRYPTO}},
     }
     resp = client.post("/api/analyze/judge", json=payload)
     assert resp.status_code == 200
@@ -216,7 +221,7 @@ def test_submit_feedback(test_client_full_flow):
         "transaction_id": "TXN-00051",
         "analyst_decision": "APPROVED",
         "analyst_notes": "Verificado manualmente. Caso correcto.",
-        "final_outcome": "REJECT",
+        "final_outcome": ResolutionOutcome.REJECT,
         "judge_score": 9.2,
         "resolution": None,
     }
@@ -233,15 +238,15 @@ def test_html_report_generation(test_client_full_flow):
     payload = {
         "transaction": {
             "id": "TXN-00051", "client_id": "CLI-0003", "merchant": "Airbnb",
-            "amount_usd": 2095.90, "date": "2024-09-23", "payment_method": "Cripto",
+            "amount_usd": 2095.90, "date": "2024-09-23", "payment_method": PaymentMethod.CRYPTO,
             "country": "COL", "channel": "POS", "device": "Firefox/Mac",
             "fraud_score": 8, "status": "Contracargo iniciado", "notes": None,
         },
         "resolution": {
-            "transaction_id": "TXN-00051", "recommended_action": "REJECT",
+            "transaction_id": "TXN-00051", "recommended_action": ResolutionOutcome.REJECT,
             "confidence": 0.99, "justification": "BLOCKER cripto",
-            "policy_verdicts": [{"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto", "requires_human_review": False}],
-            "precedent_summary": "", "log_summary": "", "risk_level": "BLOCKER",
+            "policy_verdicts": [{"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO, "requires_human_review": False}],
+            "precedent_summary": "", "log_summary": "", "risk_level": RiskLevel.BLOCKER,
             "compensation_applicable": False, "compensation_amount_usd": 0.0,
             "next_steps": ["Notificar al cliente"], "requires_hitl": False, "hitl_reason": None,
         },
@@ -252,9 +257,9 @@ def test_html_report_generation(test_client_full_flow):
         },
         "agent_analysis": "BLOCKER detectado.",
         "merchant_risk": {"merchant": "Airbnb", "cb_ratio": 0.02, "total_transactions": 10, "total_chargebacks": 2, "total_volume_usd": 5000, "avg_transaction_usd": 500, "flags": [], "is_strategic": False},
-        "client_profile": {"client_id": "CLI-0003", "total_transactions": 5, "total_chargebacks": 1, "rejected_transactions": 0, "countries_used": ["COL"], "payment_methods_used": ["Cripto"], "flags": []},
+        "client_profile": {"client_id": "CLI-0003", "total_transactions": 5, "total_chargebacks": 1, "rejected_transactions": 0, "countries_used": ["COL"], "payment_methods_used": [PaymentMethod.CRYPTO], "flags": []},
         "logs": [],
-        "policies_evaluated": [{"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto", "requires_human_review": False}],
+        "policies_evaluated": [{"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO, "requires_human_review": False}],
         "similar_cases": [],
         "hitl_decision": None,
         "cache_hit": False,
@@ -266,7 +271,7 @@ def test_html_report_generation(test_client_full_flow):
     data = resp.json()
     html = data["html"]
     assert "TXN-00051" in html
-    assert "BLOCKER" in html
+    assert RiskLevel.BLOCKER in html
     assert "Airbnb" in html
 
 
@@ -312,12 +317,12 @@ def test_resolve_response_schema(test_client_full_flow):
         "transaction_id": "TXN-00051",
         "agent_analysis": "Cripto con score 8 — BLOCKER",
         "tx_data": {
-            "id": "TXN-00051", "payment_method": "Cripto",
+            "id": "TXN-00051", "payment_method": PaymentMethod.CRYPTO,
             "fraud_score": 8, "amount_usd": 2095.90,
             "country": "COL", "merchant": "Airbnb", "channel": "POS",
         },
         "policies": [
-            {"code": "POL-EXC-003", "description": "BLOCKER cripto", "category": "EXCEPCION", "name": "Cripto", "reference": ""},
+            {"code": "POL-EXC-003", "description": "BLOCKER cripto", "category": "EXCEPCION", "name": PaymentMethod.CRYPTO, "reference": ""},
         ],
         "similar_cases": [],
         "logs": [],

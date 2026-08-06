@@ -15,6 +15,7 @@ Covers:
 import pytest
 
 from api.app.data.db import Database
+from api.app.domain.enums import ResolutionOutcome
 
 
 @pytest.fixture
@@ -180,7 +181,7 @@ class TestFeedback:
             "transaction_id": "TXN-00051",
             "analyst_decision": "APPROVED",
             "analyst_notes": "Verified.",
-            "final_outcome": "REJECT",
+            "final_outcome": ResolutionOutcome.REJECT,
             "judge_score": 9.0,
         })
         assert isinstance(feedback_id, int)
@@ -191,14 +192,14 @@ class TestFeedback:
             "transaction_id": "TXN-00051",
             "analyst_decision": "APPROVED",
             "analyst_notes": "First review",
-            "final_outcome": "REJECT",
+            "final_outcome": ResolutionOutcome.REJECT,
             "judge_score": 8.0,
         })
         id2 = db.save_feedback({
             "transaction_id": "TXN-00042",
             "analyst_decision": "REJECTED",
             "analyst_notes": "Bad case",
-            "final_outcome": "APPROVE",
+            "final_outcome": ResolutionOutcome.APPROVE,
             "judge_score": 4.0,
         })
         assert id2 > id1
@@ -230,7 +231,7 @@ class TestDashboardStats:
             "transaction_id": "TXN-00051",
             "analyst_decision": "APPROVED",
             "analyst_notes": "Verified correctly",
-            "final_outcome": "REJECT",
+            "final_outcome": ResolutionOutcome.REJECT,
             "judge_score": 9.0,
         })
         stats = db.get_dashboard_stats()

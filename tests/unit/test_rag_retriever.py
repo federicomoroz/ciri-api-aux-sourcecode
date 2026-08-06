@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from api.app.rag.retriever import QdrantRetriever, QueryBuilder
+from api.app.domain.enums import PaymentMethod
 
 
 class TestQueryBuilder:
@@ -16,7 +17,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo="No reconoce la compra",
             channel="POS",
-            payment_method="Cripto",
+            payment_method=PaymentMethod.CRYPTO,
             fraud_score=8,
             country="COL",
         )
@@ -28,7 +29,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo=None,
             channel="Web",
-            payment_method="Credito Visa",
+            payment_method=PaymentMethod.CREDIT_VISA,
             fraud_score=15,
             country="MEX",
         )
@@ -39,7 +40,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo=None,
             channel="App Movil",
-            payment_method="Debito Visa",
+            payment_method=PaymentMethod.DEBIT_VISA,
             fraud_score=75,
             country="ARG",
         )
@@ -51,7 +52,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo="Cargo duplicado",
             channel="API",
-            payment_method="Credito MC",
+            payment_method=PaymentMethod.CREDIT_MC,
             fraud_score=50,
             country="USA",
         )
@@ -62,7 +63,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo=None,
             channel="Web",
-            payment_method="Cuenta Virtual",
+            payment_method=PaymentMethod.VIRTUAL_ACCOUNT,
             fraud_score=60,
             country="ARG",
         )
@@ -74,7 +75,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo=None,
             channel="IVR",
-            payment_method="Debito MC",
+            payment_method=PaymentMethod.DEBIT_MC,
             fraud_score=55,
             country="MEX",
         )
@@ -85,14 +86,14 @@ class TestQueryBuilder:
         q = QueryBuilder.for_similar_cases(
             merchant="Airbnb",
             amount=2095.90,
-            payment_method="Cripto",
+            payment_method=PaymentMethod.CRYPTO,
             country="COL",
             fraud_score=8,
             motivo="No reconoce la compra",
         )
         assert "Airbnb" in q
         assert "2095.90" in q
-        assert "Cripto" in q
+        assert PaymentMethod.CRYPTO in q
         assert "COL" in q
         assert "No reconoce la compra" in q
 
@@ -101,7 +102,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_similar_cases(
             merchant="Amazon",
             amount=150.00,
-            payment_method="Credito Visa",
+            payment_method=PaymentMethod.CREDIT_VISA,
             country="MEX",
             fraud_score=70,
         )
@@ -114,7 +115,7 @@ class TestQueryBuilder:
         q = QueryBuilder.for_policies(
             motivo="No reconoce la compra",
             channel="POS",
-            payment_method="Cripto",
+            payment_method=PaymentMethod.CRYPTO,
             fraud_score=5,
             country="USA",
         )
@@ -135,33 +136,33 @@ class TestReranking:
 
     def test_rerank_boosts_matching_payment_method(self):
         results = [
-            self._make_result(0.80, "Credito Visa", "ARG"),
-            self._make_result(0.78, "Cripto", "MEX"),
+            self._make_result(0.80, PaymentMethod.CREDIT_VISA, "ARG"),
+            self._make_result(0.78, PaymentMethod.CRYPTO, "MEX"),
         ]
-        reranked = QdrantRetriever._rerank(results, "Cripto", "COL")
+        reranked = QdrantRetriever._rerank(results, PaymentMethod.CRYPTO, "COL")
         # Cripto match gets +0.05 boost → 0.83, should be first
-        assert reranked[0].payload["payment_method"] == "Cripto"
+        assert reranked[0].payload["payment_method"] == PaymentMethod.CRYPTO
         assert reranked[0].score == pytest.approx(0.83, abs=0.01)
 
     def test_rerank_boosts_matching_country(self):
         results = [
-            self._make_result(0.75, "Credito Visa", "COL"),
-            self._make_result(0.76, "Debito MC", "ARG"),
+            self._make_result(0.75, PaymentMethod.CREDIT_VISA, "COL"),
+            self._make_result(0.76, PaymentMethod.DEBIT_MC, "ARG"),
         ]
-        reranked = QdrantRetriever._rerank(results, "Debito Visa", "COL")
+        reranked = QdrantRetriever._rerank(results, PaymentMethod.DEBIT_VISA, "COL")
         # COL match gets +0.03 → 0.78, should be first
         assert reranked[0].payload["country"] == "COL"
 
     def test_rerank_both_match_highest_boost(self):
         results = [
-            self._make_result(0.70, "Cripto", "COL"),
-            self._make_result(0.77, "Credito Visa", "ARG"),
+            self._make_result(0.70, PaymentMethod.CRYPTO, "COL"),
+            self._make_result(0.77, PaymentMethod.CREDIT_VISA, "ARG"),
         ]
-        reranked = QdrantRetriever._rerank(results, "Cripto", "COL")
+        reranked = QdrantRetriever._rerank(results, PaymentMethod.CRYPTO, "COL")
         # Cripto+COL = +0.08 → 0.78, beats 0.77
-        assert reranked[0].payload["payment_method"] == "Cripto"
+        assert reranked[0].payload["payment_method"] == PaymentMethod.CRYPTO
 
     def test_rerank_caps_at_one(self):
-        results = [self._make_result(0.99, "Cripto", "COL")]
-        reranked = QdrantRetriever._rerank(results, "Cripto", "COL")
+        results = [self._make_result(0.99, PaymentMethod.CRYPTO, "COL")]
+        reranked = QdrantRetriever._rerank(results, PaymentMethod.CRYPTO, "COL")
         assert reranked[0].score == 1.0

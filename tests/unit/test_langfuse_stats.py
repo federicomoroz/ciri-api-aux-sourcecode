@@ -110,10 +110,10 @@ class TestLangfuseStatsEnabled:
     def test_cache_expires_after_ttl(self, service, mock_tracer):
         self._setup_langfuse_mocks(mock_tracer)
 
-        result1 = service.get_stats()
+        service.get_stats()
         # Force cache expiry
         service._cache_time = time.time() - 60
-        result2 = service.get_stats()
+        service.get_stats()
 
         # fetch_traces called twice (cache expired)
         assert mock_tracer.langfuse.fetch_traces.call_count == 2

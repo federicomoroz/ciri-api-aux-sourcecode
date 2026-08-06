@@ -1,47 +1,71 @@
 # Agente de Investigación de Contracargos
 
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-277%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-301%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
 ![Qdrant](https://img.shields.io/badge/Qdrant-vector%20DB-dc382c)
 ![Judge](https://img.shields.io/badge/Judge%20Score-9.1%2F10-gold)
 
-Agente inteligente de resolución de contracargos. Investiga casos end-to-end: recupera políticas aplicables vía RAG, las evalúa contra la transacción, sintetiza una resolución con razonamiento analítico, y se auto-mejora a través de un feedback loop con LLM-as-Judge.
+Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transacción, sus logs, las políticas que aplican, qué se resolvió en casos parecidos, el riesgo del comercio y el historial del cliente—, propone una resolución justificada y se autoevalúa. Los casos de riesgo alto frenan y esperan a un analista.
 
 ---
 
-## El flujo de un vistazo
+## Cómo usarlo
 
-**[`docs/diagrams/workflow.html`](docs/diagrams/workflow.html)** — abrí ese archivo en cualquier navegador y tenés el workflow entero: los 29 pasos en orden de ejecución más las 3 salidas de error, agrupados por sección, con el endpoint que llama cada uno. Al tocar cualquier paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+Hay **cuatro formas de usar el sistema**, y todas hacen lo mismo por dentro. Cambia por dónde entra el caso.
 
-No necesita conexión, ni instalar nada, ni importar el workflow. Se adapta al tema claro u oscuro del sistema y se imprime a PDF desde el navegador.
+| | Forma | Para qué sirve | Qué necesitás |
+|---|---|---|---|
+| **1** | [Ver el circuito](#1-ver-el-circuito-sin-ejecutar-nada) | Entender qué hace el sistema sin ejecutarlo | Un navegador |
+| **2** | [El panel web](#2-el-panel-web) | Verlo funcionar en 30 segundos, paso a paso | Un navegador |
+| **3** | [El workflow de n8n](#3-el-workflow-de-n8n) | Ver la orquestación real, que es el entregable | Una instancia de n8n |
+| **4** | [La API directa](#4-la-api-directa) | Integrarlo con otro sistema, o probar una pieza suelta | `curl` |
+
+Ninguna requiere instalar nada ni configurar claves. Si preferís correr todo en tu máquina, está en [Todo local con Docker](#todo-local-con-docker).
+
+### Modo demo: probalo sin gastar
+
+La instancia publicada corre en **modo demo**. Investigar un caso cuesta dinero real —dos modelos, varias llamadas—, y probar una entrega no debería consumir la cuenta de nadie. Así que:
+
+| | |
+|---|---|
+| **Los tres casos de ejemplo** | Se sirven con su informe ya generado, al instante. El HTML abre con un cartel **DEMO (Caso prearmado)**, la respuesta trae la cabecera `X-Modo-Demo` y el servidor deja un warning en el log. Un informe prearmado nunca se hace pasar por un análisis recién hecho. |
+| **Cualquier otro caso** | Necesita una clave de Anthropic. Cargala en el campo **API key** del panel y el pipeline corre completo, con tu cuenta. |
+| **Todo lo que no cuesta** | Sigue funcionando igual: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA, informes. |
+
+En modo demo **no se llama al modelo**. No es que lo intente y falle: no gasta. Se apaga con `CB_DEMO_MODE=false`.
+
+> **Sobre la primera llamada:** la API está en el free tier de Render, que duerme tras 15 minutos sin uso. La primera petición puede tardar ~50 segundos en despertarla; las siguientes responden en ~12. El workflow de n8n ya contempla esto con un nodo que la despierta antes de empezar.
 
 ---
 
-## Para el evaluador — 3 formas de probar
+### 1. Ver el circuito, sin ejecutar nada
 
-### Opción A — Importar el workflow en tu n8n (cero configuración)
+Abrí **[`docs/diagrams/workflow.html`](docs/diagrams/workflow.html)** en cualquier navegador.
 
-El entregable principal. Importá los 3 archivos de `n8n/` en cualquier instancia de n8n — Cloud, self-hosted o Desktop:
+Es el workflow entero en una página: los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint que llama cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue. No necesita conexión ni instalar nada, y se imprime a PDF.
 
-| Archivo | Descripción |
-|---|---|
-| `workflow_ciri_agent.json` | Workflow principal — 38 nodos (32 ejecutables + 6 sticky notes) |
-| `workflow_ciri_errors.json` | Error handler — recibe los fallos de los otros dos (Error Trigger → `POST /api/alerts/` → email opcional) |
-| `workflow_ciri_form.json` | Form trigger — formulario nativo de n8n, en `/form/chargeback-form` |
+### 2. El panel web
 
-**No hay que configurar nada** para que corran: los nodos apuntan por defecto a la API pública en Render. Sin variables, sin credenciales, sin API keys — toda la autenticación con Anthropic y Voyage AI la maneja el backend.
+**[ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel)**
 
-Dos pasos manuales, ambos inevitables porque n8n reasigna los identificadores al importar:
+Elegís un caso del dataset, apretás **Analizar** y ves el pipeline ejecutarse en vivo: cada consulta que hace, cuántas políticas recuperó, qué resolvió y qué puntaje le puso el Juez. Termina con el informe HTML completo.
 
-| # | Paso |
-|---|---|
-| 1 | Activar los workflows — n8n los importa desactivados siempre |
-| 2 | En el principal **y** en el del formulario: Settings → Error Workflow → elegir `workflow_ciri_errors`. Sin eso, los fallos quedan sólo en la ejecución y no llegan al log de alertas |
+Es la forma más rápida de ver el sistema funcionando de punta a punta. No es un entregable de la consigna: es una herramienta para poder probarlo sin montar nada.
 
-Activá el workflow y disparalo:
+Tres casos que muestran comportamientos distintos:
+
+| Caso | Qué tiene de particular | Cómo termina |
+|---|---|---|
+| `TXN-00051` | Cripto, score antifraude 8 | **BLOCKER** — rechazo automático, la operación es irreversible |
+| `TXN-00042` | Tarjeta, score 4, cliente VIP | **HIGH** — frena y espera a un analista |
+| `TXN-00089` | Comercio fuera de LATAM | **MEDIUM** — SLA extendido a 15 días hábiles |
+
+### 3. El workflow de n8n
+
+El entregable principal. Importá los tres archivos de [`n8n/`](n8n/) en cualquier instancia de n8n —Cloud, self-hosted o Desktop— y disparalo:
 
 ```bash
 curl -X POST https://<tu-n8n>/webhook/chargeback-agent \
@@ -50,40 +74,54 @@ curl -X POST https://<tu-n8n>/webhook/chargeback-agent \
   -o reporte.html
 ```
 
-Para apuntarlo a otra API (por ejemplo la tuya local), en orden de prioridad:
+Devuelve el informe HTML listo. **No hay que configurar variables, credenciales ni API keys**: los nodos apuntan por defecto a la API pública, que es quien habla con Claude y con Qdrant.
 
-| Prioridad | Cómo | Cuándo usarlo |
+| Archivo | Qué es |
+|---|---|
+| `workflow_ciri_agent.json` | El orquestador: 38 nodos, 32 ejecutables |
+| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada, en `/form/chargeback-form` |
+| `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
+
+Dos pasos manuales al importar, inevitables porque n8n reasigna los identificadores:
+
+1. **Activar los workflows.** n8n los importa desactivados siempre.
+2. En el orquestador **y** en el del formulario: **Settings → Error Workflow → `workflow_ciri_errors`**. Sin eso, los fallos quedan sólo en la ejecución y no llegan al log de alertas.
+
+Para apuntarlo a otra API, en orden de prioridad:
+
+| | Cómo | Cuándo |
 |---|---|---|
 | 1 | `api_base_url` en el body del webhook | Override por request, funciona en cualquier n8n |
-| 2 | Settings → Variables → `API_BASE_URL` | n8n con licencia (Variables es feature paga) |
-| 3 | Default `https://ciri-chargeback-agent.onrender.com` | Si no configurás nada |
+| 2 | Settings → Variables → `API_BASE_URL` | Requiere n8n con licencia: Variables es una feature paga |
+| 3 | Por defecto: la API pública | Si no configurás nada |
 
-> **Tip:** El nodo "Despertar API" hace un `GET /health` antes de las queries para absorber el cold start de Render automáticamente.
+### 4. La API directa
 
-### Opción B — Panel web en Render (0 setup, 30 segundos)
+Todo lo que hace el workflow está disponible como endpoints. La referencia completa, con ejemplos que se pueden pegar en una terminal, está en **[`docs/api.md`](docs/api.md)**. Documentación interactiva en **[/docs](https://ciri-chargeback-agent.onrender.com/docs)**.
 
-1. Abrir **[ciri-chargeback-agent.onrender.com/panel](https://ciri-chargeback-agent.onrender.com/panel)**
-2. Seleccionar un escenario (ej: TXN-00051 BLOCKER) y hacer click en **Analizar**
-3. Ver el pipeline ejecutarse en tiempo real vía SSE streaming
+El camino más corto, una sola llamada que corre el pipeline completo y devuelve el informe:
 
-> **Nota:** Render free tier tiene cold start de ~50s en la primera carga. Después responde en ~12s por caso.
+```bash
+curl -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze?direct=true" \
+  -H "Content-Type: application/json" \
+  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}' \
+  -o reporte.html
+```
 
-El panel es un extra, no un entregable pedido: sirve para ver el pipeline paso a paso sin montar nada. Soporta 3 modos: **Directo** (default, SSE streaming), **n8n Test** y **n8n Producción** — si importaste el workflow, podés pegar tu URL de n8n y ejecutarlo desde ahí.
-
-### Opción C — Docker Compose (todo local, ~5 min)
+### Todo local con Docker
 
 ```bash
 git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
 cd ciri-chargeback-agent
-cp .env.example .env
-# Editar .env → poner CB_ANTHROPIC_API_KEY y CB_VOYAGE_API_KEY
+cp .env.example .env          # ver más abajo qué dos claves poner
 docker-compose up -d
-# Abrir http://localhost:8000/panel
 ```
 
-Levanta Qdrant + FastAPI + n8n. Todo se inicializa solo: SQLite se seedea desde el Excel y Qdrant se indexa en el primer arranque, sin paso de seed manual.
+Hacen falta dos claves, ambas con free tier: [Anthropic](https://console.anthropic.com/settings/keys) para Claude y [Voyage AI](https://dash.voyageai.com/) para los embeddings. Langfuse es opcional, se activa con `CB_LANGFUSE_ENABLED=true`.
 
-Para que el workflow use tu API local en vez de Render, mandá `api_base_url` en el body:
+Levanta Qdrant, la API y n8n. Se inicializa solo: SQLite se carga desde el Excel y Qdrant se indexa en el primer arranque, sin paso de seed manual. El panel queda en `http://localhost:8000/panel` y n8n en `http://localhost:5678`.
+
+Para que el workflow use tu API local en vez de la pública, mandá `api_base_url` en el body:
 
 ```bash
 curl -X POST http://localhost:5678/webhook/chargeback-agent \
@@ -163,126 +201,13 @@ n8n (orquestador explícito · Cloud o self-hosted)
 
 ---
 
-## Prerequisitos (solo para setup local)
+## La API
 
-| Dependencia | Notas |
-|---|---|
-| Docker + Docker Compose | Para correr Qdrant + FastAPI + n8n localmente |
-| [Anthropic API Key](https://console.anthropic.com/settings/keys) | Claude Haiku + Sonnet |
-| [Voyage AI API Key](https://dash.voyageai.com/) | Free tier, registro en 1 minuto |
+Cada endpoint es una herramienta que el orquestador llama por su nombre. La referencia
+completa, agrupada por para qué sirve cada uno y con ejemplos que se pegan en una terminal,
+está en **[`docs/api.md`](docs/api.md)**.
 
-> **Langfuse** es opcional. Solo se activa si configurás `CB_LANGFUSE_ENABLED=true`.
-
----
-
-## Inicio Rápido (Docker)
-
-```bash
-git clone https://github.com/federicomoroz/ciri-chargeback-agent.git
-cd ciri-chargeback-agent
-cp .env.example .env
-# Editar .env → poner CB_ANTHROPIC_API_KEY y CB_VOYAGE_API_KEY
-docker-compose up -d
-```
-
-**Eso es todo.** Al arrancar:
-1. Qdrant se levanta → http://localhost:6333
-2. FastAPI detecta que SQLite no existe → lo crea desde el Excel (100 TXN, 60 casos, 17 políticas, 150 logs)
-3. FastAPI detecta que Qdrant está vacío → indexa políticas y casos automáticamente
-4. n8n se levanta → http://localhost:5678 (importar workflows manualmente)
-5. Panel listo → **http://localhost:8000/panel**
-
-Verificar:
-
-```bash
-curl http://localhost:8000/health
-# {"status":"healthy","sqlite":"ok","qdrant":"ok","collections":{"policies":17,"historical_cases":60}}
-```
-
-### Importar workflow de n8n (opcional)
-
-1. Ir a http://localhost:5678 → Import → seleccionar los 3 archivos de `n8n/`
-2. Activar los workflows
-
-No hace falta configurar variables ni credenciales. Si querés que el workflow use tu API local en vez de la de Render, pasá `api_base_url` en el body:
-
-```bash
-# Probar vía n8n, contra la API local
-curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
-  -H "Content-Type: application/json" \
-  -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra", "api_base_url": "http://api:8000"}' \
-  -o report_blocker.html
-```
-
----
-
-## Referencia de API
-
-Todos los endpoints bajo `/api/`. Docs interactivos: http://localhost:8000/docs
-
-### Análisis principal
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `POST` | `/api/analyze/resolve` | Evaluación de políticas + síntesis de resolución + guardrails |
-| `POST` | `/api/analyze/judge` | Evaluación de calidad LLM-as-Judge (5 criterios, 1–10) |
-
-### Transacciones
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/api/transactions/{id}` | Transacción por ID |
-| `GET` | `/api/logs/{tx_id}` | Logs de eventos de una transacción |
-| `GET` | `/api/clients/{id}/history` | Historial de chargebacks del cliente |
-
-### Políticas (CRUD + búsqueda semántica)
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/api/policies/` | Listar todas las políticas |
-| `GET` | `/api/policies/search` | Búsqueda semántica en Qdrant |
-| `GET` | `/api/policies/{code}` | Política por código |
-| `POST` | `/api/policies/` | Crear política → auto-indexada en Qdrant |
-| `PUT` | `/api/policies/{code}` | Actualizar política → re-indexada en Qdrant |
-| `DELETE` | `/api/policies/{code}` | Eliminar política → removida de Qdrant |
-
-### Casos, comercios y SLA
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/api/cases/similar` | Búsqueda semántica de casos similares |
-| `GET` | `/api/merchants/{name}/risk` | Perfil de riesgo del comercio |
-| `POST` | `/api/sla/check` | Verificación de cumplimiento SLA |
-
-### Feedback, reportes y caché
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `POST` | `/api/feedback` | Feedback de analista; auto-indexa si judge_score >= 8.0 |
-| `POST` | `/api/reports/html` | Generar reporte HTML (Jinja2) |
-| `GET` | `/api/cache/lookup` | Verificación de caché de idempotencia (SQLite) |
-
-### Panel interactivo
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/panel` | Panel interactivo de testing (3 modos: directo, n8n test, n8n prod) |
-| `POST` | `/api/panel/analyze` | Análisis via n8n webhook (o fallback directo). Acepta `?n8n_base_url=` para usar tu propia instancia |
-| `POST` | `/api/panel/analyze-stream` | Pipeline completo via SSE streaming con progreso en tiempo real |
-| `GET` | `/api/panel/n8n-status` | Liveness check de n8n (badge del panel) |
-| `GET` | `/api/panel/server-key-status` | Indica si el servidor tiene API key propia (BYOK opcional vs requerido) |
-
-### Observabilidad y alertas
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/api/langfuse/stats` | Estadísticas de Langfuse (traces, tokens, costos) |
-| `GET` | `/api/analytics/dashboard` | Métricas agregadas (transacciones, casos, feedback) |
-| `GET` | `/health` | Health check de servicios |
-| `POST` | `/api/alerts/` | Registrar alerta operativa (desde n8n error handler o pipeline) |
-| `GET` | `/api/alerts/` | Listar alertas recientes (panel log, default 50) |
-
----
+Documentación interactiva generada por FastAPI: **[/docs](https://ciri-chargeback-agent.onrender.com/docs)**.
 
 ## Configuración
 

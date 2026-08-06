@@ -7,7 +7,6 @@ ahora concentra `_campo`.
 
 from types import SimpleNamespace
 
-import pytest
 
 from api.app.observability.tracer import NoOpTracer
 from api.app.services.langfuse_stats import LangfuseStatsService

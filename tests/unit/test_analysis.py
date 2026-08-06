@@ -9,6 +9,7 @@ import pytest
 
 from api.app.analysis.analyzer import Analyzer
 from api.app.data.db import Database
+from api.app.domain.enums import Severity
 
 
 @pytest.fixture
@@ -89,8 +90,8 @@ class TestErrorPatterns:
     def test_systematic_merchant_timeout(self, analyzer):
         """MERCHANT_NO_RESPONSE x2 should detect systematic_merchant_timeout."""
         logs = [
-            {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout", "timestamp": "2024-01-01 10:00:00", "code": "408"},
-            {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout again", "timestamp": "2024-01-01 10:01:00", "code": "408"},
+            {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout", "timestamp": "2024-01-01 10:00:00", "code": "408"},
+            {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout again", "timestamp": "2024-01-01 10:01:00", "code": "408"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "systematic_merchant_timeout" in result["patterns"]
@@ -98,7 +99,7 @@ class TestErrorPatterns:
     def test_no_timeout_pattern_with_single_occurrence(self, analyzer):
         """Single MERCHANT_NO_RESPONSE should NOT trigger systematic pattern."""
         logs = [
-            {"severity": "WARN", "event": "MERCHANT_NO_RESPONSE", "detail": "once", "timestamp": "2024-01-01 10:00:00", "code": "408"},
+            {"severity": Severity.WARN, "event": "MERCHANT_NO_RESPONSE", "detail": "once", "timestamp": "2024-01-01 10:00:00", "code": "408"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "systematic_merchant_timeout" not in result["patterns"]
@@ -106,8 +107,8 @@ class TestErrorPatterns:
     def test_fraud_block_pattern(self, analyzer):
         """FRAUD_ALERT + AUTH_DECLINED should detect blocked_for_fraud."""
         logs = [
-            {"severity": "WARN", "event": "FRAUD_ALERT", "detail": "score low", "timestamp": "2024-01-01", "code": "200"},
-            {"severity": "ERROR", "event": "AUTH_DECLINED", "detail": "blocked", "timestamp": "2024-01-01", "code": "402"},
+            {"severity": Severity.WARN, "event": "FRAUD_ALERT", "detail": "score low", "timestamp": "2024-01-01", "code": "200"},
+            {"severity": Severity.ERROR, "event": "AUTH_DECLINED", "detail": "blocked", "timestamp": "2024-01-01", "code": "402"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "blocked_for_fraud" in result["patterns"]
@@ -115,26 +116,26 @@ class TestErrorPatterns:
     def test_severity_counts(self, analyzer):
         """Severity counts should be accurate."""
         logs = [
-            {"severity": "ERROR", "event": "WEBHOOK_FAILED", "detail": "", "timestamp": "", "code": "500"},
-            {"severity": "ERROR", "event": "WEBHOOK_FAILED", "detail": "", "timestamp": "", "code": "500"},
-            {"severity": "WARN", "event": "TIMEOUT_RETRY", "detail": "", "timestamp": "", "code": "408"},
-            {"severity": "INFO", "event": "AUTH_REQUEST", "detail": "", "timestamp": "", "code": "200"},
+            {"severity": Severity.ERROR, "event": "WEBHOOK_FAILED", "detail": "", "timestamp": "", "code": "500"},
+            {"severity": Severity.ERROR, "event": "WEBHOOK_FAILED", "detail": "", "timestamp": "", "code": "500"},
+            {"severity": Severity.WARN, "event": "TIMEOUT_RETRY", "detail": "", "timestamp": "", "code": "408"},
+            {"severity": Severity.INFO, "event": "AUTH_REQUEST", "detail": "", "timestamp": "", "code": "200"},
         ]
         result = analyzer.detect_error_patterns(logs)
-        assert result["severity_counts"]["ERROR"] == 2
-        assert result["severity_counts"]["WARN"] == 1
-        assert result["severity_counts"]["INFO"] == 1
+        assert result["severity_counts"][Severity.ERROR] == 2
+        assert result["severity_counts"][Severity.WARN] == 1
+        assert result["severity_counts"][Severity.INFO] == 1
 
     def test_empty_logs(self, analyzer):
         """Empty logs should return empty result."""
         result = analyzer.detect_error_patterns([])
         assert result["patterns"] == []
-        assert result["severity_counts"] == {"ERROR": 0, "WARN": 0, "INFO": 0}
+        assert result["severity_counts"] == {Severity.ERROR: 0, Severity.WARN: 0, Severity.INFO: 0}
 
     def test_duplicate_charge_pattern(self, analyzer):
         """DOUBLE_CHARGE_DETECT should detect duplicate_charge."""
         logs = [
-            {"severity": "ERROR", "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
+            {"severity": Severity.ERROR, "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "duplicate_charge" in result["patterns"]
@@ -142,7 +143,7 @@ class TestErrorPatterns:
     def test_sla_violation_pattern(self, analyzer):
         """SLA_BREACH should detect sla_violation."""
         logs = [
-            {"severity": "WARN", "event": "SLA_BREACH", "detail": "SLA exceeded", "timestamp": "2024-01-01", "code": "200"},
+            {"severity": Severity.WARN, "event": "SLA_BREACH", "detail": "SLA exceeded", "timestamp": "2024-01-01", "code": "200"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "sla_violation" in result["patterns"]
@@ -150,7 +151,7 @@ class TestErrorPatterns:
     def test_integration_failure_pattern(self, analyzer):
         """WEBHOOK_FAILED should detect integration_failure."""
         logs = [
-            {"severity": "ERROR", "event": "WEBHOOK_FAILED", "detail": "500 error", "timestamp": "2024-01-01", "code": "500"},
+            {"severity": Severity.ERROR, "event": "WEBHOOK_FAILED", "detail": "500 error", "timestamp": "2024-01-01", "code": "500"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "integration_failure" in result["patterns"]
@@ -158,8 +159,8 @@ class TestErrorPatterns:
     def test_session_interrupted_payment_pattern(self, analyzer):
         """SESSION_EXPIRED + PAYMENT_INITIATED should detect session_interrupted_payment."""
         logs = [
-            {"severity": "INFO", "event": "PAYMENT_INITIATED", "detail": "starting", "timestamp": "2024-01-01 10:00:00", "code": "200"},
-            {"severity": "WARN", "event": "SESSION_EXPIRED", "detail": "session timeout", "timestamp": "2024-01-01 10:05:00", "code": "401"},
+            {"severity": Severity.INFO, "event": "PAYMENT_INITIATED", "detail": "starting", "timestamp": "2024-01-01 10:00:00", "code": "200"},
+            {"severity": Severity.WARN, "event": "SESSION_EXPIRED", "detail": "session timeout", "timestamp": "2024-01-01 10:05:00", "code": "401"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "session_interrupted_payment" in result["patterns"]
@@ -167,7 +168,7 @@ class TestErrorPatterns:
     def test_geographic_anomaly_pattern(self, analyzer):
         """GEO_ANOMALY should detect geographic_anomaly."""
         logs = [
-            {"severity": "WARN", "event": "GEO_ANOMALY", "detail": "unusual location", "timestamp": "2024-01-01", "code": "200"},
+            {"severity": Severity.WARN, "event": "GEO_ANOMALY", "detail": "unusual location", "timestamp": "2024-01-01", "code": "200"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "geographic_anomaly" in result["patterns"]
@@ -175,7 +176,7 @@ class TestErrorPatterns:
     def test_connectivity_issue_pattern(self, analyzer):
         """TIMEOUT_RETRY should detect connectivity_issue."""
         logs = [
-            {"severity": "WARN", "event": "TIMEOUT_RETRY", "detail": "retrying", "timestamp": "2024-01-01", "code": "408"},
+            {"severity": Severity.WARN, "event": "TIMEOUT_RETRY", "detail": "retrying", "timestamp": "2024-01-01", "code": "408"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "connectivity_issue" in result["patterns"]
@@ -183,10 +184,10 @@ class TestErrorPatterns:
     def test_multiple_patterns_detected(self, analyzer):
         """Multiple patterns in same log set should all be detected."""
         logs = [
-            {"severity": "WARN", "event": "FRAUD_ALERT", "detail": "score low", "timestamp": "2024-01-01", "code": "200"},
-            {"severity": "ERROR", "event": "AUTH_DECLINED", "detail": "blocked", "timestamp": "2024-01-01", "code": "402"},
-            {"severity": "ERROR", "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
-            {"severity": "WARN", "event": "GEO_ANOMALY", "detail": "location", "timestamp": "2024-01-01", "code": "200"},
+            {"severity": Severity.WARN, "event": "FRAUD_ALERT", "detail": "score low", "timestamp": "2024-01-01", "code": "200"},
+            {"severity": Severity.ERROR, "event": "AUTH_DECLINED", "detail": "blocked", "timestamp": "2024-01-01", "code": "402"},
+            {"severity": Severity.ERROR, "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
+            {"severity": Severity.WARN, "event": "GEO_ANOMALY", "detail": "location", "timestamp": "2024-01-01", "code": "200"},
         ]
         result = analyzer.detect_error_patterns(logs)
         assert "blocked_for_fraud" in result["patterns"]
@@ -236,13 +237,13 @@ class TestPatronesEnElResumenDeLogs:
     """
 
     LOGS = [
-        {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
+        {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
          "timestamp": "2024-01-01", "code": "504"},
-        {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
+        {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
          "timestamp": "2024-01-01", "code": "504"},
-        {"severity": "ERROR", "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
+        {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout",
          "timestamp": "2024-01-01", "code": "504"},
-        {"severity": "WARN", "event": "DOUBLE_CHARGE_DETECT", "detail": "doble cobro",
+        {"severity": Severity.WARN, "event": "DOUBLE_CHARGE_DETECT", "detail": "doble cobro",
          "timestamp": "2024-01-01", "code": "200"},
     ]
 
@@ -257,7 +258,7 @@ class TestPatronesEnElResumenDeLogs:
     def test_sin_patrones_no_agrega_la_linea(self):
         from api.app.services.resolution import ResolutionService
 
-        limpios = [{"severity": "INFO", "event": "PAYMENT_INITIATED", "detail": "ok",
+        limpios = [{"severity": Severity.INFO, "event": "PAYMENT_INITIATED", "detail": "ok",
                     "timestamp": "2024-01-01", "code": "200"}]
         assert "Patrones detectados" not in ResolutionService._summarize_logs(limpios)
 

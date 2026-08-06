@@ -14,13 +14,17 @@ Covers:
 """
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, create_autospec
 from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
 from api.app.llm.client import LLMResult
 from api.app.main import app
 from api.app.data.db import Database
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel
+from api.app.rag.embedder import FastEmbedder
+from api.app.rag.updater import RAGUpdater
+from api.app.rag.retriever import QdrantRetriever
 
 
 @pytest.fixture
@@ -29,7 +33,9 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     db = Database(in_memory_db_path)
 
     mock_qdrant = MagicMock()
-    mock_embedder = MagicMock()
+    # autospec: el doble respeta la FIRMA real de encode(). Con MagicMock pelado,
+    # una llamada con un argumento que ya no existe pasa el test y falla en produccion.
+    mock_embedder = create_autospec(FastEmbedder, instance=True)
     mock_embedder.encode.return_value = [[0.1] * 1024]
 
     from api.app.analysis.analyzer import Analyzer
@@ -37,7 +43,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     from api.app.services.resolution import ResolutionService
     from api.app.services.feedback import FeedbackService
 
-    retriever = MagicMock()
+    retriever = create_autospec(QdrantRetriever, instance=True)
     retriever.search_policies.return_value = []
     retriever.search_similar_cases.return_value = []
 
@@ -45,7 +51,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     report_gen = ReportGenerator()
     mock_tracer = MagicMock()
     mock_tracer.trace.return_value = ""
-    mock_updater = MagicMock()
+    mock_updater = create_autospec(RAGUpdater, instance=True)
     mock_updater.on_case_resolved.return_value = True
 
     resolution_service = ResolutionService(mock_llm_blocker, mock_tracer)
@@ -200,8 +206,8 @@ def test_judge_low_score_not_approved(test_client_routes):
     resp = client.post("/api/analyze/judge", json={
         "resolution": {
             "transaction_id": "TXN-00051",
-            "recommended_action": "REJECT",
-            "risk_level": "HIGH",
+            "recommended_action": ResolutionOutcome.REJECT,
+            "risk_level": RiskLevel.HIGH,
             "confidence": 0.7,
             "justification": "Weak reason",
             "policy_verdicts": [],
@@ -228,7 +234,7 @@ def test_feedback_with_resolution_triggers_auto_index(test_client_routes):
         "transaction_id": "TXN-00051",
         "analyst_decision": "APPROVED",
         "analyst_notes": "Verified",
-        "final_outcome": "REJECT",
+        "final_outcome": ResolutionOutcome.REJECT,
         "judge_score": 9.0,
         "resolution": {"justification": "BLOCKER cripto confirmed"},
     })
@@ -306,15 +312,15 @@ def test_report_html_caches_when_enabled(test_client_routes):
     payload = {
         "transaction": {
             "id": "TXN-00051", "client_id": "CLI-0003", "merchant": "Airbnb",
-            "amount_usd": 2095.90, "date": "2024-09-23", "payment_method": "Cripto",
+            "amount_usd": 2095.90, "date": "2024-09-23", "payment_method": PaymentMethod.CRYPTO,
             "country": "COL", "channel": "POS", "device": "Firefox/Mac",
             "fraud_score": 8, "status": "Contracargo iniciado", "notes": None,
         },
         "resolution": {
-            "transaction_id": "TXN-00051", "recommended_action": "REJECT",
+            "transaction_id": "TXN-00051", "recommended_action": ResolutionOutcome.REJECT,
             "confidence": 0.99, "justification": "BLOCKER cripto",
             "policy_verdicts": [], "precedent_summary": "", "log_summary": "",
-            "risk_level": "BLOCKER", "compensation_applicable": False,
+            "risk_level": RiskLevel.BLOCKER, "compensation_applicable": False,
             "compensation_amount_usd": 0.0, "next_steps": ["Notificar"],
             "requires_hitl": False, "hitl_reason": None,
         },
@@ -330,7 +336,7 @@ def test_report_html_caches_when_enabled(test_client_routes):
                           "avg_transaction_usd": 500, "flags": [], "is_strategic": False},
         "client_profile": {"client_id": "CLI-0003", "total_transactions": 5,
                            "total_chargebacks": 1, "rejected_transactions": 0,
-                           "countries_used": ["COL"], "payment_methods_used": ["Cripto"], "flags": []},
+                           "countries_used": ["COL"], "payment_methods_used": [PaymentMethod.CRYPTO], "flags": []},
         "logs": [],
         "policies_evaluated": [],
         "similar_cases": [],

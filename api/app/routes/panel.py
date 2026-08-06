@@ -20,7 +20,9 @@ from ..dependencies import (
     get_report_generator,
     get_settings,
 )
+from ..data.precomputados import USO_DEMO, casos_demo, informe_demo
 from ..domain.constants import (
+    LLM_CREDIT_EXHAUSTED_MARKER,
     N8N_HEALTHZ_PATH,
     N8N_PING_TIMEOUT_S,
     N8N_TIMEOUT_S,
@@ -64,6 +66,84 @@ def _byok_pipeline(api_key: str, base: PipelineService, settings: Settings, requ
             llm_res.close()
 
 
+def _es_falta_de_saldo(exc: Exception) -> bool:
+    return LLM_CREDIT_EXHAUSTED_MARKER in str(exc).lower()
+
+
+def _hay_que_ahorrar(req: AnalyzeRequest, settings: Settings) -> bool:
+    """Si corresponde servir el caso ya resuelto en vez de gastar en el modelo.
+
+    Quien trae su propia clave paga lo suyo y corre el pipeline completo: el modo
+    demo no le aplica.
+    """
+    return settings.demo_mode and not req.api_key
+
+
+def _respuesta_demo(txn_id: str, settings: Settings) -> HTMLResponse | None:
+    """El informe prearmado del caso. None si ese caso no tiene uno."""
+    html = informe_demo(settings.demo_reports_path, txn_id)
+    if html is None:
+        return None
+
+    logger.warning(
+        "MODO DEMO: %s se responde con su informe prearmado. No se llamo al modelo "
+        "y no se gasto nada. Con una API key propia el pipeline corre completo.",
+        txn_id,
+    )
+    respuesta = HTMLResponse(content=html, status_code=200)
+    respuesta.headers["X-Modo-Demo"] = "true"
+    respuesta.headers["X-Usage-JSON"] = json.dumps(USO_DEMO)
+    return respuesta
+
+
+def _pagina_sin_caso_demo(txn_id: str, settings: Settings) -> str:
+    """Un caso sin informe prearmado, en modo demo: se explica, no se inventa."""
+    casos = ", ".join(f"<code>{c}</code>" for c in casos_demo(settings.demo_reports_path))
+    return _pagina(
+        "Este caso necesita una API key",
+        f"<p>El servidor esta en <b>modo demo</b>: no llama al modelo, para que evaluar "
+        f"el sistema no consuma la cuenta de nadie.</p>"
+        f"<p><b>Dos formas de seguir:</b></p><ul>"
+        f"<li>Los casos {casos} vienen con su analisis ya generado y se ven al instante.</li>"
+        f"<li>Para investigar <code>{txn_id}</code> —o cualquier otro— cargá tu clave de "
+        f"Anthropic en el campo <b>API key</b> del panel: ahí corre el pipeline completo, "
+        f"con tu cuenta.</li></ul>"
+        f"<p>Lo que no cuesta nada sigue disponible igual: consultar transacciones y logs, "
+        f"la busqueda semantica de politicas y precedentes, el riesgo del comercio y el SLA.</p>",
+        txn_id,
+    )
+
+
+def _pagina_de_error(txn_id: str, exc: Exception, settings: Settings) -> str:
+    """La pagina cuando el analisis no pudo correr.
+
+    Un 'error interno, revise los logs' no sirve: quien evalua no tiene los logs.
+    """
+    if _es_falta_de_saldo(exc):
+        return _pagina(
+            "Sin saldo en esa API key",
+            "<p>La clave de Anthropic usada para este analisis se quedo sin credito.</p>"
+            "<p>Con otra clave con saldo, el caso se investiga normalmente.</p>",
+            txn_id,
+        )
+    return _pagina(
+        "No se pudo completar el analisis",
+        "<p>El pipeline se interrumpio. El detalle quedo en los logs del servidor, "
+        "identificado por la transaccion.</p>",
+        txn_id,
+    )
+
+
+def _pagina(titulo: str, cuerpo: str, txn_id: str) -> str:
+    return (
+        '<html><body style="font-family:system-ui,sans-serif;max-width:640px;'
+        'margin:3em auto;padding:0 1.5em;line-height:1.6;color:#1a1a1a">'
+        f'<h2 style="margin-bottom:.2em">{titulo}</h2>'
+        f'<p style="color:#666;margin-top:0">Transaccion: <code>{txn_id}</code></p>'
+        f"{cuerpo}</body></html>"
+    )
+
+
 def _correr_directo(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings) -> HTMLResponse:
     """Ejecuta el pipeline directo y devuelve el informe, o una pagina de error."""
     try:
@@ -74,21 +154,55 @@ def _correr_directo(pipeline: PipelineService, req: AnalyzeRequest, settings: Se
     except Exception as exc:
         logger.error("Direct pipeline failed for %s: %s", req.transaction_id, exc, exc_info=True)
         return HTMLResponse(
-            content=(
-                "<html><body style='font-family:monospace;padding:2em'>"
-                "<h2>Pipeline Error</h2>"
-                f"<p><b>Transaction:</b> {req.transaction_id}</p>"
-                "<p>An internal error occurred. Check server logs for details.</p>"
-                "</body></html>"
-            ),
+            content=_pagina_de_error(req.transaction_id, exc, settings),
             status_code=500,
         )
 
 
+def _sse(step: str, data: dict) -> str:
+    return f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
+
+
 def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
-    """Traduce los eventos del pipeline a lineas SSE."""
-    for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
-        yield f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
+    """Traduce los eventos del pipeline a lineas SSE.
+
+    En modo demo no se ejecuta nada: el caso prearmado sale directo, y el panel
+    lo muestra igual que un analisis real pero con su cartel.
+    """
+    if _hay_que_ahorrar(req, settings):
+        yield from _emitir_demo(req, settings)
+        return
+    try:
+        for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
+            yield _sse(step, data)
+    except Exception as exc:
+        logger.error("Pipeline SSE fallo para %s: %s", req.transaction_id, exc, exc_info=True)
+        mensaje = (
+            "La API key usada se quedo sin saldo. Con otra clave con credito, el caso "
+            "se investiga normalmente."
+            if _es_falta_de_saldo(exc)
+            else "El analisis se interrumpio. Revisar los logs del servidor."
+        )
+        yield _sse("error", {"message": mensaje})
+
+
+def _emitir_demo(req: AnalyzeRequest, settings: Settings):
+    """El caso prearmado, anunciado como tal desde el primer evento."""
+    yield _sse("start", {"transaction_id": req.transaction_id, "demo": True})
+    html = informe_demo(settings.demo_reports_path, req.transaction_id)
+    if html is None:
+        casos = ", ".join(casos_demo(settings.demo_reports_path))
+        yield _sse("error", {"message": (
+            f"Modo demo: solo {casos} vienen con su analisis ya generado. Para investigar "
+            f"{req.transaction_id} cargá tu clave de Anthropic en el campo 'API key' y el "
+            "pipeline corre completo."
+        )})
+        return
+    logger.warning(
+        "MODO DEMO: %s se responde con su informe prearmado. No se llamo al modelo.",
+        req.transaction_id,
+    )
+    yield _sse("done", {"html": html, "usage": USO_DEMO})
 
 
 @router.get("/panel", response_class=HTMLResponse, include_in_schema=False)
@@ -167,6 +281,15 @@ async def panel_analyze(
        n8n returns raw JSON data; the panel applies the HTML template locally.
     2. If n8n is unavailable or direct=true, use the direct FastAPI pipeline.
     """
+    # Modo demo: el caso ya resuelto sale sin pasar por el modelo ni por n8n.
+    if _hay_que_ahorrar(req, settings):
+        demo = _respuesta_demo(req.transaction_id, settings)
+        if demo is not None:
+            return demo
+        return HTMLResponse(
+            content=_pagina_sin_caso_demo(req.transaction_id, settings), status_code=200
+        )
+
     if not direct:
         html = await _try_n8n(req, settings, report_gen, n8n_test, timeout_s, n8n_base_url)
         if html is not None:

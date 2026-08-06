@@ -1,8 +1,8 @@
 """Unit tests for ResolutionService guardrails and deterministic outcome."""
 
-import pytest
 from api.app.domain.context import CaseContext
 from api.app.services.resolution import ResolutionService
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
 
 
 class TestDetectDivergence:
@@ -13,41 +13,41 @@ class TestDetectDivergence:
     """
 
     BLOCKER_VERDICTS = [
-        {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+        {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO},
     ]
     FAIL_VERDICTS = [
-        {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
-        {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio"},
+        {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
+        {"policy_code": "POL-CB-004", "verdict": VerdictType.FAIL, "reasoning": "CB ratio"},
     ]
 
     def test_approve_con_blocker_queda_registrado(self):
-        propuesta = {"recommended_action": "APPROVE", "risk_level": "MEDIUM"}
-        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.MEDIUM}
+        outcome = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
         warnings = ResolutionService._detect_divergence(
             propuesta, outcome, self.BLOCKER_VERDICTS,
         )
         assert len(warnings) == 1
-        assert "APPROVE" in warnings[0]
-        assert "BLOCKER" in warnings[0]
+        assert ResolutionOutcome.APPROVE in warnings[0]
+        assert VerdictType.BLOCKER in warnings[0]
         assert "alucinacion" in warnings[0]
 
     def test_reject_con_blocker_es_coherente(self):
-        propuesta = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
-        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        propuesta = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
+        outcome = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
         warnings = ResolutionService._detect_divergence(
             propuesta, outcome, self.BLOCKER_VERDICTS,
         )
         assert warnings == []
 
     def test_approve_sin_blocker_es_coherente(self):
-        propuesta = {"recommended_action": "APPROVE", "risk_level": "LOW"}
-        outcome = {"recommended_action": "APPROVE", "risk_level": "LOW"}
-        verdicts = [{"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "ok"}]
+        propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
+        outcome = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
+        verdicts = [{"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "ok"}]
         assert ResolutionService._detect_divergence(propuesta, outcome, verdicts) == []
 
     def test_riesgo_blocker_inventado_queda_registrado(self):
-        propuesta = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
-        outcome = {"recommended_action": "PENDING_HITL", "risk_level": "HIGH"}
+        propuesta = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
+        outcome = {"recommended_action": ResolutionOutcome.PENDING_HITL, "risk_level": RiskLevel.HIGH}
         warnings = ResolutionService._detect_divergence(
             propuesta, outcome, self.FAIL_VERDICTS,
         )
@@ -55,8 +55,8 @@ class TestDetectDivergence:
         assert any("corregido a HIGH" in w for w in warnings)
 
     def test_reject_sin_blocker_queda_registrado(self):
-        propuesta = {"recommended_action": "REJECT", "risk_level": "HIGH"}
-        outcome = {"recommended_action": "PENDING_HITL", "risk_level": "HIGH"}
+        propuesta = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.HIGH}
+        outcome = {"recommended_action": ResolutionOutcome.PENDING_HITL, "risk_level": RiskLevel.HIGH}
         warnings = ResolutionService._detect_divergence(
             propuesta, outcome, self.FAIL_VERDICTS,
         )
@@ -64,16 +64,16 @@ class TestDetectDivergence:
         assert any("corregido a PENDING_HITL" in w for w in warnings)
 
     def test_sin_veredictos_no_inventa_advertencias(self):
-        propuesta = {"recommended_action": "APPROVE", "risk_level": "LOW"}
-        outcome = {"recommended_action": "APPROVE", "risk_level": "LOW"}
+        propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
+        outcome = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
         assert ResolutionService._detect_divergence(propuesta, outcome, []) == []
 
     def test_no_muta_la_propuesta(self):
         """Detectar no es corregir: de eso se encarga el override."""
-        propuesta = {"recommended_action": "APPROVE", "risk_level": "MEDIUM"}
-        outcome = {"recommended_action": "REJECT", "risk_level": "BLOCKER"}
+        propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.MEDIUM}
+        outcome = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
         ResolutionService._detect_divergence(propuesta, outcome, self.BLOCKER_VERDICTS)
-        assert propuesta == {"recommended_action": "APPROVE", "risk_level": "MEDIUM"}
+        assert propuesta == {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.MEDIUM}
 
 
 class TestGuardrailCompensation:
@@ -81,7 +81,7 @@ class TestGuardrailCompensation:
 
     def test_excessive_compensation_warning(self):
         resolution = {
-            "recommended_action": "APPROVE",
+            "recommended_action": ResolutionOutcome.APPROVE,
             "compensation_amount_usd": 150.0,
             "policy_verdicts": [],
         }
@@ -91,7 +91,7 @@ class TestGuardrailCompensation:
 
     def test_normal_compensation_no_warning(self):
         resolution = {
-            "recommended_action": "APPROVE",
+            "recommended_action": ResolutionOutcome.APPROVE,
             "compensation_amount_usd": 15.0,
             "policy_verdicts": [],
         }
@@ -105,11 +105,11 @@ class TestGuardrailExcessiveConfidence:
 
     def test_high_confidence_with_multiple_fails(self):
         resolution = {
-            "recommended_action": "REJECT",
+            "recommended_action": ResolutionOutcome.REJECT,
             "confidence": 0.98,
             "policy_verdicts": [
-                {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "score bajo"},
-                {"policy_code": "POL-FRD-002", "verdict": "FAIL", "reasoning": "geo anomaly"},
+                {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "score bajo"},
+                {"policy_code": "POL-FRD-002", "verdict": VerdictType.FAIL, "reasoning": "geo anomaly"},
             ],
         }
         tx = {"amount_usd": 100.0}
@@ -118,11 +118,11 @@ class TestGuardrailExcessiveConfidence:
 
     def test_normal_confidence_no_warning(self):
         resolution = {
-            "recommended_action": "REJECT",
+            "recommended_action": ResolutionOutcome.REJECT,
             "confidence": 0.85,
             "policy_verdicts": [
-                {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "score bajo"},
-                {"policy_code": "POL-FRD-002", "verdict": "FAIL", "reasoning": "geo anomaly"},
+                {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "score bajo"},
+                {"policy_code": "POL-FRD-002", "verdict": VerdictType.FAIL, "reasoning": "geo anomaly"},
             ],
         }
         tx = {"amount_usd": 100.0}
@@ -135,123 +135,123 @@ class TestDetermineOutcome:
 
     def test_blocker_verdict_returns_reject(self):
         verdicts = [
-            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+            {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO},
+            {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
         ]
         tx = {"fraud_score": 8}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "REJECT"
-        assert outcome["risk_level"] == "BLOCKER"
+        assert outcome["recommended_action"] == ResolutionOutcome.REJECT
+        assert outcome["risk_level"] == RiskLevel.BLOCKER
         assert outcome["requires_hitl"] is False
         assert outcome["hitl_reason"] is None
 
     def test_multiple_fails_returns_pending_hitl_high(self):
         verdicts = [
-            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
-            {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio alto"},
+            {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
+            {"policy_code": "POL-CB-004", "verdict": VerdictType.FAIL, "reasoning": "CB ratio alto"},
         ]
         tx = {"fraud_score": 25}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "PENDING_HITL"
-        assert outcome["risk_level"] == "HIGH"
+        assert outcome["recommended_action"] == ResolutionOutcome.PENDING_HITL
+        assert outcome["risk_level"] == RiskLevel.HIGH
         assert outcome["requires_hitl"] is True
         assert "2 violacion" in outcome["hitl_reason"]
 
     def test_single_fail_returns_pending_hitl_medium(self):
         verdicts = [
-            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
-            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+            {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "SLA ok"},
         ]
         tx = {"fraud_score": 25}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "PENDING_HITL"
-        assert outcome["risk_level"] == "MEDIUM"
+        assert outcome["recommended_action"] == ResolutionOutcome.PENDING_HITL
+        assert outcome["risk_level"] == RiskLevel.MEDIUM
         assert outcome["requires_hitl"] is True
 
     def test_single_fail_with_low_fraud_score_returns_high(self):
         verdicts = [
-            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+            {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
         ]
         tx = {"fraud_score": 8}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "PENDING_HITL"
-        assert outcome["risk_level"] == "HIGH"
+        assert outcome["recommended_action"] == ResolutionOutcome.PENDING_HITL
+        assert outcome["risk_level"] == RiskLevel.HIGH
 
     def test_all_pass_returns_approve_low(self):
         verdicts = [
-            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
-            {"policy_code": "POL-CB-001", "verdict": "PASS", "reasoning": "Doc ok"},
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "SLA ok"},
+            {"policy_code": "POL-CB-001", "verdict": VerdictType.PASS, "reasoning": "Doc ok"},
         ]
         tx = {"fraud_score": 85}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "APPROVE"
-        assert outcome["risk_level"] == "LOW"
+        assert outcome["recommended_action"] == ResolutionOutcome.APPROVE
+        assert outcome["risk_level"] == RiskLevel.LOW
         assert outcome["requires_hitl"] is False
         assert outcome["hitl_reason"] is None
 
     def test_all_pass_medium_fraud_score_returns_approve_medium(self):
         """fraud_score between 15-30 with no FAILs → APPROVE but risk MEDIUM."""
         verdicts = [
-            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "SLA ok"},
         ]
         tx = {"fraud_score": 20}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "APPROVE"
-        assert outcome["risk_level"] == "MEDIUM"
+        assert outcome["recommended_action"] == ResolutionOutcome.APPROVE
+        assert outcome["risk_level"] == RiskLevel.MEDIUM
 
     def test_no_fraud_score_uses_default(self):
         """Missing fraud_score defaults to 50 (safe)."""
         verdicts = [
-            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "SLA ok"},
         ]
         tx = {}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "APPROVE"
-        assert outcome["risk_level"] == "LOW"
+        assert outcome["recommended_action"] == ResolutionOutcome.APPROVE
+        assert outcome["risk_level"] == RiskLevel.LOW
 
     def test_warning_verdicts_treated_as_pass(self):
         """WARNING verdicts don't count as failures."""
         verdicts = [
-            {"policy_code": "POL-SLA-002", "verdict": "WARNING", "reasoning": "SLA close"},
-            {"policy_code": "POL-CB-001", "verdict": "PASS", "reasoning": "Doc ok"},
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.WARNING, "reasoning": "SLA close"},
+            {"policy_code": "POL-CB-001", "verdict": VerdictType.PASS, "reasoning": "Doc ok"},
         ]
         tx = {"fraud_score": 50}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "APPROVE"
-        assert outcome["risk_level"] == "LOW"
+        assert outcome["recommended_action"] == ResolutionOutcome.APPROVE
+        assert outcome["risk_level"] == RiskLevel.LOW
 
     def test_requires_human_review_forces_pending_hitl(self):
         """Even without FAILs, requires_human_review=true → PENDING_HITL."""
         verdicts = [
-            {"policy_code": "POL-CB-005", "verdict": "WARNING", "reasoning": "Needs review",
+            {"policy_code": "POL-CB-005", "verdict": VerdictType.WARNING, "reasoning": "Needs review",
              "requires_human_review": True},
-            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok"},
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "SLA ok"},
         ]
         tx = {"fraud_score": 85}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "PENDING_HITL"
+        assert outcome["recommended_action"] == ResolutionOutcome.PENDING_HITL
         assert outcome["requires_hitl"] is True
         assert "revision humana" in outcome["hitl_reason"]
 
     def test_requires_human_review_false_no_effect(self):
         """requires_human_review=false doesn't force PENDING_HITL."""
         verdicts = [
-            {"policy_code": "POL-SLA-002", "verdict": "PASS", "reasoning": "SLA ok",
+            {"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "SLA ok",
              "requires_human_review": False},
         ]
         tx = {"fraud_score": 85}
         outcome = ResolutionService._determine_outcome(verdicts, tx)
 
-        assert outcome["recommended_action"] == "APPROVE"
+        assert outcome["recommended_action"] == ResolutionOutcome.APPROVE
 
 
 class TestSanitizeVerdicts:
@@ -259,40 +259,40 @@ class TestSanitizeVerdicts:
 
     def test_non_whitelisted_blocker_downgraded_to_fail(self):
         verdicts = [
-            {"policy_code": "POL-CB-004", "verdict": "BLOCKER", "reasoning": "Suspended"},
+            {"policy_code": "POL-CB-004", "verdict": VerdictType.BLOCKER, "reasoning": "Suspended"},
         ]
         result = ResolutionService._sanitize_verdicts(verdicts)
 
-        assert result[0]["verdict"] == "FAIL"
+        assert result[0]["verdict"] == VerdictType.FAIL
         assert result[0]["requires_human_review"] is True
 
     def test_whitelisted_blocker_preserved(self):
         verdicts = [
-            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
+            {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO},
         ]
         result = ResolutionService._sanitize_verdicts(verdicts)
 
-        assert result[0]["verdict"] == "BLOCKER"
+        assert result[0]["verdict"] == VerdictType.BLOCKER
 
     def test_fail_verdicts_unchanged(self):
         verdicts = [
-            {"policy_code": "POL-CB-004", "verdict": "FAIL", "reasoning": "CB ratio alto"},
+            {"policy_code": "POL-CB-004", "verdict": VerdictType.FAIL, "reasoning": "CB ratio alto"},
         ]
         result = ResolutionService._sanitize_verdicts(verdicts)
 
-        assert result[0]["verdict"] == "FAIL"
+        assert result[0]["verdict"] == VerdictType.FAIL
 
     def test_mixed_verdicts_only_invalid_blockers_downgraded(self):
         verdicts = [
-            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Cripto"},
-            {"policy_code": "POL-CB-004", "verdict": "BLOCKER", "reasoning": "Suspended"},
-            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "Score bajo"},
+            {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO},
+            {"policy_code": "POL-CB-004", "verdict": VerdictType.BLOCKER, "reasoning": "Suspended"},
+            {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
         ]
         result = ResolutionService._sanitize_verdicts(verdicts)
 
-        assert result[0]["verdict"] == "BLOCKER"  # POL-EXC-003 preserved
-        assert result[1]["verdict"] == "FAIL"      # POL-CB-004 downgraded
-        assert result[2]["verdict"] == "FAIL"      # unchanged
+        assert result[0]["verdict"] == VerdictType.BLOCKER  # POL-EXC-003 preserved
+        assert result[1]["verdict"] == VerdictType.FAIL      # POL-CB-004 downgraded
+        assert result[2]["verdict"] == VerdictType.FAIL      # unchanged
 
 
 class TestBuildPrecedentSummary:
@@ -359,7 +359,7 @@ class TestGuardrailsEnElPipelineCompleto:
 
     TX = {
         "id": "TXN-00051", "merchant": "Airbnb", "amount_usd": 100.0,
-        "fraud_score": 8, "country": "COL", "payment_method": "Cripto", "channel": "POS",
+        "fraud_score": 8, "country": "COL", "payment_method": PaymentMethod.CRYPTO, "channel": "POS",
     }
     POLICIES = [{
         "code": "POL-EXC-003", "name": "Exclusion cripto", "category": "EXCEPCION",
@@ -368,7 +368,7 @@ class TestGuardrailsEnElPipelineCompleto:
     }]
 
     @staticmethod
-    def _servicio(sintesis: dict, veredicto: str = "BLOCKER"):
+    def _servicio(sintesis: dict, veredicto: str = VerdictType.BLOCKER):
         import json
 
         from api.app.llm.client import LLMResult
@@ -389,7 +389,7 @@ class TestGuardrailsEnElPipelineCompleto:
 
         return ResolutionService(llm=LLMGuionado(), tracer=NoOpTracer())
 
-    def _resolver(self, sintesis: dict, veredicto: str = "BLOCKER") -> dict:
+    def _resolver(self, sintesis: dict, veredicto: str = VerdictType.BLOCKER) -> dict:
         return self._servicio(sintesis, veredicto).resolve(
             CaseContext(
                 transaction=self.TX, policies=self.POLICIES,
@@ -399,29 +399,29 @@ class TestGuardrailsEnElPipelineCompleto:
 
     def test_approve_alucinado_sobre_blocker_queda_registrado(self):
         r = self._resolver({
-            "recommended_action": "APPROVE", "risk_level": "LOW",
+            "recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW,
             "confidence": 0.99, "justification": "todo bien",
         })
-        assert r["recommended_action"] == "REJECT"
-        assert r["risk_level"] == "BLOCKER"
-        assert any("APPROVE" in w and "alucinacion" in w for w in r["guardrail_warnings"]), (
+        assert r["recommended_action"] == ResolutionOutcome.REJECT
+        assert r["risk_level"] == RiskLevel.BLOCKER
+        assert any(ResolutionOutcome.APPROVE in w and "alucinacion" in w for w in r["guardrail_warnings"]), (
             "la alucinacion se corrigio pero no quedo registrada"
         )
 
     def test_reject_inventado_sin_blocker_queda_registrado(self):
         r = self._resolver(
-            {"recommended_action": "REJECT", "risk_level": "BLOCKER",
+            {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER,
              "confidence": 0.9, "justification": "x"},
-            veredicto="FAIL",
+            veredicto=VerdictType.FAIL,
         )
-        assert r["recommended_action"] == "PENDING_HITL"
+        assert r["recommended_action"] == ResolutionOutcome.PENDING_HITL
         assert any("REJECT sin veredictos BLOCKER" in w for w in r["guardrail_warnings"])
         assert any("risk_level=BLOCKER" in w for w in r["guardrail_warnings"])
 
     def test_propuesta_coherente_no_genera_ruido(self):
         r = self._resolver({
-            "recommended_action": "REJECT", "risk_level": "BLOCKER",
+            "recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER,
             "confidence": 0.8, "justification": "cripto irreversible",
         })
-        assert r["recommended_action"] == "REJECT"
+        assert r["recommended_action"] == ResolutionOutcome.REJECT
         assert r["guardrail_warnings"] == []

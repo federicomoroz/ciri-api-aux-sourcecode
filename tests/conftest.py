@@ -1,6 +1,7 @@
 import pytest
 
 from api.app.llm.client import LLMResult
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 
 class MockLLMClient:
@@ -33,7 +34,7 @@ def sample_transaction_blocker() -> dict:
         "merchant": "Airbnb",
         "amount_usd": 2095.90,
         "date": "2024-09-23",
-        "payment_method": "Cripto",
+        "payment_method": PaymentMethod.CRYPTO,
         "country": "COL",
         "channel": "POS",
         "device": "Firefox/Mac",
@@ -52,7 +53,7 @@ def sample_transaction_hitl() -> dict:
         "merchant": "Airbnb",
         "amount_usd": 2055.76,
         "date": "2024-07-15",
-        "payment_method": "Credito Visa",
+        "payment_method": PaymentMethod.CREDIT_VISA,
         "country": "BRA",
         "channel": "Web",
         "device": "Chrome/Win",
@@ -73,7 +74,7 @@ def sample_logs() -> list[dict]:
             "service": "IntegrationBus",
             "code": "408",
             "detail": "Timeout al contactar comercio",
-            "severity": "ERROR",
+            "severity": Severity.ERROR,
         },
         {
             "timestamp": "2024-09-23 10:01:00",
@@ -82,7 +83,7 @@ def sample_logs() -> list[dict]:
             "service": "IntegrationBus",
             "code": "408",
             "detail": "Segundo intento fallido",
-            "severity": "ERROR",
+            "severity": Severity.ERROR,
         },
         {
             "timestamp": "2024-09-23 10:02:00",
@@ -91,7 +92,7 @@ def sample_logs() -> list[dict]:
             "service": "FraudEngine",
             "code": "200",
             "detail": "Score 8/100 — alto riesgo",
-            "severity": "WARN",
+            "severity": Severity.WARN,
         },
         {
             "timestamp": "2024-09-23 10:03:00",
@@ -100,7 +101,7 @@ def sample_logs() -> list[dict]:
             "service": "AuthService",
             "code": "401",
             "detail": "Sesion expirada",
-            "severity": "WARN",
+            "severity": Severity.WARN,
         },
         {
             "timestamp": "2024-09-23 10:04:00",
@@ -109,7 +110,7 @@ def sample_logs() -> list[dict]:
             "service": "NotifyService",
             "code": "500",
             "detail": "Error al notificar al comercio",
-            "severity": "ERROR",
+            "severity": Severity.ERROR,
         },
     ]
 
@@ -149,16 +150,16 @@ def mock_llm_blocker():
     """MockLLMClient configured for BLOCKER scenario responses."""
     return MockLLMClient(responses={
         "auditor de cumplimiento": (
-            '[{"policy_code":"POL-EXC-003","verdict":"BLOCKER",'
+            f'[{{"policy_code":"POL-EXC-003","verdict":"{VerdictType.BLOCKER}",'
             '"reasoning":"Pago con Cripto — contracargo imposible segun POL-EXC-003","requires_human_review":false},'
-            '{"policy_code":"POL-FRD-001","verdict":"FAIL",'
+            f'{{"policy_code":"POL-FRD-001","verdict":"{VerdictType.FAIL}",'
             '"reasoning":"Score 8 inferior al minimo de 30","requires_human_review":false}]'
         ),
         "analista senior": (
-            '{"transaction_id":"TXN-00051","recommended_action":"REJECT","confidence":0.99,'
+            f'{{"transaction_id":"TXN-00051","recommended_action":"{ResolutionOutcome.REJECT}","confidence":0.99,'
             '"justification":"BLOCKER por POL-EXC-003 y FAIL por POL-FRD-001 (score=8).","policy_verdicts":[],'
             '"precedent_summary":"Sin precedentes relevantes.","log_summary":"MERCHANT_NO_RESPONSE x2, FRAUD_ALERT.",'
-            '"risk_level":"BLOCKER","compensation_applicable":false,"compensation_amount_usd":0.0,'
+            f'"risk_level":"{RiskLevel.BLOCKER}","compensation_applicable":false,"compensation_amount_usd":0.0,'
             '"next_steps":["Notificar al cliente que las transacciones cripto no son reversibles",'
             '"Cerrar el caso con resolucion: a favor del comercio"],'
             '"requires_hitl":false,"hitl_reason":null}'

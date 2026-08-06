@@ -6,7 +6,7 @@ Covers:
 - Service orchestration: LLM calls, log summarization, guardrails
 """
 
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock, create_autospec
 
 import pytest
 
@@ -15,8 +15,6 @@ from api.app.domain.constants import (
     FALLBACK_TX_ID,
     FEEDBACK_CASE_ID_PREFIX,
     FEEDBACK_STATUS_RECORDED,
-    JUDGE_APPROVAL_THRESHOLD,
-    JUDGE_NEEDS_REVIEW_THRESHOLD,
     TRACE_FEEDBACK,
     TRACE_FEEDBACK_SCORE,
     TRACE_JUDGE,
@@ -25,6 +23,9 @@ from api.app.domain.constants import (
 from api.app.services.feedback import FeedbackService
 from api.app.domain.context import CaseContext
 from api.app.services.resolution import ResolutionService
+from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
+from api.app.rag.updater import RAGUpdater
+from api.app.data.db import Database
 
 
 # ---- Fixtures ----
@@ -43,14 +44,14 @@ def mock_llm_resolve():
     llm.complete.side_effect = [
         # First call: policy eval
         LLMResult(
-            text='[{"policy_code":"POL-EXC-003","verdict":"BLOCKER","reasoning":"Cripto","requires_human_review":false}]',
+            text=f'[{{"policy_code":"POL-EXC-003","verdict":"{VerdictType.BLOCKER}","reasoning":"Cripto","requires_human_review":false}}]',
             input_tokens=500, output_tokens=100,
         ),
         # Second call: resolution synthesis
         LLMResult(
-            text='{"transaction_id":"TXN-00051","recommended_action":"REJECT","confidence":0.99,'
+            text=f'{{"transaction_id":"TXN-00051","recommended_action":"{ResolutionOutcome.REJECT}","confidence":0.99,'
             '"justification":"BLOCKER cripto","policy_verdicts":[],'
-            '"precedent_summary":"","log_summary":"","risk_level":"BLOCKER",'
+            f'"precedent_summary":"","log_summary":"","risk_level":"{RiskLevel.BLOCKER}",'
             '"compensation_applicable":false,"compensation_amount_usd":0.0,'
             '"next_steps":["Notificar"],"requires_hitl":false,"hitl_reason":null}',
             input_tokens=1200, output_tokens=300,
@@ -124,7 +125,7 @@ class TestResolutionServiceJudge:
     def test_judge_calls_tracer_trace(self, judge_service, mock_tracer):
         """Axis 7: judge() must create a trace with TRACE_JUDGE name."""
         judge_service.judge(
-            resolution={"recommended_action": "REJECT", "confidence": 0.99},
+            resolution={"recommended_action": ResolutionOutcome.REJECT, "confidence": 0.99},
             full_context={"transaction": {"id": "TXN-00051"}},
         )
         mock_tracer.trace.assert_called_once()
@@ -134,7 +135,7 @@ class TestResolutionServiceJudge:
     def test_judge_calls_tracer_score(self, judge_service, mock_tracer):
         """Axis 7: judge() must call tracer.score() with the judge score."""
         judge_service.judge(
-            resolution={"recommended_action": "REJECT", "confidence": 0.99},
+            resolution={"recommended_action": ResolutionOutcome.REJECT, "confidence": 0.99},
             full_context={"transaction": {"id": "TXN-00051"}},
         )
         mock_tracer.score.assert_called_once_with("trace-123", "judge_score", 9.2)
@@ -142,7 +143,7 @@ class TestResolutionServiceJudge:
     def test_judge_returns_overall_score(self, judge_service):
         """judge() must return overall_score and approved fields."""
         result = judge_service.judge(
-            resolution={"recommended_action": "REJECT"},
+            resolution={"recommended_action": ResolutionOutcome.REJECT},
             full_context={"transaction": {"id": "TXN-00051"}},
         )
         assert result["overall_score"] == 9.2
@@ -160,7 +161,7 @@ class TestResolutionServiceJudge:
         )
         service = ResolutionService(llm, mock_tracer)
         result = service.judge(
-            resolution={"recommended_action": "PENDING_HITL"},
+            resolution={"recommended_action": ResolutionOutcome.PENDING_HITL},
             full_context={"transaction": {"id": "TXN-00042"}},
         )
         assert result["overall_score"] == 6.5
@@ -190,13 +191,13 @@ class TestFeedbackService:
 
     @pytest.fixture
     def mock_db(self):
-        db = MagicMock()
+        db = create_autospec(Database, instance=True)
         db.save_feedback.return_value = 42
         return db
 
     @pytest.fixture
     def mock_updater(self):
-        updater = MagicMock()
+        updater = create_autospec(RAGUpdater, instance=True)
         updater.on_case_resolved.return_value = False
         return updater
 
@@ -210,7 +211,7 @@ class TestFeedbackService:
             transaction_id="TXN-00051",
             analyst_decision="APPROVED",
             analyst_notes="Verified.",
-            final_outcome="REJECT",
+            final_outcome=ResolutionOutcome.REJECT,
             judge_score=9.0,
             resolution=None,
         )
@@ -224,7 +225,7 @@ class TestFeedbackService:
             transaction_id="TXN-00051",
             analyst_decision="APPROVED",
             analyst_notes=None,
-            final_outcome="REJECT",
+            final_outcome=ResolutionOutcome.REJECT,
             judge_score=8.5,
             resolution=None,
         )
@@ -239,7 +240,7 @@ class TestFeedbackService:
             transaction_id="TXN-00051",
             analyst_decision="APPROVED",
             analyst_notes="Good case",
-            final_outcome="REJECT",
+            final_outcome=ResolutionOutcome.REJECT,
             judge_score=9.0,
             resolution={"justification": "BLOCKER cripto"},
         )
@@ -254,7 +255,7 @@ class TestFeedbackService:
             transaction_id="TXN-00051",
             analyst_decision="REJECTED",
             analyst_notes=None,
-            final_outcome="REJECT",
+            final_outcome=ResolutionOutcome.REJECT,
             judge_score=3.0,
             resolution=None,
         )
@@ -266,7 +267,7 @@ class TestFeedbackService:
             transaction_id="TXN-00051",
             analyst_decision="REJECTED",
             analyst_notes=None,
-            final_outcome="REJECT",
+            final_outcome=ResolutionOutcome.REJECT,
             judge_score=4.0,
             resolution=None,
         )
@@ -278,7 +279,7 @@ class TestFeedbackService:
             transaction_id="TXN-00051",
             analyst_decision="APPROVED",
             analyst_notes=None,
-            final_outcome="REJECT",
+            final_outcome=ResolutionOutcome.REJECT,
             judge_score=8.0,
             resolution=None,
         )

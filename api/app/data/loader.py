@@ -246,9 +246,9 @@ def _insertar(conn: sqlite3.Connection, data: dict) -> None:
     conn.executemany(
         "INSERT INTO logs (timestamp, transaction_id, event, service, code, detail, severity) VALUES (?,?,?,?,?,?,?)",
         [(
-            l["timestamp"], l["transaction_id"], l["event"],
-            l["service"], l["code"], l["detail"], l["severity"],
-        ) for l in data["logs"]],
+            log["timestamp"], log["transaction_id"], log["event"],
+            log["service"], log["code"], log["detail"], log["severity"],
+        ) for log in data["logs"]],
     )
 
 

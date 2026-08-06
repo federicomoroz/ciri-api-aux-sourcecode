@@ -12,6 +12,7 @@ import json
 
 import httpx
 import pytest
+from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, Severity, VerdictType
 
 
 # ──────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ class TestTransactions:
         assert r.status_code == 200
         tx = r.json()
         assert tx["id"] == "TXN-00051"
-        assert tx["payment_method"] == "Cripto"
+        assert tx["payment_method"] == PaymentMethod.CRYPTO
         assert int(tx["fraud_score"]) == 8
 
     def test_get_transaction_not_found(self, client: httpx.Client):
@@ -92,7 +93,7 @@ class TestPolicies:
         r = client.get("/api/policies/search", params={
             "motivo": "fraude con tarjeta",
             "channel": "Web",
-            "payment_method": "Credito Visa",
+            "payment_method": PaymentMethod.CREDIT_VISA,
             "fraud_score": 8,
         })
         assert r.status_code == 200
@@ -114,7 +115,7 @@ class TestCases:
             "motivo": "No reconoce la compra",
             "merchant": "Airbnb",
             "amount": 2095.9,
-            "payment_method": "Cripto",
+            "payment_method": PaymentMethod.CRYPTO,
             "country": "COL",
             "fraud_score": 8,
         })
@@ -211,8 +212,8 @@ class TestFullPipeline:
         """TXN-00051 is crypto with fraud_score=8 — must be REJECT/BLOCKER."""
         resolved = [e for e in pipeline_events if e["step"] == "resolved"]
         if resolved:
-            assert resolved[0]["action"] == "REJECT"
-            assert resolved[0]["risk_level"] == "BLOCKER"
+            assert resolved[0]["action"] == ResolutionOutcome.REJECT
+            assert resolved[0]["risk_level"] == RiskLevel.BLOCKER
 
     def test_judged_score_above_7(self, pipeline_events: list[dict]):
         """A correct BLOCKER resolution should score well."""
@@ -298,10 +299,10 @@ class TestResolveEndpoint:
 
     def test_blocker_crypto_is_reject(self, resolution: dict):
         """TXN-00051 is crypto with fraud_score=8 — must be REJECT."""
-        assert resolution["recommended_action"] == "REJECT"
+        assert resolution["recommended_action"] == ResolutionOutcome.REJECT
 
     def test_blocker_risk_level(self, resolution: dict):
-        assert resolution["risk_level"] == "BLOCKER"
+        assert resolution["risk_level"] == RiskLevel.BLOCKER
 
     def test_policy_verdicts_not_empty(self, resolution: dict):
         verdicts = resolution["policy_verdicts"]
@@ -313,7 +314,7 @@ class TestResolveEndpoint:
     def test_has_blocker_verdict(self, resolution: dict):
         """At least one BLOCKER verdict (POL-EXC-003 for crypto)."""
         verdicts = resolution["policy_verdicts"]
-        blockers = [v for v in verdicts if v["verdict"] == "BLOCKER"]
+        blockers = [v for v in verdicts if v["verdict"] == VerdictType.BLOCKER]
         assert len(blockers) >= 1
 
     def test_guardrail_warnings_is_list(self, resolution: dict):
@@ -413,7 +414,7 @@ class TestReport:
                 "merchant": "Airbnb",
                 "amount_usd": 2095.9,
                 "date": "2024-09-23",
-                "payment_method": "Cripto",
+                "payment_method": PaymentMethod.CRYPTO,
                 "country": "COL",
                 "channel": "POS",
                 "device": "Firefox/Mac",
@@ -423,12 +424,12 @@ class TestReport:
             },
             "resolution": {
                 "transaction_id": "TXN-00051",
-                "recommended_action": "REJECT",
-                "risk_level": "BLOCKER",
+                "recommended_action": ResolutionOutcome.REJECT,
+                "risk_level": RiskLevel.BLOCKER,
                 "justification": "Crypto payments are irreversible — POL-EXC-003 blocks this.",
                 "confidence": 0.95,
                 "policy_verdicts": [
-                    {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "Crypto"},
+                    {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": "Crypto"},
                 ],
                 "precedent_summary": "No similar precedents.",
                 "log_summary": "1 ERROR: High fraud score detected",
@@ -462,7 +463,7 @@ class TestReport:
                 "total_chargebacks": 0,
                 "rejected_transactions": 0,
                 "countries_used": ["COL"],
-                "payment_methods_used": ["Cripto"],
+                "payment_methods_used": [PaymentMethod.CRYPTO],
                 "flags": [],
             },
             "logs": [
@@ -474,7 +475,7 @@ class TestReport:
                     "service": "fraud_detection",
                     "code": "FRAUD_001",
                     "detail": "High fraud score detected",
-                    "severity": "ERROR",
+                    "severity": Severity.ERROR,
                 },
             ],
             "policies_evaluated": [
@@ -509,7 +510,7 @@ class TestAlerts:
     def test_post_alert(self, client: httpx.Client):
         r = client.post("/api/alerts/", json={
             "event_type": "e2e_test",
-            "severity": "INFO",
+            "severity": Severity.INFO,
             "message": "E2E test alert",
             "source": "pytest",
         })
