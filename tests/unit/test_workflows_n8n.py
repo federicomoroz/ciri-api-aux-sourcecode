@@ -76,10 +76,22 @@ class TestHITL:
         assert "_feedback_payload" in fb["parameters"]["jsonBody"]
 
     def test_un_caso_sin_revisar_no_se_vuelve_precedente(self):
+        """La regla, no la linea exacta.
+
+        Antes esto fijaba `huboAnalista ? resolution : null` como texto. Cuando
+        se sumo la condicion de MODIFY —una resolucion aprobada con cambios que
+        el sistema no tiene tampoco puede indexarse— el test fallo por una
+        reescritura que respetaba lo que el test defiende. Un test que se rompe
+        cuando el codigo mejora esta fijando la implementacion, no la regla.
+        """
         codigo = nodo(cargar(ORQUESTADOR), "Procesar Respuesta HITL")["parameters"]["jsCode"]
-        assert "huboAnalista ? resolution : null" in codigo, (
+        envio = next(
+            linea for linea in codigo.splitlines()
+            if linea.strip().startswith("resolution:")
+        )
+        assert "huboAnalista" in envio and "null" in envio, (
             "un caso que nadie reviso no puede convertirse en el ejemplo con el "
-            "que se resuelve el proximo"
+            f"que se resuelve el proximo — se manda: {envio.strip()}"
         )
 
 
@@ -451,3 +463,69 @@ class TestNingunCaminoContestaVacio:
         """Se sirve desde n8n, que ademas lo sandboxea: un CDN no cargaria."""
         cuerpo = nodo(cargar(ORQUESTADOR), "Responder — Requiere Aprobación")["parameters"]["responseBody"]
         assert "http://" not in cuerpo and "https://" not in cuerpo
+
+
+class TestElCanvasNoMandaFechasDelReclamo:
+    """El arreglo del SLA fue al llamador y no al contrato.
+
+    `PipelineService` dejo de caer a la fecha de la compra, pero `routes/sla.py`
+    seguia aceptando `case_open_date` del llamador y el nodo `Verificar SLA`
+    seguia mandando `$('Obtener Transaccion').first().json.date`. Resultado: el
+    mismo caso daba «en plazo» por el panel y «489 dias + USD 15» por el
+    orquestador — el camino que la consigna pide.
+
+    El test que debia atraparlo afirmaba en su docstring que «las fechas las
+    resuelve la API, no el canvas» y solo verificaba que viajara el id.
+    """
+
+    def test_verificar_sla_no_manda_case_open_date(self):
+        cuerpo = nodo(cargar(ORQUESTADOR), "Verificar SLA")["parameters"]["jsonBody"]
+        assert "case_open_date" not in cuerpo, (
+            "el canvas manda una fecha que la API ya no mira; si la mirara, "
+            "seria la de la compra y no la del reclamo"
+        )
+
+    def test_manda_el_id_para_que_la_api_resuelva(self):
+        cuerpo = nodo(cargar(ORQUESTADOR), "Verificar SLA")["parameters"]["jsonBody"]
+        assert "transaction_id" in cuerpo
+
+    def test_ningun_nodo_manda_la_fecha_de_la_transaccion_como_apertura(self):
+        """La regla, no el caso: vale para cualquier nodo futuro."""
+        import json as _json
+
+        crudo = _json.dumps(cargar(ORQUESTADOR), ensure_ascii=False)
+        assert "case_open_date" not in crudo
+
+
+class TestUnaDecisionQueNoSeEntiendeNoAprueba:
+    """`MODIFY` se registraba como `APPROVED` y contaminaba los precedentes.
+
+    El formulario del Wait ofrece tres opciones y el mapeo cubria dos:
+    `RECHAZA ? 'DENIED' : 'APPROVED'`. Un analista que eligio «modificar»
+    quedaba asentado como si hubiera aprobado, y con judge >= 8.0 el caso se
+    indexaba como precedente aprobado — envenenando el corpus con el que se
+    resuelven los siguientes.
+    """
+
+    @property
+    def codigo(self) -> str:
+        return nodo(cargar(ORQUESTADOR), "Procesar Respuesta HITL")["parameters"]["jsCode"]
+
+    def test_modify_tiene_su_propio_resultado(self):
+        assert "'MODIFIED'" in self.codigo
+        assert "MODIFY:" in self.codigo
+
+    def test_una_decision_desconocida_no_cae_en_aprobado(self):
+        """Es el mismo fail-closed que el resto del sistema."""
+        assert "|| 'PENDING_HITL'" in self.codigo
+
+    def test_una_resolucion_modificada_no_se_indexa_como_precedente(self):
+        """El analista la aprobo con cambios que el sistema no tiene."""
+        assert "!== 'MODIFIED'" in self.codigo
+
+    def test_las_tres_opciones_del_formulario_estan_mapeadas(self):
+        opciones = nodo(cargar(ORQUESTADOR), "Wait — Aprobación HITL")[
+            "parameters"]["formFields"]["values"][0]["fieldOptions"]["values"]
+        codigo = self.codigo
+        for o in opciones:
+            assert f"{o['option']}:" in codigo, f"{o['option']} no esta mapeado"

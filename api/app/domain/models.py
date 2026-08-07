@@ -58,12 +58,17 @@ class FeedbackRequest(BaseModel):
 
 
 class SLACheckRequest(BaseModel):
-    case_open_date: str
+    # La apertura del RECLAMO, no la fecha de la compra. Entre las dos pueden
+    # pasar meses y contarlos como plazo de resolucion inventa un incumplimiento.
+    #
+    # Es opcional a proposito: con `transaction_id` la ruta la resuelve del caso
+    # historico y **este campo se ignora**. Antes era obligatorio y servia de
+    # respaldo, asi que el nodo `Verificar SLA` de n8n mandaba la fecha de la
+    # transaccion y la usaba: el mismo caso daba «en plazo» por el panel y
+    # «489 dias de incumplimiento + USD 15» por el orquestador.
+    case_open_date: str | None = None
     country: str
     cliente_vip: bool = False
-    # Con el id, la ruta busca el caso historico y usa SUS fechas: la apertura
-    # real del reclamo y, si esta cerrado, su cierre. Sin el id se mide desde
-    # `case_open_date` hasta hoy, que es el caso de un reclamo recien abierto.
     transaction_id: str | None = None
 
 

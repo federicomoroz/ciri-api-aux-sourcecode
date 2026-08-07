@@ -240,11 +240,16 @@ class PipelineService:
                     })
                 elif name == "sla":
                     sla = result
+                    # Los defaults no aplican: las claves EXISTEN con None
+                    # cuando no hay reclamo registrado. Ponerles `True` y `0`
+                    # aca solo disimularia; el que muestra tiene que saber que
+                    # el plazo no se midio.
                     yield ("sla", {
-                        "within_sla": sla.get("within_sla", True),
-                        "days_elapsed": sla.get("days_elapsed", 0),
+                        "within_sla": sla.get("within_sla"),
+                        "days_elapsed": sla.get("days_elapsed"),
                         "sla_limit_days": sla.get("sla_limit_days", 0),
                         "sla_type": sla.get("sla_type", ""),
+                        "sin_reclamo_registrado": sla.get("sin_reclamo_registrado", False),
                     })
 
         ctx = CaseContext(

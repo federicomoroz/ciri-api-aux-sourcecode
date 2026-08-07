@@ -957,3 +957,103 @@ class TestElStreamNoSeQuedaMudo:
         panel = Path("api/app/reports/templates/test_panel.html").read_text(encoding="utf-8")
         cuerpo = panel[panel.index("async function _runStreaming("):panel.index("async function _runClassic(")]
         assert "reiniciarPlazo();" in cuerpo, "el plazo no se reinicia al recibir datos"
+
+
+class TestElLatidoNoDejaUnHiloTrabajandoSolo:
+    """El modo de falla que el latido introdujo, y que sus tests no cubrian.
+
+    `_con_latido` corre el pipeline en un hilo. Cuando el navegador se
+    desconecta, Starlette cierra este generador y el `with _pipeline_efimero`
+    de aguas arriba cierra los clientes HTTP — **mientras el hilo sigue adentro
+    de una llamada al modelo con esos mismos clientes**: tokens que se gastan
+    despues de cerrar la pestania, y un «client has been closed» que muere en
+    una cola que ya nadie lee.
+
+    Los cuatro tests que escribi con el latido cubrian sus caminos felices.
+    Ninguno dejaba de consumir el generador, que era el unico modo de falla que
+    el cambio traia.
+    """
+
+    @staticmethod
+    def _generador_lento(marca, espera=0.3):
+        def gen():
+            yield "data: {}\n\n"
+            import time
+
+            time.sleep(espera)
+            marca.append("siguio")
+            yield "data: {}\n\n"
+
+        return gen()
+
+    def test_cerrar_el_stream_espera_al_hilo(self):
+        """Los clientes se cierran despues, no durante."""
+        import threading
+
+        from api.app.routes.panel import _con_latido
+
+        marca = []
+        antes = threading.active_count()
+        g = _con_latido(self._generador_lento(marca), cada_s=0.05)
+        next(g)
+        g.close()
+        assert threading.active_count() <= antes, "quedo un hilo corriendo tras cerrar"
+
+    def test_no_se_empieza_el_paso_siguiente_si_nadie_escucha(self):
+        import time
+
+        from api.app.routes.panel import _con_latido
+
+        pasos = []
+
+        def gen():
+            for i in range(4):
+                pasos.append(i)
+                yield "data: {}\n\n"
+                time.sleep(0.05)
+
+        g = _con_latido(gen(), cada_s=0.02)
+        next(g)
+        g.close()
+        time.sleep(0.3)
+        assert len(pasos) < 4, "el pipeline siguio recorriendo pasos sin cliente"
+
+    def test_el_camino_normal_no_se_ve_afectado(self):
+        from api.app.routes.panel import _con_latido
+
+        def gen():
+            yield 'data: {"step": "start"}' + chr(10) * 2
+            yield 'data: {"step": "done"}' + chr(10) * 2
+
+        salida = [s for s in _con_latido(gen(), cada_s=5) if not s.startswith(":")]
+        assert len(salida) == 2
+
+
+class TestElPanelNoAfirmaUnPlazoQueNoSeMidio:
+    """El `null` del SLA llegaba al panel como «FUERA de SLA: nulld».
+
+    El arreglo del SLA propago el null bien al nodo de n8n y no al panel: mismo
+    campo, mismo lenguaje, otro consumidor. `ev.within_sla ? A : B` con null cae
+    en el else, asi que la pantalla que se mira primero afirmaba exactamente el
+    incumplimiento que el calculo existe para dejar de afirmar.
+    """
+
+    @property
+    def panel(self) -> str:
+        from pathlib import Path
+
+        return Path("api/app/reports/templates/test_panel.html").read_text(encoding="utf-8")
+
+    def test_distingue_el_null_del_incumplimiento(self):
+        assert "ev.within_sla === null" in self.panel
+
+    def test_lo_dice_en_castellano(self):
+        assert "el plazo no se mide" in self.panel
+
+    def test_el_evento_no_disimula_el_null(self):
+        """`sla.get("within_sla", True)` no hacia nada: la clave existe con None."""
+        from pathlib import Path
+
+        pipeline = Path("api/app/services/pipeline.py").read_text(encoding="utf-8")
+        bloque = pipeline[pipeline.index('elif name == "sla"'):]
+        assert '"within_sla": sla.get("within_sla")' in bloque[:600]

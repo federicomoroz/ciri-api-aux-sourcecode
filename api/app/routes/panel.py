@@ -31,6 +31,7 @@ from ..domain.constants import (
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     LLM_BAD_KEY_MARKER,
     LLM_CREDIT_EXHAUSTED_MARKER,
+    LLM_TIMEOUT_S,
     N8N_HEALTHZ_PATH,
     N8N_PING_TIMEOUT_S,
     N8N_TIMEOUT_S,
@@ -48,6 +49,8 @@ from ..services.pipeline import PipelineService
 from ..services.resolution import ResolutionService
 
 logger = logging.getLogger(__name__)
+
+LATIDO = ": latido {:.0f}s" + chr(10) * 2   # comentario SSE: el panel lo ignora
 
 router = APIRouter(tags=["panel"])
 
@@ -423,17 +426,35 @@ def _con_latido(eventos, cada_s: float = SSE_LATIDO_S):
 
     El generador corre en un hilo porque es bloqueante; la cola es lo unico que
     los dos comparten.
+
+    **Y hay que esperarlo al salir.** Si el navegador se desconecta, Starlette
+    cierra este generador: el `with _pipeline_efimero(...)` de aguas arriba
+    ejecuta su `finally` y cierra los clientes HTTP **mientras el hilo sigue
+    adentro de una llamada al modelo con esos mismos clientes**. Resultado:
+    tokens que se gastan despues de que el usuario cerro la pestania, y un
+    «client has been closed» que muere en una cola que ya nadie lee — un
+    `except: pass` a distancia. Antes de meter el hilo, el `yield from`
+    propagaba el `GeneratorExit` adentro del pipeline y cortaba ahi mismo.
+
+    Por eso el `finally` avisa que se abandono y espera al hilo. La espera esta
+    acotada por el timeout del propio modelo, que es lo unico que puede estar
+    bloqueando: no se cuelga para siempre, y si aun asi no vuelve se sigue —
+    dejar un hilo colgado es mejor que dejar la respuesta colgada.
     """
     import queue
     import threading
 
     cola: queue.Queue = queue.Queue()
     CORTE = object()
+    abandonado = threading.Event()
 
     def bombear():
         try:
             for evento in eventos:
                 cola.put(("evento", evento))
+                if abandonado.is_set():
+                    # Nadie del otro lado: no se empieza el paso siguiente.
+                    break
         except Exception as exc:            # noqa: BLE001 — se reenvia al cliente
             cola.put(("error", exc))
         finally:
@@ -442,21 +463,30 @@ def _con_latido(eventos, cada_s: float = SSE_LATIDO_S):
     hilo = threading.Thread(target=bombear, daemon=True)
     hilo.start()
     esperando = 0.0
-    while True:
-        try:
-            tipo, carga = cola.get(timeout=cada_s)
-        except queue.Empty:
-            esperando += cada_s
-            # Un comentario SSE: mantiene viva la conexion sin ensuciar los
-            # eventos que el panel interpreta.
-            yield f": latido {esperando:.0f}s\n\n"
-            continue
-        if tipo == "evento":
-            yield carga
-        elif tipo == "error":
-            raise carga
-        else:
-            return
+    try:
+        while True:
+            try:
+                tipo, carga = cola.get(timeout=cada_s)
+            except queue.Empty:
+                esperando += cada_s
+                # Un comentario SSE: mantiene viva la conexion sin ensuciar los
+                # eventos que el panel interpreta.
+                yield LATIDO.format(esperando)
+                continue
+            if tipo == "evento":
+                yield carga
+            elif tipo == "error":
+                raise carga
+            else:
+                return
+    finally:
+        abandonado.set()
+        hilo.join(timeout=LLM_TIMEOUT_S)
+        if hilo.is_alive():
+            logger.warning(
+                "El analisis siguio corriendo tras %.0fs de haberse cortado el stream",
+                LLM_TIMEOUT_S,
+            )
 
 
 def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, request=None):

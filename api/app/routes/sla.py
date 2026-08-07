@@ -16,18 +16,27 @@ def check_sla(
 ) -> dict:
     """Check SLA compliance for a case.
 
-    Si viene `transaction_id`, las fechas salen del caso historico: la apertura
-    del reclamo y, cuando esta cerrado, su cierre. Resolverlo aca y no en el
+    Si viene `transaction_id`, las fechas salen del caso historico **y solo de
+    ahi**: la apertura del reclamo y, cuando esta cerrado, su cierre. Si no hay
+    reclamo registrado, el plazo no se mide — no se sustituye por la fecha de la
+    compra, que es otra cosa. Resolverlo aca y no en el
     orquestador es lo que evita que n8n tenga que saber que existe una tabla de
     casos — y lo que hace que el plazo se mida contra el cierre real en vez de
     contra la fecha de hoy.
     """
-    apertura, cierre = req.case_open_date, None
+    # Con `transaction_id`, la apertura sale del caso historico y **el dato del
+    # llamador no se mira**. El `or apertura` de antes era el agujero: si la
+    # transaccion no tenia reclamo registrado —53 de las 100 del dataset— se caia
+    # a lo que mandara el cliente, y el nodo de n8n manda la fecha de la compra.
+    # El arreglo anterior toco el otro llamador (`PipelineService`) y dejo este
+    # contrato abierto, asi que el defecto siguio vivo por el camino que la
+    # consigna pide: el orquestador.
     if req.transaction_id:
-        caso = db.get_case_for_transaction(req.transaction_id)
-        if caso:
-            apertura = caso.get("open_date") or apertura
-            cierre = caso.get("close_date") or None
+        caso = db.get_case_for_transaction(req.transaction_id) or {}
+        apertura = caso.get("open_date") or ""
+        cierre = caso.get("close_date") or None
+    else:
+        apertura, cierre = req.case_open_date, None
 
     return analyzer.check_sla(
         case_open_date=apertura,

@@ -3167,7 +3167,16 @@ function _buildStepDetail(step, ev) {
     case 'cases':         return `${ev.count} precedentes similares`;
     case 'merchant_risk': return `CB ratio: ${(ev.cb_ratio*100).toFixed(1)}%` + (ev.flags?.length ? ` · flags: ${ev.flags.join(', ')}` : '');
     case 'client_flags':  return `${ev.total_chargebacks} CB previos` + (ev.flags?.length ? ` · flags: ${ev.flags.join(', ')}` : '');
-    case 'sla':           return `${ev.within_sla ? 'Dentro de SLA' : 'FUERA de SLA'}: ${ev.days_elapsed}d habiles / ${ev.sla_limit_days}d (${ev.sla_type})`;
+    case 'sla':
+      // `within_sla` puede venir en null: es un caso sin reclamo registrado, o
+      // sea un plazo que no se pudo medir. Con el ternario anterior caia en el
+      // else y el panel mostraba «FUERA de SLA: nulld» — afirmaba justo el
+      // incumplimiento que el calculo existe para dejar de afirmar, y en la
+      // pantalla que se mira primero.
+      if (ev.within_sla === null || ev.within_sla === undefined) {
+        return `Sin reclamo registrado: el plazo no se mide / ${ev.sla_limit_days}d (${ev.sla_type})`;
+      }
+      return `${ev.within_sla ? 'Dentro de SLA' : 'FUERA de SLA'}: ${ev.days_elapsed}d habiles / ${ev.sla_limit_days}d (${ev.sla_type})`;
     case 'resolving':     return 'Haiku (eval) + Sonnet (sintesis) + guardrails...';
     case 'resolved':      return `${ev.action} · ${ev.risk_level} · ${ev.verdicts} veredictos · ${ev.blockers} blocker · ${ev.fails} fail` + (ev.warnings ? ` · ${ev.warnings} warning(s)` : '');
     case 'judging':       return 'Sonnet · 5 criterios · score 1-10...';
