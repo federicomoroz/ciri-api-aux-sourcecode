@@ -122,6 +122,11 @@ class ResolutionService:
         # Detectar la alucinacion ANTES de corregirla: una vez aplicado el
         # override determinista, lo que propuso el modelo ya no es observable.
         warnings = self._detect_divergence(resolution, outcome, policy_verdicts)
+        if resolution.get("confidence") == 0.0 and not resolution.get("next_steps"):
+            warnings.append(
+                "GUARDRAIL: el modelo no devolvio una resolucion utilizable — el informe "
+                "sale con la decision deterministica y sin analisis"
+            )
         propuesta = self._propuesta_del_modelo(resolution)
 
         # Override LLM decisions with deterministic values (always).
@@ -252,7 +257,39 @@ class ResolutionService:
         )
         result = self.llm_resolution.complete(sys_res, usr_res, trace_id=trace_id)
         resolution = validate_llm_output(result.text, ResolutionOutput, {})
-        return resolution, result
+        return self._con_piso(resolution, determined_outcome or {}), result
+
+    @staticmethod
+    def _con_piso(resolution: dict, outcome: dict) -> dict:
+        """Garantiza que la resolucion tenga todos sus campos.
+
+        `validate_llm_output` devuelve el dict crudo cuando la validacion falla,
+        para que los guardrails puedan mirarlo. Pero si el modelo no devolvio
+        nada utilizable —una respuesta truncada, por ejemplo— ese dict puede
+        estar vacio, y entonces la plantilla del informe explota con un 500 al
+        pedirle un campo que no existe.
+
+        Un modelo que falla es un caso degradado, no una excepcion del proceso:
+        la resolucion sale con la decision que tomo el codigo, los textos vacios
+        y la constancia de que el modelo no aporto nada.
+        """
+        if resolution.get("recommended_action"):
+            return resolution
+        logger.error(
+            "El modelo no devolvio una resolucion utilizable: se arma con la decision "
+            "deterministica y se deja constancia",
+        )
+        piso = ResolutionOutput(
+            recommended_action=outcome.get("recommended_action", ResolutionOutcome.PENDING_HITL),
+            risk_level=outcome.get("risk_level", RiskLevel.HIGH),
+            confidence=0.0,
+            justification=(
+                "El modelo no devolvio una resolucion utilizable para este caso. La accion y "
+                "el nivel de riesgo son los que calculo el sistema a partir de los veredictos "
+                "de politica; no hay analisis del modelo que mostrar."
+            ),
+        ).model_dump()
+        return {**piso, **{k: v for k, v in resolution.items() if v not in (None, "", [])}}
 
     def judge(self, resolution: dict, full_context: dict) -> dict:
         """LLM-as-Judge: evaluate resolution quality across 5 criteria.

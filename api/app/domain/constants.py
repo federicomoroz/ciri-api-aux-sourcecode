@@ -46,6 +46,7 @@ __all__ = [
     "LLM_BAD_KEY_MARKER",
     "LLM_CREDIT_EXHAUSTED_MARKER",
     "LLM_DEFAULT_MAX_TOKENS",
+    "LLM_MAX_TOKENS_COMPATIBLE",
     "LLM_DEFAULT_MAX_RETRIES",
     "LLM_DEFAULT_TEMPERATURE",
     # Judge
@@ -347,6 +348,14 @@ LLM_TRUNCATION_LENGTH: int = 200    # chars to log to tracer (not to LLM)
 LLM_CREDIT_EXHAUSTED_MARKER: str = "credit balance is too low"  # Anthropic, al agotarse el saldo
 LLM_BAD_KEY_MARKER: str = "authentication_error"                # Anthropic, clave invalida
 LLM_DEFAULT_MAX_TOKENS: int = 4096
+# Los modelos de razonamiento cuentan sus tokens de pensamiento contra el mismo
+# presupuesto y NO los reportan en `completion_tokens`. Con 4096, Gemini gasta
+# ~3.900 pensando y devuelve una respuesta truncada (`finish_reason: length`)
+# que el parseo no puede recuperar. Medido: con 16.384 responde entero.
+#
+# No se sube el default de Anthropic porque ahi seria pagar por un techo que no
+# se usa: Claude no gasta presupuesto en razonamiento oculto.
+LLM_MAX_TOKENS_COMPATIBLE: int = 16384
 LLM_DEFAULT_MAX_RETRIES: int = 2
 LLM_DEFAULT_TEMPERATURE: float = 0.3
 

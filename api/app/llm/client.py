@@ -17,6 +17,7 @@ from ..domain.constants import (
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
     LLM_DEFAULT_TEMPERATURE,
+    LLM_MAX_TOKENS_COMPATIBLE,
     LLM_TIMEOUT_S,
     LLM_TRUNCATION_LENGTH,
     SECONDS_TO_MS,
@@ -186,6 +187,11 @@ class OpenAICompatibleClient:
         trace_id: str | None = None,
     ) -> LLMResult:
         start = time.time()
+        # Los modelos de razonamiento descuentan lo que piensan de este mismo
+        # presupuesto, asi que el techo de Claude les deja la respuesta a medias.
+        # Se sube solo si el llamador no pidio uno propio.
+        if max_tokens == LLM_DEFAULT_MAX_TOKENS:
+            max_tokens = LLM_MAX_TOKENS_COMPATIBLE
         try:
             respuesta = self.client.post("/chat/completions", json={
                 "model": self.model,
@@ -210,8 +216,17 @@ class OpenAICompatibleClient:
             raise
 
         latency_ms = (time.time() - start) * SECONDS_TO_MS
-        text = cuerpo["choices"][0]["message"]["content"] or ""
+        eleccion = cuerpo["choices"][0]
+        text = (eleccion.get("message") or {}).get("content") or ""
         uso = cuerpo.get("usage") or {}
+        if eleccion.get("finish_reason") == "length":
+            # Sin esto, una respuesta truncada llega al parseo como si fuera
+            # completa y se confunde con «el modelo no entendio el prompt».
+            logger.warning(
+                "%s corto por limite de tokens (max_tokens=%d): la respuesta viene "
+                "truncada. Si el modelo razona, su pensamiento consume el mismo "
+                "presupuesto y hay que subirlo.", self.model, max_tokens,
+            )
         entrada, salida = uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)
 
         self.tracer.generation(

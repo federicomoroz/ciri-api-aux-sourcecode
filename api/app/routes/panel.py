@@ -550,6 +550,36 @@ async def panel_analyze(
             content=_pagina_sin_caso_demo(req.transaction_id, settings), status_code=200
         )
 
+    if corre_gratis:
+        fallo = ""
+        try:
+            with _pipeline_demo(pipeline, request) as demo:
+                respuesta = _correr_directo(demo, req, settings)
+            # `_correr_directo` no propaga: devuelve una pagina de error. Mirar
+            # solo las excepciones dejaba pasar el 502 sin activar el respaldo.
+            if respuesta.status_code == 200:
+                return _marcar_si_gratis(respuesta, request, True)
+            fallo = f"status {respuesta.status_code}"
+        except Exception as exc:
+            fallo = str(exc)
+        logger.warning(
+            "MODO DEMO: no se pudo correr %s (%s). Se responde con el informe guardado.",
+            req.transaction_id, fallo,
+        )
+        respaldo = _respuesta_demo(req.transaction_id, settings, pipeline.db)
+        if respaldo is not None:
+            return respaldo
+        return HTMLResponse(
+            content=_pagina_sin_caso_demo(req.transaction_id, settings), status_code=200
+        )
+
+    # Efimero si el visitante trajo su clave o eligio otro modelo para esta
+    # corrida: en los dos casos la configuracion es suya y no la del proceso.
+    if req.api_key or req.modelos:
+        with _pipeline_efimero(pipeline, request, api_key=req.api_key or "", override=req.modelos) as propio:
+            respuesta = _correr_directo(propio, req, settings)
+            return _marcar_si_gratis(respuesta, request, corre_gratis)
+
     # Pidieron n8n explicitamente. Si no se puede, se dice: caer al pipeline
     # directo en silencio devolveria un informe que parece venir de la
     # orquestacion sin haber pasado por ella, que es peor que un error.
@@ -572,16 +602,11 @@ async def panel_analyze(
     # la suya gasta de su cuenta, no de la de nadie mas.
     # Modo demo con modelo configurado: corre de verdad, con la clave del
     # servidor y el modelo del demo — no con la configuracion de produccion.
-    if corre_gratis:
-        with _pipeline_demo(pipeline, request) as demo:
-            return _marcar_si_gratis(_correr_directo(demo, req, settings), request, True)
-
-    # Efimero si el visitante trajo su clave o eligio otro modelo para esta
-    # corrida: en los dos casos la configuracion es suya y no la del proceso.
-    if req.api_key or req.modelos:
-        with _pipeline_efimero(pipeline, request, api_key=req.api_key or "", override=req.modelos) as propio:
-            respuesta = _correr_directo(propio, req, settings)
-            return _marcar_si_gratis(respuesta, request, corre_gratis)
+    #
+    # Si correr falla —el vector store caido, el free tier agotado— se cae al
+    # informe guardado. Es el encadenamiento honesto: el modo demo intenta
+    # ejecutar, y solo recita cuando no puede. Un 502 seria peor que un informe
+    # viejo declarado como tal.
     if not (settings.anthropic_api_key or corre_gratis):
         return HTMLResponse(
             content=_pagina(
