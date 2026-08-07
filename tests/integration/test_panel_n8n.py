@@ -120,3 +120,88 @@ class TestConfirmaQueElN8nLlego:
         d = cliente.get("/api/panel/n8n-status").json()
         assert d["configured"] is False
         assert d["contactos"] == 1
+
+
+class TestElModoDemoNoSustituyeElOrquestador:
+    """La misma regla, para el caso que faltaba: con el modo demo prendido.
+
+    Los tests de arriba mandan `demo_mode: False`. Con el modo demo —que es el
+    default del deploy— la rama de demo devolvia el informe antes de llegar al
+    bloque de n8n, asi que elegir «n8n Production» en el panel daba un informe
+    del pipeline directo. Medido contra la instancia local: 74 ejecuciones de
+    n8n antes de la consulta y 74 despues.
+
+    El modo demo es sobre plata, no sobre quien orquesta: los nodos llaman a
+    esta misma API, que resuelve el modelo gratuito igual. No habia nada que
+    ahorrar salteandolo.
+    """
+
+    DEMO = {**CUERPO, "demo_mode": True}
+
+    def test_pedir_n8n_en_modo_demo_no_cae_al_directo(self, cliente):
+        r = cliente.post("/api/panel/analyze", json=self.DEMO)
+        assert r.status_code == 400, "devolvio un informe sin pasar por la orquestacion"
+        assert "Falta la URL" in r.text
+
+    def test_el_pipeline_directo_ni_se_toca(self, cliente):
+        cliente.post("/api/panel/analyze", json=self.DEMO)
+        app.state.pipeline_service.run.assert_not_called()
+
+    def test_el_modo_directo_en_demo_si_corre(self, cliente):
+        """Lo que no se puede sustituir es lo que se pidio explicitamente.
+
+        `direct=1` es el default del selector y tiene que seguir andando sin
+        n8n: es como se evalua el sistema sin instalar nada.
+        """
+        r = cliente.post("/api/panel/analyze?direct=1", json=self.DEMO)
+        assert r.status_code != 400 or "Falta la URL" not in r.text
+
+
+class TestElBadgeMiraLaUrlQueSeVaAUsar:
+    """Un badge en verde seguido de «tu n8n no respondio» es peor que no tenerlo.
+
+    El chequeo usaba `CB_N8N_BASE_URL` —la del servidor— y el analisis usaba la
+    que el panel tuviera escrita. Con la API en un contenedor y el campo en
+    `http://localhost:5678`, el ping daba OK contra `http://n8n:5678` y la
+    consulta moria contra localhost, que dentro del contenedor es la API misma.
+    La pagina se contradecia a si misma y no habia forma de verlo desde afuera.
+    """
+
+    def test_la_url_del_panel_gana_sobre_la_del_servidor(self, cliente):
+        r = cliente.get("/api/panel/n8n-status?n8n_base_url=http://un-host-inventado:5678")
+        assert r.json()["url"] == "http://un-host-inventado:5678"
+
+    def test_sin_url_propia_sigue_usando_la_del_servidor(self, cliente):
+        """El caso normal: el campo vacio y el servidor sabe donde esta n8n."""
+        assert cliente.get("/api/panel/n8n-status").json()["configured"] is False
+
+
+class TestSeExplicaQueLaLlamadaLaHaceLaApi:
+    """La trampa mas comun, y la que no se ve desde el browser.
+
+    En el browser `http://localhost:5678` abre el editor de n8n sin problemas,
+    asi que parece la URL correcta. Pero quien llama es la API: si corre en un
+    contenedor, su `localhost` es ella misma y n8n queda del otro lado.
+    """
+
+    @staticmethod
+    def _pagina(base, servidor):
+        from api.app.routes.panel import _pagina_n8n_no_respondio
+
+        return _pagina_n8n_no_respondio("TXN-00016", base, False, servidor)
+
+    def test_una_url_local_con_servidor_remoto_se_explica(self):
+        h = self._pagina("http://localhost:5678", "http://n8n:5678")
+        assert "la llama la API" in h
+        assert "http://n8n:5678" in h, "no dice cual es la que si funciona"
+
+    def test_dice_como_arreglarlo(self):
+        assert "vacia el campo" in self._pagina("http://127.0.0.1:5678", "http://n8n:5678")
+
+    def test_una_url_remota_no_recibe_el_aviso(self):
+        """Ahi el problema es otro y mandarlo por esta pista seria desviar."""
+        assert "la llama la API" not in self._pagina("https://x.app.n8n.cloud", "http://n8n:5678")
+
+    def test_si_el_servidor_tambien_es_local_no_hay_nada_que_sugerir(self):
+        """Todo en la misma maquina, sin contenedores: la URL no es el problema."""
+        assert "la llama la API" not in self._pagina("http://localhost:5678", "http://localhost:5678")

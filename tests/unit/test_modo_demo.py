@@ -708,3 +708,50 @@ class TestLaCorridaGratuitaViajaConSuModelo:
         """Preferible sin cartel de modelo que con uno que dice cualquier cosa."""
         r = self._app(monkeypatch, None).post("/api/analyze/resolve", json=self.CASO)
         assert r.json()["demo_modelo"] is None
+
+
+class TestElPanelLlevaAlFormulario:
+    """Un caso que espera una persona no es un fallo de n8n.
+
+    El panel muestra los informes en un `<iframe>` y descartaba toda respuesta
+    que no fuera 200. Cuando el workflow empezo a redirigir al formulario de
+    aprobacion (303), el panel lo leyo como «n8n no respondio» y ofrecio
+    reintentar — justo cuando el sistema estaba haciendo lo correcto.
+
+    Navegar y no incrustar: el formulario de n8n arma su URL de envio desde
+    `window.location`, asi que copiar su HTML adentro del panel mandaria la
+    decision del analista al origen equivocado.
+    """
+
+    URL = "http://localhost:5678/form-waiting/74?signature=abc&x=1"
+
+    @property
+    def pagina(self):
+        from api.app.routes.panel import _pagina_hacia_el_formulario
+
+        return _pagina_hacia_el_formulario("TXN-00011", self.URL)
+
+    def test_navega_sola_al_formulario(self):
+        assert 'http-equiv="refresh"' in self.pagina
+        assert "form-waiting/74" in self.pagina
+
+    def test_el_ampersand_de_la_firma_no_se_rompe(self):
+        """Escapado a medias, la firma llega cortada y el formulario la rechaza."""
+        assert "&amp;x=1" in self.pagina
+        assert "<script" not in self.pagina, (
+            "adentro de un <script> las entidades no se decodifican: el link viajaria roto"
+        )
+
+    def test_deja_el_link_a_la_vista(self):
+        """El iframe puede no llegar: n8n y el panel pueden no estar en la misma red."""
+        assert 'target="_blank"' in self.pagina
+        assert self.pagina.count("form-waiting/74") == 2
+
+    def test_dice_de_que_caso_se_trata(self):
+        assert "TXN-00011" in self.pagina
+
+    def test_un_destino_hostil_no_escapa_del_atributo(self):
+        from api.app.routes.panel import _pagina_hacia_el_formulario
+
+        sucio = _pagina_hacia_el_formulario("TXN-1", 'http://x/"><script>alert(1)</script>')
+        assert "<script>alert" not in sucio

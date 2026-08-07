@@ -9,6 +9,7 @@ POST /api/panel/analyze        — runs analysis via n8n (or direct pipeline fal
 import json
 import logging
 from contextlib import contextmanager
+from html import escape as html_escape
 
 import httpx
 from fastapi import APIRouter, Depends, Query, Request
@@ -256,9 +257,32 @@ def _pagina_sin_n8n(txn_id: str) -> str:
     )
 
 
-def _pagina_n8n_no_respondio(txn_id: str, base: str, es_prueba: bool) -> str:
+LOCALES = ("localhost", "127.0.0.1", "0.0.0.0", "[::1]")
+
+
+def _url_local(base: str) -> bool:
+    """Si esa URL apunta a la maquina de quien la escribio, no a la red."""
+    sin_esquema = base.split("://", 1)[-1]
+    return sin_esquema.split(":", 1)[0].split("/", 1)[0].lower() in LOCALES
+
+
+def _pagina_n8n_no_respondio(
+    txn_id: str, base: str, es_prueba: bool, base_del_servidor: str = "",
+) -> str:
     """n8n estaba indicado pero no contesto. No se disimula con el pipeline directo."""
     ruta = N8N_WEBHOOK_TEST_PATH if es_prueba else N8N_WEBHOOK_PATH
+    # La trampa mas comun, y la mas dificil de ver desde el browser: la llamada
+    # la hace la API, no la pagina. Si la API corre en un contenedor, su
+    # `localhost` es ella misma y n8n queda del otro lado — aunque en el browser
+    # esa misma URL abra el editor sin problemas.
+    aviso_local = ""
+    if _url_local(base) and base_del_servidor and not _url_local(base_del_servidor):
+        aviso_local = (
+            "<p><b>Esa URL la llama la API, no tu navegador.</b> La API corre en otro lado, "
+            f"asi que su <code>localhost</code> es ella misma y no n8n. Desde donde corre, "
+            f"n8n esta en <code>{html_escape(base_del_servidor)}</code>: "
+            "<b>vacia el campo de URL</b> del panel y se usa esa.</p>"
+        )
     extra = (
         "<li>En modo <b>prueba</b> hay que apretar <b>Execute workflow</b> en el editor "
         "justo antes: el webhook de test escucha una sola ejecucion.</li>"
@@ -267,7 +291,8 @@ def _pagina_n8n_no_respondio(txn_id: str, base: str, es_prueba: bool) -> str:
     )
     return _pagina(
         "Tu n8n no respondio",
-        f"<p>Se llamo a <code>{base}{ruta}</code> y no hubo respuesta util.</p>"
+        f"<p>Se llamo a <code>{html_escape(base)}{ruta}</code> y no hubo respuesta util.</p>"
+        f"{aviso_local}"
         f"<p><b>Que revisar:</b></p><ul>"
         f"<li>Que la URL sea la base de n8n, no la del editor "
         f"(<code>.../workflow/xxxx</code> no sirve).</li>"
@@ -475,7 +500,11 @@ def demo_status(request: Request, settings: Settings = Depends(get_settings)) ->
 
 
 @router.get("/api/panel/n8n-status")
-async def n8n_status(request: Request, settings: Settings = Depends(get_settings)) -> dict:
+async def n8n_status(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    n8n_base_url: str = Query("", description="La que use el panel, si escribio una"),
+) -> dict:
     """Quick liveness check for n8n — used by the panel UI to show a status badge.
 
     Without CB_N8N_BASE_URL there is no instance to point at: the panel asks the
@@ -489,7 +518,10 @@ async def n8n_status(request: Request, settings: Settings = Depends(get_settings
         "contactos": registro.total if registro else 0,
     }
 
-    base = settings.n8n_base_url.rstrip("/")
+    # La del panel gana sobre la del servidor: es la que va a usar el analisis.
+    # Chequear una y llamar a la otra daba un badge en verde seguido de «tu n8n
+    # no respondio», que es peor que no tener badge.
+    base = (n8n_base_url or settings.n8n_base_url).strip().rstrip("/")
     if not base:
         return {"configured": False, "available": False, **contacto}
     url = base + N8N_HEALTHZ_PATH
@@ -541,8 +573,20 @@ async def panel_analyze(
     # no correrlo y devuelve un analisis de ahora en vez de una grabacion.
     corre_gratis = _en_modo_demo(req, settings) and _modelo_del_demo(request) is not None
 
+    # El modo demo es sobre PLATA, no sobre quien orquesta: pasar por n8n cuesta
+    # lo mismo que no pasar, porque los nodos llaman a esta misma API y es ella
+    # la que resuelve el modelo del demo. Antes el modo demo devolvia antes de
+    # llegar al bloque de n8n, asi que quien elegia «n8n Production» en el panel
+    # recibia un informe del pipeline directo: parecia venir de la orquestacion
+    # sin haber pasado por ella. Medido: 74 ejecuciones de n8n antes de la
+    # consulta y 74 despues.
+    #
+    # El default del selector es «Directo (sin n8n)», asi que pedir n8n es una
+    # eleccion explicita — la unica que no se puede ignorar en silencio.
+    pidieron_n8n = not direct
+
     # Modo demo sin free tier: el caso ya resuelto, sin pasar por el modelo ni n8n.
-    if _en_modo_demo(req, settings) and not corre_gratis:
+    if _en_modo_demo(req, settings) and not corre_gratis and not pidieron_n8n:
         demo = _respuesta_demo(req.transaction_id, settings, pipeline.db)
         if demo is not None:
             return demo
@@ -550,7 +594,7 @@ async def panel_analyze(
             content=_pagina_sin_caso_demo(req.transaction_id, settings), status_code=200
         )
 
-    if corre_gratis:
+    if corre_gratis and not pidieron_n8n:
         fallo = ""
         try:
             with _pipeline_demo(pipeline, request) as demo:
@@ -596,7 +640,9 @@ async def panel_analyze(
         html = await _try_n8n(req, settings, report_gen, n8n_test, timeout_s, n8n_base_url)
         if html is None:
             return HTMLResponse(
-                content=_pagina_n8n_no_respondio(req.transaction_id, base, n8n_test),
+                content=_pagina_n8n_no_respondio(
+                    req.transaction_id, base, n8n_test, settings.n8n_base_url or "",
+                ),
                 status_code=502,
             )
         return HTMLResponse(content=html, status_code=200)
@@ -670,6 +716,39 @@ def panel_analyze_stream(
     )
 
 
+def _pagina_hacia_el_formulario(txn_id: str, destino: str) -> str:
+    """Lleva al formulario de aprobacion en vez de contar que existe.
+
+    El panel muestra los informes en un `<iframe>`, asi que navegarlo deja el
+    formulario adentro del panel y con el origen correcto: el suyo arma la URL
+    de envio desde `window.location`, o sea que incrustar su HTML lo mandaria al
+    lugar equivocado. Navegar sirve; copiar no.
+
+    Queda el link a la vista porque el iframe puede no llegar: si n8n corre en
+    otra maquina que la del panel, la URL del formulario no es alcanzable desde
+    el browser de quien mira.
+    """
+    seguro = html_escape(destino, quote=True)
+    return (
+        "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\">"
+        f'<meta http-equiv="refresh" content="0;url={seguro}">'
+        "<title>Aprobacion requerida</title></head><body style=\"margin:0;"
+        "font-family:ui-sans-serif,system-ui,sans-serif;background:#f9fafb;color:#374151;"
+        "display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px\">"
+        "<div style=\"text-align:center;max-width:460px\">"
+        f"<p style=\"font-size:1.05rem;margin:0 0 .6rem\"><b>{html_escape(txn_id)}</b> necesita "
+        "la decision de un analista.</p>"
+        "<p style=\"margin:0 0 1rem;color:#6b7280;font-size:.9rem\">Abriendo el formulario de "
+        "aprobacion&hellip;</p>"
+        f'<a href="{seguro}" target="_blank" rel="noopener" style="color:#2563eb;font-size:.85rem">'
+        "Si no se abre solo, entra por aca</a></div>"
+        # Navega el `meta refresh` y no un `location.replace`: adentro de un
+        # <script> las entidades HTML no se decodifican, asi que el `&` escapado
+        # de la firma viajaria literal y el formulario rechazaria el link.
+        "</body></html>"
+    )
+
+
 async def _try_n8n(
     req: AnalyzeRequest,
     settings: Settings,
@@ -700,6 +779,21 @@ async def _try_n8n(
                     "cliente_vip": req.cliente_vip,
                 },
             )
+        # Un caso que necesita una persona no es un fallo de n8n: el workflow
+        # redirige al formulario del Wait, que es donde se toma la decision.
+        # Sin esta rama el panel lo leia como «n8n no respondio» y ofrecia
+        # reintentar — justo cuando el sistema estaba haciendo lo correcto.
+        if r.status_code in (301, 302, 303, 307, 308):
+            destino = r.headers.get("location", "")
+            if destino:
+                logger.info(
+                    "panel: %s quedo esperando una decision humana; se lleva al formulario %s",
+                    req.transaction_id, destino,
+                )
+                return _pagina_hacia_el_formulario(req.transaction_id, destino)
+            logger.warning("panel: n8n redirigio sin Location — se usa el pipeline directo")
+            return None
+
         if r.status_code != 200:
             logger.warning("panel: n8n returned status=%s — falling back to direct", r.status_code)
             return None

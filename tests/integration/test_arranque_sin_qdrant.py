@@ -51,13 +51,17 @@ def test_el_panel_sigue_en_pie_sin_qdrant(cliente_sin_qdrant):
 
 
 def test_el_modo_demo_no_depende_del_vector_store(cliente_sin_qdrant):
-    """Los casos demo se sirven del disco, asi que Qdrant les es indiferente."""
+    """Los casos demo se sirven del disco, asi que Qdrant les es indiferente.
+
+    El modo directo se pide por query string, que es lo que manda el panel. Este
+    test mandaba `{"modo": "directo"}` en el cuerpo, un campo que la ruta nunca
+    leyo: pasaba de rebote porque el modo demo cortaba antes de intentar n8n.
+    """
     r = cliente_sin_qdrant.post(
-        "/api/panel/analyze",
+        "/api/panel/analyze?direct=1",
         json={
             "transaction_id": "TXN-00051",
             "motivo": "No reconoce la compra",
-            "modo": "directo",
         },
     )
     assert r.status_code == 200
