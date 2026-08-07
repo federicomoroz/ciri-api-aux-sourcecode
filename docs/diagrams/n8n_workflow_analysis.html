@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CIRI · Agente de contracargos — el circuito</title>
+<style>
+:root{
+  --paper:#fcfcfa; --surface:#fff; --ink:#17171b; --muted:#68686f; --faint:#95959d;
+  --rule:#e5e4df; --rule-mid:#d3d2cb; --wire:#b9b8b0; --shadow:0 1px 2px rgba(20,20,25,.06);
+  --api:#2563eb; --rag:#0d9488; --llm:#7c3aed; --decide:#b45309;
+  --human:#be185d; --logic:#64748b; --io:#0f766e; --error:#dc2626;
+  --tint:12%;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    --paper:#0d0f13; --surface:#161a21; --ink:#e9eaee; --muted:#9a9ca6; --faint:#71737d;
+    --rule:#232732; --rule-mid:#333846; --wire:#454b5a; --shadow:none;
+    --api:#7ea8f8; --rag:#4fd1c5; --llm:#b39cf7; --decide:#f0b355;
+    --human:#f491bb; --logic:#9aa6b8; --io:#5eead4; --error:#f08a80;
+    --tint:16%;
+  }
+}
+:root[data-theme=dark]{
+  --paper:#0d0f13; --surface:#161a21; --ink:#e9eaee; --muted:#9a9ca6; --faint:#71737d;
+  --rule:#232732; --rule-mid:#333846; --wire:#454b5a; --shadow:none;
+  --api:#7ea8f8; --rag:#4fd1c5; --llm:#b39cf7; --decide:#f0b355;
+  --human:#f491bb; --logic:#9aa6b8; --io:#5eead4; --error:#f08a80;
+  --tint:16%;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:400 16px/1.6 Inter,"Segoe UI",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+.mono,.step,.badge,.ep,.eyebrow,h1,.z-n,.n-sec,.chip,.wl{
+  font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
+.wrap{max-width:1180px;margin:0 auto;padding:0 40px}
+
+.top{padding:60px 0 0}
+.eyebrow{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
+  display:flex;justify-content:space-between;align-items:center;gap:24px}
+h1{font-size:clamp(30px,4.2vw,44px);line-height:1.06;font-weight:600;letter-spacing:-.02em;margin:22px 0 0}
+h1 em{font-style:normal;color:var(--muted)}
+.lead{max-width:66ch;color:var(--muted);margin:18px 0 0;font-size:17px}
+.theme{font:inherit;font-size:11px;letter-spacing:.14em;text-transform:uppercase;background:none;
+  border:1px solid var(--rule-mid);color:var(--faint);padding:6px 12px;border-radius:99px;cursor:pointer}
+.theme:hover{color:var(--ink);border-color:var(--ink)}
+
+.legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:14px 26px;
+  margin:38px 0 0;padding:26px 0 30px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.lg{display:grid;grid-template-columns:auto 1fr;gap:3px 11px;align-items:baseline}
+.lg i{width:11px;height:11px;border-radius:3px;grid-row:1/3;align-self:center}
+.lg b{font-size:14.5px;font-weight:600}
+.lg em{font-style:normal;font-size:13px;color:var(--faint);line-height:1.4}
+.lg.f-api i{background:var(--api)} .lg.f-rag i{background:var(--rag)}
+.lg.f-llm i{background:var(--llm)} .lg.f-decide i{background:var(--decide)}
+.lg.f-human i{background:var(--human)} .lg.f-logic i{background:var(--logic)}
+.lg.f-io i{background:var(--io)} .lg.f-error i{background:var(--error)}
+
+.fine{margin:18px 0 0;font-size:13px;color:var(--faint)}
+.nota-demo{margin:14px 0 0;padding:12px 15px;font-size:13px;line-height:1.6;
+  color:var(--faint);border-left:3px solid #e8a33d;background:rgba(232,163,61,.08);
+  border-radius:0 6px 6px 0;max-width:76ch}
+.nota-demo b{color:var(--ink,inherit)}
+.fine code{font-family:ui-monospace,monospace}
+.figure{margin:34px 0 0;overflow-x:auto;padding-bottom:18px}
+.canvas{position:relative;width:1500px;height:3610px;margin:0 auto}
+.wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.w{fill:none;stroke:var(--wire);stroke-width:1.6;stroke-linejoin:round}
+.w.err{stroke:var(--error);stroke-dasharray:5 4;opacity:.75}
+.wl{font-size:11px;fill:var(--faint);letter-spacing:.02em}
+.canvas.lit .w{opacity:.22}
+.canvas.lit .w.on{opacity:1;stroke:var(--ink);stroke-width:2.2}
+.canvas.lit .node{opacity:.42}
+.canvas.lit .node.on,.canvas.lit .node.near{opacity:1}
+
+.zone{position:absolute;left:24px;width:176px;display:grid;
+  grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+.z-n{font-size:11.5px;color:var(--faint);letter-spacing:.04em;white-space:nowrap}
+.z-t{font-size:17.5px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.z-s{font-size:12.8px;color:var(--faint);grid-column:2;line-height:1.45;margin-top:6px}
+
+.node{position:absolute;width:152px;height:96px;display:flex;flex-direction:column;gap:5px;
+  align-items:flex-start;text-align:left;background:var(--surface);border:1px solid var(--rule);
+  border-left:3px solid var(--logic);border-radius:9px;padding:9px 12px;cursor:pointer;
+  color:inherit;font:inherit;box-shadow:var(--shadow);transition:box-shadow .13s,border-color .13s}
+.node:hover,.node:focus-visible{outline:none;box-shadow:0 4px 14px rgba(20,20,25,.11)}
+.n-top{display:flex;align-items:center;gap:8px}
+.step{font-size:10.5px;color:var(--faint)}
+.badge{font-size:9px;letter-spacing:.05em;white-space:nowrap;text-transform:uppercase;font-weight:700}
+.n-name{font-size:12.8px;font-weight:600;line-height:1.24;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ep{font-size:10px;color:var(--muted);margin-top:auto;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:100%}
+.f-api{border-left-color:var(--api)} .f-api .badge{color:var(--api)}
+.f-rag{border-left-color:var(--rag)} .f-rag .badge{color:var(--rag)}
+.f-llm{border-left-color:var(--llm)} .f-llm .badge{color:var(--llm)}
+.f-decide{border-left-color:var(--decide)} .f-decide .badge{color:var(--decide)}
+.f-human{border-left-color:var(--human)} .f-human .badge{color:var(--human)}
+.f-logic{border-left-color:var(--logic)} .f-logic .badge{color:var(--logic)}
+.f-io{border-left-color:var(--io)} .f-io .badge{color:var(--io)}
+.node.on{border-color:var(--ink)}
+
+.tail{position:absolute;width:152px;text-align:center;font-size:10.5px;color:var(--faint);font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
+.chip{position:absolute;width:150px;font:inherit;font-size:11.5px;line-height:1.3;
+  background:var(--surface);color:var(--error);cursor:pointer;text-align:left;
+  border:1px dashed var(--error);border-radius:8px;padding:8px 10px}
+.chip:hover{border-style:solid}
+
+.notes{margin-bottom:72px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:30px 40px;
+  margin:56px 0 0;padding-top:34px;border-top:1px solid var(--rule)}
+.note{display:grid;grid-template-columns:auto 1fr;gap:14px}
+.n-sec{font-size:11.5px;color:var(--faint);letter-spacing:.04em;white-space:nowrap}
+.note p{margin:0;color:var(--muted);font-size:15px}
+.note code{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink)}
+
+.panel{position:fixed;top:0;right:0;height:100%;width:400px;max-width:92vw;z-index:40;
+  background:var(--surface);border-left:1px solid var(--rule);padding:34px 32px;overflow-y:auto;
+  transform:translateX(101%);transition:transform .2s cubic-bezier(.4,0,.2,1)}
+.panel.open{transform:none;box-shadow:-24px 0 60px rgba(10,10,14,.15)}
+.p-close{position:absolute;top:20px;right:22px;background:none;border:0;cursor:pointer;
+  color:var(--faint);font-size:22px;line-height:1;padding:4px}
+.p-close:hover{color:var(--ink)}
+.p-top{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.p-name{font-size:21px;font-weight:600;line-height:1.22;margin:0 0 15px}
+.p-ep{display:block;font-size:12.5px;padding:9px 12px;border-radius:8px;background:var(--paper);
+  border:1px solid var(--rule);color:var(--ink);margin-bottom:19px;font-family:ui-monospace,monospace;
+  word-break:break-all}
+.p-desc{color:var(--muted);margin:0 0 24px}
+.p-desc code{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink)}
+.d-k{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  display:block;margin:0 0 8px;font-family:ui-monospace,monospace}
+.d-list{list-style:none;margin:0 0 20px;padding:0;display:flex;flex-direction:column;gap:6px}
+.d-list button{font:inherit;font-size:14px;text-align:left;background:none;border:0;padding:0;
+  color:var(--ink);cursor:pointer;border-bottom:1px solid transparent}
+.d-list button:hover{border-bottom-color:var(--ink)}
+.d-list .none{color:var(--faint);font-size:14px}
+.scrim{position:fixed;inset:0;background:rgba(10,10,14,.26);opacity:0;pointer-events:none;
+  transition:opacity .2s;z-index:30}
+.scrim.on{opacity:1;pointer-events:auto}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.panel,.scrim,.theme{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">
+    <span>CIRI · Continuous Improvement &amp; Risk Intelligence</span>
+    <button class="theme" id="theme" type="button">Tema</button>
+  </div>
+  <h1>Agente de contracargos<br><em>el circuito completo</em></h1>
+  <p class="lead">
+    Orquestación explícita en n8n. 29 nodos que se ejecutan siempre en el mismo orden, más
+    4 salidas de error. No hay un nodo de agente decidiendo qué herramienta llamar: por eso
+    cada investigación es reproducible y auditable. Tocá cualquier nodo para ver qué hace y cómo se
+    conecta.
+  </p>
+  <div class="legend"><span class="lg f-api"><i></i><b>Llamada a la API</b><em>Trae datos de SQLite o ejecuta una regla de negocio.</em></span><span class="lg f-rag"><i></i><b>Búsqueda semántica</b><em>Consulta el vector store Qdrant.</em></span><span class="lg f-llm"><i></i><b>Llamada a un modelo</b><em>Va por la API, que es quien habla con Claude.</em></span><span class="lg f-decide"><i></i><b>Bifurca</b><em>Elige por dónde sigue el caso.</em></span><span class="lg f-logic"><i></i><b>Lógica del canvas</b><em>Arma, fusiona o transforma datos. Sin reglas de negocio.</em></span><span class="lg f-human"><i></i><b>Espera a una persona</b><em>Frena hasta que un analista decide.</em></span><span class="lg f-io"><i></i><b>Entrada y salida</b><em>Por dónde entra el caso y por dónde sale el informe.</em></span><span class="lg f-error"><i></i><b>Salida de error</b><em>Corta la ejecución y avisa.</em></span></div>
+  <p class="fine">Las rutas se muestran sin el prefijo <code>/api</code>, que comparten todas. El detalle completo de cada nodo está a un clic.</p>
+  <p class="nota-demo">
+    <b>El modo demo no aparece acá.</b> Saltea los pasos que llaman al modelo
+    —<em>Sintetizar&nbsp;Resolución</em> y <em>Juez&nbsp;de&nbsp;Calidad</em>— y sirve el
+    análisis ya calculado. El resto del circuito es el mismo.
+  </p>
+</header>
+</div>
+
+<div class="figure">
+  <div class="canvas" id="canvas">
+    <svg class="wires" viewBox="0 0 1500 3610" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <marker id="tip" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="var(--wire)"/>
+        </marker>
+        <marker id="tip-err" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" fill="var(--error)"/>
+        </marker>
+      </defs>
+      <path class="w" data-from="Webhook — Entrada" data-to="Validar Formato — IF" d="M 784 188 V 202 H 784 V 244" marker-end="url(#tip)"/><path class="w" data-from="Validar Formato — IF" data-to="Validar Formato TXN" d="M 784 340 V 354 H 784 V 396" marker-end="url(#tip)"/><text class="wl" x="793" y="379" text-anchor="start">formato válido</text><path class="w" data-from="Validar Formato TXN" data-to="Despertar API" d="M 784 492 V 506 H 784 V 606" marker-end="url(#tip)"/><path class="w" data-from="Obtener Transacción" data-to="Obtener Logs" d="M 868 1158 V 1172 H 868 V 1214" marker-end="url(#tip)"/><path class="w" data-from="Obtener Transacción" data-to="Buscar Políticas" d="M 868 1158 V 1184 H 532 V 1214" marker-end="url(#tip)"/><path class="w" data-from="Obtener Transacción" data-to="Buscar Casos Similares" d="M 868 1158 V 1184 H 364 V 1214" marker-end="url(#tip)"/><path class="w" data-from="Obtener Transacción" data-to="Riesgo del Comercio" d="M 868 1158 V 1172 H 1036 V 1214" marker-end="url(#tip)"/><path class="w" data-from="Obtener Transacción" data-to="Historial del Cliente" d="M 868 1158 V 1184 H 700 V 1214" marker-end="url(#tip)"/><path class="w" data-from="Obtener Transacción" data-to="Verificar SLA" d="M 868 1158 V 1172 H 1204 V 1214" marker-end="url(#tip)"/><path class="w" data-from="Formatear Caché" data-to="Responder — Reporte" d="M 700 1158 V 1172 H 250 V 3416 H 784 V 3458" marker-end="url(#tip)"/><path class="w" data-from="Obtener Logs" data-to="Merge — Contexto Paralelo" d="M 868 1310 V 1324 H 784 V 1366" marker-end="url(#tip)"/><path class="w" data-from="Buscar Políticas" data-to="Merge — Contexto Paralelo" d="M 532 1310 V 1324 H 784 V 1366" marker-end="url(#tip)"/><path class="w" data-from="Riesgo del Comercio" data-to="Merge — Contexto Paralelo" d="M 1036 1310 V 1324 H 784 V 1366" marker-end="url(#tip)"/><path class="w" data-from="Historial del Cliente" data-to="Merge — Contexto Paralelo" d="M 700 1310 V 1324 H 784 V 1366" marker-end="url(#tip)"/><path class="w" data-from="Buscar Casos Similares" data-to="Merge — Contexto Paralelo" d="M 364 1310 V 1324 H 784 V 1366" marker-end="url(#tip)"/><path class="w" data-from="Verificar SLA" data-to="Merge — Contexto Paralelo" d="M 1204 1310 V 1324 H 784 V 1366" marker-end="url(#tip)"/><path class="w" data-from="Merge — Contexto Paralelo" data-to="Compilar Contexto" d="M 784 1462 V 1476 H 784 V 1576" marker-end="url(#tip)"/><path class="w" data-from="Compilar Contexto" data-to="Sintetizar Resolución" d="M 784 1672 V 1686 H 784 V 1728" marker-end="url(#tip)"/><path class="w" data-from="Sintetizar Resolución" data-to="Verificar Guardrails" d="M 784 1824 V 1838 H 784 V 1880" marker-end="url(#tip)"/><path class="w" data-from="Juez de Calidad" data-to="Extraer Evaluación — Juez" d="M 784 2128 V 2142 H 784 V 2184" marker-end="url(#tip)"/><path class="w" data-from="Extraer Evaluación — Juez" data-to="¿Juez Aprueba?" d="M 784 2280 V 2294 H 784 V 2336" marker-end="url(#tip)"/><path class="w" data-from="Preparar Informe" data-to="Switch — Nivel de Riesgo" d="M 784 2794 V 2808 H 784 V 2850" marker-end="url(#tip)"/><path class="w" data-from="Switch — Nivel de Riesgo" data-to="Generar Reporte" d="M 784 2946 V 2960 H 218 V 3264 H 700 V 3306" marker-end="url(#tip)"/><text class="wl" x="501" y="2952" text-anchor="middle">BLOCKER · MEDIUM · LOW</text><path class="w" data-from="Switch — Nivel de Riesgo" data-to="Wait — Aprobación HITL" d="M 784 2946 V 2960 H 784 V 3002" marker-end="url(#tip)"/><text class="wl" x="793" y="2985" text-anchor="start">HIGH</text><path class="w" data-from="Procesar Respuesta HITL" data-to="Generar Reporte" d="M 784 3250 V 3264 H 700 V 3306" marker-end="url(#tip)"/><path class="w" data-from="Procesar Respuesta HITL" data-to="Registrar Feedback HITL" d="M 784 3250 V 3264 H 868 V 3306" marker-end="url(#tip)"/><path class="w" data-from="Generar Reporte" data-to="Responder — Reporte" d="M 700 3402 V 3416 H 784 V 3458" marker-end="url(#tip)"/><path class="w" data-from="Despertar API" data-to="Verificar Caché" d="M 784 702 V 716 H 784 V 758" marker-end="url(#tip)"/><path class="w" data-from="Verificar Caché" data-to="¿Cache Hit?" d="M 784 854 V 868 H 784 V 910" marker-end="url(#tip)"/><path class="w" data-from="Verificar Caché" data-to="Obtener Transacción" d="M 784 854 V 868 H 1318 V 1020 H 868 V 1062" marker-end="url(#tip)"/><text class="wl" x="1051" y="860" text-anchor="middle">si falla</text><path class="w" data-from="¿Cache Hit?" data-to="Formatear Caché" d="M 784 1006 V 1020 H 700 V 1062" marker-end="url(#tip)"/><text class="wl" x="709" y="1045" text-anchor="start">hay caché</text><path class="w" data-from="¿Cache Hit?" data-to="Obtener Transacción" d="M 784 1006 V 1020 H 868 V 1062" marker-end="url(#tip)"/><text class="wl" x="877" y="1045" text-anchor="start">hay que investigar</text><path class="w" data-from="Verificar Guardrails" data-to="Juez de Calidad" d="M 784 1976 V 1990 H 784 V 2032" marker-end="url(#tip)"/><path class="w" data-from="¿Juez Aprueba?" data-to="Preparar Informe" d="M 784 2432 V 2446 H 1350 V 2598 H 784 V 2698" marker-end="url(#tip)"/><text class="wl" x="1067" y="2438" text-anchor="middle">aprobada</text><path class="w" data-from="¿Juez Aprueba?" data-to="Marcar — Calidad Baja" d="M 784 2432 V 2446 H 784 V 2488" marker-end="url(#tip)"/><text class="wl" x="793" y="2471" text-anchor="start">no aprobada</text><path class="w" data-from="Marcar — Calidad Baja" data-to="Preparar Informe" d="M 784 2584 V 2598 H 784 V 2698" marker-end="url(#tip)"/><path class="w" data-from="Wait — Aprobación HITL" data-to="Procesar Respuesta HITL" d="M 784 3098 V 3112 H 784 V 3154" marker-end="url(#tip)"/><path class="w err" data-from="Validar Formato — IF" data-to="Propagar → Error Handler — TXN" d="M 860 292 H 1093 V 278 H 1326" marker-end="url(#tip-err)"/><path class="w err" data-from="Obtener Transacción" data-to="Propagar → Error Handler — API" d="M 944 1110 H 1135 V 1096 H 1326" marker-end="url(#tip-err)"/><path class="w err" data-from="Sintetizar Resolución" data-to="Propagar → Error Handler — Análisis" d="M 860 1776 H 1093 V 2066 H 1326" marker-end="url(#tip-err)"/><path class="w err" data-from="Juez de Calidad" data-to="Propagar → Error Handler — Análisis" d="M 860 2080 H 1093 V 2066 H 1326" marker-end="url(#tip-err)"/><path class="w err" data-from="Generar Reporte" data-to="Propagar → Error Handler — Informe" d="M 776 3354 H 1051 V 3340 H 1326" marker-end="url(#tip-err)"/>
+    </svg>
+    <div class="zone" style="top:34px"><span class="z-n">01–03</span><span class="z-t">Entrada y validación</span><span class="z-s">Recibe el caso y verifica el formato del identificador antes de gastar un solo token.</span></div><div class="zone" style="top:548px"><span class="z-n">04–15</span><span class="z-t">Caché y contexto</span><span class="z-s">Corta camino si el caso ya se investigó. Si no, la transacción primero y después seis consultas en paralelo.</span></div><div class="zone" style="top:1518px"><span class="z-n">16–22</span><span class="z-t">Análisis con IA</span><span class="z-s">Evalúa las políticas, sintetiza la resolución, aplica guardrails y se autoevalúa.</span></div><div class="zone" style="top:2640px"><span class="z-n">23–29</span><span class="z-t">Ruteo por riesgo</span><span class="z-s">Clasifica y deriva. Sólo los casos de riesgo alto frenan y esperan a una persona.</span></div>
+    <button class="node f-io" data-node="Webhook — Entrada" type="button" style="left:708px;top:92px"><span class="n-top"><span class="step">01</span><span class="badge">Entrada</span></span><span class="n-name">Webhook — Entrada</span><code class='ep'>POST /webhook/chargeback-agent</code></button><button class="node f-decide" data-node="Validar Formato — IF" type="button" style="left:708px;top:244px"><span class="n-top"><span class="step">02</span><span class="badge">Decide</span></span><span class="n-name">Validar Formato — IF</span></button><button class="node f-logic" data-node="Validar Formato TXN" type="button" style="left:708px;top:396px"><span class="n-top"><span class="step">03</span><span class="badge">Lógica</span></span><span class="n-name">Validar Formato TXN</span></button><button class="node f-api" data-node="Despertar API" type="button" style="left:708px;top:606px"><span class="n-top"><span class="step">04</span><span class="badge">API</span></span><span class="n-name">Despertar API</span><code class='ep'>GET /health</code></button><button class="node f-api" data-node="Verificar Caché" type="button" style="left:708px;top:758px"><span class="n-top"><span class="step">05</span><span class="badge">API</span></span><span class="n-name">Verificar Caché</span><code class='ep'>GET /cache/lookup</code></button><button class="node f-decide" data-node="¿Cache Hit?" type="button" style="left:708px;top:910px"><span class="n-top"><span class="step">06</span><span class="badge">Decide</span></span><span class="n-name">¿Cache Hit?</span></button><button class="node f-logic" data-node="Formatear Caché" type="button" style="left:624px;top:1062px"><span class="n-top"><span class="step">07</span><span class="badge">Lógica</span></span><span class="n-name">Formatear Caché</span></button><button class="node f-api" data-node="Obtener Transacción" type="button" style="left:792px;top:1062px"><span class="n-top"><span class="step">08</span><span class="badge">API</span></span><span class="n-name">Obtener Transacción</span><code class='ep'>GET /transactions/…</code></button><button class="node f-rag" data-node="Buscar Casos Similares" type="button" style="left:288px;top:1214px"><span class="n-top"><span class="step">09</span><span class="badge">RAG · Qdrant</span></span><span class="n-name">Buscar Casos Similares</span><code class='ep'>GET /cases/similar</code></button><button class="node f-rag" data-node="Buscar Políticas" type="button" style="left:456px;top:1214px"><span class="n-top"><span class="step">10</span><span class="badge">RAG · Qdrant</span></span><span class="n-name">Buscar Políticas</span><code class='ep'>GET /policies/search</code></button><button class="node f-api" data-node="Historial del Cliente" type="button" style="left:624px;top:1214px"><span class="n-top"><span class="step">11</span><span class="badge">API</span></span><span class="n-name">Historial del Cliente</span><code class='ep'>GET /clients/…/history</code></button><button class="node f-api" data-node="Obtener Logs" type="button" style="left:792px;top:1214px"><span class="n-top"><span class="step">12</span><span class="badge">API</span></span><span class="n-name">Obtener Logs</span><code class='ep'>GET /logs/…</code></button><button class="node f-api" data-node="Riesgo del Comercio" type="button" style="left:960px;top:1214px"><span class="n-top"><span class="step">13</span><span class="badge">API</span></span><span class="n-name">Riesgo del Comercio</span><code class='ep'>GET /merchants/…/risk</code></button><button class="node f-api" data-node="Verificar SLA" type="button" style="left:1128px;top:1214px"><span class="n-top"><span class="step">14</span><span class="badge">API</span></span><span class="n-name">Verificar SLA</span><code class='ep'>POST /sla/check</code></button><button class="node f-logic" data-node="Merge — Contexto Paralelo" type="button" style="left:708px;top:1366px"><span class="n-top"><span class="step">15</span><span class="badge">Lógica</span></span><span class="n-name">Merge — Contexto Paralelo</span></button><button class="node f-logic" data-node="Compilar Contexto" type="button" style="left:708px;top:1576px"><span class="n-top"><span class="step">16</span><span class="badge">Lógica</span></span><span class="n-name">Compilar Contexto</span></button><button class="node f-llm" data-node="Sintetizar Resolución" type="button" style="left:708px;top:1728px"><span class="n-top"><span class="step">17</span><span class="badge">LLM · Haiku+Sonnet</span></span><span class="n-name">Sintetizar Resolución</span><code class='ep'>POST /analyze/resolve</code></button><button class="node f-logic" data-node="Verificar Guardrails" type="button" style="left:708px;top:1880px"><span class="n-top"><span class="step">18</span><span class="badge">Lógica</span></span><span class="n-name">Verificar Guardrails</span></button><button class="node f-llm" data-node="Juez de Calidad" type="button" style="left:708px;top:2032px"><span class="n-top"><span class="step">19</span><span class="badge">LLM · Sonnet</span></span><span class="n-name">Juez de Calidad</span><code class='ep'>POST /analyze/judge</code></button><button class="node f-logic" data-node="Extraer Evaluación — Juez" type="button" style="left:708px;top:2184px"><span class="n-top"><span class="step">20</span><span class="badge">Lógica</span></span><span class="n-name">Extraer Evaluación — Juez</span></button><button class="node f-decide" data-node="¿Juez Aprueba?" type="button" style="left:708px;top:2336px"><span class="n-top"><span class="step">21</span><span class="badge">Decide</span></span><span class="n-name">¿Juez Aprueba?</span></button><button class="node f-logic" data-node="Marcar — Calidad Baja" type="button" style="left:708px;top:2488px"><span class="n-top"><span class="step">22</span><span class="badge">Lógica</span></span><span class="n-name">Marcar — Calidad Baja</span></button><button class="node f-logic" data-node="Preparar Informe" type="button" style="left:708px;top:2698px"><span class="n-top"><span class="step">23</span><span class="badge">Lógica</span></span><span class="n-name">Preparar Informe</span></button><button class="node f-decide" data-node="Switch — Nivel de Riesgo" type="button" style="left:708px;top:2850px"><span class="n-top"><span class="step">24</span><span class="badge">Decide</span></span><span class="n-name">Switch — Nivel de Riesgo</span></button><button class="node f-human" data-node="Wait — Aprobación HITL" type="button" style="left:708px;top:3002px"><span class="n-top"><span class="step">25</span><span class="badge">Persona</span></span><span class="n-name">Wait — Aprobación HITL</span></button><button class="node f-logic" data-node="Procesar Respuesta HITL" type="button" style="left:708px;top:3154px"><span class="n-top"><span class="step">26</span><span class="badge">Lógica</span></span><span class="n-name">Procesar Respuesta HITL</span></button><button class="node f-api" data-node="Generar Reporte" type="button" style="left:624px;top:3306px"><span class="n-top"><span class="step">27</span><span class="badge">API</span></span><span class="n-name">Generar Reporte</span><code class='ep'>POST /reports/html</code></button><button class="node f-api" data-node="Registrar Feedback HITL" type="button" style="left:792px;top:3306px"><span class="n-top"><span class="step">28</span><span class="badge">API</span></span><span class="n-name">Registrar Feedback HITL</span><code class='ep'>POST /feedback</code></button><button class="node f-io" data-node="Responder — Reporte" type="button" style="left:708px;top:3458px"><span class="n-top"><span class="step">29</span><span class="badge">Salida</span></span><span class="n-name">Responder — Reporte</span></button><span class="tail" style="left:792px;top:3410px">termina acá</span><button class="chip" data-node="Propagar → Error Handler — TXN" type="button" style="left:1326px;top:260px">formato inválido</button><button class="chip" data-node="Propagar → Error Handler — API" type="button" style="left:1326px;top:1078px">la API no responde</button><button class="chip" data-node="Propagar → Error Handler — Análisis" type="button" style="left:1326px;top:2048px">falla el modelo</button><button class="chip" data-node="Propagar → Error Handler — Informe" type="button" style="left:1326px;top:3322px">Propagar → Error Handler — Informe</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="notes"><section class="note"><span class="n-sec">01–03</span><p>La URL de la API se resuelve una sola vez, en «Validar Formato TXN», y los doce nodos HTTP la leen de ahí: body del webhook, variable de n8n, o la API pública por defecto. Por eso el workflow se importa y corre sin configurar nada.</p></section><section class="note"><span class="n-sec">04–15</span><p>Un acierto de caché devuelve el informe ya generado y saltea todo lo demás: dos segundos en lugar de ciento trece. Cuando hay que investigar, acá se unen el RAG y la base de datos: Qdrant aporta qué políticas aplican y qué se hizo en casos parecidos, SQLite aporta los hechos exactos. Ningún umbral de negocio vive en el canvas — los límites de SLA, el ratio de contracargos y las reglas de reincidencia se le piden a la API, que los lee de <code>domain/constants.py</code>.</p></section><section class="note"><span class="n-sec">16–22</span><p>El código decide, el LLM explica: seis de los once campos de la resolución los calcula Python y sobrescriben siempre lo que devuelve el modelo. Después un segundo modelo puntúa esa resolución sobre cinco criterios con rúbricas.</p></section><section class="note"><span class="n-sec">23–29</span><p>Si el Juez puntuó 8.0 o más, el caso se reindexa como precedente en Qdrant. Cada investigación que sale bien mejora a la siguiente.</p></section></div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="panel" id="panel" aria-live="polite">
+  <button class="p-close" id="close" type="button" aria-label="Cerrar">×</button>
+  <div class="p-top"><span class="step" id="p-step"></span><span class="badge" id="p-badge"></span></div>
+  <h2 class="p-name" id="p-name"></h2>
+  <code class="p-ep" id="p-ep"></code>
+  <p class="p-desc" id="p-desc"></p>
+  <span class="d-k">Recibe de</span><ul class="d-list" id="p-from"></ul>
+  <span class="d-k">Continúa en</span><ul class="d-list" id="p-to"></ul>
+</aside>
+
+<script>
+const DATA = {"Webhook — Entrada": {"step": "01", "badge": "Entrada", "family": "io", "endpoint": "POST /webhook/chargeback-agent", "desc": "Recibe el caso por POST. Necesita <code>transaction_id</code> y <code>motivo</code>; acepta <code>cliente_vip</code> y <code>api_base_url</code> como opcionales.", "from": [], "to": ["Validar Formato — IF"]}, "Validar Formato — IF": {"step": "02", "badge": "Decide", "family": "decide", "endpoint": "", "desc": "Valida el formato del identificador con una expresión regular. Si no matchea, corta acá: ningún caso mal formado llega a gastar tokens.", "from": ["Webhook — Entrada"], "to": ["Validar Formato TXN", "Propagar → Error Handler — TXN"]}, "Validar Formato TXN": {"step": "03", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Normaliza los campos de entrada y resuelve la URL de la API una sola vez. Los doce nodos HTTP leen ese valor, así que apuntar todo a otra API es cambiar un solo lugar.", "from": ["Validar Formato — IF"], "to": ["Despertar API"]}, "Obtener Transacción": {"step": "08", "badge": "API", "family": "api", "endpoint": "GET /api/transactions/…", "desc": "Verdad estructurada desde SQLite: monto, comercio, país, método de pago y score antifraude. Lookup exacto por identificador.", "from": ["Verificar Caché", "¿Cache Hit?"], "to": ["Obtener Logs", "Buscar Políticas", "Buscar Casos Similares", "Riesgo del Comercio", "Historial del Cliente", "Verificar SLA", "Propagar → Error Handler — API"]}, "Obtener Logs": {"step": "12", "badge": "API", "family": "api", "endpoint": "GET /api/logs/…", "desc": "Todos los eventos de procesamiento de esa transacción, completos. Se traen enteros porque acá la similitud semántica no aporta nada.", "from": ["Obtener Transacción"], "to": ["Merge — Contexto Paralelo"]}, "Buscar Políticas": {"step": "10", "badge": "RAG · Qdrant", "family": "rag", "endpoint": "GET /api/policies/search", "desc": "Búsqueda semántica sobre Qdrant. La consulta se arma de forma determinística y se enriquece con reglas según método de pago, score y país.", "from": ["Obtener Transacción"], "to": ["Merge — Contexto Paralelo"]}, "Buscar Casos Similares": {"step": "09", "badge": "RAG · Qdrant", "family": "rag", "endpoint": "GET /api/cases/similar", "desc": "Búsqueda semántica sobre los sesenta casos históricos: qué se resolvió antes ante un contracargo parecido.", "from": ["Obtener Transacción"], "to": ["Merge — Contexto Paralelo"]}, "Riesgo del Comercio": {"step": "13", "badge": "API", "family": "api", "endpoint": "GET /api/merchants/…/risk", "desc": "Ratio de contracargos, volumen y señales del comercio. Los umbrales viven en la API, no en este canvas.", "from": ["Obtener Transacción"], "to": ["Merge — Contexto Paralelo"]}, "Historial del Cliente": {"step": "11", "badge": "API", "family": "api", "endpoint": "GET /api/clients/…/history", "desc": "Reincidencia, países usados y métodos de pago. Las señales llegan ya calculadas.", "from": ["Obtener Transacción"], "to": ["Merge — Contexto Paralelo"]}, "Verificar SLA": {"step": "14", "badge": "API", "family": "api", "endpoint": "POST /api/sla/check", "desc": "Cuenta días hábiles y los compara con el límite según país y condición VIP: diez en LATAM, quince fuera, cinco para clientes VIP. De acá sale la compensación, que decide el código. La regla vive en la API para que editarla no implique tocar el workflow.", "from": ["Obtener Transacción"], "to": ["Merge — Contexto Paralelo"]}, "Merge — Contexto Paralelo": {"step": "15", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Espera a las seis ramas. Recién cuando llegaron todas se arma el contexto que ve el modelo.", "from": ["Obtener Logs", "Buscar Políticas", "Riesgo del Comercio", "Historial del Cliente", "Buscar Casos Similares", "Verificar SLA"], "to": ["Compilar Contexto"]}, "Compilar Contexto": {"step": "16", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Fusiona las salidas de las siete herramientas en un solo objeto. Es el punto donde el RAG y la base de datos se vuelven un único contexto.", "from": ["Merge — Contexto Paralelo"], "to": ["Sintetizar Resolución"]}, "Sintetizar Resolución": {"step": "17", "badge": "LLM · Haiku+Sonnet", "family": "llm", "endpoint": "POST /api/analyze/resolve", "desc": "Dos llamadas encadenadas: Haiku evalúa cada política recuperada, Sonnet sintetiza la resolución. Prompt versionado v3.0.", "from": ["Compilar Contexto"], "to": ["Verificar Guardrails", "Propagar → Error Handler — Análisis"]}, "Juez de Calidad": {"step": "19", "badge": "LLM · Sonnet", "family": "llm", "endpoint": "POST /api/analyze/judge", "desc": "Un segundo modelo evalúa la resolución sobre cinco criterios con rúbricas, en escala de uno a diez. Prompt versionado v2.0.", "from": ["Verificar Guardrails"], "to": ["Extraer Evaluación — Juez", "Propagar → Error Handler — Análisis"]}, "Extraer Evaluación — Juez": {"step": "20", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Expone la evaluación del juez para los nodos siguientes.", "from": ["Juez de Calidad"], "to": ["¿Juez Aprueba?"]}, "Preparar Informe": {"step": "23", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Arma el payload exacto que espera el generador de informes.", "from": ["¿Juez Aprueba?", "Marcar — Calidad Baja"], "to": ["Switch — Nivel de Riesgo"]}, "Switch — Nivel de Riesgo": {"step": "24", "badge": "Decide", "family": "decide", "endpoint": "", "desc": "Enruta según el nivel de riesgo calculado. Bloqueante, medio y bajo se resuelven solos; alto es el único que frena.", "from": ["Preparar Informe"], "to": ["Generar Reporte", "Wait — Aprobación HITL", "Generar Reporte", "Generar Reporte", "Generar Reporte"]}, "Despertar API": {"step": "04", "badge": "API", "family": "api", "endpoint": "GET /health", "desc": "Un <code>GET /health</code> antes de las consultas reales. Absorbe el arranque en frío del free tier de Render para que el primer nodo con datos no falle por timeout.", "from": ["Validar Formato TXN"], "to": ["Verificar Caché", "Verificar Caché"]}, "Verificar Caché": {"step": "05", "badge": "API", "family": "api", "endpoint": "GET /api/cache/lookup", "desc": "Caché de idempotencia. Si esta misma transacción ya se investigó, el informe ya existe y no hay nada que recalcular.", "from": ["Despertar API", "Despertar API"], "to": ["¿Cache Hit?", "Obtener Transacción"]}, "¿Cache Hit?": {"step": "06", "badge": "Decide", "family": "decide", "endpoint": "", "desc": "Bifurca según haya caché. Un acierto saltea el pipeline completo: dos segundos en lugar de ciento trece.", "from": ["Verificar Caché"], "to": ["Formatear Caché", "Obtener Transacción"]}, "Formatear Caché": {"step": "07", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Toma el HTML ya generado y lo manda directo a responder, sin volver a renderizarlo ni a llamar al modelo.", "from": ["¿Cache Hit?"], "to": ["Responder — Reporte"]}, "Verificar Guardrails": {"step": "18", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Hace visibles en el canvas los guardrails que ya corrieron en la API. No los recalcula: ninguno de sus umbrales vive en el canvas. El caso típico: aprobar con una política bloqueante activa se autocorrige a rechazo y queda registrado.", "from": ["Sintetizar Resolución"], "to": ["Juez de Calidad"]}, "¿Juez Aprueba?": {"step": "21", "badge": "Decide", "family": "decide", "endpoint": "", "desc": "Control de calidad. Lee el campo `approved` que ya calculó la API: el umbral vive en `constants.py`, no acá. Si no aprueba, la resolución igual se entrega, pero marcada.", "from": ["Extraer Evaluación — Juez"], "to": ["Preparar Informe", "Marcar — Calidad Baja"]}, "Marcar — Calidad Baja": {"step": "22", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Agrega la marca de calidad baja. No descarta la resolución: la entrega señalizada para que una persona la revise.", "from": ["¿Juez Aprueba?"], "to": ["Preparar Informe"]}, "Propagar → Error Handler — TXN": {"step": "—", "badge": "Corta", "family": "error", "endpoint": "", "desc": "Corta la ejecución con contexto cuando el identificador no tiene el formato esperado, y dispara el workflow de errores.", "from": ["Validar Formato — IF"], "to": []}, "Propagar → Error Handler — API": {"step": "—", "badge": "Corta", "family": "error", "endpoint": "", "desc": "Corta si la API no responde después de tres reintentos con espera creciente.", "from": ["Obtener Transacción"], "to": []}, "Propagar → Error Handler — Análisis": {"step": "—", "badge": "Corta", "family": "error", "endpoint": "", "desc": "Corta si falla alguna de las llamadas al modelo.", "from": ["Sintetizar Resolución", "Juez de Calidad"], "to": []}, "Generar Reporte": {"step": "27", "badge": "API", "family": "api", "endpoint": "POST /api/reports/html", "desc": "Renderiza el informe con Jinja2: nueve secciones y formulario de aprobación condicional. Si falla, el webhook devuelve error — nunca un 200 con el cuerpo vacío.", "from": ["Switch — Nivel de Riesgo", "Switch — Nivel de Riesgo", "Switch — Nivel de Riesgo", "Switch — Nivel de Riesgo", "Procesar Respuesta HITL"], "to": ["Responder — Reporte", "Propagar → Error Handler — Informe"]}, "Responder — Reporte": {"step": "29", "badge": "Salida", "family": "io", "endpoint": "", "desc": "Devuelve el HTML a quien disparó el webhook. Sirve igual a un navegador, a otro workflow o a un bot.", "from": ["Generar Reporte", "Formatear Caché"], "to": []}, "Wait — Aprobación HITL": {"step": "25", "badge": "Persona", "family": "human", "endpoint": "", "desc": "Persona en el circuito. Expone un formulario y espera hasta veinticuatro horas. Si nadie responde, el caso NO se aprueba: sale marcado como pendiente.", "from": ["Switch — Nivel de Riesgo"], "to": ["Procesar Respuesta HITL"]}, "Procesar Respuesta HITL": {"step": "26", "badge": "Lógica", "family": "logic", "endpoint": "", "desc": "Fusiona la decisión del analista en el payload. Falla cerrado: sin respuesta no inventa una aprobación, y sólo una decisión humana manda la resolución al feedback.", "from": ["Wait — Aprobación HITL"], "to": ["Generar Reporte", "Registrar Feedback HITL"]}, "Registrar Feedback HITL": {"step": "28", "badge": "API", "family": "api", "endpoint": "POST /api/feedback", "desc": "Cierra el circuito de mejora: manda la resolución completa y, si el juez puntuó ocho o más, el caso se reindexa como precedente en Qdrant. Corre en paralelo con la generación del informe y termina ahí — no forma parte de la respuesta al webhook.", "from": ["Procesar Respuesta HITL"], "to": []}, "Propagar → Error Handler — Informe": {"step": "—", "badge": "Corta", "family": "error", "endpoint": "", "desc": "", "from": ["Generar Reporte"], "to": []}};
+const $ = (s) => document.querySelector(s);
+const panel = $("#panel"), scrim = $("#scrim"), canvas = $("#canvas");
+
+const root = document.documentElement;
+const stored = localStorage.getItem("ciri-theme");
+if (stored) root.dataset.theme = stored;
+$("#theme").addEventListener("click", () => {
+  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const now = root.dataset.theme || (dark ? "dark" : "light");
+  root.dataset.theme = now === "dark" ? "light" : "dark";
+  localStorage.setItem("ciri-theme", root.dataset.theme);
+});
+
+function highlight(name) {
+  canvas.querySelectorAll(".w, .node").forEach((el) => el.classList.remove("on", "near"));
+  if (!name) { canvas.classList.remove("lit"); return; }
+  canvas.classList.add("lit");
+  canvas.querySelectorAll(`[data-node="${CSS.escape(name)}"]`).forEach((el) => el.classList.add("on"));
+  canvas.querySelectorAll(`.w[data-from="${CSS.escape(name)}"], .w[data-to="${CSS.escape(name)}"]`)
+    .forEach((w) => {
+      w.classList.add("on");
+      [w.dataset.from, w.dataset.to].forEach((n) => {
+        const el = canvas.querySelector(`.node[data-node="${CSS.escape(n)}"], .chip[data-node="${CSS.escape(n)}"]`);
+        if (el) el.classList.add("near");
+      });
+    });
+}
+
+const link = (names) => names.length
+  ? names.map((n) => `<li><button data-jump="${n}">${n}</button></li>`).join("")
+  : '<li class="none">—</li>';
+
+function open(name) {
+  const d = DATA[name];
+  if (!d) return;
+  $("#p-step").textContent = d.step;
+  $("#p-badge").textContent = d.badge;
+  $("#p-badge").className = "badge f-" + d.family;
+  $("#p-badge").style.color = `var(--${d.family})`;
+  $("#p-name").textContent = name;
+  $("#p-ep").textContent = d.endpoint || "";
+  $("#p-ep").style.display = d.endpoint ? "block" : "none";
+  $("#p-desc").innerHTML = d.desc;
+  $("#p-from").innerHTML = link(d.from);
+  $("#p-to").innerHTML = link(d.to);
+  panel.classList.add("open");
+  scrim.classList.add("on");
+  highlight(name);
+}
+
+function close() {
+  panel.classList.remove("open");
+  scrim.classList.remove("on");
+  highlight(null);
+}
+
+document.addEventListener("click", (e) => {
+  const node = e.target.closest("[data-node]");
+  if (node) return open(node.dataset.node);
+  const jump = e.target.closest("[data-jump]");
+  if (jump) {
+    open(jump.dataset.jump);
+    const el = canvas.querySelector(`[data-node="${CSS.escape(jump.dataset.jump)}"]`);
+    if (el) el.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+});
+
+canvas.addEventListener("mouseover", (e) => {
+  const el = e.target.closest("[data-node]");
+  if (el && !panel.classList.contains("open")) highlight(el.dataset.node);
+});
+canvas.addEventListener("mouseleave", () => {
+  if (!panel.classList.contains("open")) highlight(null);
+});
+
+$("#close").addEventListener("click", close);
+scrim.addEventListener("click", close);
+addEventListener("keydown", (e) => e.key === "Escape" && close());
+</script>
+</body>
+</html>

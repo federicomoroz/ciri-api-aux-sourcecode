@@ -15,7 +15,8 @@ import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
 INFORMES = RAIZ / "data" / "informes_demo"
-DOCUMENTOS = [RAIZ / "README.md", *sorted((RAIZ / "docs").glob("*.md"))]
+DOCS = RAIZ / "docs"
+DOCUMENTOS = [RAIZ / "README.md", *sorted(DOCS.glob("*.md"))]
 
 
 def scores_reales() -> list[float]:

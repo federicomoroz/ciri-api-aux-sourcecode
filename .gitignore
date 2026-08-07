@@ -35,10 +35,6 @@ _plan_raw.md
 # Instrucciones para el asistente de codigo: herramienta de desarrollo
 CLAUDE.md
 
-# La documentacion del entregable viaja en el ZIP, no en el repositorio:
-# aca vive solo el codigo que la API necesita para funcionar
-/docs/
-
 # Configuracion del editor y peticiones sueltas para probar a mano
 /.vscode/
 /.devcontainer/
