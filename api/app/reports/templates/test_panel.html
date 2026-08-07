@@ -1903,7 +1903,7 @@
         <div class="api-key-input-wrap">
           <input type="text" id="inp-n8n-url" placeholder="https://tu-instancia.app.n8n.cloud" oninput="onN8nUrlChange()" autocomplete="off" spellcheck="false" />
         </div>
-        <p class="form-hint" id="n8n-url-hint">Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.</p>
+        <p class="form-hint" id="n8n-url-hint">Tiene que ser una URL PUBLICA —n8n Cloud, por ejemplo—: al webhook lo llama esta API, no tu navegador. Un n8n en tu maquina no le es alcanzable; para ese caso, levanta el proyecto con docker-compose y usa su panel. Dejalo vacio para usar el pipeline directo.</p>
         <p class="contacto-n8n" id="contacto-n8n"></p>
       </div>
 
@@ -2839,7 +2839,7 @@ function onN8nUrlChange() {
   if (!url) {
     // Sin URL propia queda la del servidor, si la tiene. `verificarN8n` la
     // consulta igual: puede haber una configurada y andando.
-    marcarN8n('opcional', '', 'Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.');
+    marcarN8n('opcional', '', 'Tiene que ser una URL PUBLICA —n8n Cloud, por ejemplo—: al webhook lo llama esta API, no tu navegador. Un n8n en tu maquina no le es alcanzable; para ese caso, levanta el proyecto con docker-compose y usa su panel. Dejalo vacio para usar el pipeline directo.');
     verificacionN8n = setTimeout(() => verificarN8n('', ''), 200);
     return;
   }
@@ -2863,7 +2863,7 @@ async function verificarN8n(url, aviso) {
     const d = await r.json();
 
     if (!d.configured) {
-      marcarN8n('opcional', '', 'Pega la URL de tu n8n para poder elegir el pipeline con orquestacion.');
+      marcarN8n('opcional', '', 'Para elegir el pipeline con orquestacion: Tiene que ser una URL PUBLICA —n8n Cloud, por ejemplo—: al webhook lo llama esta API, no tu navegador. Un n8n en tu maquina no le es alcanzable; para ese caso, levanta el proyecto con docker-compose y usa su panel.');
       habilitarModosN8n(false, 'Falta la URL de tu n8n');
       return;
     }
@@ -3601,7 +3601,7 @@ async function checkHealth() {
         data.configured ? 'required' : '',
         data.configured
           ? 'La API dejo de llegar a ' + data.url + '. El pipeline volvio a Directo.'
-          : 'Pega la URL de tu n8n para poder elegir el pipeline con orquestacion.');
+          : 'Para elegir el pipeline con orquestacion: Tiene que ser una URL PUBLICA —n8n Cloud, por ejemplo—: al webhook lo llama esta API, no tu navegador. Un n8n en tu maquina no le es alcanzable; para ese caso, levanta el proyecto con docker-compose y usa su panel.');
     }
 
     // Store n8n base URL for modal link

@@ -812,6 +812,22 @@ class TestElPipelineConN8nSeHabilitaCuandoResponde:
         assert "habilitarModosN8n(" in cuerpo, "el chequeo periodico no toca el selector"
         assert "setInterval(checkHealth, 30_000)" in html
 
+    def test_pide_una_url_publica_y_dice_por_que(self):
+        """El texto viejo invitaba a pegar `localhost`, que es lo unico que no anda.
+
+        Desde el panel publicado, al webhook lo llama la API —que corre en otra
+        maquina— y no el navegador. Un n8n local le es inalcanzable por
+        definicion, y no hay campo que lo arregle.
+        """
+        html = self.panel
+        assert "URL PUBLICA" in html
+        assert "n8n Cloud" in html
+        assert "Si importaste el workflow en tu n8n, pega su URL" not in html
+
+    def test_ofrece_la_salida_para_un_n8n_local(self):
+        """Decir que no se puede sin decir que hacer es dejar a alguien varado."""
+        assert "docker-compose" in self.panel
+
     def test_si_no_se_pudo_ni_preguntar_tampoco_se_ofrece(self):
         html = self.panel
         cuerpo = html[html.index("async function checkHealth"):html.index("async function loadLangfuseStats")]
