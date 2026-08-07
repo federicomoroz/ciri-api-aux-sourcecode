@@ -833,3 +833,55 @@ class TestElPipelineConN8nSeHabilitaCuandoResponde:
         cuerpo = html[html.index("async function checkHealth"):html.index("async function loadLangfuseStats")]
         catch = cuerpo[cuerpo.rindex("} catch {"):]
         assert "habilitarModosN8n(false" in catch
+
+
+class TestElPanelInformaElModeloQueCorrio:
+    """La misma respuesta HTTP decia dos cosas contradictorias.
+
+        x-modelo-gratuito: true
+        x-usage-json: {"model":"claude-haiku-4-5-20251001","cost_usd":0.028295}
+
+    El informe nombraba bien a Gemini; la cabecera cobraba 2,8 centavos por una
+    corrida que costo cero, porque se pasaba `settings.llm_model` —el default de
+    produccion— sin importar que modelo habia servido. El panel muestra ese
+    numero en un badge.
+
+    Es el mismo error que ya se corrigio en la tabla de tarifas: ahi se arreglo
+    el precio, no el nombre del modelo con el que se lo calcula.
+    """
+
+    GEMINI = {"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"}
+    PRODUCCION = "claude-haiku-4-5-20251001"
+
+    @staticmethod
+    def _pedir(demo_mode, modelo_demo):
+        from types import SimpleNamespace
+
+        from api.app.domain.models import AnalyzeRequest
+        from api.app.routes.panel import _modelo_que_corrio
+
+        req = AnalyzeRequest(transaction_id="TXN-1", motivo="x", demo_mode=demo_mode)
+        settings = SimpleNamespace(
+            llm_model=TestElPanelInformaElModeloQueCorrio.PRODUCCION, demo_mode=True,
+        )
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+            modelos_service=SimpleNamespace(modelo_demo=lambda: modelo_demo),
+        )))
+        return _modelo_que_corrio(req, settings, request)
+
+    def test_en_demo_informa_el_modelo_gratuito(self):
+        assert self._pedir(True, self.GEMINI) == "gemini-flash-lite-latest"
+
+    def test_en_produccion_informa_el_documentado(self):
+        assert self._pedir(False, self.GEMINI) == self.PRODUCCION
+
+    def test_sin_free_tier_no_inventa_uno(self):
+        """Ahi corre la configuracion documentada, y eso es lo que hay que decir."""
+        assert self._pedir(True, None) == self.PRODUCCION
+
+    def test_el_costo_de_una_corrida_gratuita_es_cero(self):
+        """Con el nombre correcto, la tarifa ya lo resuelve."""
+        from api.app.llm.pricing import estimar_costo_usd
+
+        assert estimar_costo_usd(self._pedir(True, self.GEMINI), 20000, 3000) == 0.0
+        assert estimar_costo_usd(self._pedir(False, self.GEMINI), 20000, 3000) > 0

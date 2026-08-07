@@ -172,6 +172,7 @@ class ModelosService:
             self._override = override
         return ResolutionService(
             tracer=self.tracer, modelos=self, demo=demo, api_key=api_key,
+            alertas=self.db.save_alert,
         )
 
     # ── Para el panel ───────────────────────────────────────────────────

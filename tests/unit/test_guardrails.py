@@ -639,3 +639,115 @@ class TestElJuezCalificaAlModelo:
         )
         entregada = capturado["user"].split("## RESOLUCION ENTREGADA")[1].split("##")[0]
         assert "_propuesta_del_modelo" not in entregada
+
+
+class TestUnVeredictoIlegibleNoEsUnVeredictoFavorable:
+    """Un enum mal escrito auto-aprobaba el contracargo.
+
+    `validate_llm_output` no traduce los veredictos invalidos a proposito
+    —adivinar el mas parecido seria decidir por el modelo, y
+    `test_un_veredicto_que_no_existe_no_se_traduce` lo fija—, asi que llegaban
+    crudos a `_determine_outcome`. Ahi `has_blocker` daba False y `fail_count`
+    cero: un veredicto que decia BLOCKED valia lo mismo que uno que dice PASS.
+
+    Reproducido sobre el paquete entregado: un caso cripto con score 8 cuyos dos
+    veredictos venian como `BLOCKED` y `FAILED` salia **APPROVE, sin HITL y sin
+    un solo warning**. Con los enums bien escritos, el mismo caso da REJECT +
+    BLOCKER.
+
+    Importa desde que el modo demo corre con modelos que no son Claude: los
+    prompts piden el enum exacto, pero un modelo mas chico escribe BLOCKED.
+    """
+
+    TX = {"id": "TXN-00051", "payment_method": "Cripto", "fraud_score": 8, "amount_usd": 2095.9}
+
+    @staticmethod
+    def _resolver(veredictos):
+        from api.app.services.resolution import ResolutionService
+
+        return ResolutionService._determine_outcome(veredictos, TestUnVeredictoIlegibleNoEsUnVeredictoFavorable.TX)
+
+    def test_los_enums_mal_escritos_no_aprueban(self):
+        r = self._resolver([
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKED", "reasoning": "cripto"},
+            {"policy_code": "POL-FRD-001", "verdict": "FAILED", "reasoning": "score 8"},
+        ])
+        assert r["recommended_action"] != "APPROVE", "un veredicto ilegible aprobo el contracargo"
+        assert r["requires_hitl"] is True
+
+    def test_uno_solo_ilegible_ya_deriva_a_una_persona(self):
+        """No hace falta que fallen todos: la evidencia ya no se puede leer."""
+        r = self._resolver([
+            {"policy_code": "POL-CB-001", "verdict": "PASS", "reasoning": "ok"},
+            {"policy_code": "POL-FRD-001", "verdict": "si", "reasoning": "x"},
+        ])
+        assert r["requires_hitl"] is True
+
+    def test_dice_cual_politica_no_se_pudo_leer(self):
+        """Sin el codigo, quien revisa no sabe donde mirar."""
+        r = self._resolver([{"policy_code": "POL-FRD-001", "verdict": "QUIZAS", "reasoning": "x"}])
+        assert "POL-FRD-001" in r["hitl_reason"]
+
+    def test_los_enums_bien_escritos_siguen_decidiendo(self):
+        """El arreglo no puede volver paranoico al sistema."""
+        r = self._resolver([
+            {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "cripto"},
+            {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "score 8"},
+        ])
+        assert r["recommended_action"] == "REJECT"
+        assert r["risk_level"] == "BLOCKER"
+
+    def test_todo_pass_sigue_aprobando(self):
+        r = self._resolver([{"policy_code": "POL-CB-001", "verdict": "PASS", "reasoning": "ok"}])
+        assert r["recommended_action"] == "APPROVE"
+
+
+class TestLasAlertasSalenPorDondeVengaElCaso:
+    """El pipeline directo resolvia sin dejar alerta; la ruta si la dejaba.
+
+    `_emit_resolve_alerts` vivia en `routes/analyze.py`, asi que dependia de por
+    donde entraba el caso. Verificado en la instancia publicada: TXN-00007 por
+    el pipeline directo terminaba en PENDING_HITL y `GET /api/alerts/` devolvia
+    `[]`; el mismo caso por `POST /api/analyze/resolve` si aparecia.
+
+    Que un HITL figure o no en el log operativo segun el camino es un problema
+    de auditoria, no de comodidad. Ahora se emite donde nace la resolucion, que
+    es el unico punto por el que pasan los cuatro caminos.
+    """
+
+    @staticmethod
+    def _servicio(anotadas):
+        from api.app.services.resolution import ResolutionService
+
+        return ResolutionService(alertas=anotadas.append)
+
+    def test_un_bloqueante_deja_su_alerta(self):
+        anotadas = []
+        self._servicio(anotadas)._alertar({"risk_level": "BLOCKER"}, "TXN-00051")
+        assert anotadas and anotadas[0]["event_type"] == "blocker_auto_reject"
+        assert anotadas[0]["transaction_id"] == "TXN-00051"
+
+    def test_un_caso_que_espera_una_persona_tambien(self):
+        anotadas = []
+        self._servicio(anotadas)._alertar({"risk_level": "HIGH", "requires_hitl": True}, "TXN-00042")
+        assert anotadas and anotadas[0]["event_type"] == "hitl_required"
+
+    def test_una_aprobacion_limpia_no_ensucia_el_log(self):
+        anotadas = []
+        self._servicio(anotadas)._alertar({"risk_level": "LOW", "requires_hitl": False}, "TXN-1")
+        assert anotadas == []
+
+    def test_sin_sumidero_no_se_rompe(self):
+        """Es el caso de los tests, y no puede tumbar una resolucion."""
+        from api.app.services.resolution import ResolutionService
+
+        ResolutionService()._alertar({"risk_level": "BLOCKER"}, "TXN-1")
+
+    def test_si_anotar_falla_la_resolucion_sigue(self):
+        """Observar el sistema no puede ser una forma nueva de romperlo."""
+        from api.app.services.resolution import ResolutionService
+
+        def explota(_):
+            raise RuntimeError("la base no responde")
+
+        ResolutionService(alertas=explota)._alertar({"risk_level": "BLOCKER"}, "TXN-1")

@@ -51,6 +51,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["panel"])
 
 
+def _sumidero_de_alertas(base: PipelineService):
+    """Donde anota las alertas un pipeline efimero: la misma base del proceso.
+
+    Los eventos operativos —un rechazo automatico, un caso que necesita una
+    persona— tienen que quedar registrados venga el caso por donde venga. Sin
+    base no hay donde anotarlos, y eso es legitimo: pasa en los tests.
+    """
+    return getattr(base.db, "save_alert", None)
+
+
 @contextmanager
 def _pipeline_efimero(
     base: PipelineService, request: Request, api_key: str = "", override: dict | None = None,
@@ -75,6 +85,7 @@ def _pipeline_efimero(
                 clientes[PASO_POLITICAS], tracer,
                 llm_resolution=clientes[PASO_RESOLUCION],
                 llm_judge=clientes[PASO_JUEZ],
+                alertas=_sumidero_de_alertas(base),
             ),
             report_gen=base.report_gen,
         )
@@ -102,6 +113,7 @@ def _pipeline_demo(base: PipelineService, request: Request):
                 clientes[PASO_POLITICAS], tracer,
                 llm_resolution=clientes[PASO_RESOLUCION],
                 llm_judge=clientes[PASO_JUEZ],
+                alertas=_sumidero_de_alertas(base),
             ),
             report_gen=base.report_gen,
         )
@@ -345,10 +357,33 @@ def _pagina(titulo: str, cuerpo: str, txn_id: str) -> str:
     )
 
 
-def _correr_directo(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings) -> HTMLResponse:
+def _modelo_que_corrio(req: AnalyzeRequest, settings: Settings, request=None) -> str:
+    """El modelo con el que se resolvio, no el default de produccion.
+
+    Se pasaba `settings.llm_model` siempre, asi que una corrida con el modelo
+    del modo demo devolvia la misma respuesta HTTP diciendo dos cosas
+    contradictorias: `x-modelo-gratuito: true` junto a
+    `x-usage-json: {"model":"claude-haiku-...","cost_usd":0.0283}`. El informe
+    nombraba bien a Gemini y la cabecera cobraba 2,8 centavos por una corrida
+    que costo cero.
+
+    Es el mismo error que ya se corrigio en la tabla de tarifas —un analisis con
+    Gemini figuraba en $0.1050—: ahi se arreglo el precio, no el nombre del
+    modelo que se le pasa para calcularlo.
+    """
+    if request is not None and _en_modo_demo(req, settings):
+        demo = _modelo_del_demo(request)
+        if demo:
+            return demo.get("modelo") or settings.llm_model
+    return settings.llm_model
+
+
+def _correr_directo(
+    pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, request=None,
+) -> HTMLResponse:
     """Ejecuta el pipeline directo y devuelve el informe, o una pagina de error."""
     try:
-        html, usage = pipeline.run(req, model_name=settings.llm_model)
+        html, usage = pipeline.run(req, model_name=_modelo_que_corrio(req, settings, request))
         response = HTMLResponse(content=html, status_code=200)
         response.headers["X-Usage-JSON"] = json.dumps(usage)
         return response
@@ -390,7 +425,9 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, 
         yield from _emitir_demo(req, settings, pipeline)
         return
     try:
-        for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
+        for step, data in pipeline.run_streaming(
+            req, model_name=_modelo_que_corrio(req, settings, request),
+        ):
             if step == "done" and gratis and data.get("html"):
                 data = {**data, "html": _marcar_corrida_gratis(data["html"], request)}
             yield _sse(step, data)
@@ -598,7 +635,7 @@ async def panel_analyze(
         fallo = ""
         try:
             with _pipeline_demo(pipeline, request) as demo:
-                respuesta = _correr_directo(demo, req, settings)
+                respuesta = _correr_directo(demo, req, settings, request)
             # `_correr_directo` no propaga: devuelve una pagina de error. Mirar
             # solo las excepciones dejaba pasar el 502 sin activar el respaldo.
             if respuesta.status_code == 200:
@@ -625,7 +662,7 @@ async def panel_analyze(
     # corrida: en los dos casos la configuracion es suya y no la del proceso.
     if req.api_key or req.modelos:
         with _pipeline_efimero(pipeline, request, api_key=req.api_key or "", override=req.modelos) as propio:
-            respuesta = _correr_directo(propio, req, settings)
+            respuesta = _correr_directo(propio, req, settings, request)
             return _marcar_si_gratis(respuesta, request, corre_gratis)
 
     # Pidieron n8n explicitamente. Si no se puede, se dice: caer al pipeline
@@ -669,7 +706,9 @@ async def panel_analyze(
             ),
             status_code=400,
         )
-    return _marcar_si_gratis(_correr_directo(pipeline, req, settings), request, corre_gratis)
+    return _marcar_si_gratis(
+        _correr_directo(pipeline, req, settings, request), request, corre_gratis,
+    )
 
 
 @router.post("/api/panel/analyze-stream")
@@ -684,7 +723,19 @@ def panel_analyze_stream(
     BYOK: visitors must provide their own Anthropic API key.
     The server key is reserved for n8n and direct API endpoints.
     """
-    if not req.api_key and not settings.anthropic_api_key:
+    # El guard preguntaba solo por claves de Anthropic y cortaba antes de mirar
+    # el modo demo, que once lineas mas abajo esta perfectamente manejado. En el
+    # deploy —que tiene Gemini configurado y andando— apretar «Analizar» en la
+    # configuracion por defecto devolvia «API key requerida»: el camino
+    # principal del panel, roto, mientras `?direct=1` corria entero.
+    #
+    # La pregunta correcta no es «hay clave de Anthropic» sino «hay con que
+    # correr», y el modo demo con free tier es una de las respuestas.
+    if not (
+        req.api_key
+        or settings.anthropic_api_key
+        or (_en_modo_demo(req, settings) and _modelo_del_demo(request) is not None)
+    ):
         return StreamingResponse(
             iter([f"data: {json.dumps({'step': 'error', 'message': 'API key requerida. Ingresa tu Anthropic API Key.'})}\n\n"]),
             media_type="text/event-stream",

@@ -5,9 +5,11 @@ prueba tecnica, y quien la evalua no tiene por que consumir la cuenta de nadie
 para ver como funciona. Por eso los casos de demostracion viajan con su informe
 ya generado.
 
-**El modo demo no llama al modelo.** No es que intente y falle: no gasta. Quien
-quiera ver el pipeline ejecutandose de verdad carga su propia clave en el panel,
-y ahi corre completo — con su cuenta.
+**Esto es el respaldo, no el plan.** Con un modelo de free tier configurado
+—`CB_DEMO_PROVIDER` / `CB_DEMO_MODEL`— el modo demo corre el pipeline entero, de
+verdad, sobre cualquier transaccion: cuesta lo mismo que no correrlo y devuelve
+un analisis de ahora en vez de una grabacion. Lo de aca abajo se usa cuando no
+hay free tier configurado y no hay con que correr.
 
 Y lo declara por todos lados, porque un informe prearmado no puede hacerse pasar
 por un analisis recien hecho:

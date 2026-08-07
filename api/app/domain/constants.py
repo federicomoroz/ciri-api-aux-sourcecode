@@ -170,8 +170,8 @@ CLIENT_GEO_ANOMALY_THRESHOLD: int = 3      # distinct countries > N → "geo_ano
 # y LOW del enrutador.
 #
 # Ahora el umbral es relativo: se compara cada comercio contra el ratio del propio
-# corpus. Sobre el dataset de la prueba eso deja 5 comercios suspendidos, 4 con
-# ratio alto y 6 limpios. Sobre un libro de ventas real, donde la linea base es
+# corpus. Sobre el dataset de la prueba eso deja 2 comercios suspendidos, 4 con
+# ratio alto y 9 limpios. Sobre un libro de ventas real, donde la linea base es
 # del orden del 1%, los mismos multiplicadores reproducen los umbrales clasicos.
 MERCHANT_SUSPENDED_VS_BASELINE: float = 1.5   # cb_ratio > linea_base × N → "suspended_merchant"
 MERCHANT_HIGH_VS_BASELINE: float = 1.15       # cb_ratio > linea_base × N → "high_cb_ratio"

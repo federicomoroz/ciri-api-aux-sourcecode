@@ -189,7 +189,9 @@ async def lifespan(app: FastAPI):
     # Se le pasa el servicio y no los clientes: asi `/api/analyze/*` —lo que
     # llama n8n— toma el modelo vigente en cada peticion, y cambiarlo desde el
     # panel no exige reiniciar.
-    resolution_service = ResolutionService(tracer=tracer, modelos=modelos)
+    resolution_service = ResolutionService(
+        tracer=tracer, modelos=modelos, alertas=db.save_alert,
+    )
     report_generator = ReportGenerator()
 
     app.state.settings = settings

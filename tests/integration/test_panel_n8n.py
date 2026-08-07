@@ -205,3 +205,71 @@ class TestSeExplicaQueLaLlamadaLaHaceLaApi:
     def test_si_el_servidor_tambien_es_local_no_hay_nada_que_sugerir(self):
         """Todo en la misma maquina, sin contenedores: la URL no es el problema."""
         assert "la llama la API" not in self._pagina("http://localhost:5678", "http://localhost:5678")
+
+
+class TestElBotonAnalizarFuncionaEnLaConfiguracionPublicada:
+    """El camino principal del panel estaba roto justo en el deploy.
+
+    `/api/panel/analyze-stream` cortaba con «API key requerida» cuando no habia
+    clave de Anthropic, sin mirar el modo demo — que once lineas mas abajo esta
+    perfectamente manejado. La instancia publicada tiene Gemini configurado y
+    andando, y `?direct=1` corria entero; el SSE no. Y el panel usa SSE por
+    defecto, asi que apretar «Analizar» sin tocar nada devolvia un error.
+
+    El unico test del endpoint hacia `skip` sin clave de Anthropic y siempre
+    mandaba una: la configuracion que corre en produccion era la unica sin
+    cobertura. Esta clase es esa cobertura.
+    """
+
+    CUERPO_DEMO = {"transaction_id": TXN, "motivo": "No reconoce la compra", "demo_mode": True}
+
+    @staticmethod
+    def _cliente(in_memory_db_path, *, con_modelo_demo: bool, clave_servidor: str = ""):
+        from api.app.data.db import Database
+        from api.app.routes import panel as ruta_panel
+
+        app.state.db = Database(in_memory_db_path)
+        app.state.settings = SimpleNamespace(
+            admin_api_key="", n8n_base_url="", n8n_form_path="", demo_mode=True,
+            llm_model="haiku", llm_model_resolution="", anthropic_api_key=clave_servidor,
+            demo_reports_path="", report_cache_enabled=False,
+        )
+        app.state.pipeline_service = MagicMock()
+        app.state.report_generator = MagicMock()
+        app.state.tracer = MagicMock()
+        app.state.contacto_n8n = ContactoN8n()
+        app.state.modelos_service = MagicMock()
+        app.state.modelos_service.modelo_demo.return_value = (
+            {"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"}
+            if con_modelo_demo else None
+        )
+        return TestClient(app, raise_server_exceptions=False), ruta_panel
+
+    @staticmethod
+    def _primer_evento(respuesta) -> str:
+        """Un evento SSE termina en una linea en blanco."""
+        return respuesta.text.split("\n\n")[0]
+
+    def test_con_modelo_demo_no_pide_clave(self, in_memory_db_path):
+        """Es la configuracion del deploy: sin clave de Anthropic y con free tier."""
+        cliente, _ = self._cliente(in_memory_db_path, con_modelo_demo=True)
+        with cliente as c:
+            r = c.post("/api/panel/analyze-stream", json=self.CUERPO_DEMO)
+        assert "API key requerida" not in r.text, (
+            "el boton «Analizar» del panel publicado devuelve un error"
+        )
+
+    def test_sin_modelo_demo_y_sin_clave_si_la_pide(self, in_memory_db_path):
+        """Ahi no hay con que correr, y decirlo es lo correcto."""
+        cliente, _ = self._cliente(in_memory_db_path, con_modelo_demo=False)
+        with cliente as c:
+            r = c.post("/api/panel/analyze-stream", json=self.CUERPO_DEMO)
+        assert "API key requerida" in self._primer_evento(r)
+
+    def test_con_clave_del_servidor_tampoco_la_pide(self, in_memory_db_path):
+        cliente, _ = self._cliente(
+            in_memory_db_path, con_modelo_demo=False, clave_servidor="sk-ant-loquesea",
+        )
+        with cliente as c:
+            r = c.post("/api/panel/analyze-stream", json=self.CUERPO_DEMO)
+        assert "API key requerida" not in self._primer_evento(r)

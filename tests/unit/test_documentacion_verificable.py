@@ -207,14 +207,25 @@ class TestLosInformesQueViajanSeAbrenSolos:
         )
 
     def test_los_que_viajan_estan_todos(self):
-        """Que el ZIP los lleve no se deduce del glob: se comprueba contra git."""
+        """Que el ZIP los lleve no se deduce del glob: se comprueba contra git.
+
+        Con un `skip` explicito y no en silencio. En el paquete entregado no hay
+        `.git`, asi que `git ls-files` devuelve vacio y `set() <= revisados`
+        pasaba de forma vacua: verde sin comparar nada, justo donde correr los
+        tests importa mas. Un test que no puede probar lo que promete tiene que
+        decirlo, no aprobar.
+        """
         import subprocess
+
+        if not (RAIZ / ".git").exists():
+            pytest.skip("sin repo git al lado —el paquete entregado— no hay contra que comparar")
 
         rastreados = subprocess.run(
             ["git", "ls-files", "-z", "docs/HTML_Output_Examples"],
             cwd=RAIZ, capture_output=True,
         ).stdout.decode("utf-8").split(chr(0))
         publicados = {f for f in rastreados if f.endswith(".html")}
+        assert publicados, "git no devolvio ningun informe: la comparacion seria vacua"
         revisados = {
             str(f.relative_to(RAIZ)).replace("\\", "/") for f in self.ENTREGADOS
         }

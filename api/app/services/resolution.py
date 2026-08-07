@@ -10,6 +10,9 @@ import logging
 
 from ..analysis.analyzer import Analyzer
 from ..domain.constants import (
+    ALERT_EVENT_BLOCKER_REJECT,
+    ALERT_EVENT_HITL_REQUIRED,
+    ALERT_SOURCE_RESOLVE,
     FALLBACK_TX_ID,
     FRAUD_SCORE_DEFAULT,
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
@@ -41,6 +44,10 @@ from ..rag.formatter import annotate_by_motivo, format_cases_for_prompt, format_
 
 logger = logging.getLogger(__name__)
 
+# Los unicos veredictos que significan algo. Se deriva del enum para que agregar
+# uno nuevo no deje esta lista atras.
+_VERDICTOS_VALIDOS = frozenset(v.value for v in VerdictType)
+
 
 class ResolutionService:
     def __init__(
@@ -52,6 +59,7 @@ class ResolutionService:
         modelos=None,
         demo: bool = False,
         api_key: str = "",
+        alertas=None,
     ):
         """Este servicio no conoce clientes de modelo. Pide por paso.
 
@@ -72,6 +80,11 @@ class ResolutionService:
 
         Los clientes explicitos siguen aceptandose para los tests, que quieren
         guionar respuestas sin levantar la configuracion entera.
+
+        `alertas` es donde se anotan los eventos operativos —un rechazo
+        automatico, un caso que necesita una persona—. Es un callable y no la
+        base: este servicio no tiene por que saber que existe SQLite. Sin el,
+        no se alerta; es lo que quieren los tests.
         """
         self._modelos = modelos
         self._demo = demo
@@ -80,6 +93,7 @@ class ResolutionService:
         self._llm_resolution = llm_resolution or llm
         self._llm_judge = llm_judge or self._llm_resolution
         self.tracer = tracer
+        self._alertas = alertas
 
     def _completar(self, paso: str, system: str, user: str, trace_id: str | None = None):
         """La respuesta del modelo de ese paso."""
@@ -154,7 +168,7 @@ class ResolutionService:
             "output_tokens": eval_result.output_tokens + synth_result.output_tokens,
             "call_count": 2,
         }
-        return {
+        resultado = {
             **resolution,
             "guardrail_warnings": warnings,
             "trace_id": trace_id,
@@ -165,6 +179,47 @@ class ResolutionService:
             # ya garantizaba y no podian bajar de 10 por construccion.
             "_propuesta_del_modelo": propuesta,
         }
+        self._alertar(resultado, ctx.transaction.get("id", ""))
+        return resultado
+
+    def _alertar(self, resultado: dict, tx_id: str) -> None:
+        """Anota los eventos operativos que valen la pena mirar despues.
+
+        Vive aca y no en la ruta porque **este es el unico lugar por el que
+        pasan los cuatro caminos**: el webhook de n8n, el pipeline directo, el
+        panel y la llamada suelta a la API. Estaba en `routes/analyze.py`, asi
+        que un caso resuelto por el pipeline directo derivaba a una persona sin
+        dejar alerta, y el mismo caso por n8n si la dejaba. En una fintech, que
+        un HITL aparezca o no en el log segun por donde entro el caso es un
+        problema de auditoria.
+
+        Es best-effort a proposito: no poder anotar una alerta no puede tumbar
+        una resolucion que ya se calculo.
+        """
+        if self._alertas is None:
+            return
+        riesgo = resultado.get("risk_level", "")
+        if riesgo == RiskLevel.BLOCKER:
+            evento, severidad, mensaje = (
+                ALERT_EVENT_BLOCKER_REJECT, Severity.ERROR, f"BLOCKER auto-reject: {tx_id}",
+            )
+        elif resultado.get("requires_hitl"):
+            evento, severidad, mensaje = (
+                ALERT_EVENT_HITL_REQUIRED, Severity.WARN, f"HITL requerido: {tx_id}",
+            )
+        else:
+            return
+        try:
+            self._alertas({
+                "event_type": evento,
+                "severity": severidad,
+                "message": mensaje,
+                "source": ALERT_SOURCE_RESOLVE,
+                "transaction_id": tx_id,
+                "metadata": {"risk_level": riesgo},
+            })
+        except Exception:
+            logger.warning("No se pudo anotar la alerta de %s", tx_id, exc_info=True)
 
     def _eval_policies(self, ctx: CaseContext, trace_id: str) -> tuple[list[dict], LLMResult]:
         """Step 1: LLM policy evaluation. Raises on failure."""
@@ -614,6 +669,44 @@ class ResolutionService:
                 "hitl_reason": (
                     "No se evaluo ninguna politica — revisar si el vector store respondio "
                     "y si la evaluacion del modelo devolvio un JSON valido"
+                ),
+            }
+
+        # Un veredicto con el enum mal escrito valia lo mismo que uno que dice
+        # PASS: `has_blocker` daba False, `fail_count` daba cero, y un caso
+        # cripto con score 8 salia APPROVE sin revision humana. Con los enums
+        # bien escritos el mismo caso da REJECT + BLOCKER.
+        #
+        # El parseo no los traduce a proposito —adivinar el enum mas parecido
+        # seria decidir por el modelo, y `test_un_veredicto_que_no_existe_no_se_
+        # traduce` lo fija—, asi que la decision de que hacer con ellos es de
+        # aca: lo mismo que con la lista vacia. Un veredicto ilegible no es un
+        # veredicto favorable; es evidencia que no se pudo leer.
+        #
+        # Importa mas desde que el modo demo corre con modelos que no son
+        # Claude: los prompts piden el enum exacto, pero un modelo mas chico
+        # escribe BLOCKED o FAILED, y ahi el sistema aprobaba solo.
+        ilegibles = [
+            v.get("policy_code", "?") for v in policy_verdicts
+            if v.get("verdict") not in _VERDICTOS_VALIDOS
+        ]
+        if ilegibles:
+            logger.error(
+                "Veredictos con un valor que no existe (%s): se deriva a revision humana",
+                ", ".join(ilegibles),
+            )
+            return {
+                "recommended_action": ResolutionOutcome.PENDING_HITL,
+                "risk_level": RiskLevel.HIGH,
+                "risk_reason": (
+                    f"{len(ilegibles)} veredicto(s) con un valor que no existe: la evidencia "
+                    f"no se pudo leer"
+                ),
+                "requires_hitl": True,
+                "hitl_reason": (
+                    "El modelo devolvio veredictos que no son PASS/FAIL/BLOCKER/WARNING/"
+                    f"NOT_APPLICABLE en {', '.join(ilegibles)} — revisar la salida del modelo "
+                    "antes de decidir"
                 ),
             }
 

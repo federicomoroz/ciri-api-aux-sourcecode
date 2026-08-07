@@ -109,9 +109,17 @@ siguiente. Fijado por `tests/unit/test_workflows_n8n.py::TestHITL`.
 
 Manejo de errores: los 4 nodos `Propagar → Error Handler` cortan el flujo con contexto, los
 nodos HTTP reintentan 3 veces con backoff, y los no críticos siguen con `continueRegularOutput`
-en vez de tirar toda la investigación. `settings.errorWorkflow` viaja en el JSON exportado, así
-que los `Stop and Error` derivan al workflow de alertas apenas se importa. Si falla la generación
-del informe, el webhook devuelve error — nunca un 200 con el cuerpo vacío.
+en vez de tirar toda la investigación.
+
+**Antes de cortar, cada final de error responde**: 400 si el `transaction_id` está mal formado,
+404 si la transacción no existe, 503 si la API no contesta, 502 si falla el modelo o el informe.
+Ningún camino devuelve un `200` con el cuerpo vacío, que es indistinguible de un éxito.
+
+`settings.errorWorkflow` viaja en el JSON exportado, **pero su valor es el ID del workflow de
+errores en la instancia donde se exportó**. Al importarlo en otra, ese ID no existe: hay que
+apuntarlo a mano una vez, en *Settings → Error Workflow*. El README lo pide como paso 2 de la
+importación. Decir que funciona apenas se importa sería falso, y es la clase de detalle que
+sólo se descubre cuando ya falló algo.
 
 ---
 
@@ -120,7 +128,7 @@ del informe, el webhook devuelve error — nunca un 200 con el cuerpo vacío.
 | Sub-eje | Resolución |
 |---|---|
 | Patrones de error | `analyzer.py::detect_error_patterns` sobre los 150 logs — 8 patrones nombrados (`ErrorPattern`): timeout sistemático del comercio, problema de conectividad, bloqueo por fraude, cargo duplicado, violación de SLA, falla de integración, pago interrumpido por sesión caída, anomalía geográfica |
-| Comercios problemáticos | `analyzer.py::merchant_risk_profile` — `cb_ratio`, volumen, flags (`suspended_merchant`, `high_cb_ratio`). **El umbral es relativo a la línea base del corpus**, no un 2% absoluto: sobre una muestra de disputas donde 60 de 100 transacciones tienen contracargo, un umbral de industria marca los quince comercios y no distingue nada. Con la línea base quedan 2 suspendidos, 4 con ratio alto y 9 limpios |
+| Comercios problemáticos | `analyzer.py::merchant_risk_profile` — `cb_ratio`, volumen, flags (`suspended_merchant`, `high_cb_ratio`). **El umbral es relativo a la línea base del corpus**, no un 2% absoluto: sobre una muestra de disputas donde 47 de 100 transacciones tienen contracargo, un umbral de industria marca los quince comercios y no distingue nada. Con la línea base quedan 2 suspendidos, 4 con ratio alto y 9 limpios |
 | Clientes con señales | `analyzer.py::client_flags` — reincidencia, anomalía geográfica |
 | Inconsistencias de política | El LLM evalúa cada política recuperada y emite veredicto PASS / WARNING / FAIL / BLOCKER con cita; los conflictos quedan visibles en el reporte. Sólo puede emitir BLOCKER la política que lo declara (`puede_bloquear`, columna de SQLite): habilitar una nueva es un `POST`, no un deploy |
 
@@ -130,7 +138,7 @@ está en el canvas de n8n.
 **Verificar:**
 ```bash
 curl "https://ciri-chargeback-agent.onrender.com/api/merchants/Airbnb/risk"
-# {"cb_ratio": 0.75, "flags": ["suspended_merchant"], ...}
+# {"cb_ratio": 0.75, "flags": ["high_cb_ratio"], "total_transactions": 4, ...}
 ```
 
 ---

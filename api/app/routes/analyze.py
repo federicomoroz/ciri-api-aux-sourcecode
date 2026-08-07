@@ -12,12 +12,6 @@ from ..config import Settings
 from ..data.db import Database
 from ..data.precomputados import analisis_demo, casos_demo, distancia_de_riesgo
 from ..dependencies import get_db, get_modelos_service, get_resolution_service, get_settings
-from ..domain.constants import (
-    ALERT_EVENT_BLOCKER_REJECT,
-    ALERT_EVENT_HITL_REQUIRED,
-    ALERT_SOURCE_RESOLVE,
-)
-from ..domain.enums import RiskLevel, Severity
 from ..domain.models import JudgeRequest, JudgeResponse, ResolveRequest, ResolveResponse
 from ..services.modelos import ModelosService
 from ..services.resolution import ResolutionService
@@ -25,32 +19,6 @@ from ..services.resolution import ResolutionService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
-
-
-def _emit_resolve_alerts(result: dict, tx_id: str, db: Database) -> None:
-    """Emit operational alerts for significant resolve outcomes (best-effort)."""
-    try:
-        risk = result.get("risk_level", "")
-        if risk == RiskLevel.BLOCKER:
-            db.save_alert({
-                "event_type": ALERT_EVENT_BLOCKER_REJECT,
-                "severity": Severity.ERROR,
-                "message": f"BLOCKER auto-reject: {tx_id}",
-                "source": ALERT_SOURCE_RESOLVE,
-                "transaction_id": tx_id,
-                "metadata": {"risk_level": risk},
-            })
-        elif result.get("requires_hitl"):
-            db.save_alert({
-                "event_type": ALERT_EVENT_HITL_REQUIRED,
-                "severity": Severity.WARN,
-                "message": f"HITL requerido: {tx_id}",
-                "source": ALERT_SOURCE_RESOLVE,
-                "transaction_id": tx_id,
-                "metadata": {"risk_level": risk},
-            })
-    except Exception:
-        logger.warning("Failed to save alert for %s", tx_id, exc_info=True)
 
 
 def _caso_mas_cercano(carpeta: str, tx_data: dict | None) -> str | None:
@@ -136,7 +104,6 @@ def resolve(
         # Sin modelo de demo configurado, el modo demo recita en vez de correr.
         guardado = _demo_de(settings, tx_id, "resolution", req.tx_data)
         if guardado is not None:
-            _emit_resolve_alerts(guardado, tx_id, db)
             return guardado
 
     result = servicio.resolve(req.to_context())
@@ -146,7 +113,6 @@ def resolve(
         # con el resultado, porque el informe lo declara y no todos los que lo
         # piden pasan por el panel — n8n llama derecho a la API.
         result = {**result, "demo": True, "demo_modelo": modelos.modelo_demo()}
-    _emit_resolve_alerts(result, tx_id, db)
     return result
 
 
