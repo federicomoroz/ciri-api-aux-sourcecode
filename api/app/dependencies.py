@@ -18,7 +18,8 @@ from .data.db import Database
 from .data.loader import init_sqlite, load_excel
 from .llm.manager import LLMManager
 from .observability.contacto_n8n import ContactoN8n
-from .observability.tracer import LangfuseTracer, NoOpTracer
+from .observability.tracer import LangfuseTracer
+from .observability.trazador_local import TrazadorLocal
 from .rag.embedder import FastEmbedder
 from .rag.indexer import QdrantIndexer
 from .rag.retriever import QdrantRetriever
@@ -63,7 +64,10 @@ def _conectar_servicios(settings: Settings) -> dict:
             host=settings.langfuse_host,
         )
         if settings.langfuse_enabled
-        else NoOpTracer()
+        # Sin Langfuse se anota igual, en la SQLite del proyecto. Antes era un
+        # tracer que no hacia nada y el panel se quedaba sin una sola metrica,
+        # aunque la latencia y los tokens estuvieran pasando por delante.
+        else TrazadorLocal(settings.sqlite_path)
     )
     manager = LLMManager(settings, tracer)
     llm = manager.cliente(settings.llm_provider or "anthropic", settings.llm_model)

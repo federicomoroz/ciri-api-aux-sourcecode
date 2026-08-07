@@ -62,7 +62,7 @@ class LangfuseStatsService:
 
     def get_stats(self) -> dict:
         if not self.enabled:
-            return {"enabled": False, "summary": None, "recent_traces": []}
+            return self._stats_locales()
 
         now = time.time()
         if self._cache and (now - self._cache_time) < LANGFUSE_STATS_CACHE_TTL_S:
@@ -157,6 +157,30 @@ class LangfuseStatsService:
             "cost_usd": round(sum(f["cost_usd"] for f in filas), 4),
             "avg_judge_score": round(sum(puntajes) / len(puntajes), 2) if puntajes else None,
             "avg_latency_s": round(sum(latencias) / len(latencias), 2) if latencias else None,
+        }
+
+    def _stats_locales(self) -> dict:
+        """Lo que se pudo medir sin Langfuse. No es lo mismo, y se declara.
+
+        Sin Langfuse el panel escondia la seccion entera, como si no hubiera
+        nada que mostrar. Pero la latencia de cada llamada existe igual, los
+        tokens los informa el proveedor, y el costo de una corrida gratuita es
+        un dato —cero— y no una ausencia. Lo que falta es la traza distribuida y
+        el historico, no los numeros.
+
+        `fuente` va en la respuesta para que el panel diga de donde salen: no es
+        lo mismo «medido en este proceso» que «lo que registro Langfuse».
+        """
+        resumen, recientes = getattr(self._tracer, "resumen", lambda _limite: ({}, []))(
+            LANGFUSE_STATS_FETCH_LIMIT
+        )
+        if not resumen:
+            return {"enabled": False, "fuente": "local", "summary": None, "recent_traces": []}
+        return {
+            "enabled": True,
+            "fuente": "local",
+            "summary": resumen,
+            "recent_traces": recientes[:LANGFUSE_STATS_DISPLAY_LIMIT],
         }
 
     def _fetch_stats(self) -> dict:

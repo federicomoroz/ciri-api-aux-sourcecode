@@ -12,6 +12,7 @@ from ..domain.constants import (
     LLM_PRICING,
     LLM_PRICING_FALLBACK_KEY,
     LLM_PRICING_PER_MTOK,
+    LLM_SIN_TARIFA,
 )
 
 
@@ -20,9 +21,16 @@ def tarifa_de(model_name: str) -> tuple[float, float]:
 
     Los nombres de modelo traen sufijos de fecha y version, asi que se busca por
     subcadena. Si ninguna tarifa matchea se usa la de referencia: informar costo
-    cero seria peor que informar una estimacion.
+    cero para un modelo de pago desconocido seria peor que estimar.
+
+    La excepcion son los que este proyecto solo usa por free tier: ahi el cero
+    es el dato correcto y la estimacion era el error.
     """
     modelo = (model_name or "").lower()
+    # Los que corren por free tier van primero: si no, caian en la tarifa de
+    # referencia y una corrida que no costo nada figuraba en diez centavos.
+    if any(marca in modelo for marca in LLM_SIN_TARIFA):
+        return (0.0, 0.0)
     for clave, tarifa in LLM_PRICING.items():
         if clave in modelo:
             return tarifa

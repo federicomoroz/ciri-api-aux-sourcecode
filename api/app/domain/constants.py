@@ -106,6 +106,7 @@ __all__ = [
     # LLM Pricing
     "LLM_PRICING",
     "LLM_PRICING_PER_MTOK",
+    "LLM_SIN_TARIFA",
     # Reranking
     "RERANK_PAYMENT_METHOD_BOOST",
     "RERANK_COUNTRY_BOOST",
@@ -427,8 +428,17 @@ LLM_PRICING: dict[str, tuple[float, float]] = {
     "gpt-4.1-mini": (0.40, 1.60),
     "gpt-4o": (2.50, 10.00),
     "o4-mini": (1.10, 4.40),
-    # Los proveedores de free tier no tienen tarifa: `_costo` no los consulta.
 }
+
+# Modelos que este proyecto usa SOLO a traves de free tiers. Su tarifa es cero
+# porque la corrida no cuesta nada, no porque el modelo sea gratis en abstracto:
+# Gemini Flash tiene precio en un plan pago. Si alguien apunta una clave paga a
+# uno de estos, el panel subestima el costo — preferible a lo que hacia antes,
+# que era informar la tarifa de Sonnet para una corrida que salio cero. Un
+# analisis con Gemini figuraba en $0.1050.
+LLM_SIN_TARIFA: tuple[str, ...] = (
+    "gemini", "llama", "qwen", "deepseek", "mixtral", "gemma", "glm", "kimi",
+)
 LLM_PRICING_PER_MTOK: int = 1_000_000
 
 # ── Judge ────────────────────────────────────────────────────────────────────

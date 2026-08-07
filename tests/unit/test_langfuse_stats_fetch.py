@@ -127,9 +127,73 @@ class TestCasosBorde:
         assert stats["summary"]["avg_judge_score"] is None
 
     def test_sin_langfuse_detras_no_hay_estadisticas(self):
+        """Un tracer que no anota nada no puede informar nada.
+
+        Es el caso de los tests. El del deploy sin claves de Langfuse es otro:
+        ahi corre `TrazadorLocal`, que si anota — ver la clase de abajo.
+        """
         svc = LangfuseStatsService(NoOpTracer(), "claude-sonnet-4-6")
         assert svc.enabled is False
-        assert svc.get_stats() == {"enabled": False, "summary": None, "recent_traces": []}
+        assert svc.get_stats()["summary"] is None
+        assert svc.get_stats()["enabled"] is False
+
+
+class TestSinLangfuseSeMideIgual:
+    """Que falte Langfuse no significa que no haya nada que medir.
+
+    El panel escondia la seccion entera sin claves de Langfuse, como si no
+    hubiera datos. Pero la latencia de cada llamada existe igual, los tokens los
+    informa el proveedor, y el costo de una corrida gratuita es un dato —cero— y
+    no una ausencia. Lo que falta es la traza distribuida y el historico largo.
+    """
+
+    @staticmethod
+    def _servicio_local(tmp_path):
+        from api.app.observability.trazador_local import TrazadorLocal
+
+        trazador = TrazadorLocal(str(tmp_path / "trazas.db"))
+        tid = trazador.trace("resolve_chargeback", {}, {}, {"txn": "TXN-00051"})
+        trazador.generation(
+            name="policy_eval", model="gemini-flash-lite-latest", input="", output="",
+            tokens_in=9000, tokens_out=800, latency_ms=4200, trace_id=tid,
+        )
+        trazador.generation(
+            name="judge", model="gemini-flash-lite-latest", input="", output="",
+            tokens_in=3000, tokens_out=400, latency_ms=1500, trace_id=tid,
+        )
+        trazador.score(tid, "judge_score", 7.4)
+        return LangfuseStatsService(trazador, "gemini-flash-lite-latest")
+
+    def test_hay_metricas_sin_langfuse(self, tmp_path):
+        stats = self._servicio_local(tmp_path).get_stats()
+        assert stats["enabled"] is True
+        assert stats["summary"]["total_traces"] == 1
+
+    def test_la_latencia_se_cuenta_aunque_sea_demo(self, tmp_path):
+        """Era el punto: gratis no quiere decir que no haya nada que medir."""
+        stats = self._servicio_local(tmp_path).get_stats()
+        assert stats["summary"]["avg_latency_s"] == 5.7
+
+    def test_los_tokens_se_suman_por_analisis(self, tmp_path):
+        """Una traza es un analisis, que son varias llamadas al modelo."""
+        assert self._servicio_local(tmp_path).get_stats()["summary"]["total_tokens"] == 13200
+
+    def test_un_modelo_gratuito_cuesta_cero(self, tmp_path):
+        """Con la tarifa de referencia, esos 13.200 tokens figuraban en $0.05."""
+        assert self._servicio_local(tmp_path).get_stats()["summary"]["cost_usd"] == 0.0
+
+    def test_la_nota_del_juez_llega(self, tmp_path):
+        assert self._servicio_local(tmp_path).get_stats()["summary"]["avg_judge_score"] == 7.4
+
+    def test_se_declara_de_donde_salen_los_numeros(self, tmp_path):
+        """No es lo mismo medido aca que registrado por Langfuse."""
+        assert self._servicio_local(tmp_path).get_stats()["fuente"] == "local"
+
+    def test_sin_ninguna_corrida_no_inventa_una_seccion(self, tmp_path):
+        from api.app.observability.trazador_local import TrazadorLocal
+
+        svc = LangfuseStatsService(TrazadorLocal(str(tmp_path / "v.db")), "x")
+        assert svc.get_stats()["summary"] is None
 
 
 class TestCache:

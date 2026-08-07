@@ -260,6 +260,11 @@ class LangfuseStatsResponse(BaseModel):
     enabled: bool
     summary: dict | None = None
     recent_traces: list[dict] = []
+    # De donde salen los numeros: `langfuse` o `local`. No es un detalle de
+    # implementacion — cambia lo que significan. Los locales son de este proceso
+    # y no sobreviven a un reinicio; los de Langfuse son el historico entero.
+    # El panel lo dice en pantalla en vez de presentar los dos como lo mismo.
+    fuente: str = "langfuse"
 
 
 class AlertRequest(BaseModel):
