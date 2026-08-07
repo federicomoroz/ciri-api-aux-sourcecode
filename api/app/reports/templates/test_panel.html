@@ -2579,15 +2579,21 @@ async function restablecerModelos() {
 // ─── MODO DEMO ───────────────────────────────────────────
 // Encendido: los casos guardados salen al instante y no se llama al modelo.
 // Apagado: corre el pipeline de verdad y hace falta una API key con saldo.
-let demoMode  = true;
-let casosDemo = [];
+let demoMode   = true;
+let casosDemo  = [];
+let demoModelo = null;   // con que corre el modo demo, si hay uno configurado
+let demoCorre  = false;  // si el modo demo ejecuta o sirve informes guardados
+let produccion = {};     // que modelo usa cada paso en modo produccion
 
 async function loadDemoStatus() {
   try {
     const r = await fetch(API_BASE + '/api/panel/demo-status');
     const d = await r.json();
-    demoMode  = !!d.demo_mode;
-    casosDemo = d.casos || [];
+    demoMode   = !!d.demo_mode;
+    casosDemo  = d.casos || [];
+    demoModelo = d.demo_modelo || null;
+    demoCorre  = !!d.demo_ejecuta;
+    produccion = d.produccion || {};
   } catch { /* el default alcanza */ }
   $('inp-demo').checked = demoMode;
   applyDemoMode();
@@ -2601,22 +2607,37 @@ function onDemoToggle() {
 function applyDemoMode() {
   $('demo-card').classList.toggle('on', demoMode);
   $('demo-label').textContent = demoMode ? 'Modo demo' : 'Modo produccion';
-  $('demo-hint').innerHTML = demoMode
-    ? 'Solo los <b>' + casosDemo.length + ' casos de ejemplo</b>, con su informe ya generado. '
-      + 'No se llama al modelo: no consume la cuenta de nadie. '
-      + 'El informe llega marcado como <b>DEMO (Caso prearmado)</b>.'
-    : 'El pipeline corre <b>de verdad</b>, sobre cualquier transaccion del dataset. '
-      + 'Si cargas tu API key, se usa la tuya y no la del servidor.';
 
-  // La consulta personalizada no aplica: en demo solo existen los casos guardados.
-  const custom = document.querySelector('.form-card');
-  if (custom) custom.classList.toggle('bloqueado', demoMode);
-  if (demoMode && isCustom) {
-    isCustom = false;
-    document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
-    selectedIdx = null;
-    disableSubmit('Seleccionar escenario');
+  if (demoMode && demoCorre) {
+    // Corre el pipeline entero sobre la misma base que produccion. Lo unico
+    // distinto es el modelo, y por eso hay que nombrarlo.
+    $('demo-hint').innerHTML =
+      'El pipeline corre <b>de verdad</b> sobre cualquier transaccion del dataset, con '
+      + `<b>${demoModelo.modelo}</b> (${demoModelo.proveedor}) en los <b>tres pasos</b>. `
+      + 'Usa la cuenta del servidor: no necesitas clave. '
+      + '<b>Los resultados pueden variar</b> respecto de la configuracion documentada — '
+      + 'los prompts estan afinados para Claude.';
+  } else if (demoMode) {
+    $('demo-hint').innerHTML =
+      'No hay modelo de demo configurado, asi que se sirven los <b>'
+      + casosDemo.length + ' informes guardados</b>. No se llama al modelo. '
+      + 'Llegan marcados como <b>DEMO (Caso prearmado)</b>.';
+  } else {
+    const pasos = ['policy_eval', 'resolution', 'judge']
+      .map(p => (produccion[p] || {}).modelo).filter(Boolean);
+    const detalle = pasos.length === 3
+      ? `<b>${pasos[0]}</b> para evaluar politicas, <b>${pasos[1]}</b> para sintetizar y juzgar`
+      : 'la configuracion documentada';
+    $('demo-hint').innerHTML =
+      `La configuracion documentada: ${detalle}. `
+      + '<b>Requiere tu clave de Anthropic</b>, que se usa solo mientras esta pagina este '
+      + 'abierta — no se guarda en ningun lado. El costo de cada corrida aparece abajo, '
+      + 'en <b>Observabilidad</b>.';
   }
+
+  // En demo ya no hay restriccion de casos: corre sobre la misma base.
+  const custom = document.querySelector('.form-card');
+  if (custom) custom.classList.remove('bloqueado');
 
   $('aviso-sin-saldo').classList.toggle('visible', !demoMode);
   onApiKeyChange();

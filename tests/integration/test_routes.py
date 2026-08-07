@@ -88,7 +88,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     # MagicMock responde que si a cualquier capacidad que se le consulte.
     app.state.langfuse_stats_service = LangfuseStatsService(NoOpTracer(), "claude-sonnet-4-6")
 
-    from api.app.dependencies import construir_llm
+    from api.app.llm.manager import LLMManager
     from api.app.services.modelos import ModelosService
 
     app.state.settings.llm_provider = "anthropic"
@@ -99,7 +99,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.settings.anthropic_api_key = "test"
     db.ensure_modelos_table()
     app.state.modelos_service = ModelosService(
-        db, app.state.settings, mock_tracer, construir_llm,
+        db, app.state.settings, LLMManager(app.state.settings, mock_tracer),
     )
 
     # Ensure report cache table exists

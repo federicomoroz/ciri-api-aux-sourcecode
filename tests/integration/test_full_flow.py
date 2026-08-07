@@ -87,6 +87,25 @@ def test_client_full_flow(in_memory_db_path, mock_llm_blocker):
     app.state.feedback_service = feedback_service
     app.state.pipeline_service = MagicMock()
 
+    # Montar la app a mano exige montarla entera: `_ya_cableado` es el punto de
+    # extension para eso, y `/api/analyze/*` necesita saber que modelo le toca.
+    from api.app.llm.manager import LLMManager
+    from api.app.services.modelos import ModelosService
+
+    app.state.settings.demo_mode = False
+    app.state.settings.demo_provider = ""
+    app.state.settings.demo_model = ""
+    app.state.settings.llm_provider = "anthropic"
+    app.state.settings.llm_model = "claude-haiku-4-5-20251001"
+    app.state.settings.llm_model_resolution = ""
+    app.state.settings.llm_api_keys = {}
+    app.state.settings.llm_api_key = ""
+    app.state.settings.llm_base_url = ""
+    db.ensure_modelos_table()
+    app.state.modelos_service = ModelosService(
+        db, app.state.settings, LLMManager(app.state.settings, mock_tracer),
+    )
+
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client
 

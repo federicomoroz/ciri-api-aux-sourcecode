@@ -42,7 +42,8 @@ def settings_falsas(**extra):
         "anthropic_api_key": "clave-del-servidor",
         "llm_api_key": "",
         "llm_api_keys": {},
-        "demo_ejecuta_siempre": False,
+        "demo_provider": "",
+        "demo_model": "",
         "llm_max_retries": 2,
         "llm_base_url": "",
     }
@@ -58,22 +59,47 @@ def settings_falsas(**extra):
     return S(base)
 
 
+class ManagerFalso:
+    """Devuelve marcas en vez de clientes, para poder inspeccionarlas.
+
+    Es el `LLMManager` real reducido a lo que este servicio le pide: una clave
+    por proveedor y un cliente por (proveedor, modelo).
+    """
+
+    def __init__(self, settings):
+        self.settings = settings
+        self.tracer = MagicMock()
+        self.invalidado = 0
+
+    def clave_de(self, proveedor):
+        por_proveedor = (self.settings.llm_api_keys or {}).get(proveedor, "")
+        if por_proveedor:
+            return por_proveedor
+        if proveedor == "anthropic":
+            return self.settings.anthropic_api_key
+        return self.settings.llm_api_key
+
+    def hay_clave(self, proveedor):
+        return bool(self.clave_de(proveedor))
+
+    def cliente(self, proveedor, modelo, api_key=""):
+        return MagicMock(
+            proveedor=proveedor, modelo=modelo,
+            api_key=api_key or self.clave_de(proveedor),
+        )
+
+    def invalidar(self):
+        self.invalidado += 1
+
+
+def _servicio(**extra):
+    s = settings_falsas(**extra)
+    return ModelosService(DBFalsa(), s, ManagerFalso(s))
+
+
 @pytest.fixture
 def servicio():
-    """El constructor devuelve una marca en vez de un cliente: se inspecciona."""
-    construidos = []
-
-    def constructor(settings, modelo, tracer):
-        marca = MagicMock()
-        marca.modelo = modelo
-        marca.proveedor = settings.llm_provider
-        marca.api_key = settings.llm_api_key or settings.anthropic_api_key
-        construidos.append(marca)
-        return marca
-
-    svc = ModelosService(DBFalsa(), settings_falsas(), MagicMock(), constructor)
-    svc.construidos = construidos
-    return svc
+    return _servicio()
 
 
 class TestConfiguracionVigente:
@@ -131,16 +157,10 @@ class TestClientes:
         assert cliente.proveedor == "groq"
         assert cliente.modelo == "llama-3.3-70b-versatile"
 
-    def test_se_cachea_hasta_que_alguien_lo_cambia(self, servicio):
-        primero = servicio.cliente(PASO_JUEZ)
-        assert servicio.cliente(PASO_JUEZ) is primero
+    def test_guardar_le_avisa_al_manager(self, servicio):
+        """Cambio la configuracion: los clientes que tenia cacheados ya no sirven."""
         servicio.guardar(PASO_JUEZ, "groq", "otro")
-        assert servicio.cliente(PASO_JUEZ) is not primero
-
-    def test_guardar_cierra_los_clientes_viejos(self, servicio):
-        viejo = servicio.cliente(PASO_JUEZ)
-        servicio.guardar(PASO_JUEZ, "groq", "otro")
-        assert viejo.close.called, "el pool de conexiones quedo colgado"
+        assert servicio.manager.invalidado == 1
 
     def test_dos_pasos_distintos_dan_clientes_distintos(self, servicio):
         servicio.guardar(PASO_JUEZ, "groq", "llama")
@@ -216,21 +236,17 @@ class TestClavePorProveedor:
     """El dueño del deploy puede cargar las de free tier sin arriesgar nada."""
 
     def _con_claves(self, claves):
-        svc = ModelosService(DBFalsa(), settings_falsas(llm_api_keys=claves), MagicMock(),
-                             lambda s, m, t: MagicMock(api_key=s.llm_api_key, proveedor=s.llm_provider))
-        return svc
+        return _servicio(llm_api_keys=claves)
 
     def test_la_clave_del_proveedor_gana_sobre_la_generica(self):
         svc = self._con_claves({"groq": "gsk_propia"})
-        assert svc.clave_de("groq") == "gsk_propia"
+        assert svc.manager.clave_de("groq") == "gsk_propia"
 
     def test_sin_clave_propia_cae_a_la_generica(self):
-        svc = ModelosService(DBFalsa(), settings_falsas(llm_api_key="generica"), MagicMock(),
-                             lambda s, m, t: MagicMock())
-        assert svc.clave_de("groq") == "generica"
+        assert _servicio(llm_api_key="generica").manager.clave_de("groq") == "generica"
 
     def test_anthropic_usa_su_variable_de_siempre(self, servicio):
-        assert servicio.clave_de("anthropic") == "clave-del-servidor"
+        assert servicio.manager.clave_de("anthropic") == "clave-del-servidor"
 
     def test_cada_paso_recibe_la_clave_de_SU_proveedor(self):
         """Con dos proveedores distintos, una sola clave no alcanza."""
@@ -320,30 +336,119 @@ class TestTarifas:
         assert mini < grande, "el mini se esta cotizando con la tarifa del grande"
 
 
-class TestGastarEsUnaDecisionExplicita:
-    """En modo demo, correr con un proveedor de pago gasta plata del deploy."""
+class TestLosDosModos:
+    """Produccion es Claude con la clave del visitante; demo, el modelo del servidor.
 
-    def _svc(self, proveedor, **extra):
-        svc = ModelosService(
-            DBFalsa(), settings_falsas(llm_api_keys={proveedor: "clave"}, **extra),
-            MagicMock(), lambda s, m, t: MagicMock(),
-        )
-        for paso in PASOS_DEL_PIPELINE:
-            svc.guardar(paso, proveedor, "un-modelo")
-        return svc
+    Son dos decisiones distintas y viven en dos lugares distintos. Configurar
+    `demo_provider` ES la decision de que el modo demo corra: sin eso, sirve los
+    informes guardados, que es el comportamiento seguro.
+    """
 
-    def test_con_free_tier_corre_sin_preguntar(self):
-        assert self._svc("groq").todo_es_gratis() is True
+    def _svc(self, **extra):
+        return _servicio(**extra)
 
-    def test_con_proveedor_de_pago_no_corre_por_defecto(self):
-        assert self._svc("openai").todo_es_gratis() is False
+    def test_sin_configurar_el_modo_demo_no_corre(self):
+        assert self._svc().modelo_demo() is None
 
-    def test_con_proveedor_de_pago_corre_si_lo_pidieron(self):
-        assert self._svc("openai", demo_ejecuta_siempre=True).todo_es_gratis() is True
+    def test_configurado_y_con_clave_corre(self):
+        svc = self._svc(demo_provider="groq", demo_model="llama-3.3-70b-versatile",
+                        llm_api_keys={"groq": "gsk_x"})
+        assert svc.modelo_demo() == {"proveedor": "groq", "modelo": "llama-3.3-70b-versatile"}
 
-    def test_sin_clave_no_corre_aunque_sea_gratis(self):
-        svc = ModelosService(DBFalsa(), settings_falsas(llm_api_keys={}, llm_api_key=""),
-                             MagicMock(), lambda s, m, t: MagicMock())
-        for paso in PASOS_DEL_PIPELINE:
-            svc.guardar(paso, "groq", "llama")
-        assert svc.todo_es_gratis() is False
+    def test_configurado_sin_clave_no_corre(self):
+        """Sin credencial no hay nada que ejecutar: se cae al informe guardado."""
+        svc = self._svc(demo_provider="groq", demo_model="llama", llm_api_keys={}, llm_api_key="")
+        assert svc.modelo_demo() is None
+
+    def test_sin_modelo_no_alcanza_con_el_proveedor(self):
+        svc = self._svc(demo_provider="groq", demo_model="", llm_api_keys={"groq": "x"})
+        assert svc.modelo_demo() is None
+
+    def test_los_tres_pasos_corren_en_el_modelo_del_demo(self):
+        svc = self._svc(demo_provider="openai", demo_model="gpt-4o-mini",
+                        llm_api_keys={"openai": "sk-x"})
+        config = svc.config_demo()
+        assert {c["modelo"] for c in config.values()} == {"gpt-4o-mini"}
+        assert all(c["es_demo"] for c in config.values())
+
+    def test_el_modo_demo_no_toca_la_configuracion_de_produccion(self):
+        """Claude sigue estando: demo es otra cosa, no un reemplazo."""
+        svc = self._svc(demo_provider="openai", demo_model="gpt-4o-mini",
+                        llm_api_keys={"openai": "sk-x"})
+        svc.config_demo()
+        assert svc.vigente()[PASO_POLITICAS]["proveedor"] == "anthropic"
+        assert svc.vigente()[PASO_RESOLUCION]["modelo"] == "claude-sonnet-4-6"
+
+    def test_los_clientes_del_demo_usan_la_clave_del_servidor(self):
+        svc = self._svc(demo_provider="groq", demo_model="llama", llm_api_keys={"groq": "gsk_x"})
+        clientes = svc.clientes_demo()
+        assert all(c.api_key == "gsk_x" for c in clientes.values())
+
+    def test_sin_modo_demo_configurado_no_hay_clientes(self):
+        assert self._svc().clientes_demo() is None
+
+
+class TestLLMManager:
+    """El componente que habla con los proveedores.
+
+    Sabe resolver credenciales, construir el cliente que corresponda y cerrarlo.
+    No sabe que existe SQLite ni que el pipeline tiene tres pasos — de eso se
+    ocupa `ModelosService`. La division importa: hubo un momento en que tres
+    lugares distintos ensamblaban clientes y alcanzo con que uno quedara
+    desfasado para que el panel dijera una cosa y n8n hiciera otra.
+    """
+
+    @staticmethod
+    def _manager(monkeypatch, **extra):
+        from api.app.llm.manager import LLMManager
+
+        m = LLMManager(settings_falsas(**extra), MagicMock())
+        creados = []
+
+        def falso(proveedor, modelo, api_key):
+            c = MagicMock(proveedor=proveedor, modelo=modelo, api_key=api_key)
+            creados.append(c)
+            return c
+
+        monkeypatch.setattr(m, "_construir", falso)
+        m.creados = creados
+        return m
+
+    def test_el_cliente_del_servidor_se_cachea(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        assert m.cliente("groq", "llama") is m.cliente("groq", "llama")
+        assert len(m.creados) == 1
+
+    def test_modelos_distintos_no_comparten_cliente(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        assert m.cliente("groq", "llama") is not m.cliente("groq", "qwen")
+
+    def test_el_cliente_con_clave_propia_nunca_se_cachea(self, monkeypatch):
+        """La credencial es de quien hizo la peticion, no del proceso."""
+        m = self._manager(monkeypatch)
+        a = m.cliente("groq", "llama", api_key="sk-visitante")
+        b = m.cliente("groq", "llama", api_key="sk-visitante")
+        assert a is not b
+
+    def test_invalidar_cierra_lo_cacheado(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        cliente = m.cliente("groq", "llama")
+        m.invalidar()
+        assert cliente.close.called
+        assert m.cliente("groq", "llama") is not cliente
+
+    def test_cerrar_todos_no_repite(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        uno = m.cliente("groq", "llama")
+        m.cerrar_todos({"a": uno, "b": uno})
+        assert uno.close.call_count == 1
+
+    def test_anthropic_va_por_su_sdk_y_el_resto_por_http(self):
+        """Sin monkeypatch: se comprueba que clase construye de verdad."""
+        from api.app.llm.client import AnthropicClient, OpenAICompatibleClient
+        from api.app.llm.manager import LLMManager
+
+        m = LLMManager(settings_falsas(llm_api_keys={"groq": "gsk_x"}), MagicMock())
+        assert isinstance(m.cliente("anthropic", "claude-haiku-4-5-20251001"), AnthropicClient)
+        assert isinstance(m.cliente("groq", "llama-3.3-70b-versatile"), OpenAICompatibleClient)
+        m.invalidar()

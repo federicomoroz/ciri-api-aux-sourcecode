@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends
 from ..config import Settings
 from ..data.db import Database
 from ..data.precomputados import analisis_demo, casos_demo, distancia_de_riesgo
-from ..dependencies import get_db, get_resolution_service, get_settings
+from ..dependencies import get_db, get_modelos_service, get_resolution_service, get_settings
 from ..domain.constants import (
     ALERT_EVENT_BLOCKER_REJECT,
     ALERT_EVENT_HITL_REQUIRED,
@@ -19,6 +19,7 @@ from ..domain.constants import (
 )
 from ..domain.enums import RiskLevel, Severity
 from ..domain.models import JudgeRequest, JudgeResponse, ResolveRequest, ResolveResponse
+from ..services.modelos import ModelosService
 from ..services.resolution import ResolutionService
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,25 @@ def _caso_mas_cercano(carpeta: str, tx_data: dict | None) -> str | None:
     return min(distancias)[1]
 
 
+def _servicio_efectivo(
+    settings: Settings, modelos: ModelosService, base: ResolutionService,
+) -> tuple[ResolutionService, bool]:
+    """El servicio que corresponde a este modo, y si corrio en modo demo.
+
+    **Esta es la puerta por la que entra n8n**, que llama a la API directamente y
+    no pasa por el panel. El modo produccion vive en el panel y dura lo que dura
+    la sesion; el default del servidor —`CB_DEMO_MODE`, que arranca en true— es
+    el que decide que le toca a todo lo demas.
+
+    El servicio lo fabrica `ModelosService` y no esta funcion: quien necesita
+    hablarle al modelo lo pide, nadie ensambla clientes por su cuenta.
+    """
+    if not settings.demo_mode:
+        return base, False
+    demo = modelos.servicio(demo=True)
+    return (demo, True) if demo is not None else (base, False)
+
+
 def _demo_de(
     settings: Settings, tx_id: str, parte: str, tx_data: dict | None = None
 ) -> dict | None:
@@ -106,19 +126,25 @@ def resolve(
     service: ResolutionService = Depends(get_resolution_service),
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
+    modelos: ModelosService = Depends(get_modelos_service),
 ) -> ResolveResponse:
     """Full resolution pipeline: policy eval -> log summary -> resolution synthesis -> guardrails."""
-    tx_id_demo = req.transaction_id or (req.tx_data.get("id", "") if req.tx_data else "")
-    guardado = _demo_de(settings, tx_id_demo, "resolution", req.tx_data)
-    if guardado is not None:
-        _emit_resolve_alerts(guardado, tx_id_demo, db)
-        return guardado
-
-    result = service.resolve(req.to_context())
-
     tx_id = req.transaction_id or (req.tx_data.get("id", "") if req.tx_data else "")
-    _emit_resolve_alerts(result, tx_id, db)
 
+    servicio, en_demo = _servicio_efectivo(settings, modelos, service)
+    if not en_demo:
+        # Sin modelo de demo configurado, el modo demo recita en vez de correr.
+        guardado = _demo_de(settings, tx_id, "resolution", req.tx_data)
+        if guardado is not None:
+            _emit_resolve_alerts(guardado, tx_id, db)
+            return guardado
+
+    result = servicio.resolve(req.to_context())
+    if en_demo:
+        # Que corrio de verdad no lo vuelve la configuracion documentada: quien
+        # lo consuma tiene que poder distinguirlo.
+        result = {**result, "demo": True}
+    _emit_resolve_alerts(result, tx_id, db)
     return result
 
 
@@ -127,12 +153,15 @@ def judge(
     req: JudgeRequest,
     service: ResolutionService = Depends(get_resolution_service),
     settings: Settings = Depends(get_settings),
+    modelos: ModelosService = Depends(get_modelos_service),
 ) -> JudgeResponse:
     """LLM-as-Judge: evaluate resolution quality across 5 criteria."""
     tx_id = (req.resolution or {}).get("transaction_id", "")
-    guardado = _demo_de(settings, tx_id, "judge")
-    if guardado is not None:
-        return guardado
+    servicio, en_demo = _servicio_efectivo(settings, modelos, service)
+    if not en_demo:
+        guardado = _demo_de(settings, tx_id, "judge")
+        if guardado is not None:
+            return guardado
 
     return service.judge(
         resolution=req.resolution,

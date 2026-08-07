@@ -65,7 +65,6 @@ from api.app.llm.pricing import estimar_costo_usd  # noqa: E402
 from api.app.observability.tracer import NoOpTracer  # noqa: E402
 from api.app.rag.embedder import FastEmbedder  # noqa: E402
 from api.app.rag.retriever import QdrantRetriever  # noqa: E402
-from api.app.services.resolution import ResolutionService  # noqa: E402
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
 log = logging.getLogger("evaluar")
@@ -81,8 +80,7 @@ CRITERIOS = (
 def _servicios(settings: Settings):
     from qdrant_client import QdrantClient
 
-    from api.app.dependencies import construir_llm
-    from api.app.domain.constants import PASO_JUEZ, PASO_POLITICAS, PASO_RESOLUCION
+    from api.app.llm.manager import LLMManager
     from api.app.services.modelos import ModelosService
 
     db = Database(settings.sqlite_path)
@@ -96,13 +94,9 @@ def _servicios(settings: Settings):
     tracer = NoOpTracer()
     # Se mide la configuracion que el sistema tiene puesta —la que edita el
     # panel—, no una fija: medir algo distinto de lo que corre no sirve de nada.
-    modelos = ModelosService(db, settings, tracer, construir_llm)
-    servicio = ResolutionService(
-        modelos.cliente(PASO_POLITICAS), tracer,
-        llm_resolution=modelos.cliente(PASO_RESOLUCION),
-        llm_judge=modelos.cliente(PASO_JUEZ),
-    )
-    return db, retriever, Analyzer(db), servicio, modelos
+    # Y el servicio se pide, no se arma: la fabrica es una sola.
+    modelos = ModelosService(db, settings, LLMManager(settings, tracer))
+    return db, retriever, Analyzer(db), modelos.servicio(), modelos
 
 
 def _contexto(db: Database, retriever: QdrantRetriever, analyzer: Analyzer, tx: dict, motivo: str):

@@ -51,13 +51,21 @@ class Settings(BaseSettings):
     # trae su propia API key corre el pipeline completo igual.
     demo_mode: bool = True
     demo_reports_path: str = "data/informes_demo"
-    # En modo demo el pipeline corre de verdad si el proveedor configurado es de
-    # free tier: no cuesta nada y un analisis de ahora vale mas que una
-    # grabacion. Con un proveedor de pago —OpenAI, Anthropic— eso gastaria
-    # dinero de quien monto el deploy, asi que hace falta decirlo:
-    # `CB_DEMO_EJECUTA_SIEMPRE=true`. Con gpt-4o-mini son centavos por caso,
-    # pero la decision de gastarlos es de quien paga, no del codigo.
-    demo_ejecuta_siempre: bool = False
+    # ── Los dos modos, explicitos ──────────────────────────────────────────
+    #
+    # PRODUCCION usa `llm_provider` / `llm_model` —Claude por defecto— con la
+    # clave del visitante. Es la configuracion documentada y la que se mide.
+    #
+    # DEMO usa estos: un modelo con free tier, con la clave del servidor, para
+    # que se pueda evaluar el sistema sin cuenta propia y sin gastarle a nadie.
+    # Corre el pipeline entero de verdad; el informe avisa con que modelo salio
+    # y que los resultados pueden variar respecto de la configuracion documentada.
+    #
+    # Configurarlos ES la decision de gastar: si el modelo elegido tiene costo,
+    # lo paga quien monto el deploy. Sin configurar, el modo demo sirve los
+    # informes guardados, que es el comportamiento seguro.
+    demo_provider: str = ""
+    demo_model: str = ""
 
     # Langfuse
     langfuse_public_key: str = ""

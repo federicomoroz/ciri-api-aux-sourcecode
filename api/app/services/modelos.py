@@ -29,7 +29,7 @@ from ..domain.constants import (
     PROVEEDORES_SUGERIDOS,
 )
 from ..llm.client import LLMClient, base_url_de
-from ..observability.tracer import Tracer
+from ..llm.manager import LLMManager
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +37,16 @@ logger = logging.getLogger(__name__)
 class ModelosService:
     """Resuelve, cachea y renueva el cliente de cada paso."""
 
-    def __init__(self, db: Database, settings: Settings, tracer: Tracer, constructor):
+    def __init__(self, db: Database, settings: Settings, manager: LLMManager):
         self.db = db
         self.settings = settings
-        self.tracer = tracer
-        # Se inyecta para no importar `dependencies` desde acá y cerrar un ciclo.
-        self._constructor = constructor
-        self._cache: dict[str, LLMClient] = {}
+        # Este servicio sabe QUE se eligio; el manager sabe COMO se le habla.
+        # Ninguna de las dos mitades necesita entender a la otra.
+        self.manager = manager
+
+    @property
+    def tracer(self):
+        return self.manager.tracer
 
     # ── Configuracion ───────────────────────────────────────────────────
 
@@ -120,41 +123,52 @@ class ModelosService:
     # ── Clientes ────────────────────────────────────────────────────────
 
     def cliente(self, paso: str, api_key: str = "") -> LLMClient:
-        """El cliente de ese paso.
-
-        Con `api_key` se construye uno efimero —es el camino BYOK del panel— y
-        no se cachea: la credencial es de quien hizo la peticion, no del proceso.
-        """
-        config = self.vigente()[paso]
-        if api_key:
-            return self._construir(config, api_key)
-        if paso not in self._cache:
-            self._cache[paso] = self._construir(config, "")
-        return self._cache[paso]
+        """El cliente de ese paso, segun la configuracion vigente."""
+        return self._construir(self.vigente()[paso], api_key)
 
     def _construir(self, config: dict, api_key: str) -> LLMClient:
-        proveedor = config["proveedor"]
-        # La del visitante gana; si no trajo, la que el servidor tenga para ESE
-        # proveedor. Se copia el settings en vez de mutarlo: la configuracion del
-        # proceso la comparten todas las demas peticiones.
-        clave = api_key or self.clave_de(proveedor)
-        settings = self.settings.model_copy(update={
-            "llm_provider": proveedor,
-            "anthropic_api_key": clave,
-            "llm_api_key": clave,
-        })
-        return self._constructor(settings, config["modelo"], self.tracer)
+        return self.manager.cliente(config["proveedor"], config["modelo"], api_key)
 
     def invalidar(self) -> None:
-        """Suelta los clientes cacheados para que el proximo se arme de nuevo."""
-        for cliente in self._cache.values():
-            cerrar = getattr(cliente, "close", None)
-            if cerrar:
-                try:
-                    cerrar()
-                except Exception:
-                    logger.debug("No se pudo cerrar un cliente", exc_info=True)
-        self._cache.clear()
+        """Cambio la configuracion: los clientes cacheados ya no sirven."""
+        self.manager.invalidar()
+
+    # ── La unica fabrica ────────────────────────────────────────────────
+
+    def servicio(
+        self, *, demo: bool = False, api_key: str = "", override: dict | None = None,
+    ):
+        """Un `ResolutionService` listo, con los clientes que correspondan.
+
+        **Nadie mas arma clientes.** Las rutas, el panel y los scripts piden un
+        servicio y no saben con que modelo hablan — que es lo que permite que
+        elegirlo sea configuracion. Hubo un momento en que tres lugares
+        distintos ensamblaban lo mismo, y alcanzo con que uno quedara desfasado
+        para que el panel dijera una cosa y n8n hiciera otra.
+
+        `demo` usa el modelo del modo demo con la clave del servidor; sin uno
+        configurado devuelve None y el llamador decide su respaldo. Sin `demo`,
+        la configuracion de produccion, con la clave y la eleccion que traiga
+        esta peticion.
+        """
+        from .resolution import ResolutionService
+
+        if demo:
+            clientes = self.clientes_demo()
+            if clientes is None:
+                return None
+        elif api_key or override:
+            clientes = self.clientes_para(override, api_key=api_key)
+        else:
+            # Sin nada propio: el servicio resuelve el cliente en cada uso, asi
+            # cambiar el modelo desde el panel no exige reiniciar.
+            return ResolutionService(tracer=self.tracer, modelos=self)
+
+        return ResolutionService(
+            clientes[PASO_POLITICAS], self.tracer,
+            llm_resolution=clientes[PASO_RESOLUCION],
+            llm_judge=clientes[PASO_JUEZ],
+        )
 
     # ── Para el panel ───────────────────────────────────────────────────
 
@@ -176,38 +190,42 @@ class ModelosService:
             for pid, info in PROVEEDORES_SUGERIDOS.items()
         ]
 
-    def todo_es_gratis(self, override: dict | None = None) -> bool:
-        """Si los tres pasos corren en proveedores con free tier y hay clave.
+    def modelo_demo(self) -> dict | None:
+        """El modelo del modo demo, o None si no hay ninguno configurado.
 
-        Es lo que decide si el modo demo puede correr el pipeline de verdad en
-        vez de servir un informe guardado. «Demo» nunca quiso decir «viejo»:
-        quiso decir «que no le cueste a nadie». Cuando correrlo es gratis, la
-        respuesta honesta es correrlo.
+        «Demo» nunca quiso decir «viejo»: quiso decir «que se pueda evaluar el
+        sistema sin cuenta propia». Con un modelo configurado aca el pipeline
+        corre entero y el informe es de ahora; sin el, se sirven los informes
+        guardados, que es el respaldo.
+
+        Es una configuracion aparte de la de produccion a proposito: produccion
+        es Claude con la clave del visitante —la configuracion documentada, la
+        que se mide—, y demo es un modelo accesible con la clave del servidor.
+        Son dos decisiones distintas y merecen dos lugares distintos.
         """
-        config = self.con_override(override)
-        proveedores = {cfg["proveedor"] for cfg in config.values()}
-        if not all(self._hay_clave(p) for p in proveedores):
-            return False
-        if all(PROVEEDORES_SUGERIDOS.get(p, {}).get("gratis") for p in proveedores):
-            return True
-        # Proveedor de pago: correr en modo demo gasta dinero de quien monto el
-        # deploy. Se hace solo si lo pidio explicitamente.
-        return bool(getattr(self.settings, "demo_ejecuta_siempre", False))
+        proveedor = (getattr(self.settings, "demo_provider", "") or "").strip().lower()
+        modelo = (getattr(self.settings, "demo_model", "") or "").strip()
+        if not (proveedor and modelo and self._hay_clave(proveedor)):
+            return None
+        return {"proveedor": proveedor, "modelo": modelo}
 
-    def clave_de(self, proveedor: str) -> str:
-        """La credencial del servidor para ese proveedor, si la hay.
+    def config_demo(self) -> dict[str, dict] | None:
+        """Los tres pasos sobre el modelo del modo demo."""
+        elegido = self.modelo_demo()
+        if elegido is None:
+            return None
+        vigente = self.vigente()
+        return {
+            paso: {**vigente[paso], **elegido, "es_demo": True}
+            for paso in PASOS_DEL_PIPELINE
+        }
 
-        Se busca de lo especifico a lo general: la del proveedor, la generica, y
-        para Anthropic su variable de siempre. Asi el dueno del deploy puede
-        cargar las de free tier —que no arriesgan nada— y dejar las de pago
-        afuera, para que cada uno traiga la suya.
-        """
-        por_proveedor = (self.settings.llm_api_keys or {}).get(proveedor, "")
-        if por_proveedor:
-            return por_proveedor
-        if proveedor == "anthropic":
-            return self.settings.anthropic_api_key
-        return self.settings.llm_api_key
+    def clientes_demo(self) -> dict[str, LLMClient] | None:
+        """Un cliente por paso con el modelo del modo demo, o None."""
+        config = self.config_demo()
+        if config is None:
+            return None
+        return {paso: self._construir(config[paso], "") for paso in PASOS_DEL_PIPELINE}
 
     def _hay_clave(self, proveedor: str) -> bool:
-        return bool(self.clave_de(proveedor))
+        return self.manager.hay_clave(proveedor)

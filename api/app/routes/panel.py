@@ -84,6 +84,32 @@ def _pipeline_efimero(
                 cerrar()
 
 
+@contextmanager
+def _pipeline_demo(base: PipelineService, request: Request):
+    """Pipeline con el modelo del modo demo y la clave del servidor.
+
+    Es el que hace que evaluar el sistema no requiera cuenta propia. Los
+    clientes se cierran al salir, igual que en el efimero de produccion.
+    """
+    tracer = request.app.state.tracer
+    clientes = request.app.state.modelos_service.clientes_demo() or {}
+    try:
+        yield PipelineService(
+            db=base.db, retriever=base.retriever, analyzer=base.analyzer,
+            resolution_svc=ResolutionService(
+                clientes[PASO_POLITICAS], tracer,
+                llm_resolution=clientes[PASO_RESOLUCION],
+                llm_judge=clientes[PASO_JUEZ],
+            ),
+            report_gen=base.report_gen,
+        )
+    finally:
+        for cliente in set(clientes.values()):
+            cerrar = getattr(cliente, "close", None)
+            if cerrar:
+                cerrar()
+
+
 def _es_falta_de_saldo(exc: Exception) -> bool:
     return LLM_CREDIT_EXHAUSTED_MARKER in str(exc).lower()
 
@@ -103,24 +129,23 @@ def _en_modo_demo(req: AnalyzeRequest, settings: Settings) -> bool:
     return settings.demo_mode if req.demo_mode is None else req.demo_mode
 
 
-def _puede_correr_gratis(request: Request, override: dict | None = None) -> bool:
-    """Si el modo demo puede correr el pipeline de verdad en vez de recitarlo.
+def _modelo_del_demo(request: Request) -> dict | None:
+    """El modelo con el que corre el modo demo, si hay uno configurado.
 
-    «Demo» nunca quiso decir «viejo»: quiso decir «que no le cueste a nadie». Los
-    prompts son deterministas y piden una estructura explicita, asi que cualquier
-    modelo decente puede cumplirlos —lo verifica
-    `tests/unit/test_compatibilidad_modelos.py`—. Con un proveedor de free tier
-    configurado, servir una grabacion en vez de correrlo es peor en todo: el
-    informe envejece, no prueba nada, y correrlo cuesta lo mismo que no correrlo.
+    Los prompts son deterministas y piden una estructura explicita, asi que
+    cualquier modelo decente puede cumplirlos —lo verifica
+    `tests/unit/test_compatibilidad_modelos.py`—. Con uno configurado, servir una
+    grabacion en vez de correr es peor en todo: el informe envejece, no prueba
+    nada, y correrlo no requiere que el visitante traiga cuenta.
     """
     modelos = getattr(request.app.state, "modelos_service", None)
     if modelos is None:
-        return False
+        return None
     try:
-        return modelos.todo_es_gratis(override)
+        return modelos.modelo_demo()
     except Exception:
-        logger.warning("No se pudo saber si el modelo configurado es gratis", exc_info=True)
-        return False
+        logger.warning("No se pudo resolver el modelo del modo demo", exc_info=True)
+        return None
 
 
 def _marcar_si_gratis(respuesta, request: Request, corre_gratis: bool):
@@ -146,8 +171,8 @@ def _marcar_corrida_gratis(html: str, request: Request) -> str:
     """Le pone al informe el cartel que dice con que modelo se corrio."""
     from ..data.precomputados import _con_cartel, cartel_modelo_gratis
 
-    modelos = request.app.state.modelos_service
-    return _con_cartel(html, cartel_modelo_gratis(modelos.vigente()))
+    modelo = _modelo_del_demo(request) or {}
+    return _con_cartel(html, cartel_modelo_gratis(modelo))
 
 
 def _html_demo(txn_id: str, settings: Settings, db=None) -> str | None:
@@ -334,7 +359,7 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, 
     gratis = (
         _en_modo_demo(req, settings)
         and request is not None
-        and _puede_correr_gratis(request, req.modelos)
+        and _modelo_del_demo(request) is not None
     )
     if _en_modo_demo(req, settings) and not gratis:
         yield from _emitir_demo(req, settings, pipeline)
@@ -421,14 +446,27 @@ def server_key_status(settings: Settings = Depends(get_settings)) -> JSONRespons
 
 
 @router.get("/api/panel/demo-status")
-def demo_status(settings: Settings = Depends(get_settings)) -> JSONResponse:
-    """Que casos se pueden ver sin gastar, y como arranca el toggle del panel.
+def demo_status(request: Request, settings: Settings = Depends(get_settings)) -> JSONResponse:
+    """Como arranca el toggle del panel y con que corre cada modo.
 
-    Los casos salen de la carpeta de informes, no de una lista escrita a mano:
-    agregar un informe alcanza para que el panel lo ofrezca.
+    Con un modelo de demo configurado, el modo demo corre el pipeline entero
+    sobre **cualquier** transaccion del dataset: la misma base que produccion.
+    Los informes guardados quedan solo de respaldo para cuando no hay modelo.
     """
+    demo = _modelo_del_demo(request)
+    produccion = {}
+    modelos = getattr(request.app.state, "modelos_service", None)
+    if modelos is not None:
+        produccion = {
+            paso: {"proveedor": cfg["proveedor"], "modelo": cfg["modelo"], "titulo": cfg["titulo"]}
+            for paso, cfg in modelos.vigente().items()
+        }
     return JSONResponse({
         "demo_mode": settings.demo_mode,
+        "demo_modelo": demo,
+        "demo_ejecuta": demo is not None,
+        "produccion": produccion,
+        # Solo importan cuando no hay modelo de demo: son el respaldo.
         "casos": casos_demo(settings.demo_reports_path),
     })
 
@@ -501,7 +539,7 @@ async def panel_analyze(
     """
     # Modo demo con un modelo gratuito: se corre de verdad. Cuesta lo mismo que
     # no correrlo y devuelve un analisis de ahora en vez de una grabacion.
-    corre_gratis = _en_modo_demo(req, settings) and _puede_correr_gratis(request, req.modelos)
+    corre_gratis = _en_modo_demo(req, settings) and _modelo_del_demo(request) is not None
 
     # Modo demo sin free tier: el caso ya resuelto, sin pasar por el modelo ni n8n.
     if _en_modo_demo(req, settings) and not corre_gratis:
@@ -532,6 +570,12 @@ async def panel_analyze(
     # ── Modo produccion: el pipeline corre de verdad ──────────────────────
     # La clave que venga en la peticion reemplaza a la del servidor. Quien trae
     # la suya gasta de su cuenta, no de la de nadie mas.
+    # Modo demo con modelo configurado: corre de verdad, con la clave del
+    # servidor y el modelo del demo — no con la configuracion de produccion.
+    if corre_gratis:
+        with _pipeline_demo(pipeline, request) as demo:
+            return _marcar_si_gratis(_correr_directo(demo, req, settings), request, True)
+
     # Efimero si el visitante trajo su clave o eligio otro modelo para esta
     # corrida: en los dos casos la configuracion es suya y no la del proceso.
     if req.api_key or req.modelos:
@@ -576,7 +620,10 @@ def panel_analyze_stream(
         # despues de que esta funcion retorna, asi que cerrarlo antes dejaria
         # al stream sin cliente con el que trabajar.
         try:
-            if req.api_key or req.modelos:
+            if _en_modo_demo(req, settings) and _modelo_del_demo(request) is not None:
+                with _pipeline_demo(pipeline, request) as demo:
+                    yield from _emitir(demo, req, settings, request)
+            elif req.api_key or req.modelos:
                 with _pipeline_efimero(
                     pipeline, request, api_key=req.api_key or "", override=req.modelos,
                 ) as propio:

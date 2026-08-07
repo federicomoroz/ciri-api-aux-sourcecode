@@ -86,26 +86,27 @@ def linea_de_procedencia(procedencia: dict | None) -> str:
 ETIQUETA_GRATIS = "ANÁLISIS REAL (modelo gratuito)"
 
 
-def cartel_modelo_gratis(modelos: dict) -> str:
-    """El cartel de un analisis recien hecho, corrido en un free tier.
+def cartel_modelo_gratis(modelo: dict) -> str:
+    """El cartel de un analisis recien hecho con el modelo del modo demo.
 
     Es lo contrario del caso prearmado: el pipeline corrio entero y el resultado
-    es de ahora. Lo unico que hay que declarar es con que se corrio, porque no
-    fue la configuracion documentada — y esa distincion la tiene que ver quien
-    lee el informe, no quien lee el codigo.
+    es de ahora. Lo que hay que declarar es doble — con que se corrio, y que ese
+    modelo no es el de la configuracion documentada. Quien lee el informe tiene
+    que poder atribuirle al modelo lo que le corresponda al modelo.
     """
-    detalle = " · ".join(
-        f"{cfg['titulo'].lower()}: <b>{cfg['modelo']}</b>" for cfg in modelos.values()
-    )
     return (
         f'<div style="{_ESTILO_CARTEL}">'
-        f'<b style="letter-spacing:.03em">{ETIQUETA_GRATIS}</b> &nbsp;Este informe se '
-        "genero recien: el pipeline corrio entero, con RAG, guardrails y juez. Se uso un "
-        "proveedor con free tier para que evaluar el sistema no le cueste a nadie, asi que "
-        "<u>no es la configuracion documentada</u> (Haiku + Sonnet): los prompts estan "
-        "afinados para Claude y el resultado puede diferir."
-        f'<div style="margin-top:9px;font-size:12.5px;opacity:.85">{detalle}</div>'
-        "</div>"
+        f'<b style="letter-spacing:.03em">{ETIQUETA_GRATIS}</b> &nbsp;Este informe se genero '
+        "recien: el pipeline corrio entero, con RAG, guardrails y juez. Se uso el modelo "
+        f"<b>{modelo.get('modelo', '')}</b> ({modelo.get('proveedor', '')}) para que evaluar "
+        "el sistema no requiera cuenta propia."
+        '<div style="margin-top:9px;font-size:12.5px;opacity:.85">'
+        "<b>Los resultados pueden variar.</b> La configuracion documentada es Claude "
+        "(Haiku + Sonnet) y los prompts estan afinados para ella: un modelo mas chico "
+        "puede citar menos evidencia o razonar con menos profundidad sobre los precedentes. "
+        "Para ver el sistema en su configuracion real, pasa a <b>modo produccion</b> y "
+        "carga tu clave de Anthropic — se usa solo mientras el panel este abierto."
+        "</div></div>"
     )
 
 

@@ -16,7 +16,7 @@ from .analysis.analyzer import Analyzer
 from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
-from .llm.client import AnthropicClient, OpenAICompatibleClient, base_url_de
+from .llm.manager import LLMManager
 from .observability.contacto_n8n import ContactoN8n
 from .observability.tracer import LangfuseTracer, NoOpTracer
 from .rag.embedder import FastEmbedder
@@ -54,26 +54,6 @@ def _preparar_sqlite(settings: Settings) -> Database:
     return db
 
 
-def construir_llm(settings: Settings, modelo: str, tracer) -> AnthropicClient | OpenAICompatibleClient:
-    """El cliente del modelo, segun el proveedor configurado.
-
-    Un solo lugar decide cual se instancia. Los llamadores reciben algo que
-    cumple `LLMClient` y no saben —ni necesitan saber— con quien hablan: es la
-    afirmacion que `architecture.md` hace sobre el Protocol, hecha efectiva.
-    """
-    base = base_url_de(settings.llm_provider, settings.llm_base_url)
-    if not base:
-        return AnthropicClient(
-            api_key=settings.anthropic_api_key, model=modelo,
-            tracer=tracer, max_retries=settings.llm_max_retries,
-        )
-    return OpenAICompatibleClient(
-        api_key=settings.llm_api_key or settings.anthropic_api_key,
-        model=modelo, base_url=base,
-        tracer=tracer, max_retries=settings.llm_max_retries,
-    )
-
-
 def _conectar_servicios(settings: Settings) -> dict:
     """Clientes de los servicios externos: Qdrant, embeddings, trazas y modelo."""
     tracer = (
@@ -85,7 +65,8 @@ def _conectar_servicios(settings: Settings) -> dict:
         if settings.langfuse_enabled
         else NoOpTracer()
     )
-    llm = construir_llm(settings, settings.llm_model, tracer)
+    manager = LLMManager(settings, tracer)
+    llm = manager.cliente(settings.llm_provider or "anthropic", settings.llm_model)
     return {
         "qdrant": QdrantClient(
             url=settings.qdrant_url,
@@ -95,8 +76,9 @@ def _conectar_servicios(settings: Settings) -> dict:
         "embedder": FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key),
         "tracer": tracer,
         "llm": llm,
+        "manager": manager,
         "llm_resolution": (
-            construir_llm(settings, settings.llm_model_resolution, tracer)
+            manager.cliente(settings.llm_provider or "anthropic", settings.llm_model_resolution)
             if settings.llm_model_resolution else llm
         ),
     }
@@ -199,7 +181,7 @@ async def lifespan(app: FastAPI):
     analyzer = Analyzer(db)
     # La eleccion de modelo por paso vive en SQLite y el panel la edita; este
     # servicio la traduce en clientes y los renueva cuando cambia.
-    modelos = ModelosService(db, settings, tracer, construir_llm)
+    modelos = ModelosService(db, settings, externos["manager"])
     # Se le pasa el servicio y no los clientes: asi `/api/analyze/*` —lo que
     # llama n8n— toma el modelo vigente en cada peticion, y cambiarlo desde el
     # panel no exige reiniciar.
