@@ -67,10 +67,24 @@ class Database:
         return self._consultar("SELECT * FROM transactions")
 
     def list_transactions_compact(self) -> list[dict]:
-        """Compact listing for the test panel dropdown (no logs, no joined data)."""
+        """Compact listing for the test panel dropdown (no logs, no joined data).
+
+        Incluye el motivo del caso abierto, cuando lo hay. El panel pedia el
+        motivo aparte aunque la transaccion ya lo trajera, asi que quien evaluaba
+        podia elegir «Cargo duplicado» sobre un caso registrado como fraude y
+        analizar algo que no ocurrio. Son 47 de 100: las otras si necesitan que
+        alguien lo diga, y ahi el selector sigue apareciendo.
+        """
+        # Subconsulta y no un JOIN: hay transacciones con mas de un caso, y el
+        # JOIN devolvia una fila por cada uno — 113 opciones para 100
+        # transacciones, con ids repetidos en el desplegable. Se toma el caso
+        # mas reciente, que es el que se esta disputando.
         return self._consultar(
-            "SELECT id, merchant, amount_usd, country, payment_method, "
-            "fraud_score, channel, status FROM transactions ORDER BY id"
+            "SELECT t.id, t.merchant, t.amount_usd, t.country, t.payment_method, "
+            "t.fraud_score, t.channel, t.status, "
+            "(SELECT c.motivo FROM cases c WHERE c.transaction_id = t.id "
+            " ORDER BY c.open_date DESC LIMIT 1) AS motivo "
+            "FROM transactions t ORDER BY t.id"
         )
 
     # --- Logs ---

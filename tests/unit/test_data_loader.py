@@ -136,3 +136,54 @@ def test_seed_is_idempotent(loaded_data, tmp_path):
 
     assert first == second, f"la segunda corrida cambio los conteos: {first} -> {second}"
     assert first["logs"] == len(loaded_data["logs"])
+
+
+class TestLaListaDelPanelTraeElMotivo:
+    """El motivo es un dato del caso, no una eleccion de quien evalua.
+
+    El panel lo pedia siempre en un desplegable aparte, aunque 47 de las 100
+    transacciones tienen un caso abierto con su motivo registrado. Se podia
+    analizar «Cargo duplicado» sobre un caso asentado como fraude con tarjeta
+    robada: el informe salia coherente y describia algo que no ocurrio.
+    """
+
+    @staticmethod
+    def _db(tmp_path):
+        import sqlite3
+
+        from api.app.data.db import Database
+
+        ruta = str(tmp_path / "t.db")
+        c = sqlite3.connect(ruta)
+        c.executescript(
+            "CREATE TABLE transactions (id TEXT, merchant TEXT, amount_usd REAL,"
+            " country TEXT, payment_method TEXT, fraud_score INT, channel TEXT, status TEXT);"
+            "CREATE TABLE cases (case_id TEXT, transaction_id TEXT, motivo TEXT, open_date TEXT);"
+            "INSERT INTO transactions VALUES ('TXN-00001','Amazon',10,'ARG','Credito',50,'Web','x');"
+            "INSERT INTO transactions VALUES ('TXN-00002','eBay',20,'PER','Debito',30,'POS','x');"
+            "INSERT INTO cases VALUES ('CB-1','TXN-00002','Fraude con tarjeta robada','2024-01-01');"
+            "INSERT INTO cases VALUES ('CB-2','TXN-00002','Cargo duplicado','2024-06-01');"
+        )
+        c.commit()
+        c.close()
+        return Database(ruta)
+
+    def test_la_transaccion_con_caso_trae_su_motivo(self, tmp_path):
+        filas = {t["id"]: t for t in self._db(tmp_path).list_transactions_compact()}
+        assert filas["TXN-00002"]["motivo"] == "Cargo duplicado"
+
+    def test_gana_el_caso_mas_reciente(self, tmp_path):
+        """Es el que se esta disputando, no el que se archivo hace meses."""
+        filas = {t["id"]: t for t in self._db(tmp_path).list_transactions_compact()}
+        assert filas["TXN-00002"]["motivo"] != "Fraude con tarjeta robada"
+
+    def test_la_que_no_tiene_caso_no_inventa_uno(self, tmp_path):
+        """Ahi el panel tiene que seguir preguntandolo: no hay de donde sacarlo."""
+        filas = {t["id"]: t for t in self._db(tmp_path).list_transactions_compact()}
+        assert filas["TXN-00001"]["motivo"] is None
+
+    def test_una_transaccion_es_una_fila(self, tmp_path):
+        """Con un JOIN, la que tenia dos casos aparecia dos veces en el desplegable."""
+        filas = self._db(tmp_path).list_transactions_compact()
+        ids = [t["id"] for t in filas]
+        assert len(ids) == len(set(ids)) == 2

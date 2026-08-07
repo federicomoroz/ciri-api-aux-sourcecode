@@ -1803,11 +1803,19 @@
               <span class="txn-preview-key">Estado</span>
               <span class="txn-preview-val" id="pv-status">—</span>
             </div>
+            <div class="txn-preview-row" id="pv-motivo-row" style="display:none;grid-column:1/-1">
+              <span class="txn-preview-key">Motivo del contracargo</span>
+              <span class="txn-preview-val" id="pv-motivo">—</span>
+            </div>
           </div>
         </div>
 
-        <!-- Motivo dropdown -->
-        <div class="form-group">
+        <!-- Motivo: solo cuando la transaccion no lo trae.
+             47 de las 100 tienen un caso abierto con su motivo registrado.
+             Preguntarlo igual dejaba analizar «Cargo duplicado» sobre un caso
+             asentado como fraude: el informe salia coherente y describia algo
+             que no ocurrio. -->
+        <div class="form-group" id="grupo-motivo">
           <label class="form-label" for="sel-motivo">Motivo del contracargo</label>
           <select class="form-select" id="sel-motivo" onchange="onMotivoSelect()">
             <option value="No reconoce la compra">No reconoce la compra</option>
@@ -1915,7 +1923,13 @@
       <!-- Langfuse Observability -->
       <div class="langfuse-section" id="langfuse-section" style="display:none">
         <hr class="panel-divider"/>
-        <p class="panel-label">Observabilidad (Langfuse)</p>
+        <p class="panel-label" id="lf-titulo">Observabilidad (Langfuse)</p>
+        <p class="form-hint" id="lf-fuente" style="display:none;margin:-2px 0 6px">
+          Sin claves de Langfuse: estos numeros los mide la API en este proceso. La
+          <b>latencia</b> y los <b>tokens</b> son reales; el <b>costo es cero</b> porque el
+          modelo del modo demo corre por free tier. Lo que falta es la traza distribuida y
+          el historico — para eso hay que configurar Langfuse.
+        </p>
         <div class="lf-cards">
           <div class="lf-card">
             <span class="lf-card-value" id="lf-traces">—</span>
@@ -2291,10 +2305,35 @@ function updateFilterCounter(shown, total) {
   }
 }
 
+// El motivo es un dato del caso, no una eleccion de quien evalua: cuando la
+// transaccion lo trae se muestra y se usa. El selector queda para las 53 que no
+// tienen caso abierto, donde sin el no habria motivo ninguno.
+function aplicarMotivoDelCaso(motivo) {
+  const fila   = $('pv-motivo-row');
+  const grupo  = $('grupo-motivo');
+  const select = $('sel-motivo');
+  if (motivo) {
+    $('pv-motivo').textContent = motivo;
+    fila.style.display  = 'flex';
+    grupo.style.display = 'none';
+    // Se escribe en el select igual: es de donde lo lee el resto del panel.
+    if (![...select.options].some(o => o.value === motivo)) {
+      select.insertAdjacentHTML('afterbegin', `<option value="${motivo}">${motivo}</option>`);
+    }
+    select.value = motivo;
+    $('inp-motivo-custom').style.display = 'none';
+  } else {
+    fila.style.display  = 'none';
+    grupo.style.display = '';
+  }
+  if (typeof refreshSubmitBtn === 'function') refreshSubmitBtn();
+}
+
 function onTxnSelect() {
   const txnId = $('sel-txn').value;
   if (!txnId) {
     $('txn-preview').style.display = 'none';
+    aplicarMotivoDelCaso(null);
     deactivateCustom();
     return;
   }
@@ -2312,6 +2351,7 @@ function onTxnSelect() {
     $('pv-method').textContent = tx.payment_method;
     $('pv-status').textContent = tx.status;
     $('txn-preview').style.display = 'grid';
+    aplicarMotivoDelCaso(tx.motivo);
   }
 
   document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active'));
@@ -2640,6 +2680,16 @@ function applyDemoMode() {
   if (custom) custom.classList.remove('bloqueado');
 
   $('aviso-sin-saldo').classList.toggle('visible', !demoMode);
+
+  // En modo demo la clave y la eleccion de modelo no hacen nada: los tres pasos
+  // corren con el modelo del servidor. Dejarlos a la vista pedia una clave que
+  // no se usa y ofrecia elegir modelos de pago que el modo demo ignora — la
+  // pantalla contradecia a lo que el sistema iba a hacer.
+  const enDemo = demoMode && demoCorre;
+  document.querySelector('.api-key-section').style.display = enDemo ? 'none' : '';
+  const modelos = $('modelos-section');
+  if (modelos) modelos.style.display = enDemo ? 'none' : '';
+
   onApiKeyChange();
 }
 
@@ -3498,7 +3548,12 @@ async function checkHealth() {
   }
 
   try {
-    const r    = await fetch(API_BASE + '/api/panel/n8n-status');
+    // Se chequea la MISMA url que va a usar el analisis. Mirar la del servidor
+    // y llamar a la del campo daba un badge en verde seguido de «tu n8n no
+    // respondio»: la pagina se contradecia a si misma.
+    const propia = getN8nUrl();
+    const r    = await fetch(API_BASE + '/api/panel/n8n-status'
+                             + (propia ? '?n8n_base_url=' + encodeURIComponent(propia) : ''));
     const data = await r.json();
     // Sin instancia configurada no hay nada roto: falta decir cu\u00e1l usar.
     setChip('hc-n8n',
@@ -3658,10 +3713,17 @@ async function loadLangfuseStats() {
     const r = await fetch(API_BASE + '/api/langfuse/stats');
     const data = await r.json();
 
-    // Update health chip
+    // Sin Langfuse igual hay metricas: las anota la API en su propia base. Lo
+    // que cambia es el alcance \u2014no hay traza distribuida ni historico largo\u2014,
+    // asi que se dice de donde salen los numeros en vez de esconder la seccion.
+    const local = data.fuente === 'local';
     if (data.enabled) {
-      setChip('hc-langfuse', 'ok', 'Langfuse \u2713');
+      setChip('hc-langfuse', local ? 'warn' : 'ok', local ? 'Metricas locales' : 'Langfuse \u2713');
       $('langfuse-section').style.display = '';
+      $('lf-titulo').textContent = local
+        ? 'Observabilidad (medida en la API)'
+        : 'Observabilidad (Langfuse)';
+      $('lf-fuente').style.display = local ? '' : 'none';
     } else {
       setChip('hc-langfuse', 'warn', 'Langfuse off');
       $('langfuse-section').style.display = 'none';
