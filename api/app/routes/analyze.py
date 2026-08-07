@@ -142,8 +142,10 @@ def resolve(
     result = servicio.resolve(req.to_context())
     if en_demo:
         # Que corrio de verdad no lo vuelve la configuracion documentada: quien
-        # lo consuma tiene que poder distinguirlo.
-        result = {**result, "demo": True}
+        # lo consuma tiene que poder distinguirlo. Y con que modelo corrio viaja
+        # con el resultado, porque el informe lo declara y no todos los que lo
+        # piden pasan por el panel — n8n llama derecho a la API.
+        result = {**result, "demo": True, "demo_modelo": modelos.modelo_demo()}
     _emit_resolve_alerts(result, tx_id, db)
     return result
 

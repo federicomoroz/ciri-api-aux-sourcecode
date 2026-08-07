@@ -199,9 +199,17 @@ class ResolveResponse(BaseModel):
     hitl_reason: str | None = None
     guardrail_warnings: list[str] = []
     trace_id: str = ""
-    # True cuando la respuesta salio del analisis guardado en vez del modelo.
-    # Viaja hasta el informe, que lo muestra como "DEMO (Caso prearmado)".
+    # True cuando la corrida no fue la configuracion documentada: o salio del
+    # analisis guardado, o corrio con el modelo gratuito del modo demo. Viaja
+    # hasta el informe, que lo declara.
     demo: bool = False
+    # Con que modelo corrio, cuando corrio de verdad con el del modo demo.
+    # `demo` solo no alcanza para elegir el cartel: uno dice «esto es una
+    # grabacion» y el otro «esto se acaba de calcular, con este modelo». El
+    # informe que salia por n8n decia lo primero cuando pasaba lo segundo,
+    # porque el panel corregia el cartel despues y n8n no pasa por el panel.
+    # La diferencia tiene que estar en el dato, no en quien lo pidio.
+    demo_modelo: dict | None = None
     # Cuando el caso pedido no tenia analisis guardado, aca va SU id: esta
     # resolucion es de otra transaccion, servida como ejemplo. El informe lo
     # usa para responder con el ejemplo entero en vez de mezclar los dos.

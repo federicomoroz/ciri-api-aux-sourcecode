@@ -648,3 +648,63 @@ class TestProcedenciaDelAnalisisGuardado:
     def test_la_procedencia_tambien_aparece_en_el_informe_sustituto(self):
         html = precomputados.informe_demo(self.CARPETA, "TXN-00051", solicitada="TXN-00004")
         assert "TXN-00004" in html and "Generado el" in html
+
+
+class TestLaCorridaGratuitaViajaConSuModelo:
+    """`POST /api/analyze/resolve` dice con que corrio, no solo que fue demo.
+
+    El informe lo necesita para elegir el cartel, y quien pide el informe puede
+    no ser el panel: n8n llama a la API derecho. Si el dato no viaja con la
+    resolucion, el unico que puede corregirlo es el panel, y entonces todo lo
+    que no pase por ahi sale mal rotulado. Es exactamente lo que pasaba.
+    """
+
+    @staticmethod
+    def _app(monkeypatch, modelo):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from api.app.dependencies import get_db, get_modelos_service, get_settings
+        from api.app.routes import analyze
+
+        class ServicioFalso:
+            def resolve(self, ctx):
+                return {"transaction_id": "TXN-00051", "recommended_action": "REJECT",
+                        "risk_level": "BLOCKER", "confidence": 0.9, "justification": "x"}
+
+        class ModelosFalso:
+            def servicio(self, demo=False):
+                return ServicioFalso()
+
+            def modelo_demo(self):
+                return modelo
+
+        app = FastAPI()
+        app.include_router(analyze.router)
+        settings = type("S", (), {"demo_mode": True, "demo_reports_path": "no-existe"})()
+        app.dependency_overrides[get_settings] = lambda: settings
+        app.dependency_overrides[get_modelos_service] = lambda: ModelosFalso()
+        app.dependency_overrides[get_db] = lambda: None
+        app.dependency_overrides[analyze.get_resolution_service] = lambda: ServicioFalso()
+        return TestClient(app)
+
+    CASO = {
+        "transaction_id": "TXN-00051", "motivo": "No reconoce la compra",
+        "tx_data": {"id": "TXN-00051", "merchant": "X", "amount_usd": 10.0,
+                    "payment_method": "Cripto", "country": "AR", "channel": "Web",
+                    "fraud_score": 8, "client_id": "C1", "date": "2024-01-01"},
+        "policies": [], "similar_cases": [], "logs": [],
+        "merchant_risk": {}, "client_history": {},
+    }
+
+    def test_la_resolucion_dice_con_que_modelo_corrio(self, monkeypatch):
+        modelo = {"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"}
+        r = self._app(monkeypatch, modelo).post("/api/analyze/resolve", json=self.CASO)
+        assert r.status_code == 200
+        assert r.json()["demo"] is True
+        assert r.json()["demo_modelo"] == modelo
+
+    def test_sin_modelo_resuelto_no_se_inventa_uno(self, monkeypatch):
+        """Preferible sin cartel de modelo que con uno que dice cualquier cosa."""
+        r = self._app(monkeypatch, None).post("/api/analyze/resolve", json=self.CASO)
+        assert r.json()["demo_modelo"] is None

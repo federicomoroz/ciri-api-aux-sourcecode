@@ -249,7 +249,14 @@ def informe_de_ejemplo(carpeta: str, pedida: dict) -> tuple[str, str] | None:
 
 
 def _con_cartel(html: str, cartel: str) -> str:
-    """Mete el aviso apenas abre el body, para que sea lo primero que se lee."""
+    """Mete el aviso apenas abre el body, para que sea lo primero que se lee.
+
+    No lo repite si el informe ya lo trae: desde que la plantilla elige el
+    cartel segun con que se corrio, el panel suele encontrarlo puesto. Dos
+    carteles iguales no enganan a nadie, pero se leen como un error.
+    """
+    if ETIQUETA_GRATIS in html and ETIQUETA_GRATIS in cartel:
+        return html
     inicio = html.find("<body")
     cierre = html.find(">", inicio) if inicio != -1 else -1
     if cierre == -1:

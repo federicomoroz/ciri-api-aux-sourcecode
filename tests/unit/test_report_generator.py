@@ -154,3 +154,65 @@ class TestFormularioHITL:
             "quality_flag": "LOW_QUALITY — Revisar resolución manualmente",
         }}
         assert "LOW_QUALITY" in generator.render(data)
+
+
+class TestQueDeclaraElInforme:
+    """Una grabacion y un analisis recien hecho no se declaran igual.
+
+    El cartel salia siempre como «caso prearmado» y el panel lo corregia
+    despues, sobre el HTML ya renderizado. n8n llama a `/api/reports/html`
+    derecho, sin pasar por el panel: por ahi salia un analisis calculado en el
+    momento —con su juez, sus 17 veredictos y su BLOCKER— rotulado como una
+    grabacion vieja. Se detecto disparando el webhook, no en los tests: ninguno
+    miraba el cartel.
+
+    Ahora el cartel sale del dato. El que pide el informe no tiene que saber
+    nada de esto.
+    """
+
+    @staticmethod
+    def _con(data: dict, **resolucion) -> dict:
+        return {**data, "resolution": {**data["resolution"], **resolucion}}
+
+    def test_una_corrida_real_con_modelo_gratuito_lo_dice(self, generator, minimal_report_data):
+        from api.app.data.precomputados import ETIQUETA, ETIQUETA_GRATIS
+
+        html = generator.render(self._con(
+            minimal_report_data, demo=True,
+            demo_modelo={"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"},
+        ))
+        assert ETIQUETA_GRATIS in html
+        assert ETIQUETA not in html, "un analisis de ahora rotulado como grabacion"
+
+    def test_y_nombra_el_modelo_para_que_se_le_atribuya(self, generator, minimal_report_data):
+        """Quien lee tiene que poder atribuirle al modelo lo que es del modelo."""
+        html = generator.render(self._con(
+            minimal_report_data, demo=True,
+            demo_modelo={"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"},
+        ))
+        assert "gemini-flash-lite-latest" in html
+
+    def test_un_caso_guardado_sigue_siendo_una_grabacion(self, generator, minimal_report_data):
+        from api.app.data.precomputados import ETIQUETA, ETIQUETA_GRATIS
+
+        html = generator.render(self._con(minimal_report_data, demo=True))
+        assert ETIQUETA in html
+        assert ETIQUETA_GRATIS not in html
+
+    def test_una_corrida_normal_no_lleva_cartel(self, generator, minimal_report_data):
+        from api.app.data.precomputados import ETIQUETA, ETIQUETA_GRATIS
+
+        html = generator.render(minimal_report_data)
+        assert ETIQUETA not in html and ETIQUETA_GRATIS not in html
+
+    def test_el_panel_no_repite_el_cartel_que_ya_esta(self, generator, minimal_report_data):
+        """El panel marca el HTML despues; ahora suele encontrarlo puesto."""
+        from api.app.data.precomputados import (
+            ETIQUETA_GRATIS,
+            _con_cartel,
+            cartel_modelo_gratis,
+        )
+
+        modelo = {"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"}
+        html = generator.render(self._con(minimal_report_data, demo=True, demo_modelo=modelo))
+        assert _con_cartel(html, cartel_modelo_gratis(modelo)).count(ETIQUETA_GRATIS) == 1

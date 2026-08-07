@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from jinja2 import Environment, FileSystemLoader
 
-from ..data.precomputados import CARTEL
+from ..data.precomputados import CARTEL, cartel_modelo_gratis
 from ..domain.constants import REPORT_TEMPLATE_NAME
 
 logger = logging.getLogger(__name__)
@@ -51,6 +51,20 @@ class ReportGenerator:
         return self.template.render(
             **data,
             generated_at=generado,
-            cartel_demo=CARTEL,
+            cartel_demo=_cartel_de(data),
             datos_del_caso=_json_para_html(data),
         )
+
+
+def _cartel_de(data: dict) -> str:
+    """El cartel que corresponde a como se produjo este informe.
+
+    Dos cosas distintas se declaran distinto: una grabacion de una corrida
+    anterior, y un analisis recien hecho con un modelo que no es el documentado.
+    Sale del dato —la resolucion dice con que modelo corrio— y no de quien pidio
+    el informe, porque n8n llama a la API sin pasar por el panel y llegaba
+    marcado como prearmado un analisis que se acababa de calcular.
+    """
+    resolucion = data.get("resolution") or {}
+    modelo = resolucion.get("demo_modelo")
+    return cartel_modelo_gratis(modelo) if modelo else CARTEL
