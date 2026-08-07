@@ -227,7 +227,14 @@ PROVEEDORES_SUGERIDOS: dict[str, dict] = {
         # modelos a cuentas nuevas sin previo aviso. `gemini-2.5-flash` estaba
         # aca y ya devuelve «no longer available to new users» — el alias sigue
         # al modelo vigente y no se muere solo.
-        "modelos": ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3-flash-preview"],
+        #
+        # `flash-lite` va primero, y no por calidad: por cuota. En el free tier,
+        # el flash grande da 20 pedidos por dia y el lite 500. Como cada analisis
+        # son tres llamadas, eso es la diferencia entre 6 casos diarios y 166 —
+        # o sea, entre un panel que se agota en cinco minutos y uno que aguanta
+        # una evaluacion. Para prompts con estructura explicita como los de aca,
+        # el modelo mas chico rinde parecido.
+        "modelos": ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3-flash-preview"],
         "consola": "https://aistudio.google.com/apikey",
         "formato_clave": "AIza...",
     },
