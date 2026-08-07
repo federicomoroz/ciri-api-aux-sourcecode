@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"
     llm_base_url: str = ""     # gana sobre `llm_provider` si viene
     llm_api_key: str = ""      # si esta vacia se usa `anthropic_api_key`
+    # Una clave por proveedor, para que el panel pueda ofrecer varios sin pedir
+    # credencial: CB_LLM_API_KEYS={"groq":"gsk_...","gemini":"AIza..."}.
+    # Las de free tier las puede poner el dueno del deploy sin arriesgar nada;
+    # las de pago conviene dejarlas afuera y que cada uno traiga la suya.
+    llm_api_keys: dict[str, str] = {}
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_model_resolution: str = ""  # optional: stronger model for synthesis (call 2)
     llm_temperature: float = LLM_DEFAULT_TEMPERATURE

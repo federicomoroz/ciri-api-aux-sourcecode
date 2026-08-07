@@ -124,6 +124,10 @@ class AnalyzeRequest(BaseModel):
     api_key: str | None = Field(default=None, exclude=True)
     # El toggle del panel manda su eleccion aca. Si no viene, decide el servidor.
     demo_mode: bool | None = None
+    # Que modelo usar en cada paso, SOLO para esta corrida. El panel lo manda al
+    # apretar «Aplicar»: quien evalua puede probar otro modelo sin cambiarselo a
+    # nadie mas. Forma: {"judge": {"proveedor": "groq", "modelo": "llama-..."}}
+    modelos: dict[str, dict] | None = None
 
 
 # ---- LLM Output Validation Models ----

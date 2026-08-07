@@ -1868,14 +1868,17 @@
           <span class="modelos-estado" id="modelos-estado"></span>
         </div>
         <p class="form-hint" style="margin:-2px 0 6px">
-          El pipeline hace tres llamadas y cada una es una tarea distinta. Se guardan en el
-          servidor y valen para la proxima investigacion. <b>Las claves no se guardan</b>: van
-          en el campo de arriba o en el entorno.
+          El pipeline hace tres llamadas y cada una es una tarea distinta.
+          <b>Aplicar</b> vale para tu sesion y no le cambia nada a nadie mas;
+          <b>Guardar como predeterminado</b> cambia el servidor, que es lo que usa n8n.
+          <b>Las claves no se guardan</b>: van en el campo de arriba, o el servidor pone
+          las suyas para los proveedores con free tier.
         </p>
         <div id="modelos-pasos"></div>
         <datalist id="modelos-sugeridos"></datalist>
         <div class="modelos-acciones">
-          <button type="button" class="primario" id="btn-modelos-save" onclick="guardarModelos()" disabled>Guardar</button>
+          <button type="button" class="primario" id="btn-modelos-apply" onclick="aplicarSesion()" disabled>Aplicar</button>
+          <button type="button" id="btn-modelos-save" onclick="guardarModelos()" disabled title="También lo usa n8n, que llama a la API sin pasar por el panel">Guardar como predeterminado</button>
           <button type="button" onclick="restablecerModelos()">Restablecer</button>
           <select id="sel-todos-proveedor" onchange="aplicarATodos(this.value)" aria-label="Usar un proveedor en los tres pasos">
             <option value="">Usar en los tres pasos...</option>
@@ -2343,8 +2346,9 @@ function deactivateCustom() {
 // una es una tarea distinta. La eleccion se guarda en el servidor (SQLite) y el
 // default vive en constants.py. Las claves NO se guardan nunca: viajan por
 // peticion o salen del entorno.
-let modelosConfig  = null;   // lo que devolvio el servidor
-let modelosEditado = {};     // lo tocado y todavia sin guardar
+let modelosConfig     = null;   // lo que devolvio el servidor
+let modelosEditado    = {};     // lo tocado y todavia sin aplicar
+let modelosDeLaSesion = null;   // aplicado a esta sesion, sin tocar el servidor
 
 async function cargarModelos() {
   try {
@@ -2369,7 +2373,11 @@ function renderModelos() {
 
   const orden = ['policy_eval', 'resolution', 'judge'];
   cont.innerHTML = orden.map((paso, i) => {
-    const cfg   = { ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) };
+    const cfg   = {
+      ...modelosConfig.pasos[paso],
+      ...((modelosDeLaSesion || {})[paso] || {}),
+      ...(modelosEditado[paso] || {}),
+    };
     const prov  = _proveedorDe(cfg.proveedor);
     const sucio = !!modelosEditado[paso];
 
@@ -2410,11 +2418,18 @@ function renderModelos() {
 
   actualizarSugerencias();
   sincronizarCampoDeClave();
-  $('btn-modelos-save').disabled = Object.keys(modelosEditado).length === 0;
+  const sinAplicar = Object.keys(modelosEditado).length === 0;
+  $('btn-modelos-apply').disabled = sinAplicar;
+  $('btn-modelos-save').disabled  = sinAplicar;
   const est = $('modelos-estado');
-  const propios = orden.filter(x => modelosConfig.pasos[x].personalizado).length;
   est.className = 'modelos-estado';
-  est.textContent = propios ? `${propios}/3 personalizados` : 'valores por defecto';
+  if (modelosDeLaSesion && sinAplicar) {
+    est.className = 'modelos-estado ok';
+    est.textContent = 'aplicado a esta sesion';
+  } else {
+    const propios = orden.filter(x => modelosConfig.pasos[x].personalizado).length;
+    est.textContent = propios ? `${propios}/3 guardados en el servidor` : 'valores por defecto';
+  }
 }
 
 function actualizarSugerencias() {
@@ -2472,9 +2487,11 @@ function sincronizarCampoDeClave() {
   // El campo de API key tiene que pedir la clave DEL proveedor elegido: hasta
   // que se pudo cambiar de proveedor, siempre era la de Anthropic.
   if (!modelosConfig) return;
-  const usados = [...new Set(['policy_eval', 'resolution', 'judge'].map(paso =>
-    ({ ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) }).proveedor
-  ))];
+  const usados = [...new Set(['policy_eval', 'resolution', 'judge'].map(paso => ({
+    ...modelosConfig.pasos[paso],
+    ...((modelosDeLaSesion || {})[paso] || {}),
+    ...(modelosEditado[paso] || {}),
+  }).proveedor))];
   const label = document.querySelector('label[for="inp-api-key"]');
   const input = $('inp-api-key');
   const hint  = $('api-key-hint');
@@ -2497,6 +2514,22 @@ function sincronizarCampoDeClave() {
   hint.innerHTML = `Usa tu propia key — cada uno consume su cuota. `
     + (prov.gratis ? '<b>Tiene free tier.</b> ' : '')
     + `<a href="${prov.consola}" target="_blank" style="color:var(--accent)">Obtener key</a>`;
+}
+
+function aplicarSesion() {
+  // Se congela la seleccion actual —lo guardado en el servidor mas lo tocado— y
+  // viaja con cada analisis. El servidor no se entera hasta que se corre uno.
+  const orden = ['policy_eval', 'resolution', 'judge'];
+  modelosDeLaSesion = {};
+  orden.forEach(paso => {
+    const cfg = { ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) };
+    modelosDeLaSesion[paso] = { proveedor: cfg.proveedor, modelo: cfg.modelo };
+  });
+  modelosEditado = {};
+  renderModelos();
+  const est = $('modelos-estado');
+  est.className = 'modelos-estado ok';
+  est.textContent = 'aplicado a esta sesion';
 }
 
 async function guardarModelos() {
@@ -2531,6 +2564,7 @@ async function restablecerModelos() {
   try {
     const r = await fetch(API_BASE + '/api/config/modelos/reset', { method: 'POST' });
     if (!r.ok) throw new Error(r.status);
+    modelosDeLaSesion = null;
     await cargarModelos();
     est.className = 'modelos-estado ok';
     est.textContent = 'valores por defecto';
@@ -2819,6 +2853,9 @@ function buildPayload() {
   base.demo_mode = demoMode;
   const key = getApiKey();
   if (key) base.api_key = key;
+  // La eleccion de modelo aplicada en esta sesion viaja con cada analisis: vale
+  // para esta corrida y no le cambia nada a nadie mas.
+  if (modelosDeLaSesion) base.modelos = modelosDeLaSesion;
   return base;
 }
 

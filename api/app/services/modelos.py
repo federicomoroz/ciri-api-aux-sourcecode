@@ -92,6 +92,31 @@ class ModelosService:
         self.db.reset_modelos()
         self.invalidar()
 
+    def con_override(self, override: dict | None) -> dict[str, dict]:
+        """La configuracion vigente con la eleccion de esta peticion encima.
+
+        El panel manda su seleccion en cada analisis: vale para esa corrida y no
+        cambia lo que ve nadie mas. En una instancia publica es la unica forma
+        sensata — que un visitante cambie el modelo del proximo seria una
+        sorpresa, y que no pueda probar otro seria inutil.
+        """
+        vigente = self.vigente()
+        if not override:
+            return vigente
+        for paso, elegido in override.items():
+            if paso not in vigente or not isinstance(elegido, dict):
+                continue
+            proveedor = str(elegido.get("proveedor") or vigente[paso]["proveedor"]).lower()
+            modelo = str(elegido.get("modelo") or "").strip() or vigente[paso]["modelo"]
+            vigente[paso] = {**vigente[paso], "proveedor": proveedor, "modelo": modelo,
+                             "de_la_sesion": True}
+        return vigente
+
+    def clientes_para(self, override: dict | None, api_key: str = "") -> dict[str, LLMClient]:
+        """Un cliente por paso para ESTA peticion. Nunca se cachean."""
+        config = self.con_override(override)
+        return {paso: self._construir(config[paso], api_key) for paso in PASOS_DEL_PIPELINE}
+
     # ── Clientes ────────────────────────────────────────────────────────
 
     def cliente(self, paso: str, api_key: str = "") -> LLMClient:
@@ -108,14 +133,16 @@ class ModelosService:
         return self._cache[paso]
 
     def _construir(self, config: dict, api_key: str) -> LLMClient:
-        settings = self.settings
-        if api_key:
-            # Copia con la clave del visitante: no se toca la configuracion del
-            # proceso, que la comparten todas las demas peticiones.
-            settings = self.settings.model_copy(
-                update={"anthropic_api_key": api_key, "llm_api_key": api_key}
-            )
-        settings = settings.model_copy(update={"llm_provider": config["proveedor"]})
+        proveedor = config["proveedor"]
+        # La del visitante gana; si no trajo, la que el servidor tenga para ESE
+        # proveedor. Se copia el settings en vez de mutarlo: la configuracion del
+        # proceso la comparten todas las demas peticiones.
+        clave = api_key or self.clave_de(proveedor)
+        settings = self.settings.model_copy(update={
+            "llm_provider": proveedor,
+            "anthropic_api_key": clave,
+            "llm_api_key": clave,
+        })
         return self._constructor(settings, config["modelo"], self.tracer)
 
     def invalidar(self) -> None:
@@ -149,7 +176,37 @@ class ModelosService:
             for pid, info in PROVEEDORES_SUGERIDOS.items()
         ]
 
-    def _hay_clave(self, proveedor: str) -> bool:
+    def todo_es_gratis(self, override: dict | None = None) -> bool:
+        """Si los tres pasos corren en proveedores con free tier y hay clave.
+
+        Es lo que decide si el modo demo puede correr el pipeline de verdad en
+        vez de servir un informe guardado. «Demo» nunca quiso decir «viejo»:
+        quiso decir «que no le cueste a nadie». Cuando correrlo es gratis, la
+        respuesta honesta es correrlo.
+        """
+        config = self.con_override(override)
+        proveedores = {cfg["proveedor"] for cfg in config.values()}
+        if "anthropic" in proveedores:
+            return False
+        return all(
+            PROVEEDORES_SUGERIDOS.get(p, {}).get("gratis") and self._hay_clave(p)
+            for p in proveedores
+        )
+
+    def clave_de(self, proveedor: str) -> str:
+        """La credencial del servidor para ese proveedor, si la hay.
+
+        Se busca de lo especifico a lo general: la del proveedor, la generica, y
+        para Anthropic su variable de siempre. Asi el dueno del deploy puede
+        cargar las de free tier —que no arriesgan nada— y dejar las de pago
+        afuera, para que cada uno traiga la suya.
+        """
+        por_proveedor = (self.settings.llm_api_keys or {}).get(proveedor, "")
+        if por_proveedor:
+            return por_proveedor
         if proveedor == "anthropic":
-            return bool(self.settings.anthropic_api_key)
-        return bool(self.settings.llm_api_key)
+            return self.settings.anthropic_api_key
+        return self.settings.llm_api_key
+
+    def _hay_clave(self, proveedor: str) -> bool:
+        return bool(self.clave_de(proveedor))

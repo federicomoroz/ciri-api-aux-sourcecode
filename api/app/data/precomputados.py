@@ -83,6 +83,32 @@ def linea_de_procedencia(procedencia: dict | None) -> str:
     )
 
 
+ETIQUETA_GRATIS = "ANÁLISIS REAL (modelo gratuito)"
+
+
+def cartel_modelo_gratis(modelos: dict) -> str:
+    """El cartel de un analisis recien hecho, corrido en un free tier.
+
+    Es lo contrario del caso prearmado: el pipeline corrio entero y el resultado
+    es de ahora. Lo unico que hay que declarar es con que se corrio, porque no
+    fue la configuracion documentada — y esa distincion la tiene que ver quien
+    lee el informe, no quien lee el codigo.
+    """
+    detalle = " · ".join(
+        f"{cfg['titulo'].lower()}: <b>{cfg['modelo']}</b>" for cfg in modelos.values()
+    )
+    return (
+        f'<div style="{_ESTILO_CARTEL}">'
+        f'<b style="letter-spacing:.03em">{ETIQUETA_GRATIS}</b> &nbsp;Este informe se '
+        "genero recien: el pipeline corrio entero, con RAG, guardrails y juez. Se uso un "
+        "proveedor con free tier para que evaluar el sistema no le cueste a nadie, asi que "
+        "<u>no es la configuracion documentada</u> (Haiku + Sonnet): los prompts estan "
+        "afinados para Claude y el resultado puede diferir."
+        f'<div style="margin-top:9px;font-size:12.5px;opacity:.85">{detalle}</div>'
+        "</div>"
+    )
+
+
 def cartel_sustituto(solicitada: str, mostrada: str) -> str:
     """El cartel cuando el caso pedido no tiene analisis guardado.
 

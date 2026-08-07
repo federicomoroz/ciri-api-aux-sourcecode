@@ -51,20 +51,22 @@ router = APIRouter(tags=["panel"])
 
 
 @contextmanager
-def _byok_pipeline(api_key: str, base: PipelineService, settings: Settings, request: Request):
-    """Pipeline efimero con la API key del visitante.
+def _pipeline_efimero(
+    base: PipelineService, request: Request, api_key: str = "", override: dict | None = None,
+):
+    """Pipeline de una sola corrida, con la clave y/o los modelos de esta peticion.
 
-    Respeta la eleccion de modelo por paso: quien trae su clave corre la misma
-    configuracion que el servidor, con su credencial. Los clientes se cierran al
-    salir — son de un solo uso y cada uno abre su propio pool de conexiones. Sin
-    esto, cada request con BYOK dejaba pools colgados hasta el recolector.
+    Dos cosas viajan por peticion y ninguna se guarda: la credencial del
+    visitante y su eleccion de modelo. Asi quien evalua puede probar otro modelo
+    —o su propia cuenta— sin cambiarle nada al resto.
+
+    Los clientes se cierran al salir: son de un solo uso y cada uno abre su
+    propio pool de conexiones. Sin esto, cada peticion dejaba pools colgados
+    hasta que pasara el recolector.
     """
     tracer = request.app.state.tracer
     modelos = request.app.state.modelos_service
-    clientes = {
-        paso: modelos.cliente(paso, api_key=api_key)
-        for paso in (PASO_POLITICAS, PASO_RESOLUCION, PASO_JUEZ)
-    }
+    clientes = modelos.clientes_para(override, api_key=api_key)
     try:
         yield PipelineService(
             db=base.db, retriever=base.retriever, analyzer=base.analyzer,
@@ -92,13 +94,60 @@ def _es_clave_invalida(exc: Exception) -> bool:
 
 
 def _en_modo_demo(req: AnalyzeRequest, settings: Settings) -> bool:
-    """Si esta peticion tiene que resolverse sin llamar al modelo.
+    """Si esta peticion no tiene que gastar dinero.
 
     Manda el toggle del panel; si la peticion no dice nada, decide el servidor.
     Nota: aca no interviene la API key. Pedir modo demo teniendo clave es
     legitimo — es justamente como se mira un caso sin gastar.
     """
     return settings.demo_mode if req.demo_mode is None else req.demo_mode
+
+
+def _puede_correr_gratis(request: Request, override: dict | None = None) -> bool:
+    """Si el modo demo puede correr el pipeline de verdad en vez de recitarlo.
+
+    «Demo» nunca quiso decir «viejo»: quiso decir «que no le cueste a nadie». Los
+    prompts son deterministas y piden una estructura explicita, asi que cualquier
+    modelo decente puede cumplirlos —lo verifica
+    `tests/unit/test_compatibilidad_modelos.py`—. Con un proveedor de free tier
+    configurado, servir una grabacion en vez de correrlo es peor en todo: el
+    informe envejece, no prueba nada, y correrlo cuesta lo mismo que no correrlo.
+    """
+    modelos = getattr(request.app.state, "modelos_service", None)
+    if modelos is None:
+        return False
+    try:
+        return modelos.todo_es_gratis(override)
+    except Exception:
+        logger.warning("No se pudo saber si el modelo configurado es gratis", exc_info=True)
+        return False
+
+
+def _marcar_si_gratis(respuesta, request: Request, corre_gratis: bool):
+    """Le pone el cartel del modelo al informe, si la corrida fue gratuita.
+
+    El informe tiene que decir con que se corrio: no fue la configuracion
+    documentada, y eso lo tiene que ver quien lo lee, no quien lee el codigo.
+    """
+    if not (corre_gratis and isinstance(respuesta, HTMLResponse) and respuesta.status_code == 200):
+        return respuesta
+    nueva = HTMLResponse(
+        content=_marcar_corrida_gratis(respuesta.body.decode("utf-8"), request),
+        status_code=200,
+    )
+    nueva.headers.update(
+        {k: v for k, v in respuesta.headers.items() if k.lower().startswith("x-")}
+    )
+    nueva.headers["X-Modelo-Gratuito"] = "true"
+    return nueva
+
+
+def _marcar_corrida_gratis(html: str, request: Request) -> str:
+    """Le pone al informe el cartel que dice con que modelo se corrio."""
+    from ..data.precomputados import _con_cartel, cartel_modelo_gratis
+
+    modelos = request.app.state.modelos_service
+    return _con_cartel(html, cartel_modelo_gratis(modelos.vigente()))
 
 
 def _html_demo(txn_id: str, settings: Settings, db=None) -> str | None:
@@ -274,17 +323,26 @@ def _sse(step: str, data: dict) -> str:
     return f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
 
 
-def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings):
+def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, request=None):
     """Traduce los eventos del pipeline a lineas SSE.
 
-    En modo demo no se ejecuta nada: el caso prearmado sale directo, y el panel
-    lo muestra igual que un analisis real pero con su cartel.
+    En modo demo hay dos caminos. Si el modelo configurado es de un free tier,
+    **el pipeline corre de verdad**: no cuesta nada, y un analisis recien hecho
+    prueba lo que una grabacion no puede. Si no, sale el caso prearmado con su
+    cartel, que es el respaldo — no el plan.
     """
-    if _en_modo_demo(req, settings):
+    gratis = (
+        _en_modo_demo(req, settings)
+        and request is not None
+        and _puede_correr_gratis(request, req.modelos)
+    )
+    if _en_modo_demo(req, settings) and not gratis:
         yield from _emitir_demo(req, settings, pipeline)
         return
     try:
         for step, data in pipeline.run_streaming(req, model_name=settings.llm_model):
+            if step == "done" and gratis and data.get("html"):
+                data = {**data, "html": _marcar_corrida_gratis(data["html"], request)}
             yield _sse(step, data)
     except Exception as exc:
         logger.error("Pipeline SSE fallo para %s: %s", req.transaction_id, exc, exc_info=True)
@@ -441,8 +499,12 @@ async def panel_analyze(
        n8n returns raw JSON data; the panel applies the HTML template locally.
     2. If n8n is unavailable or direct=true, use the direct FastAPI pipeline.
     """
-    # Modo demo: el caso ya resuelto sale sin pasar por el modelo ni por n8n.
-    if _en_modo_demo(req, settings):
+    # Modo demo con un modelo gratuito: se corre de verdad. Cuesta lo mismo que
+    # no correrlo y devuelve un analisis de ahora en vez de una grabacion.
+    corre_gratis = _en_modo_demo(req, settings) and _puede_correr_gratis(request, req.modelos)
+
+    # Modo demo sin free tier: el caso ya resuelto, sin pasar por el modelo ni n8n.
+    if _en_modo_demo(req, settings) and not corre_gratis:
         demo = _respuesta_demo(req.transaction_id, settings, pipeline.db)
         if demo is not None:
             return demo
@@ -470,10 +532,13 @@ async def panel_analyze(
     # ── Modo produccion: el pipeline corre de verdad ──────────────────────
     # La clave que venga en la peticion reemplaza a la del servidor. Quien trae
     # la suya gasta de su cuenta, no de la de nadie mas.
-    if req.api_key:
-        with _byok_pipeline(req.api_key, pipeline, settings, request) as propio:
-            return _correr_directo(propio, req, settings)
-    if not settings.anthropic_api_key:
+    # Efimero si el visitante trajo su clave o eligio otro modelo para esta
+    # corrida: en los dos casos la configuracion es suya y no la del proceso.
+    if req.api_key or req.modelos:
+        with _pipeline_efimero(pipeline, request, api_key=req.api_key or "", override=req.modelos) as propio:
+            respuesta = _correr_directo(propio, req, settings)
+            return _marcar_si_gratis(respuesta, request, corre_gratis)
+    if not (settings.anthropic_api_key or corre_gratis):
         return HTMLResponse(
             content=_pagina(
                 "Hace falta una API key",
@@ -485,7 +550,7 @@ async def panel_analyze(
             ),
             status_code=400,
         )
-    return _correr_directo(pipeline, req, settings)
+    return _marcar_si_gratis(_correr_directo(pipeline, req, settings), request, corre_gratis)
 
 
 @router.post("/api/panel/analyze-stream")
@@ -511,11 +576,13 @@ def panel_analyze_stream(
         # despues de que esta funcion retorna, asi que cerrarlo antes dejaria
         # al stream sin cliente con el que trabajar.
         try:
-            if req.api_key:
-                with _byok_pipeline(req.api_key, pipeline, settings, request) as propio:
-                    yield from _emitir(propio, req, settings)
+            if req.api_key or req.modelos:
+                with _pipeline_efimero(
+                    pipeline, request, api_key=req.api_key or "", override=req.modelos,
+                ) as propio:
+                    yield from _emitir(propio, req, settings, request)
             else:
-                yield from _emitir(pipeline, req, settings)
+                yield from _emitir(pipeline, req, settings, request)
         except Exception as exc:
             logger.error("Streaming pipeline failed: %s", exc, exc_info=True)
             yield f"data: {json.dumps({'step': 'error', 'message': 'Error interno del pipeline. Revisa que tu API key sea valida.'})}\n\n"

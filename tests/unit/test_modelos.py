@@ -41,6 +41,7 @@ def settings_falsas(**extra):
         "llm_model_resolution": "claude-sonnet-4-6",
         "anthropic_api_key": "clave-del-servidor",
         "llm_api_key": "",
+        "llm_api_keys": {},
         "llm_max_retries": 2,
         "llm_base_url": "",
     }
@@ -208,3 +209,82 @@ class TestElPanelSabeDondeSacarLaClave:
         gratis = [p for p in servicio.catalogo() if p["gratis"]]
         assert len(gratis) >= 3
         assert all(p["consola"] for p in gratis)
+
+
+class TestClavePorProveedor:
+    """El dueño del deploy puede cargar las de free tier sin arriesgar nada."""
+
+    def _con_claves(self, claves):
+        svc = ModelosService(DBFalsa(), settings_falsas(llm_api_keys=claves), MagicMock(),
+                             lambda s, m, t: MagicMock(api_key=s.llm_api_key, proveedor=s.llm_provider))
+        return svc
+
+    def test_la_clave_del_proveedor_gana_sobre_la_generica(self):
+        svc = self._con_claves({"groq": "gsk_propia"})
+        assert svc.clave_de("groq") == "gsk_propia"
+
+    def test_sin_clave_propia_cae_a_la_generica(self):
+        svc = ModelosService(DBFalsa(), settings_falsas(llm_api_key="generica"), MagicMock(),
+                             lambda s, m, t: MagicMock())
+        assert svc.clave_de("groq") == "generica"
+
+    def test_anthropic_usa_su_variable_de_siempre(self, servicio):
+        assert servicio.clave_de("anthropic") == "clave-del-servidor"
+
+    def test_cada_paso_recibe_la_clave_de_SU_proveedor(self):
+        """Con dos proveedores distintos, una sola clave no alcanza."""
+        svc = self._con_claves({"groq": "gsk_x", "gemini": "AIza_y"})
+        svc.guardar(PASO_POLITICAS, "groq", "llama")
+        svc.guardar(PASO_JUEZ, "gemini", "gemini-2.5-flash")
+        assert svc.cliente(PASO_POLITICAS).api_key == "gsk_x"
+        assert svc.cliente(PASO_JUEZ).api_key == "AIza_y"
+
+    def test_el_catalogo_marca_cual_tiene_clave(self):
+        catalogo = {p["id"]: p for p in self._con_claves({"groq": "gsk_x"}).catalogo()}
+        assert catalogo["groq"]["tiene_clave"] is True
+        assert catalogo["gemini"]["tiene_clave"] is False
+
+
+class TestLaEleccionDeLaSesion:
+    """Un visitante puede probar otro modelo sin cambiárselo a los demás.
+
+    En una instancia pública es la única forma sensata: que la elección de uno
+    cambie lo que ve el próximo sería una sorpresa; que no pueda probar otro
+    modelo sería inútil.
+    """
+
+    OVERRIDE = {"judge": {"proveedor": "groq", "modelo": "llama-3.3-70b-versatile"}}
+
+    def test_el_override_pisa_solo_ese_paso(self, servicio):
+        config = servicio.con_override(self.OVERRIDE)
+        assert config[PASO_JUEZ]["modelo"] == "llama-3.3-70b-versatile"
+        assert config[PASO_POLITICAS]["modelo"] == "claude-haiku-4-5-20251001"
+
+    def test_el_override_no_toca_lo_guardado(self, servicio):
+        servicio.con_override(self.OVERRIDE)
+        assert servicio.db.get_modelos() == {}
+        assert servicio.vigente()[PASO_JUEZ]["modelo"] == "claude-sonnet-4-6"
+
+    def test_queda_marcado_como_de_la_sesion(self, servicio):
+        config = servicio.con_override(self.OVERRIDE)
+        assert config[PASO_JUEZ]["de_la_sesion"] is True
+        assert "de_la_sesion" not in config[PASO_POLITICAS]
+
+    def test_sin_override_devuelve_lo_vigente(self, servicio):
+        assert servicio.con_override(None) == servicio.vigente()
+
+    def test_un_paso_inventado_se_ignora_en_vez_de_romper(self, servicio):
+        config = servicio.con_override({"inventado": {"proveedor": "groq", "modelo": "x"}})
+        assert set(config) == set(PASOS_DEL_PIPELINE)
+
+    def test_un_modelo_vacio_conserva_el_vigente(self, servicio):
+        config = servicio.con_override({"judge": {"proveedor": "groq", "modelo": "   "}})
+        assert config[PASO_JUEZ]["modelo"] == "claude-sonnet-4-6"
+
+    def test_los_clientes_de_la_sesion_no_se_cachean(self, servicio):
+        a = servicio.clientes_para(self.OVERRIDE)
+        b = servicio.clientes_para(self.OVERRIDE)
+        assert a[PASO_JUEZ] is not b[PASO_JUEZ]
+
+    def test_devuelve_un_cliente_por_paso(self, servicio):
+        assert set(servicio.clientes_para(self.OVERRIDE)) == set(PASOS_DEL_PIPELINE)

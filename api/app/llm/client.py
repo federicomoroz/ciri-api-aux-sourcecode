@@ -126,6 +126,10 @@ PROVEEDORES: dict[str, str] = {
     "github": "https://models.inference.ai.azure.com",
     "cerebras": "https://api.cerebras.ai/v1",
     "openai": "https://api.openai.com/v1",
+    "deepseek": "https://api.deepseek.com/v1",
+    "alibaba": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+    "moonshot": "https://api.moonshot.cn/v1",
 }
 
 

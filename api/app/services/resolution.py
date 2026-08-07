@@ -20,6 +20,9 @@ from ..domain.constants import (
     GUARDRAIL_MIN_FAILS_FOR_WARNING,
     JUDGE_APPROVAL_THRESHOLD,
     LLM_MAX_CRITICAL_LOGS,
+    PASO_JUEZ,
+    PASO_POLITICAS,
+    PASO_RESOLUCION,
     POLICY_SEED_BLOQUEANTES,
     RISK_FRAUD_SEVERE,
     RISK_HIGH_MIN_FAILS,
@@ -42,19 +45,48 @@ logger = logging.getLogger(__name__)
 class ResolutionService:
     def __init__(
         self,
-        llm: LLMClient,
-        tracer: Tracer,
+        llm: LLMClient | None = None,
+        tracer: Tracer | None = None,
         llm_resolution: LLMClient | None = None,
         llm_judge: LLMClient | None = None,
+        modelos=None,
     ):
-        # Un cliente por paso. `llm_judge` cae en el de sintesis si no se
-        # especifica, que era el comportamiento anterior: evaluar y resolver
-        # piden un razonamiento parecido, asi que compartir modelo es un default
-        # razonable — pero ahora es un default, no una atadura.
-        self.llm = llm
-        self.llm_resolution = llm_resolution or llm
-        self.llm_judge = llm_judge or self.llm_resolution
+        """Un cliente por paso, fijo o resuelto en cada uso.
+
+        Con `modelos` (un `ModelosService`) los tres clientes se piden **en el
+        momento de usarlos**. Sostenerlos en atributos parecia inocente y no lo
+        era: el servicio se arma una vez en el arranque, asi que cambiar el
+        modelo desde el panel actualizaba el panel y dejaba a `/api/analyze/*`
+        —que es lo que llama n8n— corriendo el modelo viejo hasta reiniciar. El
+        panel decia una cosa y el sistema hacia otra.
+
+        Sin `modelos` se usan los clientes que le pasen, que es lo que hacen los
+        tests y el pipeline efimero de BYOK.
+
+        `llm_judge` cae en el de sintesis si no se especifica: evaluar y resolver
+        piden un razonamiento parecido, asi que compartir modelo es un default
+        razonable — pero ahora es un default, no una atadura.
+        """
+        self._modelos = modelos
+        self._llm = llm
+        self._llm_resolution = llm_resolution or llm
+        self._llm_judge = llm_judge or self._llm_resolution
         self.tracer = tracer
+
+    @property
+    def llm(self) -> LLMClient:
+        return self._cliente(PASO_POLITICAS, self._llm)
+
+    @property
+    def llm_resolution(self) -> LLMClient:
+        return self._cliente(PASO_RESOLUCION, self._llm_resolution)
+
+    @property
+    def llm_judge(self) -> LLMClient:
+        return self._cliente(PASO_JUEZ, self._llm_judge)
+
+    def _cliente(self, paso: str, fijo: LLMClient | None) -> LLMClient:
+        return self._modelos.cliente(paso) if self._modelos is not None else fijo
 
     def resolve(self, ctx: CaseContext) -> dict:
         """Full resolution pipeline: policy eval -> log summary -> resolution synthesis -> guardrails.

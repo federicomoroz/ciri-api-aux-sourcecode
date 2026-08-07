@@ -259,12 +259,11 @@ class TestLosErroresSeNombran:
 
 
 class TestLaClaveDelVisitanteManda:
-    """En modo produccion, la clave de la peticion reemplaza a la del servidor.
+    """Lo que viaja por peticion es de quien la hace, y no se guarda.
 
-    Es lo que hace que evaluar el sistema a fondo no le cueste nada al dueño del
-    repositorio: quien trae su clave gasta de su cuenta. Y desde que el modelo de
-    cada paso se elige por configuracion, el pipeline efimero tiene que respetar
-    esa eleccion: la clave cambia, la configuracion no.
+    Dos cosas: la clave —para que evaluar el sistema a fondo no le cueste al
+    dueño del repositorio— y la eleccion de modelo, para que un visitante pueda
+    probar otro sin cambiarselo a nadie mas.
     """
 
     @staticmethod
@@ -273,53 +272,65 @@ class TestLaClaveDelVisitanteManda:
         from unittest.mock import MagicMock
 
         import api.app.routes.panel as panel
+        from api.app.domain.constants import PASOS_DEL_PIPELINE
 
         modelos = MagicMock()
-        modelos.cliente.side_effect = lambda paso, api_key="": registro.setdefault(
-            (paso, api_key), MagicMock()
-        )
+
+        def clientes_para(override, api_key=""):
+            registro["override"] = override
+            registro["api_key"] = api_key
+            registro["clientes"] = {p: MagicMock() for p in PASOS_DEL_PIPELINE}
+            return registro["clientes"]
+
+        modelos.clientes_para.side_effect = clientes_para
         monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
         monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
 
         base = SimpleNamespace(db=None, retriever=None, analyzer=None, report_gen=None)
-        cfg = SimpleNamespace(llm_model="haiku", llm_model_resolution="sonnet")
         peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
             tracer=MagicMock(), modelos_service=modelos,
         )))
-        return panel, base, cfg, peticion, modelos
+        return panel, base, peticion
 
-    def test_los_tres_pasos_se_construyen_con_la_clave_de_la_peticion(self, monkeypatch):
+    def test_la_clave_de_la_peticion_llega_a_los_clientes(self, monkeypatch):
         registro = {}
-        panel, base, cfg, peticion, modelos = self._panel_falso(monkeypatch, registro)
+        panel, base, peticion = self._panel_falso(monkeypatch, registro)
 
-        with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
+        with panel._pipeline_efimero(base, peticion, api_key=CLAVE_PROPIA):
             pass
 
-        pedidos = [llamada.kwargs.get("api_key") for llamada in modelos.cliente.call_args_list]
-        assert pedidos == [CLAVE_PROPIA] * 3, "algun paso no uso la clave del visitante"
+        assert registro["api_key"] == CLAVE_PROPIA
 
-    def test_pide_un_cliente_por_cada_paso_del_pipeline(self, monkeypatch):
+    def test_la_eleccion_de_modelo_de_la_sesion_tambien_viaja(self, monkeypatch):
+        registro = {}
+        panel, base, peticion = self._panel_falso(monkeypatch, registro)
+        eleccion = {"judge": {"proveedor": "groq", "modelo": "llama-3.3-70b-versatile"}}
+
+        with panel._pipeline_efimero(base, peticion, override=eleccion):
+            pass
+
+        assert registro["override"] == eleccion
+
+    def test_se_construye_un_cliente_por_cada_paso(self, monkeypatch):
         from api.app.domain.constants import PASOS_DEL_PIPELINE
 
         registro = {}
-        panel, base, cfg, peticion, modelos = self._panel_falso(monkeypatch, registro)
+        panel, base, peticion = self._panel_falso(monkeypatch, registro)
 
-        with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
+        with panel._pipeline_efimero(base, peticion, api_key=CLAVE_PROPIA):
             pass
 
-        pasos = [llamada.args[0] for llamada in modelos.cliente.call_args_list]
-        assert set(pasos) == set(PASOS_DEL_PIPELINE)
+        assert set(registro["clientes"]) == set(PASOS_DEL_PIPELINE)
 
     def test_los_clientes_se_cierran_al_terminar(self, monkeypatch):
         """Cada uno abre su pool de conexiones: sin cerrar, quedan colgados."""
         registro = {}
-        panel, base, cfg, peticion, _ = self._panel_falso(monkeypatch, registro)
+        panel, base, peticion = self._panel_falso(monkeypatch, registro)
 
-        with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
+        with panel._pipeline_efimero(base, peticion, api_key=CLAVE_PROPIA):
             pass
 
-        assert registro, "no se construyo ningun cliente"
-        assert all(c.close.called for c in registro.values())
+        assert all(c.close.called for c in registro["clientes"].values())
 
 
 class TestElAnalisisGuardado:

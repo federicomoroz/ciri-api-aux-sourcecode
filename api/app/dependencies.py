@@ -16,7 +16,6 @@ from .analysis.analyzer import Analyzer
 from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
-from .domain.constants import PASO_JUEZ, PASO_POLITICAS, PASO_RESOLUCION
 from .llm.client import AnthropicClient, OpenAICompatibleClient, base_url_de
 from .observability.contacto_n8n import ContactoN8n
 from .observability.tracer import LangfuseTracer, NoOpTracer
@@ -201,11 +200,10 @@ async def lifespan(app: FastAPI):
     # La eleccion de modelo por paso vive en SQLite y el panel la edita; este
     # servicio la traduce en clientes y los renueva cuando cambia.
     modelos = ModelosService(db, settings, tracer, construir_llm)
-    resolution_service = ResolutionService(
-        modelos.cliente(PASO_POLITICAS), tracer,
-        llm_resolution=modelos.cliente(PASO_RESOLUCION),
-        llm_judge=modelos.cliente(PASO_JUEZ),
-    )
+    # Se le pasa el servicio y no los clientes: asi `/api/analyze/*` —lo que
+    # llama n8n— toma el modelo vigente en cada peticion, y cambiarlo desde el
+    # panel no exige reiniciar.
+    resolution_service = ResolutionService(tracer=tracer, modelos=modelos)
     report_generator = ReportGenerator()
 
     app.state.settings = settings

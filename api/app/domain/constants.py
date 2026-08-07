@@ -229,7 +229,15 @@ PROVEEDORES_SUGERIDOS: dict[str, dict] = {
     "openrouter": {
         "nombre": "OpenRouter",
         "gratis": True,
-        "modelos": ["meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-32b:free"],
+        # Solo los slugs terminados en `:free` no se cobran, y el catalogo rota:
+        # un modelo que hoy es gratis puede dejar de serlo. La lista vigente esta
+        # en `GET https://openrouter.ai/api/v1/models` filtrando por `:free`.
+        # Estos se verificaron contra la API.
+        "modelos": [
+            "openai/gpt-oss-20b:free",
+            "google/gemma-4-31b-it:free",
+            "nvidia/nemotron-3-super-120b-a12b:free",
+        ],
         "consola": "https://openrouter.ai/keys",
         "formato_clave": "sk-or-v1-...",
     },
@@ -250,9 +258,40 @@ PROVEEDORES_SUGERIDOS: dict[str, dict] = {
     "openai": {
         "nombre": "OpenAI",
         "gratis": False,
-        "modelos": ["gpt-4o-mini", "gpt-4o"],
+        "modelos": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
         "consola": "https://platform.openai.com/api-keys",
         "formato_clave": "sk-proj-...",
+    },
+    # Compatibles con OpenAI y competitivos en precio. Se marcan como de pago a
+    # proposito: varios tienen cuota gratuita, pero anunciar «gratis» sin estar
+    # seguro haria que el modo demo gaste plata ajena creyendo que no gasta.
+    "deepseek": {
+        "nombre": "DeepSeek",
+        "gratis": False,
+        "modelos": ["deepseek-chat", "deepseek-reasoner"],
+        "consola": "https://platform.deepseek.com/api_keys",
+        "formato_clave": "sk-...",
+    },
+    "alibaba": {
+        "nombre": "Qwen (Alibaba)",
+        "gratis": False,
+        "modelos": ["qwen-plus", "qwen-turbo", "qwen2.5-72b-instruct"],
+        "consola": "https://bailian.console.alibabacloud.com/",
+        "formato_clave": "sk-...",
+    },
+    "zhipu": {
+        "nombre": "Zhipu GLM",
+        "gratis": False,
+        "modelos": ["glm-4-flash", "glm-4-plus"],
+        "consola": "https://open.bigmodel.cn/usercenter/apikeys",
+        "formato_clave": "...",
+    },
+    "moonshot": {
+        "nombre": "Moonshot (Kimi)",
+        "gratis": False,
+        "modelos": ["moonshot-v1-8k", "moonshot-v1-32k"],
+        "consola": "https://platform.moonshot.cn/console/api-keys",
+        "formato_clave": "sk-...",
     },
 }
 

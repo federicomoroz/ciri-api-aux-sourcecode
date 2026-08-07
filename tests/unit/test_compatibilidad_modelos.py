@@ -1,0 +1,171 @@
+"""«Los prompts son deterministas: deberian servir con cualquier modelo decente».
+
+Esa afirmacion es verificable, y esto es lo que la verifica sin gastar un centavo.
+
+Lo que cambia entre modelos no es si entienden la consigna —los prompts piden una
+estructura explicita— sino **como envuelven la respuesta**. Claude devuelve el
+JSON pelado. Los modelos mas chicos y los de razonamiento lo rodean de prosa, lo
+meten en un bloque de codigo, dejan una coma colgando, o lo envuelven en un objeto
+con una clave que nadie pidio.
+
+Cada caso de aca es una forma real de esa familia. Si el parseo las cubre, cambiar
+de proveedor es cambiar una linea de configuracion; si no, es un bug por modelo.
+
+Lo que estos tests NO prueban es la calidad del razonamiento: eso lo mide
+`scripts/evaluar.py` contra el modelo de verdad. Aca se prueba el contrato.
+"""
+
+import pytest
+
+from api.app.domain.models import (
+    JudgeEvaluationOutput,
+    PolicyVerdictOutput,
+    ResolutionOutput,
+)
+from api.app.llm.parsing import parse_json_safely, validate_llm_output
+
+VEREDICTOS = [
+    {"policy_code": "POL-EXC-003", "verdict": "BLOCKER", "reasoning": "cripto irreversible"},
+    {"policy_code": "POL-FRD-001", "verdict": "FAIL", "reasoning": "score 8 < 15"},
+]
+RESOLUCION = {
+    "transaction_id": "TXN-00051",
+    "recommended_action": "REJECT",
+    "confidence": 0.95,
+    "risk_level": "BLOCKER",
+    "justification": "cripto",
+}
+
+
+class TestFormasDeEnvolver:
+    """Cada una es como responde alguna familia de modelos."""
+
+    def test_json_pelado(self):
+        """Claude. El caso facil."""
+        assert parse_json_safely('{"a": 1}', {}) == {"a": 1}
+
+    def test_bloque_de_codigo_con_lenguaje(self):
+        """Llama, Qwen, Mistral: casi siempre lo meten en un fence."""
+        crudo = '```json\n{"a": 1}\n```'
+        assert parse_json_safely(crudo, {}) == {"a": 1}
+
+    def test_prosa_antes_y_despues(self):
+        """Gemini tiende a presentar la respuesta antes de darla."""
+        crudo = 'Claro, aca esta el analisis:\n\n{"a": 1}\n\nEspero que sirva.'
+        assert parse_json_safely(crudo, {}) == {"a": 1}
+
+    def test_cadena_de_razonamiento_antes_del_json(self):
+        """Los modelos de razonamiento anteponen su `<think>`. No es un error."""
+        crudo = (
+            "<think>El metodo de pago es cripto, asi que POL-EXC-003 aplica.\n"
+            'Deberia devolver BLOCKER.</think>\n{"verdict": "BLOCKER"}'
+        )
+        assert parse_json_safely(crudo, {}) == {"verdict": "BLOCKER"}
+
+    def test_razonamiento_y_bloque_de_codigo_juntos(self):
+        crudo = '<thinking>hmm</thinking>\n\n```json\n{"a": 1}\n```'
+        assert parse_json_safely(crudo, {}) == {"a": 1}
+
+    def test_coma_colgando(self):
+        """El error de sintaxis mas comun en los modelos chicos."""
+        assert parse_json_safely('{"a": 1, "b": 2,}', {}) == {"a": 1, "b": 2}
+
+    def test_coma_colgando_en_una_lista(self):
+        assert parse_json_safely('[{"a": 1}, {"b": 2},]', []) == [{"a": 1}, {"b": 2}]
+
+    def test_lista_envuelta_en_un_objeto(self):
+        """Cumplen el contenido y agregan un envoltorio que nadie pidio."""
+        crudo = '{"policy_verdicts": [{"policy_code": "POL-EXC-003"}]}'
+        assert parse_json_safely(crudo, []) == [{"policy_code": "POL-EXC-003"}]
+
+    def test_lista_envuelta_con_otro_nombre_de_clave(self):
+        """El nombre del envoltorio lo inventa el modelo: no se puede asumir."""
+        assert parse_json_safely('{"resultados": [1, 2]}', []) == [1, 2]
+
+    def test_un_objeto_con_dos_claves_no_se_desenvuelve(self):
+        """Desenvolver ahi seria adivinar cual de las dos era la respuesta."""
+        crudo = '{"verdicts": [1], "razonamiento": "x"}'
+        assert parse_json_safely(crudo, []) == {"verdicts": [1], "razonamiento": "x"}
+
+    def test_todo_junto(self):
+        """El peor caso realista: razonamiento, fence, prosa y coma colgando."""
+        crudo = (
+            "<think>Analizando...</think>\n"
+            "Aca esta el resultado:\n"
+            '```json\n{"policy_verdicts": [{"policy_code": "POL-EXC-003"},]}\n```\n'
+            "Avisame si necesitas otra cosa."
+        )
+        assert parse_json_safely(crudo, []) == [{"policy_code": "POL-EXC-003"}]
+
+
+class TestElContratoSeMantiene:
+    """Los tres prompts tienen que producir su estructura, venga como venga."""
+
+    @pytest.mark.parametrize("envoltorio", [
+        '{crudo}',
+        '```json\n{crudo}\n```',
+        'Aca esta:\n\n{crudo}',
+        '<think>razonando</think>\n{crudo}',
+    ])
+    def test_los_veredictos_de_politica_sobreviven(self, envoltorio):
+        import json
+
+        crudo = envoltorio.format(crudo=json.dumps(VEREDICTOS))
+        salida = validate_llm_output(crudo, PolicyVerdictOutput, [])
+        assert len(salida) == 2
+        assert salida[0]["policy_code"] == "POL-EXC-003"
+        assert salida[0]["verdict"] == "BLOCKER"
+
+    @pytest.mark.parametrize("envoltorio", [
+        '{crudo}',
+        '```json\n{crudo}\n```',
+        '<thinking>x</thinking>{crudo}',
+    ])
+    def test_la_resolucion_sobrevive(self, envoltorio):
+        import json
+
+        crudo = envoltorio.format(crudo=json.dumps(RESOLUCION))
+        salida = validate_llm_output(crudo, ResolutionOutput, {})
+        assert salida["recommended_action"] == "REJECT"
+        assert salida["risk_level"] == "BLOCKER"
+
+    def test_la_evaluacion_del_juez_sobrevive(self):
+        crudo = (
+            '```json\n{"overall_score": 8.4, "criteria": {"policy_consistency": 9.0}, '
+            '"approved": true, "strengths": ["ok"], "weaknesses": [],}\n```'
+        )
+        salida = validate_llm_output(crudo, JudgeEvaluationOutput, {})
+        assert salida["overall_score"] == 8.4
+        assert salida["approved"] is True
+
+    def test_los_veredictos_envueltos_igual_llegan_completos(self):
+        crudo = '{"verdicts": [{"policy_code": "POL-EXC-003", "verdict": "BLOCKER"}]}'
+        salida = validate_llm_output(crudo, PolicyVerdictOutput, [])
+        assert isinstance(salida, list) and salida[0]["verdict"] == "BLOCKER"
+
+
+class TestCuandoNoHayNadaQueRescatar:
+    """Reparar envoltorio es legitimo; inventar contenido no.
+
+    Con el fallback vacio, `_determine_outcome` deriva a revision humana en vez de
+    aprobar: es el fail-closed de `decisions.md` y la red que hace que un modelo
+    que no cumple el contrato sea un caso pendiente y no uno aprobado solo.
+    """
+
+    def test_una_disculpa_no_es_un_json(self):
+        crudo = "Lo siento, no puedo procesar esta solicitud."
+        assert parse_json_safely(crudo, []) == []
+
+    def test_un_json_truncado_a_la_mitad_no_se_completa(self):
+        """Pasa cuando el modelo choca contra max_tokens."""
+        crudo = '[{"policy_code": "POL-EXC-003", "verdict": "BLOCK'
+        assert parse_json_safely(crudo, []) == []
+
+    def test_una_respuesta_vacia_da_el_fallback(self):
+        assert validate_llm_output("", PolicyVerdictOutput, []) == []
+
+    def test_un_veredicto_que_no_existe_no_se_traduce(self):
+        """Inventar el enum mas parecido seria decidir por el modelo."""
+        crudo = '[{"policy_code": "POL-X", "verdict": "TAL_VEZ"}]'
+        salida = validate_llm_output(crudo, PolicyVerdictOutput, [])
+        assert salida[0]["verdict"] == "TAL_VEZ", "se valido en silencio algo invalido"
