@@ -20,6 +20,7 @@ from ..domain.constants import (
     REPORT_TEMPLATE_NAME,
 )
 from ..domain.enums import MerchantFlag, ResolutionOutcome, RiskLevel, Severity
+from ..llm import prompts
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,11 @@ class ReportGenerator:
             umbral_juez_aprueba=JUDGE_APPROVAL_THRESHOLD,
             umbral_juez_revisa=JUDGE_NEEDS_REVIEW_THRESHOLD,
             umbral_cliente_reincidente=CLIENT_RECIDIVIST_THRESHOLD,
+            # Las versiones salen del changelog de cada prompt. Estaban
+            # escritas a mano en la plantilla como «v1_...» —el nombre del
+            # modulo, no la version—, asi que el audit trail declaraba v1
+            # para un prompt que iba por v3.1.
+            versiones_de_prompt=prompts.versiones(),
             datos_del_caso=_json_para_html(data),
         )
 

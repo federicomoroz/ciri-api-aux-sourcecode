@@ -375,3 +375,101 @@ class TestSLASobreElReclamo:
         )
         assert r["medido_desde"] == "2024-09-23"
         assert r["medido_hasta"] == "2024-10-01"
+
+
+class TestSinReclamoRegistradoNoSeMideElPlazo:
+    """El SLA se contaba desde la fecha de COMPRA cuando no habia caso abierto.
+
+    El arreglo anterior cubrio los casos cerrados —se miden hasta su cierre, no
+    hasta hoy— y dejo afuera los que no tienen reclamo registrado: 53 de las 100
+    transacciones del dataset, incluida TXN-00051, la del escenario estrella.
+
+    Ahi la apertura caia a la fecha de la transaccion y el corte era hoy:
+    TXN-00051 daba 489 dias habiles contra un limite de 10, y el informe
+    afirmaba una compensacion de USD 15 al lado del veredicto de la misma
+    politica diciendo que el caso recien empieza. Se contradecia en la misma
+    pagina.
+
+    Entre la compra y el reclamo pueden pasar meses. Sin reclamo no hay reloj.
+    """
+
+    @staticmethod
+    def _analyzer(tmp_path):
+        import sqlite3
+
+        from api.app.analysis.analyzer import Analyzer
+        from api.app.data.db import Database
+
+        ruta = str(tmp_path / "a.db")
+        c = sqlite3.connect(ruta)
+        c.executescript(
+            "CREATE TABLE transactions (id TEXT, merchant TEXT, amount_usd REAL, date TEXT);"
+            "CREATE TABLE cases (case_id TEXT, transaction_id TEXT, open_date TEXT, close_date TEXT);"
+            "CREATE TABLE policies (code TEXT, sla_dias INT, puede_bloquear INT);"
+        )
+        c.commit()
+        c.close()
+        return Analyzer(Database(ruta))
+
+    def test_sin_apertura_no_afirma_incumplimiento(self, tmp_path):
+        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        assert r["within_sla"] is None, "afirmo un plazo que nadie midio"
+        assert r["days_elapsed"] is None
+
+    def test_sin_apertura_no_paga_compensacion(self, tmp_path):
+        """Se paga cuando consta que se incumplio, no cuando no consta nada."""
+        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        assert r["compensation_applicable"] is False
+
+    def test_lo_declara_para_que_el_informe_lo_pueda_decir(self, tmp_path):
+        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        assert r["sin_reclamo_registrado"] is True
+
+    def test_el_plazo_que_concede_la_politica_se_informa_igual(self, tmp_path):
+        """Es un dato del caso, no depende de que haya reclamo."""
+        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        assert r["sla_limit_days"] > 0
+        assert r["policy_reference"]
+
+    def test_con_reclamo_abierto_si_se_mide(self, tmp_path):
+        r = self._analyzer(tmp_path).check_sla(case_open_date="2024-01-01", country="COL")
+        assert r["within_sla"] is False
+        assert r["compensation_applicable"] is True
+
+    def test_un_reclamo_de_ayer_esta_en_plazo(self, tmp_path):
+        from datetime import UTC, datetime, timedelta
+
+        ayer = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+        r = self._analyzer(tmp_path).check_sla(case_open_date=ayer, country="COL")
+        assert r["within_sla"] is True
+        assert r["compensation_applicable"] is False
+
+
+class TestLaCompensacionNoSaleDeUnPlazoQueNoSeMidio:
+    """`not sla.get("within_sla", True)` daba True con None.
+
+    O sea que el arreglo de arriba se filtraba igual por el otro camino: el
+    plazo no se medía, pero la compensacion salia lo mismo.
+    """
+
+    TX = {"amount_usd": 2095.90}
+
+    @staticmethod
+    def _comp(sla):
+        from api.app.services.resolution import ResolutionService
+
+        return ResolutionService._determine_compensation(
+            sla, TestLaCompensacionNoSaleDeUnPlazoQueNoSeMidio.TX)
+
+    def test_un_plazo_sin_medir_no_compensa(self):
+        assert self._comp({"within_sla": None})["compensation_applicable"] is False
+
+    def test_un_plazo_incumplido_si(self):
+        assert self._comp({"within_sla": False})["compensation_applicable"] is True
+
+    def test_un_plazo_cumplido_no(self):
+        assert self._comp({"within_sla": True})["compensation_applicable"] is False
+
+    def test_sin_dato_de_sla_no_determina_nada(self):
+        """Ahi decide el modelo, sujeto a los guardrails."""
+        assert self._comp({}) == {}

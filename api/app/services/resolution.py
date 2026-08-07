@@ -630,10 +630,15 @@ class ResolutionService:
 
         Sin dato de SLA no hay nada que determinar: se devuelve vacio y la
         decision queda en el modelo, sujeta a `_validate_resolution`.
+
+        `within_sla` puede venir en None: es un reclamo sin fecha de apertura
+        registrada, o sea un plazo que no se pudo medir. Eso **no** es un
+        incumplimiento. Con `not sla.get("within_sla", True)` un None daba True
+        y la compensacion salia igual, que es el mismo defecto por otro camino.
         """
         if not sla or "within_sla" not in sla:
             return {}
-        incumplido = not sla.get("within_sla", True)
+        incumplido = sla.get("within_sla") is False
         monto = float(tx_data.get("amount_usd", 0) or 0)
         return {
             "compensation_applicable": incumplido,

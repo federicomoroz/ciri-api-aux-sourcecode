@@ -82,6 +82,7 @@ __all__ = [
     "N8N_HEALTHZ_PATH",
     "N8N_ORIGIN_HEADER",
     "LLM_TIMEOUT_S",
+    "SSE_LATIDO_S",
     "N8N_TIMEOUT_S",
     "N8N_PING_TIMEOUT_S",
     # Trace / observability names
@@ -475,6 +476,11 @@ N8N_HEALTHZ_PATH: str = "/healthz"
 # "tu n8n llego hasta aca"; no lleva la URL de nadie.
 N8N_ORIGIN_HEADER: str = "X-Origen-n8n"
 LLM_TIMEOUT_S: float = 300.0                  # timeout de una llamada al modelo
+# Cada cuanto el stream del panel manda senal de vida mientras un paso corre.
+# Los tres pasos son llamadas al modelo y entre evento y evento el stream
+# quedaba mudo minutos: el navegador cortaba por su cuenta y el usuario veia un
+# error que culpaba al cold start con el servicio ya caliente.
+SSE_LATIDO_S: float = 10.0
 N8N_TIMEOUT_S: float = 300.0
 N8N_PING_TIMEOUT_S: float = 3.0
 

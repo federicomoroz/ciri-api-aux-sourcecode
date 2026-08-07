@@ -40,6 +40,7 @@ from ..domain.constants import (
     PASO_POLITICAS,
     PASO_RESOLUCION,
     RISK_FRAUD_SEVERE,
+    SSE_LATIDO_S,
 )
 from ..domain.models import AnalyzeRequest
 from ..reports.generator import ReportGenerator
@@ -408,6 +409,56 @@ def _sse(step: str, data: dict) -> str:
     return f"data: {json.dumps({'step': step, **data}, ensure_ascii=False)}\n\n"
 
 
+def _con_latido(eventos, cada_s: float = SSE_LATIDO_S):
+    """Mantiene el stream hablando mientras un paso tarda.
+
+    Los tres pasos del pipeline son llamadas al modelo y cada una puede tardar
+    minutos: entre evento y evento el stream quedaba **mudo**. El cliente aborta
+    a los N segundos y mostraba un mensaje que culpaba al cold start de Render
+    con el servicio ya caliente; en 2 de 5 corridas medidas ni siquiera llegaba
+    un evento de error, porque el generador seguia bloqueado en el modelo.
+
+    Con un latido cada pocos segundos el stream nunca queda callado: quien mira
+    ve que el analisis sigue vivo, y si algo revienta el error llega igual.
+
+    El generador corre en un hilo porque es bloqueante; la cola es lo unico que
+    los dos comparten.
+    """
+    import queue
+    import threading
+
+    cola: queue.Queue = queue.Queue()
+    CORTE = object()
+
+    def bombear():
+        try:
+            for evento in eventos:
+                cola.put(("evento", evento))
+        except Exception as exc:            # noqa: BLE001 — se reenvia al cliente
+            cola.put(("error", exc))
+        finally:
+            cola.put(("fin", CORTE))
+
+    hilo = threading.Thread(target=bombear, daemon=True)
+    hilo.start()
+    esperando = 0.0
+    while True:
+        try:
+            tipo, carga = cola.get(timeout=cada_s)
+        except queue.Empty:
+            esperando += cada_s
+            # Un comentario SSE: mantiene viva la conexion sin ensuciar los
+            # eventos que el panel interpreta.
+            yield f": latido {esperando:.0f}s\n\n"
+            continue
+        if tipo == "evento":
+            yield carga
+        elif tipo == "error":
+            raise carga
+        else:
+            return
+
+
 def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, request=None):
     """Traduce los eventos del pipeline a lineas SSE.
 
@@ -748,14 +799,14 @@ def panel_analyze_stream(
         try:
             if _en_modo_demo(req, settings) and _modelo_del_demo(request) is not None:
                 with _pipeline_demo(pipeline, request) as demo:
-                    yield from _emitir(demo, req, settings, request)
+                    yield from _con_latido(_emitir(demo, req, settings, request))
             elif req.api_key or req.modelos:
                 with _pipeline_efimero(
                     pipeline, request, api_key=req.api_key or "", override=req.modelos,
                 ) as propio:
-                    yield from _emitir(propio, req, settings, request)
+                    yield from _con_latido(_emitir(propio, req, settings, request))
             else:
-                yield from _emitir(pipeline, req, settings, request)
+                yield from _con_latido(_emitir(pipeline, req, settings, request))
         except Exception as exc:
             logger.error("Streaming pipeline failed: %s", exc, exc_info=True)
             yield f"data: {json.dumps({'step': 'error', 'message': 'Error interno del pipeline. Revisa que tu API key sea valida.'})}\n\n"

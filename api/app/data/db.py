@@ -311,6 +311,29 @@ class Database:
         fila = self._uno("SELECT html FROM report_cache WHERE cache_key = ?", (cache_key,))
         return fila["html"] if fila else None
 
+    def clear_report_cache(self) -> int:
+        """Vacia el cache de informes. Devuelve cuantos habia.
+
+        Se llama al crear, editar o borrar una politica. El cache tiene clave
+        `(transaction_id, cliente_vip)` y ninguna nocion de que politicas
+        estaban vigentes cuando se genero el informe, asi que despues de tocar
+        una politica **todo** lo guardado quedo viejo.
+
+        Sin esto, la decision de arquitectura mas importante del proyecto —las
+        politicas son datos, editarlas no requiere deploy— era cierta en el
+        indice y no se veia en el informe: se editaba POL-FRD-001, se volvia a
+        pedir el mismo caso, y salia el HTML anterior byte a byte. El ejemplo
+        del propio README no funcionaba si el caso ya se habia corrido.
+
+        Se vacia entero y no por caso: una politica aplica a cualquier
+        transaccion, asi que no hay forma de saber cuales informes quedaron
+        viejos sin volver a evaluarlos. Vaciar de mas cuesta una corrida;
+        vaciar de menos deja un informe que afirma algo que ya no rige.
+        """
+        cuantos = self._uno("SELECT COUNT(*) AS n FROM report_cache")
+        self._escribir("DELETE FROM report_cache")
+        return int(cuantos["n"]) if cuantos else 0
+
     def store_cached_report(self, cache_key: str, html: str) -> None:
         self._escribir(
             """INSERT OR REPLACE INTO report_cache (cache_key, html, created_at)

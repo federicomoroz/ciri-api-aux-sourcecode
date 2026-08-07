@@ -222,6 +222,21 @@ class Analyzer:
         siempre: un plazo que da positivo el 100% de las veces no mide nada. El
         reloj de un reclamo corre mientras el reclamo esta abierto.
 
+        **Y sin fecha de apertura no se mide nada.** Ese arreglo cubria los casos
+        cerrados y dejaba afuera los que no tienen reclamo registrado —53 de las
+        100 transacciones del dataset, incluida TXN-00051—: ahi la apertura caia
+        a la fecha de la COMPRA y el plazo se contaba contra hoy. TXN-00051 daba
+        489 dias habiles contra un limite de 10, y el informe afirmaba una
+        compensacion de USD 15 al lado del veredicto de la misma politica
+        diciendo que el caso recien empieza. Se contradecia en la misma pagina.
+
+        La fecha de compra no es la de apertura del reclamo: entre las dos puede
+        haber meses. Sin reclamo registrado no hay reloj que correr, asi que el
+        plazo no se evalua —`within_sla` queda en None— y **no se afirma un
+        incumplimiento que nadie puede sostener**. Que la compensacion no se
+        aplique por falta de dato es lo conservador: se paga cuando consta que
+        el plazo se incumplio, no cuando no consta nada.
+
         If NOT within SLA -> compensation_applicable = True (POL-SLA-004: max USD 15)
         """
         today = today or datetime.now(UTC).date()
@@ -234,11 +249,12 @@ class Analyzer:
                     logger.warning("Fecha invalida en %s: %r", campo, valor)
                 return defecto
 
+        sin_apertura = not (case_open_date or "").strip()
         open_date = _fecha(case_open_date, today, "case_open_date")
         corte = _fecha(case_close_date, today, "case_close_date") if case_close_date else today
         cerrado = case_close_date is not None and corte != today
 
-        days_elapsed = self._business_days_between(open_date, corte)
+        days_elapsed = None if sin_apertura else self._business_days_between(open_date, corte)
 
         # Que politica aplica es una regla —depende del cliente y del pais—, y las
         # reglas viven en codigo. Cuantos dias concede esa politica es un dato
@@ -260,8 +276,10 @@ class Analyzer:
         sla_limit = self._dias_de(codigo, SLA_TYPE_DIAS_POR_DEFECTO[sla_type])
         policy_reference = f"{codigo} ({quien}: {sla_limit} dias habiles)"
 
-        within_sla = days_elapsed <= sla_limit
-        compensation_applicable = not within_sla
+        # Sin apertura no se afirma ni cumplimiento ni incumplimiento: el plazo
+        # que concede la politica se informa igual, porque es un dato del caso.
+        within_sla = None if sin_apertura else days_elapsed <= sla_limit
+        compensation_applicable = within_sla is False
 
         return {
             "within_sla": within_sla,
@@ -272,8 +290,11 @@ class Analyzer:
             "compensation_applicable": compensation_applicable,
             # Contra que se conto: sin esto, «12 dias habiles» no se puede
             # reproducir ni auditar.
-            "medido_desde": open_date.isoformat(),
-            "medido_hasta": corte.isoformat(),
+            "medido_desde": None if sin_apertura else open_date.isoformat(),
+            "medido_hasta": None if sin_apertura else corte.isoformat(),
             "caso_cerrado": cerrado,
             "pais_desconocido": pais_desconocido,
+            # Para que el informe y el modelo puedan decir POR QUE no se evaluo,
+            # en vez de mostrar un plazo cumplido que nadie midio.
+            "sin_reclamo_registrado": sin_apertura,
         }

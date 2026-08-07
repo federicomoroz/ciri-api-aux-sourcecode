@@ -3020,7 +3020,16 @@ async function startAnalysis(payload) {
   abortCtrl = new AbortController();
   const timeoutSec = parseInt($('timeout-select').value) || 180;
   const FETCH_TIMEOUT_MS = (timeoutSec + 20) * 1000;
-  const timeoutId = setTimeout(() => abortCtrl.abort(), FETCH_TIMEOUT_MS);
+  // Plazo de INACTIVIDAD, no plazo total. El servidor manda un latido cada
+  // pocos segundos mientras un paso corre, asi que quedarse callado significa
+  // que algo se colgo — que un analisis tarde no. Con el plazo fijo, el
+  // navegador abortaba a los N segundos con el pipeline todavia trabajando y
+  // mostraba un error que culpaba al cold start con el servicio ya caliente.
+  let timeoutId = setTimeout(() => abortCtrl.abort(), FETCH_TIMEOUT_MS);
+  const reiniciarPlazo = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => abortCtrl.abort(), FETCH_TIMEOUT_MS);
+  };
 
   // Use streaming endpoint for direct pipeline, regular for n8n
   const mode = getPipelineMode();
@@ -3036,7 +3045,7 @@ async function startAnalysis(payload) {
 
   try {
     if (useStream) {
-      await _runStreaming(payload, timeoutId);
+      await _runStreaming(payload, () => clearTimeout(timeoutId), reiniciarPlazo);
     } else {
       await _runClassic(payload, mode, timeoutSec, timeoutId);
     }
@@ -3064,7 +3073,7 @@ async function startAnalysis(payload) {
 }
 
 // ─── SSE STREAMING PATH ──────────────────────────────────
-async function _runStreaming(payload, timeoutId) {
+async function _runStreaming(payload, cortarPlazo, reiniciarPlazo) {
   const url = API_BASE + '/api/panel/analyze-stream';
   const resp = await fetch(url, {
     method: 'POST',
@@ -3089,6 +3098,8 @@ async function _runStreaming(payload, timeoutId) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
+    // Llego algo —evento o latido—: el servidor sigue vivo.
+    reiniciarPlazo();
 
     const parts = buffer.split('\n\n');
     buffer = parts.pop();
@@ -3109,7 +3120,7 @@ async function _runStreaming(payload, timeoutId) {
 
       // Handle done event — final HTML + usage
       if (step === 'done') {
-        clearTimeout(timeoutId);
+        cortarPlazo();
         stopTimer();
         resultHtml = event.html || '';
         usageInfo = event.usage || null;
@@ -3142,7 +3153,7 @@ async function _runStreaming(payload, timeoutId) {
   }
 
   // Stream ended without 'done' event
-  clearTimeout(timeoutId);
+  cortarPlazo();
   stopTimer();
   if (!resultHtml) throw new Error('Stream ended without result');
 }

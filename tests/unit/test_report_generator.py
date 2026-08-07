@@ -412,3 +412,35 @@ class TestLaPlantillaNoRepiteUmbralesNiEnums:
         assert "text-yellow-600" in pintado([MerchantFlag.HIGH_CB_RATIO.value])
         # Mismo ratio, sin flags: el analyzer no lo marco, y el informe no lo inventa.
         assert "text-green-600" in pintado([])
+
+
+class TestElInformeDeclaraLaVersionDePromptQueLoProdujo:
+    """Decia «v1_policy_eval, v1_resolution, v1_judge» como texto fijo.
+
+    Eso es el nombre del MODULO, no la version: los prompts iban por v1.2, v3.1
+    y v2.1. `architecture.md` afirma que «el prefijo de version hace explicito
+    que version de prompt produjo que resolucion en el audit trail», y el audit
+    trail declaraba v1 para un prompt v3.1. Ademas no se leia de ningun lado:
+    cambiar un prompt no cambiaba lo que el informe decia.
+    """
+
+    def test_declara_las_versiones_reales(self, generator, minimal_report_data):
+        from api.app.llm import prompts
+
+        html = generator.render(minimal_report_data)
+        for nombre, version in prompts.versiones().items():
+            assert f"{nombre} {version}" in html, f"el informe no declara {nombre} {version}"
+
+    def test_las_versiones_salen_del_changelog_de_cada_prompt(self):
+        """Una sola fuente: la linea que se edita al cambiar el prompt."""
+        from api.app.llm import prompts
+
+        vs = prompts.versiones()
+        assert vs["v1_resolution"] != "v1", "sigue leyendo el nombre del modulo"
+        assert all(v.startswith("v") and v[1].isdigit() for v in vs.values())
+
+    def test_no_quedo_ninguna_version_escrita_a_mano(self):
+        from pathlib import Path
+
+        plantilla = Path("api/app/reports/templates/case_report.html").read_text(encoding="utf-8")
+        assert "v1_policy_eval, v1_resolution, v1_judge" not in plantilla

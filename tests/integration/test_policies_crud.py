@@ -140,3 +140,54 @@ def test_delete_policy(test_client):
     # Verify it's gone from SQLite
     get_resp = client.get("/api/policies/POL-DEL-001")
     assert get_resp.status_code == 404
+
+
+class TestTocarUnaPoliticaInvalidaLosInformes:
+    """Editar una politica reindexaba Qdrant y no se veia en el informe.
+
+    El cache tiene clave `(transaction_id, cliente_vip)` y ninguna nocion de que
+    politicas regian cuando se genero. Reproducido contra el deploy: se creo una
+    politica, `health` paso de 17 a 18 colecciones y la busqueda ya la devolvia;
+    se volvio a pedir el mismo caso y salio `cache_hit: true` con el HTML
+    anterior byte a byte.
+
+    La decision de arquitectura numero dos del proyecto —las politicas son
+    datos, editarlas no requiere deploy— era cierta en el indice y **no se veia**
+    donde el usuario mira. El ejemplo del propio README no funcionaba si el caso
+    ya se habia corrido.
+    """
+
+    @staticmethod
+    def _db(tmp_path):
+        from api.app.data.db import Database
+
+        db = Database(str(tmp_path / "c.db"))
+        db.ensure_report_cache_table()
+        return db
+
+    def test_el_cache_se_puede_vaciar(self, tmp_path):
+        db = self._db(tmp_path)
+        db.store_cached_report("TXN-00051|False", "<html>viejo</html>")
+        assert db.clear_report_cache() == 1
+        assert db.get_cached_report("TXN-00051|False") is None
+
+    def test_vaciar_un_cache_vacio_no_falla(self, tmp_path):
+        assert self._db(tmp_path).clear_report_cache() == 0
+
+    def test_se_vacia_entero_y_no_por_caso(self, tmp_path):
+        """Una politica aplica a cualquier transaccion: no se sabe cuales quedaron viejos."""
+        db = self._db(tmp_path)
+        for txn in ("TXN-00001", "TXN-00051", "TXN-00089"):
+            db.store_cached_report(f"{txn}|False", "<html>x</html>")
+        assert db.clear_report_cache() == 3
+
+    def test_las_tres_rutas_de_escritura_lo_invalidan(self):
+        """Crear, editar y borrar dejan viejos los informes por igual."""
+        import re
+        from pathlib import Path
+
+        codigo = Path("api/app/routes/policies.py").read_text(encoding="utf-8")
+        for verbo in ("post", "put", "delete"):
+            cuerpo = re.split(r"@router\.", codigo)
+            handler = next(c for c in cuerpo if c.startswith(f'{verbo}('))
+            assert "_invalidar_informes" in handler, f"{verbo.upper()} no invalida el cache"

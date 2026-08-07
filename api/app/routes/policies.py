@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..data.db import Database
@@ -7,6 +9,8 @@ from ..domain.models import PolicyCreate, PolicyUpdate
 from ..rag.formatter import envolver_resultados, format_policies_for_prompt
 from ..rag.retriever import QdrantRetriever
 from ..rag.updater import RAGUpdater
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/policies", tags=["policies"])
 
@@ -58,6 +62,28 @@ def get_policy(code: str, db: Database = Depends(get_db)) -> dict:
     return _politica_o_404(db, code)
 
 
+def _invalidar_informes(db: Database, code: str) -> None:
+    """Tocar una politica deja viejos todos los informes guardados.
+
+    Reindexar en Qdrant no alcanza: el informe se sirve del cache, que no sabe
+    con que politicas se genero. Sin esto se editaba una politica, se volvia a
+    pedir el mismo caso y salia el HTML de antes — la feature andaba y no se
+    veia, que desde afuera es lo mismo que no andar.
+
+    Best-effort: no poder vaciar el cache no puede tumbar la edicion, que ya se
+    guardo y ya se indexo.
+    """
+    try:
+        borrados = db.clear_report_cache()
+        if borrados:
+            logger.info(
+                "%s cambio: se vaciaron %d informes cacheados que ya no reflejan las politicas vigentes",
+                code, borrados,
+            )
+    except Exception:
+        logger.warning("No se pudo vaciar el cache tras tocar %s", code, exc_info=True)
+
+
 @router.post("/", status_code=201)
 def create_policy(
     policy: PolicyCreate,
@@ -67,6 +93,7 @@ def create_policy(
     """Create new policy -> save to SQLite + index in Qdrant immediately."""
     policy_dict = db.create_policy_record(policy.model_dump())
     updater.on_policy_created(policy_dict)
+    _invalidar_informes(db, policy_dict["code"])
     return policy_dict
 
 
@@ -82,6 +109,7 @@ def update_policy(
     existing = _politica_o_404(db, code)
     updated = db.merge_policy_update(existing, policy.model_dump(exclude_unset=True))
     updater.on_policy_updated(updated)
+    _invalidar_informes(db, code)
     return updated
 
 
@@ -95,3 +123,4 @@ def delete_policy(
     _politica_o_404(db, code)
     db.delete_policy(code)
     updater.on_policy_deleted(code)
+    _invalidar_informes(db, code)

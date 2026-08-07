@@ -885,3 +885,75 @@ class TestElPanelInformaElModeloQueCorrio:
 
         assert estimar_costo_usd(self._pedir(True, self.GEMINI), 20000, 3000) == 0.0
         assert estimar_costo_usd(self._pedir(False, self.GEMINI), 20000, 3000) > 0
+
+
+class TestElStreamNoSeQuedaMudo:
+    """El panel se colgaba sin emitir error en 2 de 5 corridas medidas.
+
+    Los tres pasos del pipeline son llamadas al modelo y cada una puede tardar
+    minutos. Entre evento y evento el stream quedaba callado, el navegador
+    abortaba por su cuenta, y el mensaje culpaba al cold start de Render con el
+    servicio ya caliente. En dos corridas ni siquiera llego un evento de error,
+    porque el generador seguia bloqueado adentro del modelo.
+
+    Con un latido cada pocos segundos el stream nunca queda mudo, y el plazo del
+    cliente pasa a ser de INACTIVIDAD: abortar porque no llega nada es correcto;
+    abortar porque el analisis tarda, no.
+    """
+
+    @staticmethod
+    def _latidos_y_eventos(generador, cada_s=0.05):
+        from api.app.routes.panel import _con_latido
+
+        salida = list(_con_latido(generador, cada_s=cada_s))
+        return ([s for s in salida if s.startswith(": latido")],
+                [s for s in salida if not s.startswith(": latido")])
+
+    def test_manda_senal_de_vida_mientras_un_paso_tarda(self):
+        import time
+
+        def lento():
+            yield "data: {}\n\n"
+            time.sleep(0.3)
+            yield "data: {}\n\n"
+
+        latidos, eventos = self._latidos_y_eventos(lento())
+        assert latidos, "el stream se quedo mudo durante el paso lento"
+        assert len(eventos) == 2, "se perdio algun evento real"
+
+    def test_un_stream_rapido_no_se_llena_de_latidos(self):
+        def rapido():
+            yield "data: {}\n\n"
+
+        latidos, eventos = self._latidos_y_eventos(rapido(), cada_s=5)
+        assert latidos == []
+        assert len(eventos) == 1
+
+    def test_el_error_sigue_llegando(self):
+        """Lo peor seria que el latido tape la falla que tiene que reportar."""
+        import pytest as _pytest
+
+        def revienta():
+            yield "data: {}\n\n"
+            raise RuntimeError("el modelo no respondio")
+
+        with _pytest.raises(RuntimeError, match="no respondio"):
+            self._latidos_y_eventos(revienta())
+
+    def test_el_latido_es_un_comentario_sse(self):
+        """El panel ignora todo lo que no empiece con `data: `, asi que no lo rompe."""
+        import time
+
+        def lento():
+            yield "data: {}\n\n"
+            time.sleep(0.2)
+
+        latidos, _ = self._latidos_y_eventos(lento())
+        assert all(s.startswith(":") and s.endswith("\n\n") for s in latidos)
+
+    def test_el_cliente_espera_por_inactividad_y_no_por_plazo_fijo(self):
+        from pathlib import Path
+
+        panel = Path("api/app/reports/templates/test_panel.html").read_text(encoding="utf-8")
+        cuerpo = panel[panel.index("async function _runStreaming("):panel.index("async function _runClassic(")]
+        assert "reiniciarPlazo();" in cuerpo, "el plazo no se reinicia al recibir datos"
