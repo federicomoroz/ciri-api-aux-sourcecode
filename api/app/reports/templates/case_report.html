@@ -4,23 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte de Contracargo — {{ transaction.id }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .badge-blocker { @apply bg-red-700 text-white px-3 py-1 rounded-full font-bold text-sm; }
-        .badge-high { @apply bg-orange-500 text-white px-3 py-1 rounded-full font-bold text-sm; }
-        .badge-medium { @apply bg-yellow-500 text-black px-3 py-1 rounded-full font-bold text-sm; }
-        .badge-low { @apply bg-green-500 text-white px-3 py-1 rounded-full font-bold text-sm; }
-        .verdict-blocker { background: #dc2626; color: white; }
-        .verdict-fail { background: #f97316; color: white; }
-        .verdict-warning { background: #eab308; color: black; }
-        .verdict-pass { background: #22c55e; color: white; }
-        .verdict-not_applicable { background: #94a3b8; color: white; }
-        .log-error { border-left: 4px solid #dc2626; background: #fef2f2; }
-        .log-warn { border-left: 4px solid #f97316; background: #fff7ed; }
-        .log-info { border-left: 4px solid #94a3b8; background: #f8fafc; }
-        .score-bar { height: 8px; border-radius: 4px; background: #e2e8f0; }
-        .score-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #22c55e, #3b82f6); }
-    </style>
+    {# Los estilos van incrustados, no traidos de un CDN: este HTML es un
+       entregable y se abre desde el disco. Ver `_estilos.css`. #}
+    <style>{% include '_estilos.css' %}</style>
 </head>
 <body class="bg-gray-50 min-h-screen" data-risk-level="{{ resolution.risk_level if resolution else '' }}"{% if resolution and resolution.demo %} data-demo="true"{% endif %}>
 {% if resolution and resolution.demo %}{{ cartel_demo | safe }}{% endif %}

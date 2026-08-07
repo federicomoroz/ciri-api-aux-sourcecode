@@ -270,3 +270,73 @@ class TestElDesvioDeLaNotaSeDeclara:
         cartel = html.split("Evaluación de Calidad")[0]
         assert f"±{DEMO_DESVIO_JUEZ:.1f} puntos" in cartel
         assert "gratuito" in cartel
+
+
+class TestElInformeSeBastaSolo:
+    """El HTML no puede depender de bajar nada de internet.
+
+    Traia los estilos del CDN de Tailwind, que los genera en el browser. Anda
+    casi siempre, y por eso tardo en aparecer: n8n sirve la respuesta del
+    formulario HITL con `Content-Security-Policy: sandbox` sin
+    `allow-same-origin`, el documento queda en un origen opaco y el script no
+    aplica nada. El analista aprobaba un contracargo y recibia un informe sin
+    una sola regla de estilo — texto plano con los datos apilados.
+
+    El mismo HTML se entrega en un ZIP y se abre desde el disco, donde puede no
+    haber red o el CDN puede estar bloqueado. Un entregable que necesita
+    internet para leerse no es un entregable.
+    """
+
+    @staticmethod
+    def _externos(html: str) -> list[str]:
+        import re
+
+        return re.findall(r'<(?:script|link|img|iframe)[^>]*\s(?:src|href)=["\']([^"\']+)', html)
+
+    def test_no_trae_nada_de_afuera(self, generator, minimal_report_data):
+        html = generator.render(minimal_report_data)
+        remotos = [u for u in self._externos(html) if u.startswith(("http://", "https://", "//"))]
+        assert not remotos, f"el informe no se ve sin internet: {remotos}"
+
+    def test_los_estilos_viajan_adentro(self, generator, minimal_report_data):
+        html = generator.render(minimal_report_data)
+        assert "<style>" in html
+        assert ".rounded-2xl" in html and ".shadow-lg" in html
+
+    def test_toda_clase_usada_tiene_su_regla(self, generator, minimal_report_data):
+        """Agregar una clase a la plantilla sin agregar su regla no se nota mirando.
+
+        Con el CDN cualquier utilidad de Tailwind andaba sola. Ahora las reglas
+        son las que estan escritas: una clase sin regla es un elemento sin
+        estilo, y eso solo se ve abriendo el informe.
+        """
+        import re
+        from pathlib import Path
+
+        plantilla = Path("api/app/reports/templates/case_report.html").read_text(encoding="utf-8")
+        css = Path("api/app/reports/templates/_estilos.css").read_text(encoding="utf-8")
+
+        usadas = set()
+        for bloque in re.findall(r'class="((?:[^"]|\{\{[^}]*\}\})*)"', plantilla):
+            limpio = re.sub(r"\{%.*?%\}|\{\{.*?\}\}", " ", bloque, flags=re.S)
+            # Un token cortado —`log-` sale de `class="log-{{ nivel }}"`— es un
+            # prefijo que se completa al renderizar, no una clase.
+            usadas.update(c for c in limpio.split() if c and not c.endswith("-"))
+
+        # En CSS los `:` y los `.` del nombre van escapados —`.md\:grid-cols-2`—
+        # y un `:` SIN escapar arranca una pseudoclase: `.hover\:bg-gray-50:hover`
+        # define `hover:bg-gray-50`, no `hover:bg-gray-50:hover`.
+        definidas = {
+            re.split(r"(?<!\\):", s)[0].replace("\\", "")
+            for s in re.findall(r"\.([A-Za-z][\w:.\\-]*)", css)
+        }
+        faltan = sorted(c for c in usadas if c not in definidas)
+        assert not faltan, f"clases sin regla en _estilos.css: {faltan}"
+
+    def test_el_ancho_de_la_grilla_sigue_siendo_responsive(self, generator, minimal_report_data):
+        """Escribir el CSS a mano es facil que se coma el breakpoint."""
+        from pathlib import Path
+
+        css = Path("api/app/reports/templates/_estilos.css").read_text(encoding="utf-8")
+        assert "@media (min-width: 768px)" in css
+        assert r"md\:grid-cols-3" in css
