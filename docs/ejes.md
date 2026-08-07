@@ -85,7 +85,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 |---|---|---|
 | `v1_policy_eval.py` | v1.2 | Haiku 4.5 |
 | `v1_resolution.py` | v3.1 | Sonnet |
-| `v1_judge.py` | v2.0 | Sonnet |
+| `v1_judge.py` | v2.1 | Sonnet |
 
 ---
 
@@ -120,7 +120,7 @@ del informe, el webhook devuelve error — nunca un 200 con el cuerpo vacío.
 | Patrones de error | `analyzer.py::detect_error_patterns` sobre los 150 logs — 8 patrones nombrados (`ErrorPattern`): timeout sistemático del comercio, problema de conectividad, bloqueo por fraude, cargo duplicado, violación de SLA, falla de integración, pago interrumpido por sesión caída, anomalía geográfica |
 | Comercios problemáticos | `analyzer.py::merchant_risk_profile` — `cb_ratio`, volumen, flags (`suspended_merchant`, `high_cb_ratio`). **El umbral es relativo a la línea base del corpus**, no un 2% absoluto: sobre una muestra de disputas donde 60 de 100 transacciones tienen contracargo, un umbral de industria marca los quince comercios y no distingue nada. Con la línea base quedan 2 suspendidos, 4 con ratio alto y 9 limpios |
 | Clientes con señales | `analyzer.py::client_flags` — reincidencia, anomalía geográfica |
-| Inconsistencias de política | El LLM evalúa cada política recuperada y emite veredicto PASS / WARNING / FAIL / BLOCKER con cita; los conflictos quedan visibles en el reporte |
+| Inconsistencias de política | El LLM evalúa cada política recuperada y emite veredicto PASS / WARNING / FAIL / BLOCKER con cita; los conflictos quedan visibles en el reporte. Sólo puede emitir BLOCKER la política que lo declara (`puede_bloquear`, columna de SQLite): habilitar una nueva es un `POST`, no un deploy |
 
 Los umbrales de todo esto viven en `api/app/domain/constants.py`, en un solo lugar. Ninguno
 está en el canvas de n8n.
@@ -191,9 +191,9 @@ pytest tests/integration/test_arranque_sin_qdrant.py -v   # levanta contra un Qd
 | Bonus pedido | Estado |
 |---|---|
 | Human-in-the-Loop | Nodo `Wait` con formulario propio para casos HIGH (espera 24 h, **falla cerrado**) + formulario embebido en el reporte. Los dos alimentan `POST /api/feedback` |
-| LLM-as-a-Judge | `POST /api/analyze/judge`, 5 criterios con rúbricas, prompt v2.0 |
+| LLM-as-a-Judge | `POST /api/analyze/judge`, 5 criterios con rúbricas, prompt v2.1. Dos de los criterios evalúan **la propuesta del modelo**, no la versión ya corregida por el override: sobre la entregada no podían bajar de 10 por construcción |
 | Observabilidad | Langfuse (traces, tokens, costo, scores) |
 | Caché semántico | **No implementado, y es deliberado.** Hay caché de idempotencia exact-match; cachear por similitud arriesga devolver la resolución de otro caso. Ver `decisions.md#9` |
-| Guardrails | 6: cuatro registran contradicciones del modelo con la evidencia —incluida la compensación contra el SLA calculado—, dos validan los campos que el modelo sí controla |
+| Guardrails | 6: cuatro registran contradicciones del modelo con la evidencia —incluida la compensación contra el SLA calculado—, dos validan los campos que el modelo sí controla. Más el fail-closed: sin veredictos de política el caso deriva a un analista en vez de aprobarse solo |
 | Trazabilidad completa | Cada paso es un nodo nombrado en el canvas + traza en Langfuse + audit trail en SQLite |
 | Multi-Agent | **No implementado como tal.** Hay 3 roles de LLM separados (evaluador de políticas, sintetizador, juez) con modelos y prompts distintos, pero orquestados explícitamente por n8n, no negociando entre sí |

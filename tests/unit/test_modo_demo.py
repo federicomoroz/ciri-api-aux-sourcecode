@@ -8,10 +8,12 @@ Las dos reglas que estos tests fijan:
 """
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from api.app.data import precomputados
 from api.app.data.precomputados import (
     CARTEL,
     ETIQUETA,
@@ -585,3 +587,41 @@ class TestNoSeDisimulaLaFaltaDeN8n:
         prod = _pagina_n8n_no_respondio("TXN-1", "http://x", False)
         assert "webhook-test" in prueba
         assert "webhook-test" not in prod
+
+
+class TestProcedenciaDelAnalisisGuardado:
+    """Un informe guardado envejece: hay que decir de cuándo es.
+
+    Los prompts y los umbrales cambian, y el resultado deja de ser el que el
+    sistema produciría hoy. Declararlo es la diferencia entre un ejemplo y una
+    foto vieja presentada como actual — y regenerarlos cuesta saldo de API.
+    """
+
+    CARPETA = str(Path(__file__).resolve().parents[2] / "data" / "informes_demo")
+
+    def test_cada_analisis_guardado_declara_su_procedencia(self):
+        import glob
+        import json
+
+        archivos = glob.glob(f"{self.CARPETA}/analisis_*.json")
+        assert archivos, "no hay análisis guardados"
+        for f in archivos:
+            proc = json.loads(Path(f).read_text(encoding="utf-8")).get("procedencia")
+            assert proc, f"{Path(f).name} no declara cuándo se generó"
+            assert proc.get("generado"), f"{Path(f).name}: sin fecha"
+            assert proc.get("prompts"), f"{Path(f).name}: sin versiones de prompt"
+
+    def test_el_cartel_dice_cuando_y_con_que_version(self):
+        html = precomputados.informe_demo(self.CARPETA, "TXN-00051")
+        assert html is not None
+        assert "Generado el" in html
+        assert "resolution v3.0" in html
+        assert "no es necesariamente el que produciria hoy" in html
+
+    def test_sin_procedencia_el_cartel_no_inventa_nada(self):
+        assert precomputados.linea_de_procedencia(None) == ""
+        assert precomputados.linea_de_procedencia({}) == ""
+
+    def test_la_procedencia_tambien_aparece_en_el_informe_sustituto(self):
+        html = precomputados.informe_demo(self.CARPETA, "TXN-00051", solicitada="TXN-00004")
+        assert "TXN-00004" in html and "Generado el" in html

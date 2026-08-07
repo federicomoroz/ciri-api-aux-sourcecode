@@ -18,6 +18,8 @@ __all__ = [
     "CLIENT_RECIDIVIST_THRESHOLD",
     "CLIENT_GEO_ANOMALY_THRESHOLD",
     # Merchant risk
+    "POLICY_SEED_BLOQUEANTES",
+    "POLICY_SEED_SLA_DIAS",
     "MERCHANT_SUSPENDED_VS_BASELINE",
     "MERCHANT_HIGH_VS_BASELINE",
     "MERCHANT_STRATEGIC_VOLUME",
@@ -28,6 +30,7 @@ __all__ = [
     # RAG
     "SIMILAR_CASES_SCORE_THRESHOLD",
     "SIMILAR_CASES_TOP_K",
+    "SIMILAR_CASES_CANDIDATOS",
     "POLICIES_TOP_K_FALLBACK",
     "POLICIES_SCORE_THRESHOLD",
     "EMBEDDING_DIM",
@@ -77,6 +80,7 @@ __all__ = [
     "SLA_TYPE_VIP",
     "SLA_TYPE_EXTENDED",
     "SLA_TYPE_STANDARD",
+    "SLA_TYPE_DIAS_POR_DEFECTO",
     # Health status
     "HEALTH_OK",
     "HEALTH_HEALTHY",
@@ -164,14 +168,31 @@ GUARDRAIL_MIN_FAILS_FOR_WARNING: int = 2         # min policy failures to trigge
 RISK_FRAUD_SEVERE: int = 15    # fraud_score < N → risk HIGH (even with 1 FAIL)
 RISK_HIGH_MIN_FAILS: int = 2   # fail_count >= N → risk HIGH
 
-# Only these policies can legitimately produce BLOCKER verdicts.
-# All other BLOCKER verdicts are downgraded to FAIL + requires_human_review.
-# POL-EXC-003 = crypto (irreversible payment method — cannot proceed).
-BLOCKER_POLICY_CODES: frozenset[str] = frozenset({"POL-EXC-003"})
+# ── Semilla de la semantica de las politicas ────────────────────────────────
+# Que politica puede bloquear y con que plazo son cosas que la politica HACE, y
+# vivian aca mientras su texto se editaba por API: se podia cambiar la
+# descripcion de POL-SLA-002 sin deploy, pero no sus diez dias. Ahora son
+# columnas de la tabla `policies` y esto es solo el valor con el que arranca el
+# dataset — a partir del primer arranque manda SQLite, y el CRUD las edita.
+#
+# POL-EXC-003 = cripto: metodo de pago irreversible, no se puede continuar. Es
+# la unica que arranca pudiendo bloquear; cualquier otro BLOCKER que emita el
+# modelo se degrada a FAIL + requires_human_review.
+POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})
+POLICY_SEED_SLA_DIAS: dict[str, int] = {
+    "POL-EXC-002": SLA_VIP_DAYS,        # clientes VIP
+    "POL-SLA-002": SLA_STANDARD_DAYS,   # resolucion estandar LATAM
+    "POL-EXC-004": SLA_EXTENDED_DAYS,   # comercios internacionales
+}
 
 # ── RAG ─────────────────────────────────────────────────────────────────────
 SIMILAR_CASES_SCORE_THRESHOLD: float = 0.40  # min cosine similarity for case results
-SIMILAR_CASES_TOP_K: int = 5
+SIMILAR_CASES_TOP_K: int = 5                 # cuantos precedentes ve el modelo
+# El rerank se aplicaba despues del limit de Qdrant, asi que reordenaba el
+# top-5 pero no podia cambiar quien entraba: un precedente del mismo metodo de
+# pago que salia sexto por coseno se perdia aunque el boost lo hubiera puesto
+# primero. Se traen mas candidatos y se recorta despues de reordenar.
+SIMILAR_CASES_CANDIDATOS: int = 15
 # El corpus de politicas se recupera entero: es chico y el LLM filtra relevancia.
 # "Entero" se resuelve contando la coleccion en cada busqueda, no con un numero
 # fijo — con el 17 del dataset escrito a mano, la politica 18 quedaba afuera del
@@ -247,6 +268,14 @@ FALLBACK_TX_ID: str = "unknown"
 SLA_TYPE_VIP: str = "vip"
 SLA_TYPE_EXTENDED: str = "extended"
 SLA_TYPE_STANDARD: str = "standard"
+
+# Plazo de respaldo por tipo, para cuando la politica no esta cargada o no
+# define `sla_dias`. El valor vigente es el de SQLite.
+SLA_TYPE_DIAS_POR_DEFECTO: dict[str, int] = {
+    SLA_TYPE_VIP: SLA_VIP_DAYS,
+    SLA_TYPE_STANDARD: SLA_STANDARD_DAYS,
+    SLA_TYPE_EXTENDED: SLA_EXTENDED_DAYS,
+}
 
 # ── Health Status ────────────────────────────────────────────────────────────
 HEALTH_OK: str = "ok"

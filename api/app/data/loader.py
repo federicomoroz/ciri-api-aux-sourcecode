@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 
 import openpyxl
 
+from ..domain.constants import POLICY_SEED_BLOQUEANTES, POLICY_SEED_SLA_DIAS
+
 logger = logging.getLogger(__name__)
 
 
@@ -169,7 +171,13 @@ _TABLAS = (
         description TEXT NOT NULL,
         reference TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        -- La semantica ejecutable de la politica, junto a su texto. Estaba en
+        -- constants.py: se podia editar la descripcion por API pero no la
+        -- capacidad de bloquear ni el plazo, que son las dos cosas que la
+        -- politica realmente hace.
+        puede_bloquear INTEGER NOT NULL DEFAULT 0,
+        sla_dias INTEGER
     )""",
     """CREATE TABLE IF NOT EXISTS logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -234,11 +242,17 @@ def _insertar(conn: sqlite3.Connection, data: dict) -> None:
         ) for c in data["cases"]],
     )
 
+    # Columnas explicitas: con VALUES posicional, agregar una columna rompe la
+    # carga en silencio o la desplaza.
     conn.executemany(
-        "INSERT OR IGNORE INTO policies VALUES (?,?,?,?,?,?,?)",
+        "INSERT OR IGNORE INTO policies "
+        "(code, name, category, description, reference, created_at, updated_at, "
+        " puede_bloquear, sla_dias) VALUES (?,?,?,?,?,?,?,?,?)",
         [(
             p["code"], p["name"], p["category"],
             p["description"], p["reference"], now, now,
+            int(p["code"] in POLICY_SEED_BLOQUEANTES),
+            POLICY_SEED_SLA_DIAS.get(p["code"]),
         ) for p in data["policies"]],
     )
 

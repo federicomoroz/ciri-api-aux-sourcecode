@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from api.app.domain.constants import POLICIES_TOP_K_FALLBACK
+from api.app.domain.constants import POLICIES_TOP_K_FALLBACK, SIMILAR_CASES_TOP_K
 from api.app.domain.enums import PaymentMethod
 from api.app.rag.retriever import QdrantRetriever, QueryBuilder
 
@@ -216,3 +216,47 @@ class TestLimiteDeRecuperacionDePoliticas:
         retriever, client = self._retriever(total=0)
         retriever.search_policies(motivo="fraude")
         assert client.query_points.call_args.kwargs["limit"] >= 1
+
+
+class TestElRerankPuedeCambiarQuienEntra:
+    """Reordenar el top-5 no es rerankear.
+
+    Regresión: los boosts se aplicaban después del `limit` de Qdrant, así que
+    sólo cambiaban el orden de los cinco que ya habían entrado por coseno. Un
+    precedente del mismo método de pago que salía sexto se perdía aunque el
+    boost lo hubiera puesto primero.
+    """
+
+    @staticmethod
+    def _caso(score: float, metodo: str, pais: str, case_id: str):
+        r = MagicMock()
+        r.score = score
+        r.payload = {"case_id": case_id, "payment_method": metodo, "country": pais}
+        return r
+
+    def _retriever(self, casos):
+        client = MagicMock()
+        client.query_points.return_value = MagicMock(points=casos)
+        embedder = MagicMock()
+        embedder.encode.return_value = [MagicMock(tolist=lambda: [0.0] * 1024)]
+        return QdrantRetriever(client, embedder), client
+
+    def test_pide_mas_candidatos_de_los_que_entrega(self):
+        retriever, client = self._retriever([])
+        retriever.search_similar_cases("Airbnb", 100.0, PaymentMethod.CRYPTO, "COL", 8)
+        assert client.query_points.call_args.kwargs["limit"] > SIMILAR_CASES_TOP_K
+
+    def test_entrega_solo_el_top_k(self):
+        casos = [self._caso(0.9 - i / 100, PaymentMethod.CREDIT_VISA, "MEX", f"CB-{i}") for i in range(15)]
+        retriever, _ = self._retriever(casos)
+        assert len(retriever.search_similar_cases("X", 1.0, PaymentMethod.CRYPTO, "COL", 8)) == SIMILAR_CASES_TOP_K
+
+    def test_un_septimo_con_boost_desplaza_a_un_quinto_sin_boost(self):
+        """Lo que antes era imposible: el boost cambia la composición del set."""
+        casos = [self._caso(0.80 - i / 100, PaymentMethod.CREDIT_VISA, "MEX", f"CB-{i}") for i in range(6)]
+        casos.append(self._caso(0.74, PaymentMethod.CRYPTO, "COL", "CB-BOOST"))
+        retriever, _ = self._retriever(casos)
+        entregados = retriever.search_similar_cases("X", 1.0, PaymentMethod.CRYPTO, "COL", 8)
+        ids = [c["case_id"] for c in entregados]
+        assert "CB-BOOST" in ids, "el boost no alcanzó a meterlo en el set entregado"
+        assert ids[0] == "CB-BOOST", "0.74 + 0.08 supera al mejor de 0.80"

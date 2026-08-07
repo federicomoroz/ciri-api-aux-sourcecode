@@ -160,7 +160,7 @@ Fijado por `tests/unit/test_rag_retriever.py::TestLimiteDeRecuperacionDePolitica
 | Tamano del vector | 1024 |
 | Metrica de distancia | Coseno |
 | Puntos iniciales | 60+ |
-| Recuperacion `top_k` | 5 |
+| Recuperacion `top_k` | 15 candidatos, 5 entregados tras el rerank |
 | Recuperacion `score_threshold` | 0.40 |
 | Proposito | Recuperacion de precedentes para contexto de resolucion |
 
@@ -373,7 +373,7 @@ Esto ahorra un round-trip a Voyage AI por cada investigacion de contracargo, red
 | Coleccion | top_k | score_threshold | Justificacion |
 |---|---|---|---|
 | `policies` | todas las indexadas | 0.0 | Corpus pequeno — recuperar todo, el LLM filtra |
-| `historical_cases` | 5 | 0.40 | Solo precedentes semanticamente significativos |
+| `historical_cases` | 15 candidatos -> 5 entregados | 0.40 | Solo precedentes semanticamente significativos; el rerank recorta despues de reordenar |
 
 ---
 

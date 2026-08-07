@@ -22,8 +22,9 @@ class ResolveRequest(BaseModel):
     client_history: dict
     motivo: str | None = None
     cliente_vip: bool = False
-    # n8n ya lo manda desde que existe el nodo `Verificar SLA`. Sin este campo
-    # Pydantic lo descartaba en silencio y la llamada se pagaba para nada.
+    # `Sintetizar Resolucion` manda el contexto compilado entero, asi que esto
+    # llega. Cuando el nodo enumeraba campos a mano no llegaba, Pydantic lo
+    # descartaba en silencio y la llamada al SLA se pagaba para nada.
     sla: dict = {}
 
     def to_context(self) -> CaseContext:
@@ -72,6 +73,15 @@ class PolicyCreate(BaseModel):
     category: str = Field(min_length=1)
     description: str = Field(min_length=1)
     reference: str = Field(min_length=1)
+    # Lo que la politica HACE, junto a lo que la politica DICE. Estaba en
+    # constants.py: se podia editar la descripcion sin deploy pero no la
+    # capacidad de bloquear ni el plazo.
+    #
+    # `puede_bloquear` arranca en false a proposito: un veredicto BLOCKER frena
+    # el caso sin revision humana, asi que habilitarlo tiene que ser un acto
+    # explicito y no el resultado de olvidarse un campo.
+    puede_bloquear: bool = False
+    sla_dias: int | None = Field(default=None, gt=0)
 
 
 class PolicyUpdate(BaseModel):
@@ -79,6 +89,8 @@ class PolicyUpdate(BaseModel):
     category: str | None = Field(default=None, min_length=1)
     description: str | None = Field(default=None, min_length=1)
     reference: str | None = Field(default=None, min_length=1)
+    puede_bloquear: bool | None = None
+    sla_dias: int | None = Field(default=None, gt=0)
 
 
 class ReportRequest(BaseModel):

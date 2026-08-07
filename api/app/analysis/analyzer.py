@@ -16,12 +16,10 @@ from ..domain.constants import (
     MERCHANT_STRATEGIC_VOLUME,
     MERCHANT_SUSPENDED_VS_BASELINE,
     MERCHANT_TIMEOUT_PATTERN_MIN_COUNT,
-    SLA_EXTENDED_DAYS,
-    SLA_STANDARD_DAYS,
+    SLA_TYPE_DIAS_POR_DEFECTO,
     SLA_TYPE_EXTENDED,
     SLA_TYPE_STANDARD,
     SLA_TYPE_VIP,
-    SLA_VIP_DAYS,
 )
 from ..domain.enums import ClientFlag, ErrorPattern, LogEventType, MerchantFlag, Severity, TransactionStatus
 
@@ -185,6 +183,21 @@ class Analyzer:
                 habiles += 1
         return habiles
 
+    def _dias_de(self, codigo: str, por_defecto: int) -> int:
+        """Los dias habiles que concede esa politica, segun SQLite.
+
+        Si la politica no esta cargada o no tiene plazo definido, se usa el
+        valor por defecto: el sistema no puede quedarse sin poder medir un SLA
+        porque alguien borro una fila.
+        """
+        try:
+            politica = self.db.get_policy(codigo) or {}
+        except Exception:
+            logger.warning("No se pudo leer %s para el SLA", codigo, exc_info=True)
+            return por_defecto
+        dias = politica.get("sla_dias")
+        return int(dias) if dias else por_defecto
+
     def check_sla(
         self,
         case_open_date: str,
@@ -227,18 +240,19 @@ class Analyzer:
 
         days_elapsed = self._business_days_between(open_date, corte)
 
+        # Que politica aplica es una regla —depende del cliente y del pais—, y las
+        # reglas viven en codigo. Cuantos dias concede esa politica es un dato
+        # suyo, y sale de SQLite: editar POL-SLA-002 por la API cambia el plazo
+        # sin deploy. Antes se editaba el texto y el numero seguia siendo 10.
         if cliente_vip:
-            sla_limit = SLA_VIP_DAYS
-            sla_type = SLA_TYPE_VIP
-            policy_reference = f"POL-EXC-002 (clientes VIP: {SLA_VIP_DAYS} dias habiles)"
+            codigo, sla_type, quien = "POL-EXC-002", SLA_TYPE_VIP, "clientes VIP"
         elif country not in LATAM_COUNTRIES:
-            sla_limit = SLA_EXTENDED_DAYS
-            sla_type = SLA_TYPE_EXTENDED
-            policy_reference = f"POL-EXC-004 (comercios internacionales: {SLA_EXTENDED_DAYS} dias habiles)"
+            codigo, sla_type, quien = "POL-EXC-004", SLA_TYPE_EXTENDED, "comercios internacionales"
         else:
-            sla_limit = SLA_STANDARD_DAYS
-            sla_type = SLA_TYPE_STANDARD
-            policy_reference = f"POL-SLA-002 (resolucion estandar: {SLA_STANDARD_DAYS} dias habiles)"
+            codigo, sla_type, quien = "POL-SLA-002", SLA_TYPE_STANDARD, "resolucion estandar"
+
+        sla_limit = self._dias_de(codigo, SLA_TYPE_DIAS_POR_DEFECTO[sla_type])
+        policy_reference = f"{codigo} ({quien}: {sla_limit} dias habiles)"
 
         within_sla = days_elapsed <= sla_limit
         compensation_applicable = not within_sla

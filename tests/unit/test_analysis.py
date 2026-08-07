@@ -329,10 +329,12 @@ class TestSLASobreElReclamo:
     """
 
     @staticmethod
-    def _analyzer():
+    def _analyzer(sla_dias: int | None = None):
         from unittest.mock import MagicMock
 
-        return Analyzer(MagicMock())
+        db = MagicMock()
+        db.get_policy.return_value = {"sla_dias": sla_dias} if sla_dias else {}
+        return Analyzer(db)
 
     def test_un_caso_cerrado_a_tiempo_cumple_aunque_sea_viejo(self):
         r = self._analyzer().check_sla(
@@ -354,6 +356,18 @@ class TestSLASobreElReclamo:
         assert r["caso_cerrado"] is False
         assert r["medido_hasta"] == "2026-08-07"
         assert r["within_sla"] is True
+
+    def test_el_plazo_sale_de_la_politica_no_de_una_constante(self):
+        """Editar POL-SLA-002 por la API cambia el plazo sin deploy."""
+        r = self._analyzer(sla_dias=3).check_sla(
+            "2024-09-23", "COL", case_close_date="2024-10-01", today=date(2026, 8, 7),
+        )
+        assert r["sla_limit_days"] == 3
+        assert r["within_sla"] is False, "6 dias habiles superan un plazo de 3"
+
+    def test_sin_plazo_en_la_politica_usa_el_de_respaldo(self):
+        r = self._analyzer().check_sla("2024-09-23", "COL", case_close_date="2024-10-01")
+        assert r["sla_limit_days"] == 10
 
     def test_devuelve_contra_que_conto(self):
         r = self._analyzer().check_sla(

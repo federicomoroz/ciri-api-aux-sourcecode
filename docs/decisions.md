@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 548 tests pasando (515 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 564 tests pasando (531 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -480,3 +480,67 @@ es decidir.
 - (+) El canvas sigue mostrando el nivel de riesgo sin usarlo para derivar
 - (-) La rama HIGH dejó de ser la que frena, así que el nombre «Switch — Nivel de Riesgo» dejó de
   describirlo: hubo que renombrarlo, y eso rompe cualquier referencia externa al nodo por nombre
+
+---
+
+## 19. Lo que una política *hace* también es dato
+
+**Decisión:** `puede_bloquear` y `sla_dias` son columnas de la tabla `policies`, expuestas en el
+CRUD y presentes en la carga útil de Qdrant. `POLICY_SEED_*` en `constants.py` es sólo el valor
+con el que arranca el dataset.
+
+**Razonamiento:** «Las políticas son datos, no código» era cierto para el texto y falso para la
+semántica. Dos cosas que la política *hace* vivían en `constants.py`:
+
+- `BLOCKER_POLICY_CODES = {"POL-EXC-003"}` — se podía cargar una política nueva que dijera
+  «rechazar automáticamente», indexarla, verla en el contexto del modelo… y nunca podía producir
+  un rechazo. El veredicto se degradaba a FAIL en silencio.
+- `SLA_STANDARD_DAYS = 10` — se podía editar la descripción de POL-SLA-002 y el modelo la leía
+  cambiada, mientras `check_sla` seguía devolviendo diez días.
+
+El corte quedó donde tiene sentido: **qué política aplica es una regla** —depende del cliente y
+del país, y las reglas son código—; **cuánto concede esa política es un dato suyo**. Lo mismo con
+bloquear: que exista una lista blanca sigue siendo una decisión de diseño, pero quién está en ella
+es del documento.
+
+`puede_bloquear` arranca en `false` por defecto y a propósito. Un BLOCKER frena un caso sin
+revisión humana; habilitarlo tiene que ser un acto explícito, no el resultado de olvidarse un
+campo. El guardrail contra la sobre-escalada del modelo no se pierde: se vuelve editable.
+
+**Trade-offs:**
+- (+) Una política nueva puede bloquear, y un plazo se cambia, sin deploy — verificado extremo a extremo
+- (+) La semántica viaja con el documento a Qdrant: el guardrail no necesita volver a SQLite por veredicto
+- (-) Un índice armado antes de que las columnas existieran no trae los campos; hay un respaldo a
+  la semilla, pero lo correcto es reindexar
+- (-) Alguien con acceso al CRUD puede habilitar una política bloqueante. Es exactamente el poder
+  que la decisión concede, y por eso el `false` por defecto y la autenticación existen
+
+---
+
+## 20. El Juez califica al modelo, no a la corrección
+
+**Decisión:** `policy_consistency` y `risk_assessment` se evalúan sobre la propuesta original del
+modelo, capturada antes del override. Los otros tres criterios, sobre la resolución entregada.
+
+**Razonamiento:** El Juez recibía la resolución ya corregida. Pero la acción, el nivel de riesgo y
+la derivación los fija el código *siempre*: preguntarle a un modelo si esos campos son coherentes
+con los veredictos es preguntarle si el override funcionó. **Dos de los cinco criterios no podían
+bajar de 10 por construcción**, y arrastraban el promedio hacia arriba sin medir nada.
+
+La propuesta original ya se capturaba —`_detect_divergence` la necesita para registrar las
+contradicciones— así que el dato estaba; sólo no llegaba al Juez. Ahora viaja en
+`_propuesta_del_modelo`, se le pasa al prompt en su propia sección, y se quita de la resolución
+que el Juez ve para que no aparezca dos veces.
+
+Que el override haya corregido un `APPROVE` sobre un BLOCKER no redime al modelo: el objetivo del
+Juez es medir la calidad del razonamiento, y esa medición sólo tiene sentido sobre lo que el
+razonamiento produjo.
+
+**Trade-offs:**
+- (+) Los cinco criterios miden algo que puede fallar
+- (+) El score deja de estar inflado por construcción
+- (-) **Bajará**, y no sé cuánto: medirlo requiere correr el modelo, y eso cuesta saldo. El badge
+  sigue mostrando 8.7, que es el promedio de los informes guardados —generados con el Juez v2.0—,
+  y está declarado como tal
+- (-) Un prompt más largo y con una sección condicional: si falta la propuesta, el Juez cae al
+  comportamiento anterior y lo anota en `weaknesses`

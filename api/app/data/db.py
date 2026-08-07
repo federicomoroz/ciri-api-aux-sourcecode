@@ -5,7 +5,13 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
-from ..domain.constants import DASHBOARD_TOP_N, JUDGE_AUTO_INDEX_THRESHOLD, SQLITE_TIMEOUT_S
+from ..domain.constants import (
+    DASHBOARD_TOP_N,
+    JUDGE_AUTO_INDEX_THRESHOLD,
+    POLICY_SEED_BLOQUEANTES,
+    POLICY_SEED_SLA_DIAS,
+    SQLITE_TIMEOUT_S,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -180,14 +186,48 @@ class Database:
         previa = self._uno(
             "SELECT created_at FROM policies WHERE code = ?", (policy["code"],),
         )
+        # Columnas nombradas: con VALUES posicional, agregar una columna
+        # desplaza los datos en silencio.
         self._escribir(
-            "INSERT OR REPLACE INTO policies VALUES (?,?,?,?,?,?,?)",
+            "INSERT OR REPLACE INTO policies "
+            "(code, name, category, description, reference, created_at, updated_at, "
+            " puede_bloquear, sla_dias) VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 policy["code"], policy["name"], policy["category"],
                 policy["description"], policy["reference"],
                 previa["created_at"] if previa else ahora, ahora,
+                int(bool(policy.get("puede_bloquear", False))),
+                policy.get("sla_dias"),
             ),
         )
+
+    def ensure_policies_semantics(self) -> None:
+        """Agrega las columnas de semantica a una base que ya existia.
+
+        SQLite en el free tier de Render se recrea del Excel cuando falta, pero
+        una base local con datos previos no tiene estas columnas y la app no
+        puede exigir que se borre para actualizarse.
+        """
+        existentes = {c["name"] for c in self._consultar("PRAGMA table_info(policies)")}
+        for columna, ddl in (
+            ("puede_bloquear", "INTEGER NOT NULL DEFAULT 0"),
+            ("sla_dias", "INTEGER"),
+        ):
+            if columna not in existentes:
+                self._escribir(f"ALTER TABLE policies ADD COLUMN {columna} {ddl}")
+                logger.info("policies: columna %s agregada", columna)
+
+        if "puede_bloquear" not in existentes:
+            marcadores = ",".join("?" * len(POLICY_SEED_BLOQUEANTES))
+            self._escribir(
+                f"UPDATE policies SET puede_bloquear = 1 WHERE code IN ({marcadores})",
+                tuple(sorted(POLICY_SEED_BLOQUEANTES)),
+            )
+        if "sla_dias" not in existentes:
+            for codigo, dias in POLICY_SEED_SLA_DIAS.items():
+                self._escribir(
+                    "UPDATE policies SET sla_dias = ? WHERE code = ?", (dias, codigo),
+                )
 
     def delete_policy(self, code: str) -> bool:
         return self._escribir("DELETE FROM policies WHERE code = ?", (code,)).rowcount > 0

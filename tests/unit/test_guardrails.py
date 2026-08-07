@@ -255,13 +255,22 @@ class TestDetermineOutcome:
 
 
 class TestSanitizeVerdicts:
-    """Downgrade invalid BLOCKER verdicts to FAIL."""
+    """Solo puede emitir BLOCKER la politica marcada como bloqueante.
+
+    El permiso sale de la politica (`puede_bloquear`, columna de SQLite que
+    viaja en la carga de Qdrant), no de una lista en el codigo: habilitar una
+    politica bloqueante nueva es un POST, no un deploy.
+    """
+
+    BLOQUEANTE = {"code": "POL-EXC-003", "puede_bloquear": True}
+    COMUN = {"code": "POL-CB-004", "puede_bloquear": False}
+    POLITICAS = [BLOQUEANTE, COMUN, {"code": "POL-FRD-001", "puede_bloquear": False}]
 
     def test_non_whitelisted_blocker_downgraded_to_fail(self):
         verdicts = [
             {"policy_code": "POL-CB-004", "verdict": VerdictType.BLOCKER, "reasoning": "Suspended"},
         ]
-        result = ResolutionService._sanitize_verdicts(verdicts)
+        result = ResolutionService._sanitize_verdicts(verdicts, self.POLITICAS)
 
         assert result[0]["verdict"] == VerdictType.FAIL
         assert result[0]["requires_human_review"] is True
@@ -270,7 +279,7 @@ class TestSanitizeVerdicts:
         verdicts = [
             {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": PaymentMethod.CRYPTO},
         ]
-        result = ResolutionService._sanitize_verdicts(verdicts)
+        result = ResolutionService._sanitize_verdicts(verdicts, self.POLITICAS)
 
         assert result[0]["verdict"] == VerdictType.BLOCKER
 
@@ -278,7 +287,7 @@ class TestSanitizeVerdicts:
         verdicts = [
             {"policy_code": "POL-CB-004", "verdict": VerdictType.FAIL, "reasoning": "CB ratio alto"},
         ]
-        result = ResolutionService._sanitize_verdicts(verdicts)
+        result = ResolutionService._sanitize_verdicts(verdicts, self.POLITICAS)
 
         assert result[0]["verdict"] == VerdictType.FAIL
 
@@ -288,11 +297,32 @@ class TestSanitizeVerdicts:
             {"policy_code": "POL-CB-004", "verdict": VerdictType.BLOCKER, "reasoning": "Suspended"},
             {"policy_code": "POL-FRD-001", "verdict": VerdictType.FAIL, "reasoning": "Score bajo"},
         ]
-        result = ResolutionService._sanitize_verdicts(verdicts)
+        result = ResolutionService._sanitize_verdicts(verdicts, self.POLITICAS)
 
         assert result[0]["verdict"] == VerdictType.BLOCKER  # POL-EXC-003 preserved
         assert result[1]["verdict"] == VerdictType.FAIL      # POL-CB-004 downgraded
         assert result[2]["verdict"] == VerdictType.FAIL      # unchanged
+
+    def test_una_politica_nueva_puede_bloquear_sin_deploy(self):
+        """Regresion: la whitelist estaba en constants.py.
+
+        Cargar una politica que dijera «rechazar automaticamente» la indexaba y
+        la llevaba al contexto, pero nunca podia producir un rechazo.
+        """
+        verdicts = [{"policy_code": "POL-AUD-001", "verdict": VerdictType.BLOCKER, "reasoning": "x"}]
+        nuevas = [{"code": "POL-AUD-001", "puede_bloquear": True}]
+        assert ResolutionService._sanitize_verdicts(verdicts, nuevas)[0]["verdict"] == VerdictType.BLOCKER
+
+    def test_un_indice_viejo_sin_el_campo_cae_a_la_semilla(self):
+        """Una coleccion armada antes de que la columna existiera sigue funcionando."""
+        sin_campo = [{"code": "POL-EXC-003"}, {"code": "POL-CB-004"}]
+        verdicts = [
+            {"policy_code": "POL-EXC-003", "verdict": VerdictType.BLOCKER, "reasoning": "cripto"},
+            {"policy_code": "POL-CB-004", "verdict": VerdictType.BLOCKER, "reasoning": "suspendido"},
+        ]
+        r = ResolutionService._sanitize_verdicts(verdicts, sin_campo)
+        assert r[0]["verdict"] == VerdictType.BLOCKER
+        assert r[1]["verdict"] == VerdictType.FAIL
 
 
 class TestBuildPrecedentSummary:
@@ -539,3 +569,73 @@ class TestSinVeredictosFallaCerrado:
             [{"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS}], {"fraud_score": 90},
         )
         assert r["recommended_action"] == ResolutionOutcome.APPROVE
+
+
+class TestElJuezCalificaAlModelo:
+    """El Juez evaluaba la resolucion ya corregida por el override.
+
+    `policy_consistency` y `risk_assessment` califican la accion y el nivel de
+    riesgo — dos campos que el codigo fija siempre. Sobre la version entregada no
+    podian bajar de 10 por construccion: dos de los cinco criterios eran ruido, y
+    el score global salia inflado. Ahora se les pasa la propuesta original.
+    """
+
+    PROPUESTA_ALUCINADA = {
+        "recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW,
+        "confidence": 0.99, "justification": "todo bien",
+    }
+
+    def test_la_propuesta_se_captura_antes_del_override(self):
+        r = TestGuardrailsEnElPipelineCompleto()._resolver(self.PROPUESTA_ALUCINADA)
+        propuesta = r["_propuesta_del_modelo"]
+        assert propuesta["recommended_action"] == ResolutionOutcome.APPROVE, (
+            "se capturo despues del override: quedo la decision del codigo"
+        )
+        assert r["recommended_action"] == ResolutionOutcome.REJECT, "el override tiene que aplicarse igual"
+
+    def test_lleva_los_campos_que_el_override_pisa(self):
+        r = TestGuardrailsEnElPipelineCompleto()._resolver(self.PROPUESTA_ALUCINADA)
+        assert set(r["_propuesta_del_modelo"]) == {
+            "recommended_action", "risk_level", "requires_hitl",
+            "compensation_applicable", "confidence",
+        }
+
+    def test_el_prompt_del_juez_recibe_la_propuesta(self):
+        from api.app.llm import prompts
+
+        _, user = prompts.v1_judge.render(
+            full_context={"transaction": {"id": "TXN-00051"}},
+            resolution={"recommended_action": ResolutionOutcome.REJECT},
+            propuesta={"recommended_action": ResolutionOutcome.APPROVE},
+        )
+        assert "PROPUESTA ORIGINAL DEL MODELO" in user
+        assert "APPROVE" in user.split("PROPUESTA ORIGINAL DEL MODELO")[1]
+
+    def test_sin_propuesta_el_prompt_no_inventa_la_seccion(self):
+        from api.app.llm import prompts
+
+        _, user = prompts.v1_judge.render(
+            full_context={}, resolution={"recommended_action": ResolutionOutcome.REJECT},
+        )
+        assert "PROPUESTA ORIGINAL DEL MODELO" not in user
+
+    def test_la_propuesta_no_viaja_dentro_de_la_resolucion_que_se_juzga(self):
+        """El Juez no debe ver el campo interno duplicado en la resolucion."""
+        from api.app.observability.tracer import NoOpTracer
+
+        capturado = {}
+
+        class LLMEspia:
+            def complete(self, system, user, trace_id="", **kwargs):
+                capturado["user"] = user
+                from api.app.llm.client import LLMResult
+                return LLMResult(text='{"overall_score": 8.0, "criteria": {}}', input_tokens=1, output_tokens=1)
+
+        svc = ResolutionService(llm=LLMEspia(), tracer=NoOpTracer())
+        svc.judge(
+            resolution={"recommended_action": ResolutionOutcome.REJECT,
+                        "_propuesta_del_modelo": {"recommended_action": ResolutionOutcome.APPROVE}},
+            full_context={"transaction": {"id": "TXN-00051"}},
+        )
+        entregada = capturado["user"].split("## RESOLUCION ENTREGADA")[1].split("##")[0]
+        assert "_propuesta_del_modelo" not in entregada

@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-548%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-564%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -199,6 +199,10 @@ SQLite     la verdad exacta. Transacciones, logs, historial del cliente, para
 
 **Las políticas son datos, no código.** Viven como documentos en Qdrant y se editan por API: `PUT /api/policies/{code}` reindexa en el momento, sin deploy. Por eso quien las evalúa también es el modelo y no una función Python — si las reglas se pueden cambiar en caliente, su evaluación tiene que poder cambiar con ellas.
 
+Y no sólo el texto: **lo que la política *hace* también es dato**. `puede_bloquear` decide si esa política puede frenar un caso sola, y `sla_dias` cuántos días hábiles concede. Cargar una política nueva que rechace automáticamente es un `POST`; cambiar el plazo de POL-SLA-002 es un `PUT`. Antes eso estaba en `constants.py` y editar la descripción no movía ni el plazo ni la capacidad de bloquear.
+
+> **La instancia pública tiene el CRUD abierto a propósito**, para que se pueda probar todo esto sin credenciales. No es el modo de producción: el middleware de autenticación está implementado (`api/app/main.py`, comparación en tiempo constante) y se activa con `CB_ADMIN_API_KEY`. En una fintech, un `DELETE /api/policies/POL-FRD-001` anónimo es un incidente; acá es una decisión de evaluación, y conviene que quede dicha.
+
 El detalle —las capas, el flujo de datos, la escalabilidad y las decisiones— está en `docs/architecture.md`.
 
 ---
@@ -222,7 +226,7 @@ sólo el código que la API necesita para funcionar.
 |---|---|
 | `docs/ejes.md` | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
 | `docs/architecture.md` | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
-| `docs/decisions.md` | 18 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
+| `docs/decisions.md` | 20 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
 | `docs/prompts.md` | Los prompts, versionados, y por qué cambiaron |
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
@@ -230,7 +234,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 548 en 29 archivos; los de `unit/` e `integration/` corren
+**Tests:** `pytest tests/ -v`. Son 564 en 29 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
 validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.

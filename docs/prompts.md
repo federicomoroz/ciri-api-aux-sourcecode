@@ -50,7 +50,7 @@ El pipeline utiliza dos modelos Claude para optimizar costo vs. calidad:
 |---|---|---|
 | Call 1: Evaluacion de politicas (v1.2) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
 | Call 2: Sintesis de resolucion (v3.1) | **Sonnet** | Tarea analitica: razonar sobre precedentes, conectar evidencias, justificar. |
-| Call 3: Juez de calidad (v2.0) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
+| Call 3: Juez de calidad (v2.1) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
 
 Configuracion en `.env`:
 ```
@@ -89,6 +89,7 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 | v1_resolution | v3.0 | 2025-07 | Razonamiento analitico para Sonnet — "el codigo decide, el LLM explica" |
 | v1_resolution | v3.1 | 2025-08 | El SLA entra al contexto y la compensacion pasa a ser determinista (POL-SLA-004) |
 | v1_judge | v1.0 | 2025-01 | Version inicial — 5 criterios, APPROVE+BLOCKER = 1.0 automatico |
+| v1_judge | v2.1 | 2025-08 | `policy_consistency` y `risk_assessment` evaluan la propuesta del modelo, no la version ya corregida por el override |
 | v1_judge | v2.0 | 2025-07 | Rubrica granular por criterio (niveles 10.0, 9.0, 7.0-8.9, etc.), semantica de fraud_score, proteccion contra penalizacion incorrecta de PENDING_HITL |
 
 ---
@@ -386,7 +387,7 @@ El prompt exige una estructura de justificacion en 6 partes (maximo 200 palabras
 
 ---
 
-## Prompt 3: v1_judge (v2.0)
+## Prompt 3: v1_judge (v2.1)
 
 **Archivo:** `api/app/llm/prompts/v1_judge.py`
 **Modelo:** Sonnet (Call 3)

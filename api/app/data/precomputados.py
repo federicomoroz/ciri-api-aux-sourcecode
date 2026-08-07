@@ -62,6 +62,27 @@ CARTEL = (
 )
 
 
+def linea_de_procedencia(procedencia: dict | None) -> str:
+    """Cuando y con que version se genero este analisis.
+
+    Un informe guardado envejece: los prompts y los umbrales cambian y el
+    resultado deja de ser el que el sistema produciria hoy. Decirlo es la
+    diferencia entre un ejemplo y una foto vieja presentada como actual.
+    """
+    if not procedencia:
+        return ""
+    versiones = procedencia.get("prompts") or {}
+    detalle = " · ".join(f"{k} {v}" for k, v in versiones.items())
+    return (
+        '<div style="margin-top:9px;font-size:12.5px;opacity:.85">'
+        f"Generado el <b>{procedencia.get('generado', 'fecha no registrada')}</b>"
+        + (f" con los prompts {detalle}. " if detalle else ". ")
+        + "El sistema siguio cambiando desde entonces, asi que este resultado no es "
+        "necesariamente el que produciria hoy."
+        "</div>"
+    )
+
+
 def cartel_sustituto(solicitada: str, mostrada: str) -> str:
     """El cartel cuando el caso pedido no tiene analisis guardado.
 
@@ -129,6 +150,8 @@ def informe_demo(carpeta: str, transaction_id: str, solicitada: str = "") -> str
         if html is None:
             return None
         cartel = CARTEL if not pedida or pedida == txn else cartel_sustituto(pedida, txn)
+        procedencia = (analisis_demo(carpeta, txn) or {}).get("procedencia")
+        cartel = cartel.replace("</div>", linea_de_procedencia(procedencia) + "</div>", 1)
         return _con_cartel(html, cartel)
     return None
 

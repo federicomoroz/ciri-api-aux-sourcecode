@@ -1,3 +1,4 @@
+# PROMPT VERSION: v2.1 | DATE: 2025-08 | CHANGES: policy_consistency y risk_assessment evaluan la propuesta del modelo, no la version ya corregida por el override determinista.
 # PROMPT VERSION: v2.0 | DATE: 2025-07 | CHANGES: Granular scoring rubrics per criterion. Fix scoring ceiling.
 # PURPOSE: LLM-as-Judge to evaluate resolution quality across 5 criteria
 # OUTPUT: JudgeEvaluation JSON object
@@ -21,9 +22,21 @@ SEMANTICA DE FRAUD_SCORE (CRITICO — no confundir):
 - fraud_score=4 significa ALTO RIESGO de fraude.
 - NO interpretes un fraud_score alto como "riesgo alto" — es exactamente lo contrario.
 
+QUE EVALUAS EN CADA CRITERIO (CRITICO):
+El sistema corrige por codigo la accion, el nivel de riesgo, la derivacion y la compensacion
+ANTES de que llegue esta evaluacion. Si evaluaras esos campos sobre la RESOLUCION ENTREGADA,
+estarias calificando lo que el codigo ya garantizo: policy_consistency y risk_assessment darian
+siempre 10 y no medirian nada.
+- policy_consistency y risk_assessment se evaluan sobre la PROPUESTA ORIGINAL DEL MODELO, que
+  viene en su propia seccion. Ahi si es posible que el modelo se haya equivocado.
+- justification_quality, precedent_usage y actionability se evaluan sobre la RESOLUCION
+  ENTREGADA: son los campos que el modelo escribio y que nadie sobrescribio.
+- Si no hay seccion de propuesta original, evalua los cinco criterios sobre la resolucion
+  entregada y anota en weaknesses que la propuesta no estaba disponible.
+
 CRITERIOS CON RUBRICA (cada uno se evalua de 1.0 a 10.0):
 
-1. policy_consistency: La resolucion respeta todos los BLOCKERs, FAILs y requires_human_review?
+1. policy_consistency (sobre la PROPUESTA ORIGINAL): la accion que propuso el modelo respetaba todos los BLOCKERs, FAILs y requires_human_review?
    - 10.0: Accion perfecta + todos los veredictos respetados sin excepcion
    - 9.0: Accion correcta + veredictos citados correctamente, minimas inconsistencias menores
    - 7.0-8.9: Accion correcta pero algun veredicto no citado o razonamiento impreciso en un veredicto
@@ -44,7 +57,7 @@ CRITERIOS CON RUBRICA (cada uno se evalua de 1.0 a 10.0):
    - 5.0-6.9: Solo lista case_ids sin extraer aprendizajes
    - 1.0-4.9: Ignora completamente los precedentes disponibles
 
-4. risk_assessment: El risk_level asignado es correcto dado los veredictos y el fraud_score?
+4. risk_assessment (sobre la PROPUESTA ORIGINAL): el risk_level que propuso el modelo era correcto dado los veredictos y el fraud_score?
    - 10.0: Risk level correcto + explicacion clara de POR QUE (distingue riesgo de fraude vs riesgo de politica si aplica) + conexion con la decision
    - 9.0: Risk level correcto + explicacion de la fuente del riesgo (politica vs fraude vs ambos)
    - 7.0-8.9: Risk level correcto pero sin explicar la fuente del riesgo o con explicacion incompleta
@@ -63,7 +76,7 @@ approved = true si overall_score >= 7.0
 
 REGLAS:
 1. USA LA RUBRICA. Asigna el score que corresponda segun la descripcion del nivel. No redondees sistematicamente a .0 o .5 — usa el valor exacto que refleje la calidad (ej: 8.7, 9.2, 7.3).
-2. Un APPROVE con BLOCKER activo es el error mas grave posible — policy_consistency = 1.0 automaticamente.
+2. Un APPROVE con BLOCKER activo es el error mas grave posible — policy_consistency = 1.0 automaticamente. Se juzga sobre la propuesta original: que el override lo haya corregido despues no lo redime, porque el objetivo es medir al modelo.
 3. strengths: lista de 1-3 aspectos positivos concretos de la resolucion.
 4. weaknesses: lista de 1-3 areas de mejora concretas. Solo reporta problemas REALES — no penalices PENDING_HITL cuando es la accion correcta.
 5. Responde UNICAMENTE con JSON valido. En espanol. Sin texto adicional.
@@ -89,15 +102,26 @@ Formato de respuesta:
 USER_TEMPLATE = """## EVIDENCIA COMPLETA (contexto del caso)
 {full_context}
 
-## RESOLUCION PROPUESTA
+## RESOLUCION ENTREGADA (con los campos deterministas ya aplicados)
 {resolution}
+{propuesta}
+Evalua usando la RUBRICA de cada criterio y devuelve el JSON de evaluacion."""
 
-Evalua la resolucion usando la RUBRICA de cada criterio y devuelve el JSON de evaluacion."""
+PROPUESTA_TEMPLATE = """
+## PROPUESTA ORIGINAL DEL MODELO (antes de la correccion por codigo)
+Sobre esto se evaluan policy_consistency y risk_assessment.
+{propuesta}
+"""
 
 
-def render(full_context: dict, resolution: dict) -> tuple[str, str]:
+def render(
+    full_context: dict, resolution: dict, propuesta: dict | None = None,
+) -> tuple[str, str]:
     user = USER_TEMPLATE.format(
         full_context=bloque_json(full_context),
         resolution=bloque_json(resolution),
+        propuesta=(
+            PROPUESTA_TEMPLATE.format(propuesta=bloque_json(propuesta)) if propuesta else ""
+        ),
     )
     return SYSTEM, user

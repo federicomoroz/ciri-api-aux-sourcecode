@@ -48,6 +48,7 @@ def _preparar_sqlite(settings: Settings) -> Database:
     db = Database(db_path)
     db.ensure_report_cache_table()
     db.ensure_alerts_table()
+    db.ensure_policies_semantics()
     return db
 
 

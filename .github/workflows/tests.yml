@@ -37,7 +37,10 @@ jobs:
       # modelo, asi que dependen de que Render este despierto y de que haya
       # saldo. Un test que falla por algo ajeno al codigo no informa nada.
       - name: Tests
-        run: pytest tests/unit tests/integration -q --cov=api/app --cov-report=term-missing
+        # --cov-fail-under: sin un piso, la cobertura puede caer sin que nada
+        # avise. El numero es el actual menos un margen: sube cuando sube, y
+        # bajarlo tiene que ser una decision explicita en un diff.
+        run: pytest tests/unit tests/integration -q --cov=api/app --cov-report=term-missing --cov-fail-under=85
 
       # Un workflow puede importar sin errores y no hacer nada: un Wait sin modo
       # de reanudacion es un sleep, un nodo HTTP sin reintentos desmiente al

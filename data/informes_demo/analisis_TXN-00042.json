@@ -137,5 +137,14 @@
     "merchant": "Airbnb",
     "amount_usd": 2055.76,
     "risk_level": "HIGH"
+  },
+  "procedencia": {
+    "generado": "2026-08-06",
+    "prompts": {
+      "policy_eval": "v1.2",
+      "resolution": "v3.0",
+      "judge": "v2.0"
+    },
+    "nota": "Analisis real de una corrida completa del pipeline, guardado para que el sistema se pueda evaluar sin consumir la cuenta del modelo. No es lo que el sistema produciria hoy: desde esta corrida cambiaron el prompt de resolucion (v3.0 -> v3.1, el SLA entra al contexto y la compensacion la determina el codigo), el del juez (v2.0 -> v2.1, califica la propuesta del modelo y no la version ya corregida) y los umbrales de comercio problematico y de SLA, que pasaron a calibrarse contra el dataset. Regenerarlo requiere saldo de API."
   }
 }

@@ -128,6 +128,10 @@ class QdrantIndexer:
                     "description": policy["description"],
                     "reference": policy["reference"],
                     "markdown": _policy_to_markdown(policy),
+                    # Sin esto, el guardrail que decide que politica puede
+                    # bloquear tendria que volver a SQLite por cada veredicto.
+                    "puede_bloquear": bool(policy.get("puede_bloquear", False)),
+                    "sla_dias": policy.get("sla_dias"),
                 },
             ))
 
@@ -212,6 +216,8 @@ class QdrantIndexer:
                 "description": policy["description"],
                 "reference": policy["reference"],
                 "markdown": text,
+                "puede_bloquear": bool(policy.get("puede_bloquear", False)),
+                "sla_dias": policy.get("sla_dias"),
             },
         )
         try:

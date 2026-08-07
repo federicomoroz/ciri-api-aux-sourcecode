@@ -10,7 +10,6 @@ import logging
 
 from ..analysis.analyzer import Analyzer
 from ..domain.constants import (
-    BLOCKER_POLICY_CODES,
     FALLBACK_TX_ID,
     FRAUD_SCORE_DEFAULT,
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
@@ -21,6 +20,7 @@ from ..domain.constants import (
     GUARDRAIL_MIN_FAILS_FOR_WARNING,
     JUDGE_APPROVAL_THRESHOLD,
     LLM_MAX_CRITICAL_LOGS,
+    POLICY_SEED_BLOQUEANTES,
     RISK_FRAUD_SEVERE,
     RISK_HIGH_MIN_FAILS,
     SLA_COMPENSATION_MAX_USD,
@@ -79,6 +79,7 @@ class ResolutionService:
         # Detectar la alucinacion ANTES de corregirla: una vez aplicado el
         # override determinista, lo que propuso el modelo ya no es observable.
         warnings = self._detect_divergence(resolution, outcome, policy_verdicts)
+        propuesta = self._propuesta_del_modelo(resolution)
 
         # Override LLM decisions with deterministic values (always).
         resolution["policy_verdicts"] = policy_verdicts
@@ -98,7 +99,17 @@ class ResolutionService:
             "output_tokens": eval_result.output_tokens + synth_result.output_tokens,
             "call_count": 2,
         }
-        return {**resolution, "guardrail_warnings": warnings, "trace_id": trace_id, "_usage": usage}
+        return {
+            **resolution,
+            "guardrail_warnings": warnings,
+            "trace_id": trace_id,
+            "_usage": usage,
+            # Lo que propuso el modelo antes del override. Viaja para que el
+            # Juez califique al modelo y no a la correccion: sin esto,
+            # policy_consistency y risk_assessment evaluaban lo que el codigo
+            # ya garantizaba y no podian bajar de 10 por construccion.
+            "_propuesta_del_modelo": propuesta,
+        }
 
     def _eval_policies(self, ctx: CaseContext, trace_id: str) -> tuple[list[dict], LLMResult]:
         """Step 1: LLM policy evaluation. Raises on failure."""
@@ -111,23 +122,62 @@ class ResolutionService:
         )
         result = self.llm.complete(sys_eval, usr_eval, trace_id=trace_id)
         verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])
-        verdicts = self._sanitize_verdicts(verdicts)
+        verdicts = self._sanitize_verdicts(verdicts, ctx.policies)
         return verdicts, result
 
     @staticmethod
-    def _sanitize_verdicts(verdicts: list[dict]) -> list[dict]:
+    def _propuesta_del_modelo(resolution: dict) -> dict:
+        """Los campos que el override esta por sobrescribir, tal como los propuso.
+
+        Se toma antes de la correccion. Despues no existe: la resolucion
+        entregada tiene la decision del codigo, y calificar eso es calificar al
+        codigo.
+        """
+        return {
+            campo: resolution.get(campo)
+            for campo in (
+                "recommended_action", "risk_level", "requires_hitl",
+                "compensation_applicable", "confidence",
+            )
+        }
+
+    @staticmethod
+    def _pueden_bloquear(policies: list[dict]) -> frozenset[str]:
+        """Que politicas de las recuperadas tienen permitido bloquear.
+
+        Sale de la politica misma (`puede_bloquear`, columna de SQLite que viaja
+        en la carga de Qdrant), no de una lista en el codigo: agregar una
+        politica bloqueante es un POST, no un deploy.
+
+        Si el documento indexado no trae el campo —un indice armado antes de que
+        la columna existiera—, se cae a la semilla del dataset. Reindexar la
+        politica, o editarla por la API, la trae al dia.
+        """
+        codigos = {
+            p.get("code") for p in policies
+            if p.get("puede_bloquear") in (1, True, "1", "true")
+        }
+        sin_dato = {
+            p.get("code") for p in policies if "puede_bloquear" not in p
+        } & POLICY_SEED_BLOQUEANTES
+        return frozenset(codigos | sin_dato) - {None}
+
+    @classmethod
+    def _sanitize_verdicts(cls, verdicts: list[dict], policies: list[dict]) -> list[dict]:
         """Downgrade invalid BLOCKER verdicts to FAIL.
 
-        Only policies in BLOCKER_POLICY_CODES can produce legitimate BLOCKERs.
-        Other BLOCKERs are LLM over-escalation (e.g. merchant suspension ≠ BLOCKER).
+        Solo las politicas marcadas como bloqueantes pueden emitir un BLOCKER
+        legitimo. El resto es sobre-escalada del modelo (por ejemplo, tratar la
+        suspension de un comercio como si fuera irreversible).
         """
+        habilitadas = cls._pueden_bloquear(policies)
         for v in verdicts:
             if (
                 v.get("verdict") == VerdictType.BLOCKER
-                and v.get("policy_code") not in BLOCKER_POLICY_CODES
+                and v.get("policy_code") not in habilitadas
             ):
                 logger.warning(
-                    "BLOCKER downgraded to FAIL for %s (not in BLOCKER_POLICY_CODES)",
+                    "BLOCKER degradado a FAIL en %s: la politica no esta marcada como bloqueante",
                     v.get("policy_code"),
                 )
                 v["verdict"] = VerdictType.FAIL
@@ -178,7 +228,7 @@ class ResolutionService:
         # Strip internal metadata — Judge evaluates the corrected resolution, not the audit trail.
         # guardrail_warnings and guardrail-set hitl_reason mention original pre-correction
         # values (e.g. "Auto-corregido: REJECT sin BLOCKER...") which confuse the Judge LLM.
-        _strip_keys = {"guardrail_warnings", "_usage", "trace_id"}
+        _strip_keys = {"guardrail_warnings", "_usage", "trace_id", "_propuesta_del_modelo"}
         judge_resolution = {k: v for k, v in resolution.items() if k not in _strip_keys}
         if str(judge_resolution.get("hitl_reason", "")).startswith(GUARDRAIL_AUTO_CORRECTED_PREFIX):
             judge_resolution["hitl_reason"] = GUARDRAIL_HITL_REASON_GENERIC
@@ -186,6 +236,7 @@ class ResolutionService:
         system, user = prompts.v1_judge.render(
             full_context=full_context,
             resolution=judge_resolution,
+            propuesta=resolution.get("_propuesta_del_modelo"),
         )
         llm_result = self.llm_resolution.complete(system, user, trace_id=trace_id)
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})

@@ -4,7 +4,7 @@ RAG retriever with deterministic query builder.
 Design decisions:
 - QueryBuilder is deterministic (no LLM). Reproducible, zero cost, faster.
 - policies: retrieve ALL (small corpus, counted per query). LLM filters. threshold=0.0
-- historical_cases: top-5, threshold=0.40 (semantic similarity)
+- historical_cases: 15 candidatos, rerank por boosts, top-5. threshold=0.40
 """
 
 import logging
@@ -21,6 +21,7 @@ from ..domain.constants import (
     RERANK_COUNTRY_BOOST,
     RERANK_MAX_SCORE,
     RERANK_PAYMENT_METHOD_BOOST,
+    SIMILAR_CASES_CANDIDATOS,
     SIMILAR_CASES_SCORE_THRESHOLD,
     SIMILAR_CASES_TOP_K,
 )
@@ -145,19 +146,22 @@ class QdrantRetriever:
         query_filter = Filter(
             should=[FieldCondition(key="payment_method", match=MatchValue(value=payment_method))]
         )
+        # Se piden mas candidatos de los que se van a entregar: el rerank tiene
+        # que poder cambiar QUIEN entra, no solo el orden de los que ya entraron.
+        candidatos = max(top_k, SIMILAR_CASES_CANDIDATOS)
         try:
             results = self.client.query_points(
                 collection_name=self.cases_collection,
                 query=vector,
                 query_filter=query_filter,
-                limit=top_k,
+                limit=candidatos,
                 score_threshold=score_threshold,
                 with_payload=True,
             ).points
         except Exception as e:
             logger.error("Qdrant case search failed: %s", e)
             raise
-        results = self._rerank(results, payment_method, country)
+        results = self._rerank(results, payment_method, country)[:top_k]
         return [{**r.payload, "score": round(r.score, 4), "_query": query} for r in results]
 
     def search_policies(
