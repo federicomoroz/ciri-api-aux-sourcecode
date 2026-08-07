@@ -91,6 +91,11 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     from api.app.llm.manager import LLMManager
     from api.app.services.modelos import ModelosService
 
+    # Sin esto, `settings` es un MagicMock y todo campo nuevo sale truthy:
+    # el modo demo se daria por configurado y armaria un cliente con mocks.
+    app.state.settings.demo_mode = False
+    app.state.settings.demo_provider = ""
+    app.state.settings.demo_model = ""
     app.state.settings.llm_provider = "anthropic"
     app.state.settings.llm_model = "claude-haiku-4-5-20251001"
     app.state.settings.llm_model_resolution = "claude-sonnet-4-6"
@@ -430,3 +435,45 @@ class TestConfiguracionDeModelos:
         cliente, _, _ = test_client_routes
         html = cliente.get("/panel").text
         assert "modelos-section" in html and "cargarModelos()" in html
+
+
+class TestLosDosEndpointsRespetanElModo:
+    """`/resolve` y `/judge` tienen que usar el MISMO modelo.
+
+    Regresion: `judge` resolvia el servicio del modo demo y despues llamaba al
+    de produccion. Con la cuenta de Anthropic sin credito eso era un 500, y
+    desde n8n se veia como «Error en analisis LLM» sin decir que la mitad del
+    pipeline se habia ido por el proveedor equivocado. Es la clase de bug que un
+    test de una sola ruta no encuentra: cada una anda, y juntas no.
+    """
+
+    @staticmethod
+    def _servicios_usados(monkeypatch):
+        from unittest.mock import MagicMock
+
+        import api.app.routes.analyze as analyze
+
+        usados = []
+        demo = MagicMock()
+        demo.resolve.return_value = {"recommended_action": "APPROVE", "risk_level": "LOW",
+                                     "confidence": 0.9, "policy_verdicts": []}
+        demo.judge.return_value = {"overall_score": 8.0, "approved": True, "criteria": {}}
+
+        def espia(settings, modelos, base):
+            usados.append("demo")
+            return demo, True
+
+        monkeypatch.setattr(analyze, "_servicio_efectivo", espia)
+        return usados, demo
+
+    def test_judge_usa_el_servicio_del_modo_y_no_el_de_produccion(self, monkeypatch, test_client_routes):
+        cliente, _, _ = test_client_routes
+        _, demo = self._servicios_usados(monkeypatch)
+
+        r = cliente.post("/api/analyze/judge", json={
+            "resolution": {"transaction_id": "TXN-00051", "recommended_action": "REJECT"},
+            "full_context": {"transaction": {"id": "TXN-00051"}},
+        })
+        assert r.status_code == 200
+        assert demo.judge.called, "el juez corrio con el servicio de produccion"
+        assert r.json()["demo"] is True, "una corrida en modo demo tiene que declararse"

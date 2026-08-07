@@ -163,7 +163,8 @@ def judge(
         if guardado is not None:
             return guardado
 
-    return service.judge(
+    resultado = servicio.judge(
         resolution=req.resolution,
         full_context=req.full_context,
     )
+    return {**resultado, "demo": True} if en_demo else resultado
