@@ -568,6 +568,10 @@ async def panel_analyze(
         )
         respaldo = _respuesta_demo(req.transaction_id, settings, pipeline.db)
         if respaldo is not None:
+            # Sin esto, «cayo al informe guardado» y «el modelo esta bien
+            # configurado» se ven igual desde afuera: 200 y un HTML. El motivo
+            # viaja en la cabecera para poder distinguirlos sin leer los logs.
+            respaldo.headers["X-Demo-Fallback"] = fallo[:180] or "desconocido"
             return respaldo
         return HTMLResponse(
             content=_pagina_sin_caso_demo(req.transaction_id, settings), status_code=200

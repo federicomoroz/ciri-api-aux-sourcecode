@@ -38,15 +38,15 @@
         "responseMode": "lastNode",
         "options": {}
       },
-      "id": "520546a7-97c9-49d5-89f0-4eb78e5fe26d",
+      "id": "d65f8fa1-6727-4b0f-a16e-702be5037a1c",
       "name": "Form Trigger — Formulario",
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.1,
       "position": [
-        9952,
-        3088
+        11184,
+        4080
       ],
-      "webhookId": "295e700d-57ba-45bd-8d38-40d045b01e37"
+      "webhookId": "1c433dc6-c661-4dc8-afce-43dd7f4f54df"
     },
     {
       "parameters": {
@@ -64,13 +64,13 @@
           "timeout": 120000
         }
       },
-      "id": "eee3ea4c-5f80-4395-be3c-289cf010f39d",
+      "id": "d6d9558d-4cb5-4b8b-bbc2-5c2391c4466b",
       "name": "Disparar el Orquestador",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        10384,
-        3040
+        11616,
+        4032
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -101,13 +101,13 @@
         },
         "options": {}
       },
-      "id": "be78874a-7970-406f-b313-9360fc6f63e7",
+      "id": "96d4a1ae-e1bb-4ecb-abf1-71049dd7b89e",
       "name": "Validar Formato — IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        10160,
-        3088
+        11392,
+        4080
       ]
     },
     {
@@ -117,13 +117,13 @@
         "completionMessage": "={{ 'Se investigó ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '. Corrió el workflow orquestador completo: el informe quedó en su ejecución, en la pestaña Executions.' }}",
         "options": {}
       },
-      "id": "cca03576-54f0-4792-8ae2-b04e9b21d011",
+      "id": "e71fd5d5-4eab-4510-93f3-9bf7773b6c37",
       "name": "Respuesta — Listo",
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
       "position": [
-        10640,
-        2960
+        11872,
+        3952
       ],
       "webhookId": "73b64b04-8f79-4a43-8ca6-af0b668af87a"
     },
@@ -134,13 +134,13 @@
         "completionMessage": "={{ '«' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + '» no tiene el formato esperado. Debe ser TXN- seguido de cinco dígitos, por ejemplo TXN-00051.' }}",
         "options": {}
       },
-      "id": "61bf02c9-dc31-4caa-9882-bdac16c449f5",
+      "id": "52fcea3f-5b6d-47c0-a7bb-ff9d848b23f7",
       "name": "Respuesta — Formato Invalido",
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
       "position": [
-        10384,
-        3248
+        12128,
+        4352
       ],
       "webhookId": "ad5a013b-67e7-4663-8d2b-543d00febd56"
     },
@@ -151,13 +151,13 @@
         "completionMessage": "={{ 'No se pudo investigar ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'el orquestador no respondió') + '. El equipo ya fue notificado.' }}",
         "options": {}
       },
-      "id": "a8557e0d-16aa-4fe0-890b-72a6461334b5",
+      "id": "ca2a8333-39be-48eb-b84a-e5ffdf2794a1",
       "name": "Respuesta — Fallo el Analisis",
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
       "position": [
-        10640,
-        3120
+        12128,
+        4160
       ],
       "webhookId": "02d6c409-745c-4091-9492-4b96076e9b17"
     },
@@ -168,13 +168,13 @@
         "width": 772,
         "color": 5
       },
-      "id": "7f265822-78a2-48fe-984d-4d031a7b7f05",
+      "id": "d91ebbb5-321d-4b3f-813a-af3bc31ea2b2",
       "name": "Sticky Note — Form Trigger",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        9920,
-        2464
+        11152,
+        3456
       ]
     },
     {
@@ -188,18 +188,18 @@
           "timeout": 10000
         }
       },
-      "id": "a0358f0f-558d-4a36-a879-8d9f1498b0dd",
+      "id": "c47b96b2-4e59-44be-8a84-4034529cf626",
       "name": "Registrar Entrada Rechazada",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        10640,
-        3280
+        11648,
+        4352
       ],
-      "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 2000
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -212,18 +212,18 @@
           "timeout": 10000
         }
       },
-      "id": "5c048133-a9a8-4070-b6e9-bf370114c9c1",
+      "id": "06797982-da7b-48bb-a5ea-e51adbd1e5e2",
       "name": "Registrar Fallo del Análisis",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        10640,
-        3120
+        11872,
+        4160
       ],
-      "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 2000
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
@@ -304,10 +304,10 @@
     "binaryMode": "separate",
     "availableInMCP": false,
     "timeSavedMode": "fixed",
-    "callerPolicy": "workflowsFromSameOwner",
-    "errorWorkflow": "ciriErrorHandler"
+    "errorWorkflow": "teWDCm7Y2erv1u3f",
+    "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "5f50cb14-a0d8-4fa5-bfb6-bea659e8d0f9",
+  "versionId": "1fadf4ff-012d-4d58-9dad-06f38f9732c2",
   "meta": {
     "instanceId": "92936ca510fad697deadd62294080b90dc71bd9e892063c4b055dfcec9e98a2e"
   },
