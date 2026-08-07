@@ -263,7 +263,9 @@ class TestElFormularioDeAprobacionSeAnuncia:
         """
         wf = cargar(ORQUESTADOR)
         cadena = ["Avisar — Formulario HITL", "Responder — Requiere Aprobación"]
-        for actual, siguiente in zip(cadena, cadena[1:] + ["Wait — Aprobación HITL"]):
+        for actual, siguiente in zip(
+            cadena, cadena[1:] + ["Wait — Aprobación HITL"], strict=True,
+        ):
             assert salidas(wf, actual)[0] == [siguiente]
 
     def test_manda_la_url_del_formulario(self):
