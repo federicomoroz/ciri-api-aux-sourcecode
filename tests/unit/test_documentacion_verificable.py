@@ -98,3 +98,41 @@ def test_el_conteo_de_tests_del_readme_es_el_real():
     assert abs(declarados - reales) <= 40, (
         f"el badge dice {declarados} y hay {reales} funciones de test en {len(archivos)} archivos"
     )
+
+
+NIVELES = {"blocker", "high", "medium", "low"}
+
+
+def test_ningun_informe_se_llama_como_un_riesgo_que_no_tiene():
+    """El nombre de archivo es documentación: no puede contradecir al contenido.
+
+    Regresión: `report_medium_TXN-00089.html` contenía un caso HIGH, y el README
+    lo anunciaba como MEDIUM. Se refuta abriendo el archivo.
+    """
+    riesgos = {
+        f.stem.removeprefix("analisis_"): json.loads(f.read_text(encoding="utf-8"))["resolution"]["risk_level"]
+        for f in INFORMES.glob("analisis_*.json")
+    }
+    desmentidos = []
+    for f in INFORMES.glob("report_*.html"):
+        etiqueta = f.stem.split("_")[1].lower()
+        txn = "TXN-" + f.stem.split("TXN-")[1][:5]
+        if etiqueta in NIVELES and riesgos.get(txn, "").lower() != etiqueta:
+            desmentidos.append(f"{f.name} dice '{etiqueta}' y el análisis dice '{riesgos.get(txn)}'")
+    assert not desmentidos, desmentidos
+
+
+def test_el_readme_anuncia_el_riesgo_que_cada_caso_tiene():
+    """Los escenarios de la portada son lo primero que alguien contrasta."""
+    readme = LEEME.read_text(encoding="utf-8")
+    for f in INFORMES.glob("analisis_*.json"):
+        txn = f.stem.removeprefix("analisis_")
+        riesgo = json.loads(f.read_text(encoding="utf-8"))["resolution"]["risk_level"]
+        fila = next((ln for ln in readme.splitlines() if f"`{txn}`" in ln and "|" in ln), None)
+        if fila is None:
+            continue
+        otros = {n for n in ("BLOCKER", "HIGH", "MEDIUM", "LOW") if n != riesgo}
+        assert riesgo in fila, f"{txn} es {riesgo} y el README no lo dice: {fila.strip()}"
+        assert not (otros & set(fila.split())), (
+            f"{txn} es {riesgo} y el README anuncia otro nivel: {fila.strip()}"
+        )

@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-546%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-548%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -101,7 +101,7 @@ Tres casos que muestran comportamientos distintos:
 |---|---|---|
 | `TXN-00051` | Cripto, score antifraude 8 | **BLOCKER** — rechazo automático, la operación es irreversible |
 | `TXN-00042` | Tarjeta, score 4, cliente VIP | **HIGH** — frena y espera a un analista |
-| `TXN-00089` | Comercio fuera de LATAM | **MEDIUM** — SLA extendido a 15 días hábiles |
+| `TXN-00089` | Comercio fuera de LATAM, score 8 | **HIGH** — frena y espera a un analista; POL-EXC-004 le extiende el SLA a 15 días hábiles |
 
 ### 3. El workflow de n8n
 
@@ -230,7 +230,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 546 en 29 archivos; los de `unit/` e `integration/` corren
+**Tests:** `pytest tests/ -v`. Son 548 en 29 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
 validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.
