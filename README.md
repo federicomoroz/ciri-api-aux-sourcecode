@@ -75,11 +75,13 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 ### 1. Ver el circuito, sin ejecutar nada
 
-Los dos archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
+Los tres archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
 
 **«n8n y la API»** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
 **«el circuito completo»** — el circuito completo. Los 29 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+
+**«el RAG»** — la cadena entera de recuperación, seguida con un caso real: qué se indexa y qué no, cómo el código arma la consulta, por qué las dos colecciones se buscan con criterios opuestos, cómo se formatea el contexto y por dónde el índice se escribe solo.
 
 ### 2. El panel web
 

@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>El RAG — de la transacción al contexto del modelo</title>
+<style>
+  :root{
+    --paper:#fcfcfa; --surface:#fff; --ink:#17171b; --muted:#68686f; --faint:#95959d;
+    --rule:#e5e4df; --rule-mid:#d3d2cb; --wire:#c3c2ba;
+    --api:#2563eb; --rag:#0d9488; --llm:#7c3aed; --logic:#64748b;
+    --decide:#b45309; --human:#be185d; --vuelta:#be185d;
+    --shadow:0 1px 2px rgba(20,20,25,.06);
+    --code-bg:#f5f4f0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#131316; --surface:#1b1b1f; --ink:#f0efec; --muted:#a3a3ac; --faint:#7a7a84;
+      --rule:#2b2b31; --rule-mid:#3a3a42; --wire:#4a4a53;
+      --api:#7ea6ff; --rag:#4fd1c5; --llm:#b794f6; --logic:#94a3b8;
+      --decide:#e0a04a; --human:#f472b6; --vuelta:#f472b6;
+      --shadow:0 1px 2px rgba(0,0,0,.4);
+      --code-bg:#232329;
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .hoja{max-width:1120px; margin:0 auto; padding:48px 32px 72px}
+
+  /* ── encabezado ─────────────────────────────────────────── */
+  .ceja{
+    font:600 11px/1 ui-monospace,monospace; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--faint); margin-bottom:18px;
+  }
+  h1{font-size:30px; line-height:1.15; margin:0 0 14px; letter-spacing:-.02em; font-weight:650}
+  h1 em{font-style:normal; color:var(--muted); font-weight:400}
+  .tesis{max-width:64ch; color:var(--muted); margin:0 0 30px}
+  .tesis b{color:var(--ink); font-weight:600}
+
+  .leyenda{
+    display:flex; flex-wrap:wrap; gap:8px 22px; padding:14px 0 0;
+    border-top:1px solid var(--rule); margin-bottom:16px;
+    font-size:12.5px; color:var(--muted);
+  }
+  .leyenda span{display:inline-flex; align-items:center; gap:7px}
+  .pip{width:9px; height:9px; border-radius:2px; flex:none}
+
+  .caso-guia{
+    font-size:12.5px; color:var(--faint); margin:0 0 40px;
+    padding:9px 13px; border-left:2px solid var(--rag); background:var(--surface);
+    border-radius:0 6px 6px 0;
+  }
+  .caso-guia b{color:var(--ink); font-weight:600}
+  .caso-guia code{font:12px ui-monospace,monospace; color:var(--rag)}
+
+  /* ── etapas ─────────────────────────────────────────────── */
+  .etapa{margin:0 0 34px}
+  .etapa-cab{
+    display:flex; align-items:baseline; gap:12px;
+    padding-bottom:9px; margin-bottom:16px; border-bottom:1px solid var(--rule);
+  }
+  .etapa-n{font:600 11px/1 ui-monospace,monospace; color:var(--faint); letter-spacing:.1em}
+  .etapa-t{font-weight:600; font-size:14px}
+  .etapa-d{font-size:12.5px; color:var(--faint); margin-left:auto; text-align:right}
+  .etapa > p{max-width:70ch; color:var(--muted); font-size:13.5px; margin:0 0 14px}
+  .etapa > p b{color:var(--ink); font-weight:600}
+
+  /* ── la pieza que se repite: una transformación ─────────── */
+  .paso{
+    display:grid; grid-template-columns:180px 1fr; gap:0 20px;
+    padding:14px 12px; margin:0 -12px; border-radius:8px;
+  }
+  .paso:hover{background:var(--surface); box-shadow:var(--shadow)}
+  .paso-q{font-size:13px; font-weight:600; line-height:1.45}
+  .paso-q .sub{
+    display:block; font:11.5px/1.5 ui-monospace,monospace;
+    color:var(--faint); font-weight:400; margin-top:3px; word-break:break-all;
+  }
+  .paso-cuerpo > p{margin:0 0 9px; font-size:13px; color:var(--muted); max-width:66ch}
+  .paso-cuerpo > p:last-child{margin-bottom:0}
+
+  code, .bloque{font-family:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
+  code{font-size:12.5px}
+  .bloque{
+    background:var(--code-bg); border:1px solid var(--rule);
+    border-radius:6px; padding:10px 13px; margin:0 0 9px;
+    font-size:12.5px; line-height:1.65; color:var(--ink);
+    overflow-x:auto; white-space:pre-wrap; word-break:break-word;
+  }
+  .bloque:last-child{margin-bottom:0}
+  .bloque .et{color:var(--faint)}
+  .bloque .on{color:var(--rag); font-weight:600}
+  .bloque .off{color:var(--faint); text-decoration:line-through}
+
+  /* ── tarjetas en rejilla ────────────────────────────────── */
+  .rejilla{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px}
+  .tarj{
+    border:1px solid var(--rule); border-radius:8px; padding:15px 17px;
+    background:var(--surface);
+  }
+  .tarj.acento{border-left:3px solid var(--rag)}
+  .tarj.gris{border-left:3px solid var(--logic)}
+  .tarj.vuelta{border-left:3px solid var(--vuelta)}
+  .tarj h3{
+    font-size:13px; margin:0 0 4px; font-weight:650;
+    display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
+  }
+  .tarj h3 .n{font:11.5px/1 ui-monospace,monospace; color:var(--faint); font-weight:400}
+  .tarj p{margin:0 0 8px; font-size:12.5px; color:var(--muted); line-height:1.55}
+  .tarj p:last-child{margin-bottom:0}
+  .tarj dl{margin:9px 0 0; display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:12px}
+  .tarj dt{color:var(--faint); font-family:ui-monospace,monospace; font-size:11.5px}
+  .tarj dd{margin:0; color:var(--ink)}
+
+  .chip{
+    display:inline-block; border:1px solid var(--rule-mid); border-radius:11px;
+    padding:1px 8px; font:11.5px/1.7 ui-monospace,monospace; color:var(--faint);
+    white-space:nowrap;
+  }
+  .chip.si{border-color:var(--rag); color:var(--rag)}
+  .chip.no{border-color:var(--rule-mid); color:var(--faint)}
+
+  /* ── comparación de las dos búsquedas ───────────────────── */
+  table{border-collapse:collapse; width:100%; font-size:12.5px; margin:0}
+  th,td{text-align:left; padding:8px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+  th{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
+  td:first-child{color:var(--faint); font-family:ui-monospace,monospace; font-size:11.5px; width:26%}
+  .col-pol{color:var(--rag)} .col-cas{color:var(--llm)}
+  .tabla-envoltura{overflow-x:auto; border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
+
+  /* ── el aparte de qué NO se indexa ──────────────────────── */
+  .contra{
+    border:1px solid var(--rule); border-left:3px solid var(--logic);
+    border-radius:0 8px 8px 0; padding:16px 19px; margin:16px 0 0; background:var(--surface);
+  }
+  .contra h3{font-size:13px; margin:0 0 5px; font-weight:650}
+  .contra p{margin:0; font-size:12.5px; color:var(--muted); max-width:70ch}
+
+  /* ── cierre ─────────────────────────────────────────────── */
+  .cierre{
+    margin:48px 0 0; padding-top:24px; border-top:1px solid var(--rule);
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:24px 34px;
+  }
+  .cierre h3{font-size:13px; margin:0 0 5px; font-weight:650}
+  .cierre p{margin:0; font-size:13px; color:var(--muted)}
+  .cierre code{font-size:12px; color:var(--ink)}
+
+  @media (max-width:760px){
+    .hoja{padding:32px 18px 56px}
+    h1{font-size:25px}
+    .paso{grid-template-columns:1fr; gap:8px}
+    .paso-q .sub{word-break:normal}
+  }
+  @media print{
+    body{background:#fff}
+    .paso:hover{background:none; box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div class="hoja">
+
+  <p class="ceja">CIRI · Agente de contracargos</p>
+  <h1>El RAG<br><em>de una transacción al contexto que lee el modelo</em></h1>
+  <p class="tesis">
+    El RAG de este sistema no es una llamada: es una cadena de transformaciones sobre texto,
+    y <b>ninguna de ellas la decide un modelo</b>. El código arma la consulta, el código elige
+    cuántos resultados traer y el código los ordena. El modelo recibe el contexto ya armado y
+    su trabajo empieza ahí. Esta página sigue esa cadena entera con un caso real.
+  </p>
+
+  <div class="leyenda">
+    <span><i class="pip" style="background:var(--rag)"></i>Qdrant · vector store</span>
+    <span><i class="pip" style="background:var(--api)"></i>SQLite · dato exacto</span>
+    <span><i class="pip" style="background:var(--logic)"></i>Código, sin modelo</span>
+    <span><i class="pip" style="background:var(--llm)"></i>Llamada a un modelo</span>
+    <span><i class="pip" style="background:var(--vuelta)"></i>Lo que vuelve al índice</span>
+  </div>
+
+  <p class="caso-guia">
+    <b>El caso que sigue toda la página:</b> <code>TXN-00051</code> — Airbnb, USD 2.095,90,
+    <b>Cripto</b>, COL, canal POS, score antifraude <b>8</b>. Motivo declarado:
+    «No reconoce la compra». Los textos que aparecen abajo son los que produce el sistema,
+    no ejemplos ilustrativos.
+  </p>
+
+  <!-- ── 01 ────────────────────────────────────────────── -->
+  <section class="etapa">
+    <div class="etapa-cab">
+      <span class="etapa-n">01</span><span class="etapa-t">Qué entra al índice</span>
+      <span class="etapa-d">Dos colecciones · 1024 dimensiones · <code>voyage-multilingual-2</code></span>
+    </div>
+    <p>
+      Cada documento se convierte a texto antes de embeberse, y el formato del texto es una
+      decisión de diseño: <b>una política es un documento entero, sin partir</b>. Miden entre 60 y
+      90 tokens, y su unidad de sentido es indivisible — condición, umbral y excepción sólo
+      significan algo juntos. Partirlas en fragmentos habría multiplicado los puntos sin agregar
+      una sola distinción útil.
+    </p>
+
+    <div class="rejilla">
+      <div class="tarj acento">
+        <h3>policies <span class="n">17 en el dataset · crece por API</span></h3>
+        <p>Una política, un punto. Se embebe su Markdown completo:</p>
+        <div class="bloque"><span class="et"># POL-EXC-003
+**Categoria:** EXCEPCIÓN
+**Politica:** Transacciones en cripto
+## Descripcion</span>
+Las transacciones realizadas con criptomonedas
+no son elegibles para chargeback bajo ninguna
+circunstancia. Se aplica política de 'no
+reversibilidad' inherente al protocolo.
+<span class="et">**Referencia:** Manual de Excepciones v1.0, Sec. 4</span></div>
+        <dl>
+          <dt>id del punto</dt><dd><code>uuid5(código)</code> — determinista, permite reescribir</dd>
+          <dt>carga útil</dt><dd>código, nombre, categoría, descripción, referencia, markdown</dd>
+        </dl>
+      </div>
+
+      <div class="tarj acento">
+        <h3>historical_cases <span class="n">60 · crece con cada caso avalado</span></h3>
+        <p>Un caso no se embebe solo: se le pega su transacción, porque el precedente sin su contexto no se parece a nada.</p>
+        <div class="bloque"><span class="et">Caso CB-0038: contracargo por</span> cargo duplicado
+<span class="et">Resolucion:</span> Aprobado <span class="et">en</span> PayPal Store, <span class="et">Credito Visa,
+MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
+<span class="et">Observaciones:</span> Error tecnico del procesador</div>
+        <dl>
+          <dt>carga útil</dt><dd>el caso entero + comercio, monto, método de pago y país de su transacción</dd>
+          <dt>filtrable</dt><dd><code>payment_method</code> tiene índice propio en Qdrant</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="contra">
+      <h3>Lo que deliberadamente no se indexa</h3>
+      <p>
+        <b>Transacciones y logs.</b> A una transacción se llega por su identificador exacto, y los
+        logs se traen completos por <code>transaction_id</code>. Buscar «la transacción más parecida
+        a TXN-00051» no responde ninguna pregunta que alguien tenga: embeberlas habría sido
+        gastar en un índice que nadie consulta. El RAG se reserva para lo que sí tiene vecinos
+        semánticos — una política escrita en prosa, un caso resuelto por otra persona.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── 02 ────────────────────────────────────────────── -->
+  <section class="etapa">
+    <div class="etapa-cab">
+      <span class="etapa-n">02</span><span class="etapa-t">La consulta la arma el código</span>
+      <span class="etapa-d"><code>rag/retriever.py</code> · QueryBuilder</span>
+    </div>
+    <p>
+      No hay un modelo escribiendo la consulta. Hay una plantilla con los campos de la transacción
+      y <b>cuatro reglas de enriquecimiento</b> que agregan vocabulario cuando la transacción entra
+      en un caso conocido. La consecuencia es que <b>la misma transacción produce siempre la misma
+      búsqueda</b>: cero costo, cero latencia, y un auditor puede reconstruir qué se buscó.
+    </p>
+
+    <div class="paso">
+      <div class="paso-q">Plantilla base<span class="sub">for_policies()</span></div>
+      <div class="paso-cuerpo">
+        <div class="bloque"><span class="et">contracargo {motivo}, {canal}, {método}, score {n}/100, {país}</span></div>
+      </div>
+    </div>
+
+    <div class="paso">
+      <div class="paso-q">Las cuatro reglas<span class="sub">y cuál disparó con TXN-00051</span></div>
+      <div class="paso-cuerpo">
+        <div class="bloque"><span class="on">✓ método = Cripto        → «criptomonedas no reversible blocker»</span>
+<span class="on">✓ score &lt; 30            → «transaccion de alto riesgo fraude score bajo»</span>
+<span class="off">✗ país fuera de LATAM   → «internacional fuera LATAM plazo extendido»</span>
+<span class="off">✗ canal = IVR           → «limite monto IVR»</span></div>
+        <p>
+          COL es LATAM y el canal es POS, así que esas dos no aportan nada. Las otras dos sí: sin
+          ellas, la consulta no dice en ninguna parte que este pago sea irreversible, y
+          <code>POL-EXC-003</code> —la única política que puede emitir un veredicto bloqueante—
+          compite por similitud con las otras dieciséis sin ninguna ventaja.
+        </p>
+      </div>
+    </div>
+
+    <div class="paso">
+      <div class="paso-q">Lo que sale<span class="sub">consulta de políticas</span></div>
+      <div class="paso-cuerpo">
+        <div class="bloque">contracargo No reconoce la compra, POS, Cripto, score 8/100, COL <span class="on">criptomonedas no reversible blocker transaccion de alto riesgo fraude score bajo</span></div>
+        <p>
+          Esta cadena viaja de vuelta en la respuesta como <code>query_used</code>. Devolver la
+          consulta y no sólo los resultados es lo que hace la búsqueda auditable: se puede repetir
+          a mano.
+        </p>
+      </div>
+    </div>
+
+    <div class="paso">
+      <div class="paso-q">Y en paralelo<span class="sub">for_similar_cases()</span></div>
+      <div class="paso-cuerpo">
+        <div class="bloque">Contracargo en Airbnb por USD 2095.90, Cripto, COL, score 8, motivo: No reconoce la compra</div>
+        <p>
+          Otra plantilla, porque se busca otra cosa. La de políticas describe una <em>situación</em>
+          contra un corpus normativo; la de casos describe una <em>transacción</em> contra otras
+          transacciones. Compartir plantilla habría sido más corto y peor.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 03 ────────────────────────────────────────────── -->
+  <section class="etapa">
+    <div class="etapa-cab">
+      <span class="etapa-n">03</span><span class="etapa-t">Un solo viaje a Voyage</span>
+      <span class="etapa-d"><code>GET /api/policies/search</code> · <code>GET /api/cases/similar</code></span>
+    </div>
+    <p>
+      Las dos consultas se embeben en <b>una sola llamada</b> a la API de embeddings
+      (<code>_embed_batch</code>). No es una micro-optimización: en el free tier de Voyage, cada
+      viaje cuenta, y las dos búsquedas siempre ocurren juntas. La alternativa —dos llamadas
+      independientes— daba exactamente el mismo resultado por el doble de viajes, con el riesgo
+      añadido de que las dos rutas divergieran con el tiempo.
+    </p>
+    <div class="paso">
+      <div class="paso-q">2 textos → 2 vectores<span class="sub">1024 dimensiones cada uno</span></div>
+      <div class="paso-cuerpo">
+        <div class="bloque">["contracargo No reconoce la compra, POS, Cripto…",
+ "Contracargo en Airbnb por USD 2095.90, Cripto…"]
+        <span class="et">↓ una petición</span>
+[[0.021, -0.118, …], [-0.004, 0.267, …]]</div>
+        <p>
+          <code>voyage-multilingual-2</code> se eligió por rendimiento en español: el dataset, las
+          políticas y los logs están en español, y traducir para embeber habría metido una pérdida
+          en el único punto de la cadena donde el sentido es todo lo que hay.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 04 ────────────────────────────────────────────── -->
+  <section class="etapa">
+    <div class="etapa-cab">
+      <span class="etapa-n">04</span><span class="etapa-t">Dos búsquedas, dos reglas opuestas</span>
+      <span class="etapa-d">Corpus distintos piden estrategias distintas</span>
+    </div>
+    <p>
+      Acá está la decisión menos obvia del RAG: <b>las dos colecciones se consultan con criterios
+      contrarios</b>. Sobre las políticas se recupera todo y filtra el modelo; sobre los
+      precedentes se filtra fuerte y el modelo recibe pocos. La razón es el costo del error en
+      cada lado — omitir una política es incumplir una norma; traer un precedente flojo es
+      empujar al modelo a razonar sobre algo que no se parece.
+    </p>
+
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr><th></th><th class="col-pol">policies</th><th class="col-cas">historical_cases</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>cuántos</td>
+            <td>todos los indexados — se cuenta la colección en cada búsqueda</td>
+            <td>los 5 mejores</td>
+          </tr>
+          <tr>
+            <td>umbral</td>
+            <td><code>0.0</code> — sin piso</td>
+            <td><code>0.40</code> de coseno</td>
+          </tr>
+          <tr>
+            <td>filtro</td>
+            <td>ninguno</td>
+            <td>blando por <code>payment_method</code>: <code>should</code>, no <code>must</code> — prefiere, no exige</td>
+          </tr>
+          <tr>
+            <td>reordenado</td>
+            <td>no hace falta: entran todos</td>
+            <td>+0.05 mismo método · +0.03 mismo país · tope 1.0</td>
+          </tr>
+          <tr>
+            <td>quién filtra</td>
+            <td>el modelo, leyendo cada política y emitiendo <code>NOT_APPLICABLE</code></td>
+            <td>el código, antes de que el modelo vea nada</td>
+          </tr>
+          <tr>
+            <td>por qué</td>
+            <td>corpus chico y normativo. Un umbral de coseno puede dejar afuera una política
+                relevante escrita con otro vocabulario, y esa omisión no se ve: no hay error, hay
+                una regla que nunca se evaluó</td>
+            <td>corpus abierto y creciente. Un precedente con similitud baja no es un precedente:
+                es ruido que el modelo va a citar igual</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="paso" style="margin-top:16px">
+      <div class="paso-q">El límite se cuenta, no se asume<span class="sub">_total_politicas()</span></div>
+      <div class="paso-cuerpo">
+        <p>
+          El tope de recuperación era la constante <code>17</code> —las políticas del dataset—.
+          Cargar la número 18 por <code>POST /api/policies/</code> la indexaba bien y la listaba
+          bien, pero <b>la peor rankeada de las 18 desaparecía del contexto del modelo sin log ni
+          aviso</b>: el sistema seguía funcionando y evaluaba una política menos. Ahora el límite
+          sale de contar la colección en cada búsqueda, que sobre un corpus de este tamaño es
+          barato y es correcto para cualquier cantidad.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 05 ────────────────────────────────────────────── -->
+  <section class="etapa">
+    <div class="etapa-cab">
+      <span class="etapa-n">05</span><span class="etapa-t">El contexto que ve el modelo</span>
+      <span class="etapa-d"><code>rag/formatter.py</code> · fuente única del formato</span>
+    </div>
+    <p>
+      Los resultados no van crudos al prompt. Se formatean una vez, en un módulo aparte, y de ahí
+      salen para los dos usos: el prompt y el resumen determinista del informe. Estaban duplicados
+      y llegaron a divergir — el mismo precedente se describía distinto según quién lo mirara.
+    </p>
+
+    <div class="rejilla">
+      <div class="tarj acento">
+        <h3>Políticas <span class="n">→ v1_policy_eval · Haiku</span></h3>
+        <p>Secciones numeradas en Markdown, con su código y su referencia. El modelo emite un veredicto por cada una: PASS, FAIL, WARNING, BLOCKER o NOT_APPLICABLE, siempre citando el código.</p>
+        <div class="bloque"><span class="et">### 1. POL-EXC-003 — Transacciones en cripto</span>
+Las transacciones realizadas con criptomonedas…
+<span class="et">Referencia: Manual de Excepciones v1.0, Sec. 4</span></div>
+      </div>
+
+      <div class="tarj acento">
+        <h3>Precedentes <span class="n">→ v1_resolution · Sonnet</span></h3>
+        <p>Antes de formatear, cada caso pasa por <code>annotate_by_motivo</code>: seis grupos de sinónimos deciden si comparte patrón con el caso actual. Los que matchean van primero y llevan etiqueta.</p>
+        <div class="bloque"><span class="on">[MOTIVO SIMILAR]</span> CB-0038 · cargo duplicado
+  aprobado en 2d · <span class="on">[MISMO MERCHANT]</span> PayPal Store
+  <span class="et">Relevancia: mismo patrón de cargo duplicado
+  (match por observaciones)</span></div>
+        <p>
+          La etiqueta dice también <b>de dónde</b> vino el match — del campo motivo o de las
+          observaciones —, porque un match indirecto vale menos y conviene poder decirlo en vez de
+          presentarlos todos como equivalentes.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 06 ────────────────────────────────────────────── -->
+  <section class="etapa">
+    <div class="etapa-cab">
+      <span class="etapa-n">06</span><span class="etapa-t">La vuelta: el índice cambia solo</span>
+      <span class="etapa-d">Sin deploy, sin tocar código</span>
+    </div>
+    <p>
+      Un RAG que sólo se lee es un buscador. Lo que lo vuelve la columna vertebral del sistema es
+      que <b>el índice se escribe en caliente por dos caminos</b>, y ninguno de los dos pasa por un
+      release.
+    </p>
+
+    <div class="rejilla">
+      <div class="tarj vuelta">
+        <h3>Editar una política</h3>
+        <p><code>PUT /api/policies/{código}</code> guarda en SQLite y reindexa el punto en Qdrant en la misma petición. El identificador del punto es un <code>uuid5</code> del código, así que la reescritura es idempotente: no quedan duplicados ni fantasmas.</p>
+        <p><b>Las políticas son datos, no código.</b> Cambiar un umbral es una llamada HTTP, no un deploy — y por eso la evaluación también tiene que ser del modelo y no de un <code>if</code> en Python: si la regla es editable, quien la aplica tiene que poder leerla.</p>
+      </div>
+
+      <div class="tarj vuelta">
+        <h3>Cerrar un caso</h3>
+        <p>Cuando un analista avala una resolución y el Juez la puntuó <b>8.0 o más</b>, el caso se indexa como precedente y queda disponible para la siguiente investigación.</p>
+        <p>Las dos condiciones son necesarias. Sin el aval humano, un caso que nadie revisó se convertiría en el ejemplo con el que se resuelve el próximo; sin el umbral del Juez, el corpus se llenaría de resoluciones mediocres que después se citan como precedente.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── cierre ────────────────────────────────────────── -->
+  <div class="cierre">
+    <div>
+      <h3>Unir el RAG con la base de datos</h3>
+      <p>
+        Es el patrón que pedía la consigna, y acá la división es literal: SQLite responde
+        <em>qué pasó</em> —esta transacción, estos logs, este historial— y Qdrant responde
+        <em>qué se hace con esto</em> —qué normas aplican, qué se decidió antes en casos
+        parecidos—. Ninguna de las dos sola alcanza para justificar una resolución.
+      </p>
+    </div>
+    <div>
+      <h3>Por qué nada de esto usa un modelo</h3>
+      <p>
+        Armar la consulta, elegir cuántos resultados traer y ordenarlos son decisiones con
+        respuesta correcta conocida. Delegarlas a un modelo agrega costo, latencia y
+        variabilidad a cambio de nada. El modelo entra donde no hay respuesta mecánica:
+        interpretar una política y redactar la justificación.
+      </p>
+    </div>
+    <div>
+      <h3>Dónde está el detalle</h3>
+      <p>
+        <code>docs/rag_explanation.md</code> desarrolla cada decisión con sus alternativas
+        descartadas. El código vive en <code>api/app/rag/</code>: <code>indexer.py</code>,
+        <code>retriever.py</code>, <code>formatter.py</code>, <code>embedder.py</code> y
+        <code>updater.py</code>.
+      </p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

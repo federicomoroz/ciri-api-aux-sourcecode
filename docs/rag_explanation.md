@@ -1,5 +1,9 @@
 # Estrategia RAG — Agente de Contracargos CIRI
 
+> **Version visual:** el diagrama **«el RAG»** (`docs/diagrams/rag.html`, en la raiz de la
+> entrega) recorre esta misma cadena con un caso real del dataset y los textos que produce el
+> sistema. Se abre en cualquier navegador, sin instalar nada.
+
 Este documento explica la estrategia de Retrieval-Augmented Generation (RAG) del agente: que se indexa en Qdrant, que no se indexa y por que, como funciona la recuperacion semantica, y como el vector store se mantiene actualizado mientras el sistema opera.
 
 ---

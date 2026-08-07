@@ -70,6 +70,8 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 **El flujo completo, navegable:** el diagrama **«el circuito completo»**, tambien en la raiz, es una pagina autocontenida con los 29 pasos en orden de ejecucion, cada conexion trazada, el endpoint que llama cada nodo y una ficha explicativa al tocarlos. Se abre en cualquier navegador, sin conexion.
 
+**El RAG, de punta a punta:** el diagrama **«el RAG»**, tambien en la raiz, sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
+
 El workflow contiene **39 nodos (33 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 
 ```
