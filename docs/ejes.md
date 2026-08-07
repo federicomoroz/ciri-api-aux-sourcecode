@@ -84,7 +84,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 | Prompt | Versión | Modelo |
 |---|---|---|
 | `v1_policy_eval.py` | v1.2 | Haiku 4.5 |
-| `v1_resolution.py` | v3.0 | Sonnet |
+| `v1_resolution.py` | v3.1 | Sonnet |
 | `v1_judge.py` | v2.0 | Sonnet |
 
 ---
@@ -94,7 +94,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 | Sub-eje | Resolución |
 |---|---|
 | Clasificación | `risk_level` ∈ BLOCKER / HIGH / MEDIUM / LOW, calculado por código (`resolution.py::_determine_outcome`), no por el LLM |
-| Derivación | `Switch — Nivel de Riesgo` en n8n: HIGH va a un `Wait` con formulario que espera la decisión de un analista hasta 24 h; el resto se resuelve solo |
+| Derivación | `Switch — Derivación` en n8n enruta por **`requires_hitl`**, que es lo que decidió la API — no por el nivel de riesgo. Un caso MEDIUM que pide analista frenaba igual antes de llegar al Switch y salía cerrado; ahora frena en el `Wait`, que espera hasta 24 h. El nivel de riesgo dice cuán grave es; quién decide si hace falta una persona es `requires_hitl` |
 | Reportes | `POST /api/reports/html` — Jinja2, 9 secciones, formulario HITL condicional. Ejemplos en `docs/HTML_Output_Examples/` |
 | Alertas | Dos severidades con dos caminos. **Fallas** (`ERROR`): los tres workflows propagan a `workflow_ciri_errors.json` — el principal desde 3 nodos `Stop and Error`, el formulario desde 1 — que registra la alerta y avisa por mail. **Entradas rechazadas** (`WARN`): el formulario las registra directo, sin marcar la ejecución como fallida ni mandar mail, porque un tipeo no es una falla. `GET /api/alerts/` lista todo |
 
@@ -118,7 +118,7 @@ del informe, el webhook devuelve error — nunca un 200 con el cuerpo vacío.
 | Sub-eje | Resolución |
 |---|---|
 | Patrones de error | `analyzer.py::detect_error_patterns` sobre los 150 logs — 8 patrones nombrados (`ErrorPattern`): timeout sistemático del comercio, problema de conectividad, bloqueo por fraude, cargo duplicado, violación de SLA, falla de integración, pago interrumpido por sesión caída, anomalía geográfica |
-| Comercios problemáticos | `analyzer.py::merchant_risk_profile` — `cb_ratio`, volumen, flags (`suspended_merchant`, `high_cb_ratio`) |
+| Comercios problemáticos | `analyzer.py::merchant_risk_profile` — `cb_ratio`, volumen, flags (`suspended_merchant`, `high_cb_ratio`). **El umbral es relativo a la línea base del corpus**, no un 2% absoluto: sobre una muestra de disputas donde 60 de 100 transacciones tienen contracargo, un umbral de industria marca los quince comercios y no distingue nada. Con la línea base quedan 2 suspendidos, 4 con ratio alto y 9 limpios |
 | Clientes con señales | `analyzer.py::client_flags` — reincidencia, anomalía geográfica |
 | Inconsistencias de política | El LLM evalúa cada política recuperada y emite veredicto PASS / WARNING / FAIL / BLOCKER con cita; los conflictos quedan visibles en el reporte |
 

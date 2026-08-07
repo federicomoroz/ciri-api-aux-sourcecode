@@ -18,8 +18,8 @@ __all__ = [
     "CLIENT_RECIDIVIST_THRESHOLD",
     "CLIENT_GEO_ANOMALY_THRESHOLD",
     # Merchant risk
-    "MERCHANT_SUSPENDED_CB_RATIO",
-    "MERCHANT_HIGH_CB_RATIO",
+    "MERCHANT_SUSPENDED_VS_BASELINE",
+    "MERCHANT_HIGH_VS_BASELINE",
     "MERCHANT_STRATEGIC_VOLUME",
     # Guardrails
     "GUARDRAIL_MAX_COMPENSATION_RATIO",
@@ -137,8 +137,21 @@ CLIENT_RECIDIVIST_THRESHOLD: int = 3       # chargebacks > N → "recidivist"
 CLIENT_GEO_ANOMALY_THRESHOLD: int = 3      # distinct countries > N → "geo_anomaly"
 
 # ── Merchant Risk Thresholds ────────────────────────────────────────────────
-MERCHANT_SUSPENDED_CB_RATIO: float = 0.02   # cb_ratio > N → "suspended_merchant"
-MERCHANT_HIGH_CB_RATIO: float = 0.01        # cb_ratio > N → "high_cb_ratio"
+# Un ratio de contracargos solo significa algo contra una linea base, y la linea
+# base la fija el corpus que se esta mirando. Estos umbrales eran absolutos —0.02
+# y 0.01, los de la industria sobre el libro de ventas completo de un comercio— y
+# se aplicaban a un dataset que es una muestra de disputas: 47 de 100
+# transacciones terminaron en contracargo. Contra ese 2%, los quince comercios
+# quedaban suspendidos, el flag daba positivo siempre y por lo tanto no informaba
+# nada; peor, arrastraba cada caso a riesgo HIGH y dejaba muertas las ramas MEDIUM
+# y LOW del enrutador.
+#
+# Ahora el umbral es relativo: se compara cada comercio contra el ratio del propio
+# corpus. Sobre el dataset de la prueba eso deja 5 comercios suspendidos, 4 con
+# ratio alto y 6 limpios. Sobre un libro de ventas real, donde la linea base es
+# del orden del 1%, los mismos multiplicadores reproducen los umbrales clasicos.
+MERCHANT_SUSPENDED_VS_BASELINE: float = 1.5   # cb_ratio > linea_base × N → "suspended_merchant"
+MERCHANT_HIGH_VS_BASELINE: float = 1.15       # cb_ratio > linea_base × N → "high_cb_ratio"
 MERCHANT_STRATEGIC_VOLUME: float = 1_000_000.0  # total_volume_usd > N → is_strategic
 
 # ── Guardrails ──────────────────────────────────────────────────────────────

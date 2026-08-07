@@ -174,3 +174,57 @@ class TestManejoDeErrores:
         ]
         assert not rotas, rotas
         assert not [o for o in wf["connections"] if o not in nombres]
+
+
+class TestElContextoLlegaEntero:
+    """Enumerar campos a mano en un nodo HTTP es una lista que se desincroniza.
+
+    Regresion: `Compilar Contexto` empezo a incluir `sla` y `Sintetizar
+    Resolucion` siguio mandando los diez `bodyParameters` de siempre. La API
+    recibia peticiones sin SLA, la compensacion nunca se aplicaba por n8n y si
+    por el pipeline directo — los dos caminos divergian justo en el unico campo
+    con consecuencia monetaria.
+    """
+
+    def test_la_resolucion_recibe_el_contexto_compilado_completo(self):
+        n = nodo(cargar(ORQUESTADOR), "Sintetizar Resolución")
+        assert n["parameters"].get("specifyBody") == "json", (
+            "con bodyParameters hay que enumerar los campos, y esa lista ya se desincronizo"
+        )
+        assert "JSON.stringify($json)" in n["parameters"]["jsonBody"]
+
+    def test_el_sla_se_pide_con_el_id_de_la_transaccion(self):
+        """Las fechas del reclamo las resuelve la API, no el canvas."""
+        n = nodo(cargar(ORQUESTADOR), "Verificar SLA")
+        assert "transaction_id" in n["parameters"]["jsonBody"]
+
+    def test_compilar_contexto_incluye_el_sla(self):
+        codigo = nodo(cargar(ORQUESTADOR), "Compilar Contexto")["parameters"]["jsCode"]
+        assert "sla:" in codigo
+
+
+class TestDerivacion:
+    def test_el_enrutador_mira_requires_hitl(self):
+        """Regresion: enrutaba por `risk_level`.
+
+        Un caso MEDIUM con `requires_hitl=true` —un solo FAIL sin fraude severo—
+        salia por la rama que cierra el caso y respondia 200 sin que ningun
+        analista lo viera. El nivel de riesgo dice cuan grave es; quien dice si
+        hace falta una persona es `requires_hitl`.
+        """
+        wf = cargar(ORQUESTADOR)
+        sw = nodo(wf, "Switch — Derivación")
+        primera = sw["parameters"]["rules"]["values"][0]["conditions"]["conditions"][0]
+        assert "requires_hitl" in primera["leftValue"]
+        assert salidas(wf, "Switch — Derivación")[0] == ["Wait — Aprobación HITL"]
+
+    @pytest.mark.parametrize("archivo", TODOS)
+    def test_toda_expresion_de_url_empieza_con_igual(self, archivo):
+        """Sin el `=`, n8n manda `{{ ... }}` literal y la peticion falla."""
+        malas = [
+            n["name"] for n in cargar(archivo)["nodes"]
+            if isinstance(n["parameters"].get("url"), str)
+            and "{{" in n["parameters"]["url"]
+            and not n["parameters"]["url"].startswith("=")
+        ]
+        assert not malas, f"urls que n8n no va a evaluar: {malas}"

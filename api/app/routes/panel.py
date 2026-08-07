@@ -27,6 +27,7 @@ from ..dependencies import (
     get_settings,
 )
 from ..domain.constants import (
+    FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     LLM_BAD_KEY_MARKER,
     LLM_CREDIT_EXHAUSTED_MARKER,
     N8N_HEALTHZ_PATH,
@@ -34,6 +35,7 @@ from ..domain.constants import (
     N8N_TIMEOUT_S,
     N8N_WEBHOOK_PATH,
     N8N_WEBHOOK_TEST_PATH,
+    RISK_FRAUD_SEVERE,
 )
 from ..domain.models import AnalyzeRequest
 from ..llm.client import AnthropicClient
@@ -325,9 +327,21 @@ def _emitir_demo(req: AnalyzeRequest, settings: Settings, pipeline=None):
 def serve_panel(
     report_gen: ReportGenerator = Depends(get_report_generator),
 ) -> HTMLResponse:
-    """Serve the interactive test panel page."""
+    """Serve the interactive test panel page.
+
+    Los umbrales del score antifraude se inyectan desde `domain/constants.py`:
+    escritos a mano en el JavaScript ya se habian desincronizado —el panel los
+    trataba como una escala 0-10 donde alto es malo, cuando el score es 0-100 y
+    alto significa seguro—, y pintaba de rojo las transacciones mas confiables.
+    """
     tmpl = report_gen.env.get_template("test_panel.html")
-    return HTMLResponse(content=tmpl.render(), status_code=200)
+    return HTMLResponse(
+        content=tmpl.render(
+            score_severo=RISK_FRAUD_SEVERE,
+            score_riesgoso=FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+        ),
+        status_code=200,
+    )
 
 
 @router.get("/api/panel/server-key-status")

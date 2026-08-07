@@ -1670,9 +1670,9 @@
             </select>
             <select id="filter-score" onchange="applyFilters()">
               <option value="">Score: Todos</option>
-              <option value="high">Alto (7-10)</option>
-              <option value="medium">Medio (4-6)</option>
-              <option value="low">Bajo (1-3)</option>
+              <option value="high">Riesgo alto (score &lt; {{ score_severo }})</option>
+              <option value="medium">Riesgo medio ({{ score_severo }}–{{ score_riesgoso - 1 }})</option>
+              <option value="low">Riesgo bajo ({{ score_riesgoso }}+)</option>
             </select>
           </div>
           <div class="filter-chips" id="filter-chips"></div>
@@ -2037,6 +2037,11 @@ const STEP_INDEX = {
   resolving: 8, resolved: 8, judging: 9, judged: 9, done: 10,
 };
 
+// Umbrales del score antifraude, inyectados desde domain/constants.py.
+// Escritos a mano acá ya se habían desincronizado del backend.
+const SCORE_SEVERO   = {{ score_severo }};    // por debajo: riesgo alto
+const SCORE_RIESGOSO = {{ score_riesgoso }};  // por debajo: riesgo medio
+
 // ─── STATE ────────────────────────────────────────────────
 let selectedIdx    = null;
 let isCustom       = false;
@@ -2069,7 +2074,8 @@ function renderTransactionDropdown(txns) {
   sel.innerHTML = '<option value="">— Seleccionar transaccion —</option>';
   txns.forEach(tx => {
     const score  = tx.fraud_score;
-    const flag   = score >= 7 ? '[!]' : score >= 4 ? '[?]' : '[ok]';
+    // Score bajo = riesgo alto. Es 0-100 y mide confianza, no peligro.
+    const flag   = score < SCORE_SEVERO ? '[!]' : score < SCORE_RIESGOSO ? '[?]' : '[ok]';
     const opt    = document.createElement('option');
     opt.value    = tx.id;
     opt.textContent = `${tx.id} | ${tx.merchant} | $${Number(tx.amount_usd).toFixed(0)} | ${tx.country} | Score ${score} ${flag}`;
@@ -2114,9 +2120,9 @@ function applyFilters() {
   if (score) {
     filtered = filtered.filter(t => {
       const s = t.fraud_score;
-      if (score === 'high')   return s >= 7;
-      if (score === 'medium') return s >= 4 && s <= 6;
-      if (score === 'low')    return s >= 1 && s <= 3;
+      if (score === 'high')   return s < SCORE_SEVERO;
+      if (score === 'medium') return s >= SCORE_SEVERO && s < SCORE_RIESGOSO;
+      if (score === 'low')    return s >= SCORE_RIESGOSO;
       return true;
     });
   }
@@ -2142,7 +2148,9 @@ function renderFilterChips() {
     const val = $(f.id).value;
     if (!val) return;
     const display = f.id === 'filter-score'
-      ? (val === 'high' ? 'Alto (7-10)' : val === 'medium' ? 'Medio (4-6)' : 'Bajo (1-3)')
+      ? (val === 'high' ? `Riesgo alto (< ${SCORE_SEVERO})`
+         : val === 'medium' ? `Riesgo medio (${SCORE_SEVERO}–${SCORE_RIESGOSO - 1})`
+         : `Riesgo bajo (${SCORE_RIESGOSO}+)`)
       : val;
     const chip = document.createElement('span');
     chip.className = 'filter-chip';
@@ -2180,8 +2188,9 @@ function onTxnSelect() {
     $('pv-country').textContent  = `${tx.country} · ${tx.channel}`;
     const score = tx.fraud_score;
     const scoreEl = $('pv-score');
-    scoreEl.textContent = score + '/10';
-    scoreEl.className   = 'txn-preview-val ' + (score >= 7 ? 'score-high' : score >= 4 ? 'score-medium' : 'score-low');
+    scoreEl.textContent = score + '/100';
+    scoreEl.className   = 'txn-preview-val ' + (
+      score < SCORE_SEVERO ? 'score-high' : score < SCORE_RIESGOSO ? 'score-medium' : 'score-low');
     $('pv-method').textContent = tx.payment_method;
     $('pv-status').textContent = tx.status;
     $('txn-preview').style.display = 'grid';

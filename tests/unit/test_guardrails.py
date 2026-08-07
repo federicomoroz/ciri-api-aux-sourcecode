@@ -506,3 +506,36 @@ class TestDetermineCompensation:
     def test_sin_sla_no_determina_nada(self):
         assert ResolutionService._determine_compensation({}, self.TX) == {}
         assert ResolutionService._determine_compensation({"days_elapsed": 3}, self.TX) == {}
+
+
+class TestSinVeredictosFallaCerrado:
+    """«Ninguna politica fallo» y «no se evaluo ninguna politica» no son lo mismo.
+
+    Regresion: `_determine_outcome([])` devolvia APPROVE con `requires_hitl=False`.
+    Se llega ahi por dos caminos reales —Qdrant caido, que el nodo `Buscar
+    Politicas` deja pasar con `continueRegularOutput`, o un JSON invalido del
+    modelo, que `validate_llm_output` degrada a lista vacia—, o sea que una falla
+    de infraestructura aprobaba contracargos sola.
+    """
+
+    def test_sin_veredictos_no_aprueba(self):
+        r = ResolutionService._determine_outcome([], {"fraud_score": 8})
+        assert r["recommended_action"] != ResolutionOutcome.APPROVE
+        assert r["recommended_action"] == ResolutionOutcome.PENDING_HITL
+
+    def test_sin_veredictos_pide_una_persona(self):
+        r = ResolutionService._determine_outcome([], {"fraud_score": 90})
+        assert r["requires_hitl"] is True
+        assert "politica" in r["hitl_reason"].lower()
+
+    def test_el_motivo_del_riesgo_dice_que_no_hubo_evidencia(self):
+        r = ResolutionService._determine_outcome([], {})
+        assert r["risk_level"] == RiskLevel.HIGH
+        assert "evidencia" in r["risk_reason"].lower()
+
+    def test_con_un_solo_pass_si_puede_aprobar(self):
+        """La rama nueva no debe tragarse el caso normal."""
+        r = ResolutionService._determine_outcome(
+            [{"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS}], {"fraud_score": 90},
+        )
+        assert r["recommended_action"] == ResolutionOutcome.APPROVE

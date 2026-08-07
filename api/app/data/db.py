@@ -98,6 +98,32 @@ class Database:
 
     # --- Merchant stats ---
 
+    def get_corpus_cb_ratio(self) -> float:
+        """Contracargos sobre transacciones en todo el corpus.
+
+        Es la referencia contra la que se juzga a cada comercio. Se consulta en
+        vez de fijarse: si manana se cargan mas transacciones, la linea base se
+        mueve sola y los flags siguen significando lo mismo.
+        """
+        totales = self._uno(
+            "SELECT (SELECT COUNT(*) FROM cases) AS cbs, "
+            "(SELECT COUNT(*) FROM transactions) AS txs"
+        ) or {}
+        txs = totales.get("txs") or 0
+        return (totales.get("cbs") or 0) / txs if txs else 0.0
+
+    def get_case_for_transaction(self, txn_id: str) -> dict | None:
+        """El caso historico de esa transaccion, si existe.
+
+        De aca salen las fechas reales de apertura y cierre del reclamo, que son
+        las que el SLA tiene que medir. La fecha de la transaccion es cuando se
+        compro, no cuando se abrio la disputa.
+        """
+        return self._uno(
+            "SELECT * FROM cases WHERE transaction_id = ? ORDER BY open_date LIMIT 1",
+            (txn_id,),
+        )
+
     def get_merchant_stats(self, merchant: str) -> dict:
         totales = self._uno(
             "SELECT COUNT(*) as cnt, SUM(amount_usd) as vol, AVG(amount_usd) as avg "

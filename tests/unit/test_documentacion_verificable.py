@@ -16,7 +16,14 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[2]
 INFORMES = RAIZ / "data" / "informes_demo"
 DOCS = RAIZ / "docs"
-DOCUMENTOS = [RAIZ / "README.md", *sorted(DOCS.glob("*.md"))]
+# El build renombra README.md a "1 — LEEME.md" para que quede primero al abrir
+# la carpeta. Buscarlo por un solo nombre hacia que estos tests fallaran justo
+# sobre el paquete entregado, que es donde mas importaba que corrieran.
+LEEME = next(
+    (f for f in (RAIZ / "README.md", RAIZ / "1 — LEEME.md") if f.is_file()),
+    RAIZ / "README.md",
+)
+DOCUMENTOS = [LEEME, *sorted(DOCS.glob("*.md"))]
 
 
 def scores_reales() -> list[float]:
@@ -34,9 +41,9 @@ def promedio() -> float:
 
 
 def test_el_badge_del_readme_coincide_con_los_informes(promedio):
-    readme = (RAIZ / "README.md").read_text(encoding="utf-8")
+    readme = LEEME.read_text(encoding="utf-8")
     m = re.search(r"Judge%20Score-([0-9.]+)%2F10", readme)
-    assert m, "el README perdio el badge del Judge score"
+    assert m, f"{LEEME.name} perdio el badge del Judge score"
     assert float(m.group(1)) == pytest.approx(promedio, abs=0.05), (
         f"el badge dice {m.group(1)} y los informes del paquete promedian {promedio}"
     )
@@ -73,9 +80,9 @@ def test_cada_escenario_documentado_tiene_su_informe():
 
 def test_el_conteo_de_tests_del_readme_es_el_real():
     """Un badge de tests que nadie recalcula envejece en la primera semana."""
-    readme = (RAIZ / "README.md").read_text(encoding="utf-8")
+    readme = LEEME.read_text(encoding="utf-8")
     m = re.search(r"tests-(\d+)%20passed", readme)
-    assert m, "el README perdio el badge de tests"
+    assert m, f"{LEEME.name} perdio el badge de tests"
     declarados = int(m.group(1))
 
     archivos = [

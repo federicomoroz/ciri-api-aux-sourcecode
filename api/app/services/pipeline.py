@@ -71,12 +71,27 @@ class PipelineService:
             # El pipeline directo espeja al orquestador: si n8n consulta el SLA
             # antes de sintetizar, aca tambien, o los dos caminos no dan lo mismo.
             executor.submit(
-                self.analyzer.check_sla,
-                case_open_date=str(tx.get("date", "")),
-                country=country,
-                cliente_vip=req.cliente_vip,
+                self._sla_del_caso, req.transaction_id, str(tx.get("date", "")),
+                country, req.cliente_vip,
             ): "sla",
         }
+
+    def _sla_del_caso(
+        self, txn_id: str, fecha_tx: str, country: str, cliente_vip: bool,
+    ) -> dict:
+        """El SLA se mide sobre el reclamo, no sobre la compra.
+
+        Misma resolucion de fechas que hace `POST /api/sla/check`: si hay caso
+        historico manda su apertura y, si esta cerrado, su cierre. Los dos
+        caminos tienen que contar los mismos dias.
+        """
+        caso = self.db.get_case_for_transaction(txn_id) or {}
+        return self.analyzer.check_sla(
+            case_open_date=caso.get("open_date") or fecha_tx,
+            country=country,
+            cliente_vip=cliente_vip,
+            case_close_date=caso.get("close_date") or None,
+        )
 
     def _judge(self, ctx: CaseContext, resolution: dict) -> dict:
         """Run judge LLM call."""

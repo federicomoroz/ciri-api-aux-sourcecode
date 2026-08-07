@@ -457,7 +457,28 @@ class ResolutionService:
         - Algun FAIL (sin BLOCKER) → PENDING_HITL + riesgo HIGH o MEDIUM
         - Algun requires_human_review → PENDING_HITL (red de seguridad)
         - Todo PASS/WARNING → APPROVE + riesgo LOW o MEDIUM
+        - Sin veredictos → PENDING_HITL: no hay evidencia de nada
         """
+        if not policy_verdicts:
+            # Falla cerrado. "Ninguna politica fallo" y "no se evaluo ninguna
+            # politica" no son lo mismo, y sin esta rama daban lo mismo: APPROVE.
+            # Se llega aca por dos caminos reales —Qdrant caido, que el nodo
+            # `Buscar Politicas` deja pasar con `continueRegularOutput`, o un JSON
+            # invalido del modelo, que `validate_llm_output` degrada a lista
+            # vacia—, o sea que una falla de infraestructura terminaba aprobando
+            # contracargos sola.
+            logger.error("Sin veredictos de politica: se deriva a revision humana")
+            return {
+                "recommended_action": ResolutionOutcome.PENDING_HITL,
+                "risk_level": RiskLevel.HIGH,
+                "risk_reason": "No se pudo evaluar ninguna politica: sin evidencia no hay decision",
+                "requires_hitl": True,
+                "hitl_reason": (
+                    "No se evaluo ninguna politica — revisar si el vector store respondio "
+                    "y si la evaluacion del modelo devolvio un JSON valido"
+                ),
+            }
+
         has_blocker = any(v.get("verdict") == VerdictType.BLOCKER for v in policy_verdicts)
         fail_count = len(
             ResolutionService._codigos(policy_verdicts, VerdictType.FAIL, VerdictType.BLOCKER)

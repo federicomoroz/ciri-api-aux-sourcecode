@@ -60,6 +60,10 @@ class SLACheckRequest(BaseModel):
     case_open_date: str
     country: str
     cliente_vip: bool = False
+    # Con el id, la ruta busca el caso historico y usa SUS fechas: la apertura
+    # real del reclamo y, si esta cerrado, su cierre. Sin el id se mide desde
+    # `case_open_date` hasta hoy, que es el caso de un reclamo recien abierto.
+    transaction_id: str | None = None
 
 
 class PolicyCreate(BaseModel):

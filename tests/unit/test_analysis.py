@@ -9,7 +9,7 @@ import pytest
 
 from api.app.analysis.analyzer import Analyzer
 from api.app.data.db import Database
-from api.app.domain.enums import Severity
+from api.app.domain.enums import MerchantFlag, Severity
 
 
 @pytest.fixture
@@ -266,3 +266,98 @@ class TestPatronesEnElResumenDeLogs:
         from api.app.services.resolution import ResolutionService
 
         assert "Total: 0 eventos" in ResolutionService._summarize_logs([])
+
+
+class TestLineaBaseDelCorpus:
+    """Un ratio de contracargos solo significa algo contra una referencia.
+
+    Regresion: el umbral era 0.02 —el de la industria sobre el libro de ventas
+    completo de un comercio— aplicado a un dataset que es una muestra de
+    disputas, donde casi la mitad de las transacciones terminaron en contracargo.
+    Los quince comercios salian suspendidos: un flag que da positivo siempre no
+    distingue nada, y arrastraba cada caso a riesgo HIGH.
+    """
+
+    @staticmethod
+    def _analyzer(baseline: float, cb_ratio: float):
+        from unittest.mock import MagicMock
+
+        db = MagicMock()
+        db.get_corpus_cb_ratio.return_value = baseline
+        db.get_merchant_stats.return_value = {
+            "merchant": "X", "total_transactions": 10, "total_chargebacks": 5,
+            "cb_ratio": cb_ratio, "total_volume_usd": 1000.0, "avg_transaction_usd": 100.0,
+        }
+        return Analyzer(db)
+
+    def test_muy_por_encima_de_la_base_se_suspende(self):
+        perfil = self._analyzer(0.47, 1.11).merchant_risk_profile("AliExpress")
+        assert MerchantFlag.SUSPENDED_MERCHANT in perfil["flags"]
+
+    def test_apenas_por_encima_es_ratio_alto_no_suspension(self):
+        perfil = self._analyzer(0.47, 0.60).merchant_risk_profile("Steam")
+        assert MerchantFlag.HIGH_CB_RATIO in perfil["flags"]
+        assert MerchantFlag.SUSPENDED_MERCHANT not in perfil["flags"]
+
+    def test_en_la_base_no_se_marca(self):
+        perfil = self._analyzer(0.47, 0.47).merchant_risk_profile("eBay")
+        assert perfil["flags"] == []
+
+    def test_muy_por_debajo_no_se_marca(self):
+        perfil = self._analyzer(0.47, 0.11).merchant_risk_profile("Spotify")
+        assert perfil["flags"] == []
+
+    def test_el_perfil_devuelve_su_referencia(self):
+        """0.75 no dice nada; 0.75 contra una base de 0.47, si."""
+        perfil = self._analyzer(0.47, 0.75).merchant_risk_profile("Airbnb")
+        assert perfil["cb_ratio_baseline"] == 0.47
+
+    def test_sobre_un_libro_de_ventas_real_reproduce_el_umbral_clasico(self):
+        """Con una base del 1%, 1.5x da 1.5% — el orden de magnitud de la industria."""
+        assert MerchantFlag.SUSPENDED_MERCHANT in (
+            self._analyzer(0.01, 0.02).merchant_risk_profile("X")["flags"]
+        )
+        assert self._analyzer(0.01, 0.005).merchant_risk_profile("X")["flags"] == []
+
+
+class TestSLASobreElReclamo:
+    """El reloj corre mientras el reclamo esta abierto, no hasta hoy.
+
+    Regresion: se medía hasta `now()`. Sobre un dataset fechado en 2024, eso da
+    el plazo vencido en el 100% de los casos y dispara la compensacion de
+    POL-SLA-004 siempre.
+    """
+
+    @staticmethod
+    def _analyzer():
+        from unittest.mock import MagicMock
+
+        return Analyzer(MagicMock())
+
+    def test_un_caso_cerrado_a_tiempo_cumple_aunque_sea_viejo(self):
+        r = self._analyzer().check_sla(
+            "2024-09-23", "COL", case_close_date="2024-10-01", today=date(2026, 8, 7),
+        )
+        assert r["within_sla"] is True
+        assert r["compensation_applicable"] is False
+        assert r["caso_cerrado"] is True
+
+    def test_un_caso_cerrado_tarde_no_cumple(self):
+        r = self._analyzer().check_sla(
+            "2024-09-23", "COL", case_close_date="2024-11-15", today=date(2026, 8, 7),
+        )
+        assert r["within_sla"] is False
+        assert r["compensation_applicable"] is True
+
+    def test_un_caso_abierto_se_mide_hasta_hoy(self):
+        r = self._analyzer().check_sla("2026-08-03", "COL", today=date(2026, 8, 7))
+        assert r["caso_cerrado"] is False
+        assert r["medido_hasta"] == "2026-08-07"
+        assert r["within_sla"] is True
+
+    def test_devuelve_contra_que_conto(self):
+        r = self._analyzer().check_sla(
+            "2024-09-23", "COL", case_close_date="2024-10-01", today=date(2026, 8, 7),
+        )
+        assert r["medido_desde"] == "2024-09-23"
+        assert r["medido_hasta"] == "2024-10-01"

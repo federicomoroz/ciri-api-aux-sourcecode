@@ -92,7 +92,7 @@ ETAPA 2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP en paralelo
    [Buscar Casos Similares]          GET  /api/cases/similar          <- RAG: Qdrant semantico
    [Riesgo del Comercio]             GET  /api/merchants/{name}/risk  <- cb_ratio + flags
    [Historial del Cliente]           GET  /api/clients/{id}/history   <- flags de reincidencia
-   [Verificar SLA]                   POST /api/sla/check              <- limites por pais/VIP
+   [Verificar SLA]                   POST /api/sla/check              <- dias habiles del reclamo
    [Merge -- Contexto Paralelo]      <- Merge: espera las 7 ramas paralelas
    [Propagar -> Error Handler -- API]<- Stop and Error si la API no responde
 
@@ -108,7 +108,7 @@ ETAPA 3 -- ANALISIS CON IA (9 nodos)
    [Propagar -> Error Handler -- Analisis] <- Stop and Error si falla el LLM
 
 ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (7 nodos)
-   [Switch -- Nivel de Riesgo]
+   [Switch -- Derivacion]              <- enruta por requires_hitl, no por risk_level
       BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]
       HIGH -> [Wait -- Aprobacion HITL]    <- Wait: formulario, espera al analista hasta 24 h
            -> [Procesar Respuesta HITL]    <- Code: fusiona la decision; falla cerrado si no hubo
@@ -313,7 +313,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez es **8.7/10** sobre los escenarios de demo, y los 524 tests pasan (491 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez es **8.7/10** sobre los escenarios de demo, y los 546 tests pasan (513 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -529,7 +529,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Consecuencias:**
 - Cada pieza de logica se testea con `pytest` independientemente de n8n
-- 491 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
+- 513 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
 - 33 tests E2E adicionales corren contra la API real desplegada en Render (LLM real, Qdrant real, sin mocks)
 - n8n es reemplazable (Temporal, Airflow, un cron job) sin tocar FastAPI
 - La documentacion OpenAPI en `/docs` se autogenera y siempre esta actualizada
@@ -739,10 +739,10 @@ quest_ML/
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
-  tests/                      # 524 tests (unit + integration + E2E)
+  tests/                      # 546 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
-    decisions.md              # 16 decisiones técnicas con razonamiento
+    decisions.md              # 18 decisiones técnicas con razonamiento
     prompts.md                # Prompts documentados con versionado
     rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
     mejora_continua.md        # Feedback loop, Judge, guardrails
@@ -758,7 +758,7 @@ quest_ML/
 ## La Suite de Tests
 
 Corren solos en cada push y cada pull request
-(`.github/workflows/tests.yml`): lint, los 491 de `unit` e `integration` con
+(`.github/workflows/tests.yml`): lint, los 513 de `unit` e `integration` con
 cobertura, y una validacion de que los tres JSON de n8n sean importables —nodos
 que existen y conexiones que apuntan a algo—. Un workflow roto no compila nada,
 asi que sin ese paso el problema aparecia recien al importarlo a mano.
@@ -784,7 +784,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-524 tests en 29 archivos (unit + integration + E2E):
+546 tests en 29 archivos (unit + integration + E2E):
 
 ```
 tests/

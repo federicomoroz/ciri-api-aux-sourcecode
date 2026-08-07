@@ -12,9 +12,9 @@ from ..domain.constants import (
     CLIENT_GEO_ANOMALY_THRESHOLD,
     CLIENT_RECIDIVIST_THRESHOLD,
     LATAM_COUNTRIES,
-    MERCHANT_HIGH_CB_RATIO,
+    MERCHANT_HIGH_VS_BASELINE,
     MERCHANT_STRATEGIC_VOLUME,
-    MERCHANT_SUSPENDED_CB_RATIO,
+    MERCHANT_SUSPENDED_VS_BASELINE,
     MERCHANT_TIMEOUT_PATTERN_MIN_COUNT,
     SLA_EXTENDED_DAYS,
     SLA_STANDARD_DAYS,
@@ -32,17 +32,33 @@ class Analyzer:
     def __init__(self, db: Database):
         self.db = db
 
+    def linea_base_cb(self) -> float:
+        """Ratio de contracargos de todo el corpus. Es contra esto que se compara.
+
+        Un comercio no es problematico por tener contracargos: lo es por tener
+        mas de los que corresponden al conjunto en el que se lo mira. Este
+        dataset es una muestra de disputas —casi la mitad de sus transacciones
+        terminaron en contracargo—, asi que compararlo contra el 2% clasico de
+        la industria da quince comercios suspendidos de quince y un flag que no
+        distingue nada.
+        """
+        return self.db.get_corpus_cb_ratio()
+
     def merchant_risk_profile(self, merchant: str) -> dict:
         """Compute CB ratio, volume, and risk flags for a merchant."""
         stats = self.db.get_merchant_stats(merchant)
         cb_ratio = stats["cb_ratio"]
+        base = self.linea_base_cb()
         flags = []
-        if cb_ratio > MERCHANT_SUSPENDED_CB_RATIO:
+        if cb_ratio > base * MERCHANT_SUSPENDED_VS_BASELINE:
             flags.append(MerchantFlag.SUSPENDED_MERCHANT)
-        elif cb_ratio > MERCHANT_HIGH_CB_RATIO:
+        elif cb_ratio > base * MERCHANT_HIGH_VS_BASELINE:
             flags.append(MerchantFlag.HIGH_CB_RATIO)
         return {
             **stats,
+            # Va en la respuesta porque el ratio solo se lee bien al lado de su
+            # referencia: 0.75 no dice nada; 0.75 contra una base de 0.47, si.
+            "cb_ratio_baseline": round(base, 4),
             "flags": flags,
             "is_strategic": stats["total_volume_usd"] > MERCHANT_STRATEGIC_VOLUME,
         }
@@ -175,6 +191,7 @@ class Analyzer:
         country: str,
         cliente_vip: bool = False,
         today: date | None = None,
+        case_close_date: str | None = None,
     ) -> dict:
         """Check SLA compliance based on policy rules.
 
@@ -184,18 +201,31 @@ class Analyzer:
         - POL-EXC-004 (non-LATAM merchants): 15 business days
 
         Los limites son en dias habiles, asi que se cuentan dias habiles.
-        `today` existe para que los tests no dependan del dia en que corren.
+        `today` existe para que los tests no dependan del dia en que corran.
+
+        **Un caso cerrado se mide hasta su cierre, no hasta hoy.** Sin eso, todo
+        caso del dataset —fechado en 2024— aparece incumplido por el solo hecho
+        de que pasaron los meses, y la compensacion de POL-SLA-004 se dispara
+        siempre: un plazo que da positivo el 100% de las veces no mide nada. El
+        reloj de un reclamo corre mientras el reclamo esta abierto.
 
         If NOT within SLA -> compensation_applicable = True (POL-SLA-004: max USD 15)
         """
         today = today or datetime.now(UTC).date()
-        try:
-            open_date = datetime.strptime(case_open_date[:10], "%Y-%m-%d").date()
-        except (ValueError, TypeError):
-            logger.warning("Invalid case_open_date '%s', defaulting to today", case_open_date)
-            open_date = today
 
-        days_elapsed = self._business_days_between(open_date, today)
+        def _fecha(valor: str | None, defecto: date, campo: str) -> date:
+            try:
+                return datetime.strptime(valor[:10], "%Y-%m-%d").date()
+            except (ValueError, TypeError, IndexError):
+                if valor:
+                    logger.warning("Fecha invalida en %s: %r", campo, valor)
+                return defecto
+
+        open_date = _fecha(case_open_date, today, "case_open_date")
+        corte = _fecha(case_close_date, today, "case_close_date") if case_close_date else today
+        cerrado = case_close_date is not None and corte != today
+
+        days_elapsed = self._business_days_between(open_date, corte)
 
         if cliente_vip:
             sla_limit = SLA_VIP_DAYS
@@ -220,4 +250,9 @@ class Analyzer:
             "sla_type": sla_type,
             "policy_reference": policy_reference,
             "compensation_applicable": compensation_applicable,
+            # Contra que se conto: sin esto, «12 dias habiles» no se puede
+            # reproducir ni auditar.
+            "medido_desde": open_date.isoformat(),
+            "medido_hasta": corte.isoformat(),
+            "caso_cerrado": cerrado,
         }

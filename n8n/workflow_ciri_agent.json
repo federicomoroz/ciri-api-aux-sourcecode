@@ -391,7 +391,7 @@
         "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/sla/check",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ case_open_date: $('Obtener Transacción').first().json.date, country: $('Obtener Transacción').first().json.country, cliente_vip: $('Validar Formato TXN').first().json.cliente_vip }) }}",
+        "jsonBody": "={{ JSON.stringify({ transaction_id: $('Validar Formato TXN').first().json.transaction_id, case_open_date: $('Obtener Transacción').first().json.date, country: $('Obtener Transacción').first().json.country, cliente_vip: $('Validar Formato TXN').first().json.cliente_vip }) }}",
         "options": {
           "timeout": 30000
         }
@@ -412,7 +412,9 @@
       "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 2000
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "notes": "La API busca el caso histórico y mide contra su cierre, no contra hoy."
     },
     {
       "parameters": {
@@ -446,50 +448,8 @@
         "method": "POST",
         "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/analyze/resolve",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "transaction_id",
-              "value": "={{ $json.transaction_id }}"
-            },
-            {
-              "name": "agent_analysis",
-              "value": "={{ $json.agent_analysis }}"
-            },
-            {
-              "name": "tx_data",
-              "value": "={{ $json.tx_data }}"
-            },
-            {
-              "name": "policies",
-              "value": "={{ $json.policies }}"
-            },
-            {
-              "name": "similar_cases",
-              "value": "={{ $json.similar_cases }}"
-            },
-            {
-              "name": "logs",
-              "value": "={{ $json.logs }}"
-            },
-            {
-              "name": "merchant_risk",
-              "value": "={{ $json.merchant_risk }}"
-            },
-            {
-              "name": "client_history",
-              "value": "={{ $json.client_history }}"
-            },
-            {
-              "name": "motivo",
-              "value": "={{ $json.motivo }}"
-            },
-            {
-              "name": "cliente_vip",
-              "value": "={{ $json.cliente_vip }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
           "timeout": 120000
         }
@@ -510,7 +470,9 @@
       "onError": "continueErrorOutput",
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 2000
+      "waitBetweenTries": 2000,
+      "notesInFlow": true,
+      "notes": "Manda el contexto compilado entero: enumerar campos a mano ya perdió el SLA una vez."
     },
     {
       "parameters": {
@@ -603,6 +565,31 @@
                 },
                 "conditions": [
                   {
+                    "id": "cond-hitl",
+                    "leftValue": "={{ $json.resolution.requires_hitl }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "REVISIÓN HUMANA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
                     "id": "cond-blocker",
                     "leftValue": "={{ $json.resolution.risk_level }}",
                     "rightValue": "BLOCKER",
@@ -617,31 +604,6 @@
               },
               "renameOutput": true,
               "outputKey": "BLOCKER"
-            },
-            {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 1
-                },
-                "conditions": [
-                  {
-                    "id": "cond-high",
-                    "leftValue": "={{ $json.resolution.risk_level }}",
-                    "rightValue": "HIGH",
-                    "operator": {
-                      "type": "string",
-                      "operation": "equals",
-                      "singleValue": true
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "HIGH"
             },
             {
               "conditions": {
@@ -700,7 +662,7 @@
         }
       },
       "id": "7f06d9ff-e32f-4086-8984-8a669c4b6200",
-      "name": "Switch — Nivel de Riesgo",
+      "name": "Switch — Derivación",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
@@ -1293,46 +1255,7 @@
       "main": [
         [
           {
-            "node": "Switch — Nivel de Riesgo",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Switch — Nivel de Riesgo": {
-      "main": [
-        [
-          {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Wait — Aprobación HITL",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
+            "node": "Switch — Derivación",
             "type": "main",
             "index": 0
           }
@@ -1505,6 +1428,45 @@
           },
           {
             "node": "Registrar Feedback HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch — Derivación": {
+      "main": [
+        [
+          {
+            "node": "Wait — Aprobación HITL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }

@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-524%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-546%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -222,7 +222,7 @@ sólo el código que la API necesita para funcionar.
 |---|---|
 | `docs/ejes.md` | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
 | `docs/architecture.md` | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
-| `docs/decisions.md` | 16 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
+| `docs/decisions.md` | 18 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
 | `docs/prompts.md` | Los prompts, versionados, y por qué cambiaron |
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
@@ -230,7 +230,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 524 en 29 archivos; los de `unit/` e `integration/` corren
+**Tests:** `pytest tests/ -v`. Son 546 en 29 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
 validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.

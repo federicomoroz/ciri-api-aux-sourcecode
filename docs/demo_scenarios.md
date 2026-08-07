@@ -67,20 +67,23 @@ El score promedio del Juez en los escenarios de prueba es **8.7/10**, lo que ind
 
 ### Qué demuestra
 
-La capacidad del sistema para aplicar exclusiones de política no negociables. Las transacciones con criptomonedas son irreversibles por definición (POL-EXC-003). Combinado con un fraud_score de 8/100 (POL-FRD-001, umbral mínimo 15), este caso produce dos veredictos BLOCKER. La resolución debe ser `REJECT` sin importar cualquier otra evidencia. Este escenario también muestra el guardrail: si el LLM alucinara un `APPROVE`, el sistema lo corrige automáticamente.
+La capacidad del sistema para aplicar exclusiones de política no negociables. Las transacciones con criptomonedas son irreversibles por definición (POL-EXC-003). Combinado con un fraud_score de 8/100 (POL-FRD-001, umbral mínimo 15), este caso produce un BLOCKER y tres FAIL. **Un solo BLOCKER alcanza**: `BLOCKER_POLICY_CODES` contiene únicamente a POL-EXC-003, así que cualquier otro veredicto bloqueante que emita el modelo se degrada a FAIL con revisión humana. La resolución debe ser `REJECT` sin importar cualquier otra evidencia. Este escenario también muestra el guardrail: si el LLM alucinara un `APPROVE`, el sistema lo corrige automáticamente.
 
 ### Perfil de la transacción
 
 | Campo | Valor |
 |-------|-------|
 | ID | TXN-00051 |
-| Comercio | CryptoVault SA |
-| Monto | USD 850.00 |
+| Comercio | Airbnb |
+| Monto | USD 2.095,90 |
 | Método de pago | Cripto |
-| País | ARG |
+| País | COL |
 | Fraud score | 8 / 100 |
-| Canal | Web |
+| Canal | POS |
 | Cliente VIP | No |
+
+> Los valores de esta sección salen de `data/chargeback.db` y el resultado, de
+> `data/informes_demo/analisis_TXN-00051.json`, que viaja en este mismo paquete.
 
 ### Flujo esperado del pipeline
 
@@ -90,13 +93,13 @@ La capacidad del sistema para aplicar exclusiones de política no negociables. L
 3. GET /api/logs/TXN-00051                → logs asociados
 4. GET /api/policies/search               → RAG semántico → recupera 17 políticas
 5. GET /api/cases/similar                 → RAG semántico → precedentes similares
-6. GET /api/merchants/CryptoVault+SA/risk → perfil de riesgo del comercio
+6. GET /api/merchants/Airbnb/risk         → perfil de riesgo del comercio
 7. GET /api/clients/{id}/history          → historial del cliente
 8. POST /api/sla/check                    → verificación SLA (10 días LATAM)
 9. POST /api/analyze/resolve              → LLM evalúa políticas (Haiku) + sintetiza (Sonnet)
-   → POL-EXC-003: BLOCKER (cripto irreversible)
-   → POL-FRD-001: BLOCKER (score 8 < umbral 15)
-   → Acción determinística: REJECT (hay BLOCKERs)
+   → POL-EXC-003: BLOCKER (cripto irreversible — única política de la whitelist)
+   → POL-FRD-001, POL-CB-003, POL-CB-004: FAIL
+   → Acción determinística: REJECT (hay un BLOCKER)
 10. POST /api/analyze/judge               → LLM-as-Judge (Sonnet) → score 8.6/10
 11. POST /api/reports/html                → Reporte HTML con badge BLOCKER rojo
 ```
@@ -112,7 +115,7 @@ curl -s "http://localhost:8000/api/policies/search?payment_method=Cripto&fraud_s
   | jq '{query: .query_used, count: .count}'
 
 # Paso 3: Buscar precedentes similares
-curl -s "http://localhost:8000/api/cases/similar?merchant=CryptoVault+SA&amount_usd=850&payment_method=Cripto&country=ARG&fraud_score=8" \
+curl -s "http://localhost:8000/api/cases/similar?merchant=Airbnb&amount_usd=2095.90&payment_method=Cripto&country=COL&fraud_score=8" \
   | jq '.results[] | {case_id, resolution, fraud_score}'
 
 # Paso 4a: Investigación completa vía webhook n8n (ruta principal)
@@ -129,37 +132,50 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
 #   https://ciri-chargeback-agent.onrender.com/panel
 ```
 
-### Salida esperada
+### Salida real
+
+No es una salida esperada: es la que produjo el sistema, recortada. El archivo
+completo —con los 17 veredictos y la evaluación del Juez— viaja en
+`data/informes_demo/analisis_TXN-00051.json`.
 
 ```json
 {
   "transaction_id": "TXN-00051",
   "recommended_action": "REJECT",
-  "confidence": 0.97,
+  "confidence": 0.95,
   "risk_level": "BLOCKER",
-  "justification": "TXN-00051 involucra una transacción con método de pago Cripto. POL-EXC-003 establece que las criptomonedas son irreversibles por naturaleza — BLOCKER obligatorio. Adicionalmente, el score antifraude de 8/100 activa POL-FRD-001 (umbral mínimo 15) como BLOCKER secundario. La combinación de dos BLOCKERs hace que el rechazo sea mandatorio.",
+  "justification": "El riesgo BLOCKER no proviene de fraude sofisticado sino de una restricción estructural e irreversible: el método de pago es Cripto, lo que activa POL-EXC-003 como BLOCKER automático. Las transacciones en criptomonedas son técnicamente irreversibles y no son elegibles para chargeback bajo ninguna ci…",
   "policy_verdicts": [
     {
       "policy_code": "POL-EXC-003",
       "verdict": "BLOCKER",
-      "reasoning": "Método de pago: Cripto. Transacciones con criptomonedas son irreversibles. BLOCKER sin excepción.",
-      "requires_human_review": false
+      "reasoning": "Método de pago es Cripto (irreversible). BLOCKER automático según POL-EXC-003. Las transacciones en criptomonedas no son elegibles para chargeback bajo ninguna circunstancia."
     },
     {
       "policy_code": "POL-FRD-001",
-      "verdict": "BLOCKER",
-      "reasoning": "Score antifraude: 8/100, umbral mínimo: 15. Alto riesgo de fraude confirmado.",
-      "requires_human_review": false
+      "verdict": "FAIL",
+      "reasoning": "fraud_score=8, umbral mínimo=30. 8 < 30 → transacción con score antifraude inferior al umbral. Según POL-FRD-001, debe ser rechazada automáticamente o derivada a revisión manual. Requiere acción inmediata."
+    },
+    {
+      "policy_code": "POL-CB-004",
+      "verdict": "FAIL",
+      "reasoning": "Comercio Airbnb: total_transactions=4, total_chargebacks=3, cb_ratio=0.75 (75%). Umbral crítico: >2% (suspensión preventiva). 75% >> 2% → comercio supera ampliamente el límite de CBs. Además, perfil indica flag 'suspended_merchant', confirmando que ya está suspendido. Política violada."
+    },
+    {
+      "policy_code": "POL-CB-003",
+      "verdict": "FAIL",
+      "reasoning": "Comercio está suspendido (flag='suspended_merchant'). POL-CB-003 requiere que el comercio presente defensa en 10 días hábiles. Un comercio suspendido no puede cumplir esta obligación. La política sigue siendo relevante para el procesamiento del chargeback, pero la suspensión impide que el comercio responda adecuadamente. Requiere revisión manual sobre cómo proceder con comercio suspendido."
     }
   ],
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
   "requires_hitl": false,
   "next_steps": [
-    "Notificar al cliente el rechazo del contracargo citando POL-EXC-003 y POL-FRD-001",
-    "Reportar transacción TXN-00051 al equipo de fraude para investigación",
-    "Revisar perfil de CryptoVault SA — evaluar suspensión si tasa de fraude supera el 2%",
-    "Archivar caso con clasificación FRAUDE_CONFIRMADO_CRIPTO"
+    "Notificar al cliente CLI-0003 que la transacción TXN-00051 no es elegible para chargeback por método de pago Cripto (irreversible) según POL-EXC-003 — área de Atención al Cliente, plazo inmediato",
+    "Registrar el REJECT formal en el sistema citando BLOCKER POL-EXC-003 como causal única y suficiente — área de Operaciones de Contracargos, plazo 24h hábiles",
+    "Escalar el perfil del comercio Airbnb (cb_ratio=0.75, flag 'suspended_merchant') al área de Gestión de Comercios para revisión de suspensión vigente según POL-CB-004 — plazo 48h hábiles",
+    "Solicitar timestamps de apertura del reclamo y primera respuesta al cliente para verificar cumplimiento de POL-SLA-001 (48h hábiles) — área de Operaciones, dato complementario que no modifica el REJECT actual pero es requerido para auditoría",
+    "Documentar los 2 eventos MERCHANT_NO_RESPONSE en el expediente del comercio Airbnb como evidencia adicional de incumplimiento de SLA comercial — área de Riesgo de Comercios, plazo 48h hábiles"
   ],
   "guardrail_warnings": []
 }
@@ -167,7 +183,7 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
 
 ### Observaciones clave
 
-1. **Dos BLOCKERs detectados:** POL-EXC-003 (Cripto = irreversible) y POL-FRD-001 (score=8 < 15). La acción `REJECT` se determina de forma determinística antes de que el LLM sintetice la justificación.
+1. **Un BLOCKER y tres FAIL:** POL-EXC-003 (cripto = irreversible) es el único que puede bloquear — es el único código en `BLOCKER_POLICY_CODES`. POL-FRD-001 (score 8 < 15), POL-CB-003 y POL-CB-004 quedan en FAIL. La acción `REJECT` se determina de forma determinística antes de que el LLM sintetice la justificación.
 2. **Guardrail no activado:** El LLM produce correctamente `REJECT` — el guardrail no tiene nada que corregir. Si hubiera dicho `APPROVE`, el sistema lo habría sobrescrito.
 3. **Sin HITL:** Los casos BLOCKER son determinísticos — la revisión del analista no agrega valor.
 4. **Sin compensación:** El SLA no fue incumplido (el caso se rechazó inmediatamente).

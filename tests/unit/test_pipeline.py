@@ -37,6 +37,10 @@ class DBFalsa:
         return [{"severity": Severity.INFO, "event": "PAYMENT_INITIATED", "detail": "ok",
                  "timestamp": "2024-01-01", "code": "200"}]
 
+    def get_case_for_transaction(self, txn_id):
+        return {"case_id": "CB-0001", "transaction_id": txn_id,
+                "open_date": "2024-09-23", "close_date": "2024-10-11"}
+
 
 class RetrieverFalso:
     def search_policies_and_cases(self, **kwargs):
@@ -50,10 +54,13 @@ class AnalyzerFalso:
     def client_flags(self, client_id):
         return {"client_id": client_id, "total_chargebacks": 0, "flags": []}
 
-    def check_sla(self, case_open_date, country, cliente_vip=False):
+    def check_sla(self, case_open_date, country, cliente_vip=False, case_close_date=None):
+        self.sla_pedido = {"open": case_open_date, "close": case_close_date}
         return {"within_sla": False, "days_elapsed": 12, "sla_limit_days": 10,
                 "sla_type": "standard", "policy_reference": "POL-SLA-002",
-                "compensation_applicable": True}
+                "compensation_applicable": True,
+                "medido_desde": case_open_date, "medido_hasta": case_close_date,
+                "caso_cerrado": case_close_date is not None}
 
 
 class ResolucionFalsa:
@@ -94,6 +101,18 @@ class TestRun:
         assert usage["input_tokens"] == 13
         assert usage["output_tokens"] == 7
         assert usage["call_count"] == 3
+
+    def test_el_sla_se_mide_sobre_el_reclamo_y_no_sobre_la_compra(self, pipeline):
+        """Regresion: se medía desde la fecha de la transacción hasta hoy.
+
+        Sobre un dataset de 2024 eso da el plazo vencido en el 100% de los casos
+        y dispara la compensación de POL-SLA-004 siempre. El reloj de un reclamo
+        corre mientras el reclamo está abierto.
+        """
+        pipeline.run(REQ)
+        pedido = pipeline.analyzer.sla_pedido
+        assert pedido["open"] == "2024-09-23", "usó la fecha de la compra, no la del reclamo"
+        assert pedido["close"] == "2024-10-11", "no midió hasta el cierre del caso"
 
     def test_el_sla_llega_al_contexto(self, pipeline):
         """Regresion: el pipeline directo no consultaba el SLA y n8n si.

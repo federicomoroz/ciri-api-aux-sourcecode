@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 524 tests pasando (491 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 546 tests pasando (513 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -413,3 +413,70 @@ con el que se resuelve el siguiente.
 - (-) Un plazo vencido deja el caso sin resolver: hace falta un proceso que recoja los pendientes
 - (-) Las 24 horas son una constante del canvas, no de `constants.py` — es un parámetro de
   operación del workflow, no una regla de negocio, pero la frontera acá es discutible
+
+---
+
+## 17. Los umbrales se calibran contra los datos, no contra la industria
+
+**Decisión:** El flag de comercio problemático compara el `cb_ratio` contra la **línea base del
+propio corpus** (`MERCHANT_SUSPENDED_VS_BASELINE = 1.5`) en vez de contra un 2% absoluto. Y el
+SLA se mide **desde que el reclamo se abrió hasta que se cerró**, no hasta hoy.
+
+**Razonamiento:** Los dos umbrales venían de la industria y ninguno se había probado contra el
+dataset. El resultado, cuando se miró:
+
+| | Antes | Ahora |
+|---|---|---|
+| Comercios marcados | **15 de 15** | 2 suspendidos, 4 ratio alto, 9 limpios |
+| Casos dentro de SLA | **0 de 60** | 17 de 60 |
+
+Un 2% de contracargos es alto sobre el libro de ventas completo de un comercio. Este dataset no
+es eso: es una muestra de disputas donde 60 de 100 transacciones terminaron en contracargo. Medir
+una muestra sesgada con la vara de la población marca todo. Y un flag que da positivo el 100% de
+las veces no es conservador — no informa nada, y acá además arrastraba cada caso a riesgo HIGH,
+dejando muertas las ramas MEDIUM y LOW del enrutador.
+
+Lo mismo con el SLA: comparaba la fecha de la **transacción** contra `now()`. Sobre datos de 2024
+eso da 420 días hábiles y el plazo incumplido siempre, con la compensación de POL-SLA-004
+disparándose en cada caso. Dos errores encadenados: se medía la compra en vez del reclamo, y se
+medía hasta hoy en vez de hasta el cierre. El reloj de un reclamo corre mientras el reclamo está
+abierto.
+
+La forma relativa además envejece bien: con una línea base del 1% —un libro de ventas real— los
+mismos multiplicadores reproducen los umbrales clásicos. El umbral no cambia de valor; cambia de
+naturaleza.
+
+**Trade-offs:**
+- (+) Los flags vuelven a discriminar, y con ellos las ramas MEDIUM y LOW del enrutador
+- (+) La línea base se consulta, no se fija: cargar más transacciones la mueve sola
+- (+) `merchant_risk_profile` devuelve `cb_ratio_baseline` — un 0.75 sin su referencia no se puede leer
+- (-) Un multiplicador es más difícil de explicarle a un analista que «más del 2%»
+- (-) Sobre un corpus muy chico la línea base es ruidosa; con menos de ~30 transacciones habría
+  que caer a un umbral absoluto, y hoy eso no está implementado
+
+---
+
+## 18. El enrutador mira `requires_hitl`, no el nivel de riesgo
+
+**Decisión:** `Switch — Derivación` enruta por `resolution.requires_hitl`. La primera salida va al
+`Wait`; el resto, al informe.
+
+**Razonamiento:** Enrutaba por `risk_level == "HIGH"`. Pero el nivel de riesgo y la necesidad de
+un analista son dos preguntas distintas que `_determine_outcome` responde por separado: un caso
+con un solo FAIL y sin fraude severo sale `MEDIUM` **y** `requires_hitl: true`. Ese caso caía en
+la rama MEDIUM, generaba el informe y el webhook respondía 200 — la API pidiendo una persona y la
+orquestación cerrando el caso.
+
+Además era lógica de decisión repartida entre n8n y Python, que es justamente lo que la consigna
+prohíbe: el canvas estaba re-derivando «¿hace falta un humano?» a partir del nivel de riesgo, en
+vez de leer el campo que ya contesta esa pregunta.
+
+Las ramas por nivel de riesgo se conservan después de la primera: siguen documentando en el canvas
+qué tan grave es cada caso, que es información útil para quien lee el circuito. Lo que ya no hacen
+es decidir.
+
+**Trade-offs:**
+- (+) Un solo lugar decide si hace falta una persona, y es el mismo que lo calcula
+- (+) El canvas sigue mostrando el nivel de riesgo sin usarlo para derivar
+- (-) La rama HIGH dejó de ser la que frena, así que el nombre «Switch — Nivel de Riesgo» dejó de
+  describirlo: hubo que renombrarlo, y eso rompe cualquier referencia externa al nodo por nombre

@@ -204,7 +204,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "{{ $('Form Trigger — Formulario').first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
+        "url": "={{ $('Form Trigger — Formulario').first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ event_type: 'form_analysis_failed', severity: 'ERROR', message: 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'la API no respondio'), source: 'n8n-form', transaction_id: ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() || null, metadata: { origen: 'formulario' } }) }}",
