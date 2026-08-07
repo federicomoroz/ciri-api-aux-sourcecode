@@ -166,13 +166,15 @@ curl -X PUT https://ciri-chargeback-agent.onrender.com/api/policies/POL-FRD-001 
 | Sub-eje | Resolución |
 |---|---|
 | Errores | Workflow de error handler + `POST /api/alerts/` + `GET /api/alerts/` (log operativo) |
-| Costo | Langfuse traceá cada llamada con tokens y costo; `GET /api/langfuse/stats` los agrega |
+| Costo | Langfuse traceá cada llamada con tokens y costo; `GET /api/langfuse/stats` los agrega. Un modelo de free tier cuesta **cero**, y así se informa: antes caía en la tarifa de referencia y una corrida gratuita figuraba en $0.10 |
 | Tiempos | Latencia por generación en Langfuse; el panel muestra el tiempo de cada paso vía SSE |
 | Calidad | El Judge puntúa **cada** resolución y el score se manda a Langfuse como `score` de la traza |
 
-`api/app/observability/tracer.py` define un `Protocol` con dos implementaciones: `LangfuseTracer`
-y `NoOpTracer`. La observabilidad se activa con `CB_LANGFUSE_ENABLED=true` y su ausencia nunca
-rompe el pipeline ni los tests.
+`api/app/observability/tracer.py` define un `Protocol` con tres implementaciones:
+`LangfuseTracer`, `TrazadorLocal` —que anota en SQLite cuando no hay claves de Langfuse— y
+`NoOpTracer`, para los tests. La observabilidad se activa con `CB_LANGFUSE_ENABLED=true`, y su
+ausencia no deja al panel sin metricas ni rompe el pipeline: se sigue midiendo latencia, tokens
+y la nota del juez, y el panel declara de donde salen los numeros.
 
 **Que un servicio externo se caiga no tumba el resto.** La API arranca aunque Qdrant no responda:
 el panel sigue en pie, los casos demo se sirven completos —no tocan el vector store— y sólo las

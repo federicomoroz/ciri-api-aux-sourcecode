@@ -191,16 +191,34 @@ class TestLosInformesQueViajanSeAbrenSolos:
     salen los estilos, no lo que dicen.
     """
 
-    # `entregables/` no se versiona: en un clon limpio quedan los de
-    # `data/informes_demo`, que son los mismos que sirve el modo demo.
+    # Los del ZIP son estos: `armar_entrega.py` copia lo que git trackea mas
+    # `docs/` entero. La primera version de este test globeaba `docs/examples`
+    # y `entregables/` —una ruta que no existe y otra que git no trackea— y
+    # pasaba en verde sin abrir un solo archivo de los que viajan.
     ENTREGADOS = sorted(
-        list(INFORMES.glob("*.html"))
-        + list((RAIZ / "entregables" / "Codigo" / "docs" / "examples").glob("*.html"))
+        f for f in RAIZ.rglob("*.html")
+        if f.is_relative_to(INFORMES) or f.is_relative_to(RAIZ / "docs" / "HTML_Output_Examples")
     )
 
     def test_hay_informes_que_revisar(self):
-        """Si el glob deja de encontrarlos, este archivo pasa sin probar nada."""
-        assert self.ENTREGADOS, "no se encontro ningun informe entregado"
+        """Sin esto, un glob que no matchea nada deja el archivo entero en verde."""
+        assert len(self.ENTREGADOS) >= 6, (
+            f"se esperaban los 3 de docs/ y los 3 del modo demo; hay {len(self.ENTREGADOS)}"
+        )
+
+    def test_los_que_viajan_estan_todos(self):
+        """Que el ZIP los lleve no se deduce del glob: se comprueba contra git."""
+        import subprocess
+
+        rastreados = subprocess.run(
+            ["git", "ls-files", "-z", "docs/HTML_Output_Examples"],
+            cwd=RAIZ, capture_output=True,
+        ).stdout.decode("utf-8").split(chr(0))
+        publicados = {f for f in rastreados if f.endswith(".html")}
+        revisados = {
+            str(f.relative_to(RAIZ)).replace("\\", "/") for f in self.ENTREGADOS
+        }
+        assert publicados <= revisados, f"no se revisan: {publicados - revisados}"
 
     @pytest.mark.parametrize("informe", ENTREGADOS, ids=lambda p: p.name)
     def test_no_pide_nada_a_la_red(self, informe):

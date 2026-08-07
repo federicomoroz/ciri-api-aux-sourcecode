@@ -33,8 +33,18 @@ El campo `demo_mode` del body elige el modo por petición; si no viene, decide e
 Estado de la integración con n8n, y una señal que no se puede obtener de otro modo:
 
 ```json
-{"configured": false, "available": false, "ultimo_contacto_hace_s": 40.2, "contactos": 3}
+{"configured": true, "available": true, "url": "https://tu.app.n8n.cloud",
+ "ultimo_contacto_hace_s": 40.2, "contactos": 3}
 ```
+
+Acepta `?n8n_base_url=` y, cuando viene, **chequea esa** y no la del servidor. Tiene que ser
+la misma que va a usar el análisis: mirar una y llamar a la otra daba un badge en verde seguido
+de «tu n8n no respondió», y la página se contradecía sin forma de ver por qué.
+
+El panel usa esta respuesta para habilitar o no el pipeline con orquestación. **Y quien prueba
+es la API**, no el navegador: al webhook lo llama ella, que puede estar en otra red. Con la API
+en un contenedor, `http://localhost:5678` abre el editor en tu browser y desde el contenedor es
+la API misma.
 
 `ultimo_contacto_hace_s` dice cuánto hace que **una orquestación de n8n llamó a esta API**. El workflow marca su primera petición con la cabecera `X-Origen-n8n`; quien importó el workflow y lo disparó no tiene forma, desde su lado, de saber si la llamada llegó, y esto se lo confirma.
 
@@ -47,11 +57,12 @@ No registra de dónde vino: la API es pública y compartida, así que anotar la 
 | | |
 |---|---|
 | Sin URL | `400` — el servidor no puede adivinar dónde corre tu n8n |
-| Tu n8n no responde | `502` diciendo a qué dirección se llamó y qué revisar |
+| Tu n8n no responde | `502` diciendo a qué dirección se llamó y qué revisar. Si la URL es local y la API no, lo explica: la llamada la hace ella |
+| El caso necesita una persona | `303` al formulario de aprobación, que así se abre solo |
 
-En los dos casos **no se ejecuta el pipeline directo en su lugar**. El informe sería idéntico al de una corrida real, y quien evalúa creería que pasó por los 29 nodos de orquestación sin haber pasado.
+En los dos casos **no se ejecuta el pipeline directo en su lugar**. El informe sería idéntico al de una corrida real, y quien evalúa creería que pasó por los 39 nodos de orquestación sin haber pasado.
 
-**El modo demo alcanza al workflow de n8n.** `resolve` y `judge` responden con el análisis guardado, así que el flujo corre entero: las siete consultas de contexto son reales, el compilado es real y el informe se genera de verdad. Cuando la resolución es la de otro caso, `/api/reports/html` responde con el informe completo de ese caso en vez de mezclar los dos.
+**El modo demo no cambia quién orquesta.** Es sobre plata, no sobre arquitectura: los nodos llaman a esta misma API, que resuelve el modelo del demo igual. Con un free tier configurado, `resolve` y `judge` corren de verdad con ese modelo y la resolución viaja con `demo_modelo` —el informe lo usa para declarar con qué se produjo—. Sin free tier responden con el análisis guardado, y cuando la resolución es la de otro caso, `/api/reports/html` responde con el informe completo de ese caso en vez de mezclar los dos.
 
 ```bash
 # Modo demo: informe al instante, sin costo
@@ -383,7 +394,7 @@ puede aparecer como precedente. Se comprueba en `GET /health`.
 |---|---|
 | `GET /health` | Estado de SQLite y Qdrant, con el conteo de cada colección |
 | `GET /api/analytics/dashboard` | Métricas agregadas del dataset y del feedback |
-| `GET /api/langfuse/stats` | Trazas, tokens, costo y puntajes. Requiere Langfuse configurado |
+| `GET /api/langfuse/stats` | Trazas, tokens, costo y puntajes. Sin Langfuse devuelve lo medido en la API (`fuente: "local"`) en vez de nada |
 | `POST /api/alerts/` | Registrar un evento operativo |
 | `GET /api/alerts/` | Los más recientes, del más nuevo al más viejo |
 

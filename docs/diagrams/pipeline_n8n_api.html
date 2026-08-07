@@ -299,27 +299,39 @@
     </div>
 
     <div class="canvas-hace">
-      <span class="q">Switch — Nivel de Riesgo</span>
-      <span>BLOCKER, MEDIUM y LOW siguen solos. HIGH pausa en un Wait hasta que un analista decide.</span>
+      <span class="q">Switch — Derivación</span>
+      <span>Enruta por <code>requires_hitl</code>, no por nivel de riesgo: un caso MEDIUM con una política fallada también necesita una persona.</span>
+    </div>
+
+    <div class="fila f-api">
+      <div class="lado-n8n">Avisar — Formulario HITL<span class="sub">sólo si hace falta una persona</span></div>
+      <div class="flecha"><b>12</b></div>
+      <div class="ruta"><i></i><span><span class="met">POST</span> /api/alerts/</span></div>
+      <div class="toca"><span class="chip">SQLite</span></div>
+    </div>
+
+    <div class="canvas-hace">
+      <span class="q">Responder — Requiere Aprobación</span>
+      <span>Un 303 al formulario del Wait, que se abre solo. Su URL se genera al correr y n8n sólo la expone <b>antes</b> de llegar al nodo: por eso el aviso y la respuesta van primero.</span>
     </div>
 
     <div class="fila f-api">
       <div class="lado-n8n">Generar Reporte</div>
-      <div class="flecha"><b>12</b></div>
+      <div class="flecha"><b>13</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /api/reports/html</span></div>
       <div class="toca"><span class="chip">Jinja2</span><span class="chip">SQLite</span></div>
     </div>
 
     <div class="fila f-api">
       <div class="lado-n8n">Registrar Feedback HITL<span class="sub">sólo si hubo analista</span></div>
-      <div class="flecha"><b>13</b></div>
+      <div class="flecha"><b>14</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /api/feedback</span></div>
       <div class="toca"><span class="chip">SQLite</span><span class="chip">Qdrant</span></div>
     </div>
 
     <div class="canvas-hace">
       <span class="q">Responder — Reporte</span>
-      <span>El informe HTML vuelve por el mismo webhook por donde entró el caso.</span>
+      <span>El informe HTML vuelve por el mismo webhook por donde entró el caso. Y cada final de error tiene el suyo —400, 404, 502, 503—: ningún camino contesta 200 vacío.</span>
     </div>
   </section>
 
@@ -342,7 +354,7 @@
       <div class="lado-n8n">El formulario<span class="sub">workflow aparte, con su Form Trigger</span></div>
       <div class="flecha vuelve"><b>↩</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /webhook/chargeback-agent</span></div>
-      <div class="toca"><span class="chip">corre los 29 pasos igual</span></div>
+      <div class="toca"><span class="chip">corre los 39 pasos igual</span></div>
     </div>
   </div>
 
@@ -355,7 +367,7 @@
     </div>
     <div>
       <h3>No hay nodo de agente</h3>
-      <p>Ningún modelo elige qué herramienta llamar. Las trece llamadas ocurren siempre, en este
+      <p>Ningún modelo elige qué herramienta llamar. Las catorce llamadas ocurren siempre, en este
       orden, para todos los casos. Eso es lo que hace reproducible una investigación.</p>
     </div>
     <div>

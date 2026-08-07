@@ -66,9 +66,9 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 ## Orquestacion Explicita con n8n
 
-**Como se hablan n8n y la API:** el diagrama **«n8n y la API»**, en la raiz de la entrega, resume la conversacion — las trece llamadas en orden, que toca cada una y las dos veces que va al reves.
+**Como se hablan n8n y la API:** el diagrama **«n8n y la API»**, en la raiz de la entrega, resume la conversacion — las catorce llamadas en orden, que toca cada una y las dos veces que va al reves.
 
-**El flujo completo, navegable:** el diagrama **«el circuito completo»**, tambien en la raiz, es una pagina autocontenida con los 29 pasos en orden de ejecucion, cada conexion trazada, el endpoint que llama cada nodo y una ficha explicativa al tocarlos. Se abre en cualquier navegador, sin conexion.
+**El flujo completo, navegable:** el diagrama **«el circuito completo»**, tambien en la raiz, es una pagina autocontenida con los 39 pasos en orden de ejecucion, cada conexion trazada, el endpoint que llama cada nodo y una ficha explicativa al tocarlos. Se abre en cualquier navegador, sin conexion.
 
 **El RAG, de punta a punta:** el diagrama **«el RAG»**, tambien en la raiz, sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
 
@@ -79,6 +79,7 @@ ETAPA 1 -- ENTRADA + CACHE (8 nodos)
    [Webhook -- Entrada]              <- HTTP POST trigger (API/curl)
    [Validar Formato -- IF]           <- IF: valida formato TXN-XXXXX
    [Validar Formato TXN]             <- Set: normaliza campos + resuelve api_base_url
+   [Responder -- Formato Invalido]   <- 400: lo arregla quien llama, no fallo el sistema
    [Propagar -> Error Handler -- TXN]<- Stop and Error si el formato es invalido
    [Despertar API]                   GET  /health   (despierta el cold-start de Render)
    [Verificar Cache]                 GET  /api/cache/lookup
@@ -94,6 +95,7 @@ ETAPA 2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP en paralelo
    [Historial del Cliente]           GET  /api/clients/{id}/history   <- flags de reincidencia
    [Verificar SLA]                   POST /api/sla/check              <- dias habiles del reclamo
    [Merge -- Contexto Paralelo]      <- Merge: espera las 7 ramas paralelas
+   [Responder -- API No Disponible]  <- 404 si el caso no existe, 503 si la API no responde
    [Propagar -> Error Handler -- API]<- Stop and Error si la API no responde
 
 ETAPA 3 -- ANALISIS CON IA (9 nodos)
@@ -105,20 +107,34 @@ ETAPA 3 -- ANALISIS CON IA (9 nodos)
    [Juez Aprueba?]                   <- IF: lee `approved` de la API (umbral en constants.py)
    [Marcar -- Calidad Baja]          <- Set: agrega flag LOW_QUALITY
    [Preparar Informe]                <- Code: construye el payload ReportRequest
+   [Responder -- Falla del Analisis] <- 502: fallo un servicio de atras, no la peticion
    [Propagar -> Error Handler -- Analisis] <- Stop and Error si falla el LLM
 
-ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (7 nodos)
+ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (11 nodos)
    [Switch -- Derivacion]              <- enruta por requires_hitl, no por risk_level
-      BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]
-      HIGH -> [Wait -- Aprobacion HITL]    <- Wait: formulario, espera al analista hasta 24 h
-           -> [Procesar Respuesta HITL]    <- Code: fusiona la decision; falla cerrado si no hubo
-           -> [Generar Reporte]            POST /api/reports/html -> [Responder -- Reporte]
-           -> [Registrar Feedback HITL]    POST /api/feedback (auto-index si score >= 8.0)
+      BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]  (200, HTML)
+                                            \-> [Responder -- Falla del Informe] (502)
+      REVISION HUMANA
+           -> [Avisar -- Formulario HITL]   POST /api/alerts/ con $execution.resumeFormUrl
+           -> [Responder -- Requiere Aprobacion]  <- 303 al formulario: se abre solo
+           -> [Wait -- Aprobacion HITL]     <- formulario, espera al analista hasta 24 h
+           -> [Procesar Respuesta HITL]     <- Code: fusiona la decision; falla cerrado si no hubo
+           -> [Generar Reporte]             POST /api/reports/html -> [Responder -- Reporte]
+           -> [Registrar Feedback HITL]     POST /api/feedback (auto-index si score >= 8.0)
    Cache hit -> [Formatear Cache] -> [Responder -- Reporte]   (sin re-renderizar)
-   Errores   -> [Stop and Error] -> workflow_ciri_errors.json (4 salidas, incluida la del informe)
+   Errores   -> [Responder -- ...] -> [Stop and Error] -> workflow_ciri_errors.json
+
+La URL del formulario del Wait se genera al correr y n8n solo la expone ANTES de
+llegar al nodo (`$execution.resumeFormUrl`). Por eso los dos que la necesitan --la
+alerta y la respuesta al que llamo-- van antes. Sin eso el caso quedaba esperando
+una decision que nadie sabia donde tomar.
+
+Ningun camino contesta 200 vacio. El webhook responde lo que diga un nodo Respond,
+y un `stopAndError` cortaba antes de llegar a uno: un transaction_id mal formado y
+un informe generado se veian igual desde afuera.
 ```
 
-**Una sola fuente de verdad para la URL de la API:** los 13 nodos HTTP usan
+**Una sola fuente de verdad para la URL de la API:** los 14 nodos HTTP usan
 `{{ $('Validar Formato TXN').first().json.api_base_url }}`. Ese campo se resuelve una vez, con
 este orden de prioridad: `api_base_url` del body del webhook -> variable `API_BASE_URL` de n8n ->
 default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
@@ -128,7 +144,7 @@ default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 - `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL)
 - `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa)
 
-**El formulario no llama a la API por su cuenta.** Es un workflow aparte, con su propio Form Trigger; cuando recibe un caso hace una llamada saliente al webhook del orquestador (`/webhook/chargeback-agent`) sobre la misma instancia. Es una segunda via de entrada **al agente**, no un atajo que lo esquive, asi que corre los 29 pasos igual que el webhook. Un formulario que llamara directo a un endpoint REST haria irrelevante la orquestacion, que es justamente el entregable.
+**El formulario no llama a la API por su cuenta.** Es un workflow aparte, con su propio Form Trigger; cuando recibe un caso hace una llamada saliente al webhook del orquestador (`/webhook/chargeback-agent`) sobre la misma instancia. Es una segunda via de entrada **al agente**, no un atajo que lo esquive, asi que corre los 39 pasos igual que el webhook. Un formulario que llamara directo a un endpoint REST haria irrelevante la orquestacion, que es justamente el entregable.
 
 Al importar desde la interfaz, n8n reemplaza el path del formulario por un identificador propio: hay que escribir `chargeback-form` en el campo **Form Path** del nodo. El nodo esta en `typeVersion` 2.1 a proposito — de 2.2 en adelante ese campo no existe y la URL del formulario queda fuera de control de quien importa.
 
@@ -159,7 +175,7 @@ flowchart TD
 
     subgraph S2 ["S2 - Ensamblado de Contexto"]
         GET_TX[Transaccion]
-        GET_TX -->|error| ERR_API[Stop and Error]
+        GET_TX -->|error| ERR_API([Responder 404/503]) --> STOP_API[Stop and Error]
         GET_TX --> GET_LOGS[Logs] & SEARCH_POL[Politicas] & SEARCH_CASES[Casos similares] & MERCHANT[Comercio] & CLIENT[Cliente] & SLA[SLA]
         MERCHANT --> EVAL_M[Evaluar riesgo]
         CLIENT --> EVAL_C[Evaluar historial]
@@ -168,8 +184,8 @@ flowchart TD
 
     subgraph S3 ["S3 - Analisis con IA"]
         COMPILE[Compilar contexto]
-        COMPILE --> RESOLVE["Resolucion LLM (Haiku + Sonnet)"]
-        RESOLVE -->|error| ERR_LLM[Stop and Error]
+        COMPILE --> RESOLVE["Resolucion LLM (Haiku + Sonnet, o el del modo demo)"]
+        RESOLVE -->|error| ERR_LLM([Responder 502]) --> STOP_LLM[Stop and Error]
         RESOLVE --> GUARDRAILS[Guardrails]
         GUARDRAILS --> JUDGE["Juez LLM (Sonnet)"]
         JUDGE -->|error| ERR_LLM
@@ -180,17 +196,18 @@ flowchart TD
     end
 
     subgraph S4 ["S4 - Enrutamiento por Riesgo"]
-        SWITCH{Nivel de riesgo}
-        SWITCH -->|BLOCKER| REPORT[Generar Reporte]
-        SWITCH -->|HIGH| REPORT
-        SWITCH -->|MEDIUM| REPORT
-        SWITCH -->|LOW| REPORT
-        REPORT -->|error| ERR_RPT[Stop and Error]
-        REPORT --> RESPOND([Responder])
-        RESPOND --> IS_HIGH{"Es HIGH?"}
-        IS_HIGH -->|si| WAIT[Wait HITL]
+        SWITCH{"requires_hitl?"}
+        SWITCH -->|"si -- REVISION HUMANA"| ALERTA[Avisar Formulario HITL]
+        ALERTA --> R303([Responder 303 al formulario])
+        R303 --> WAIT[Wait -- Aprobacion HITL]
         WAIT --> PROCESS_HITL[Procesar Respuesta]
         PROCESS_HITL --> FEEDBACK[Registrar Feedback]
+        PROCESS_HITL --> REPORT[Generar Reporte]
+        SWITCH -->|BLOCKER| REPORT
+        SWITCH -->|MEDIUM| REPORT
+        SWITCH -->|LOW| REPORT
+        REPORT -->|error| ERR_RPT([Responder 502]) --> STOP_RPT[Stop and Error]
+        REPORT --> RESPOND([Responder 200 -- informe HTML])
     end
 
     MERGE --> COMPILE
@@ -217,7 +234,7 @@ Investigar un caso cuesta dinero real: Haiku evalua cada politica recuperada, So
 
 Por eso la instancia publicada arranca en **modo demo**, con un toggle en el panel para apagarlo. En ese modo **no se llama al modelo**: no es que intente y falle, no gasta.
 
-**El modo demo no toca la orquestacion.** El diagrama del workflow es el mismo con demo encendido o apagado: los mismos 29 pasos, las mismas conexiones, los mismos endpoints. Lo unico que cambia es de donde sale la respuesta de dos de esos pasos.
+**El modo demo no toca la orquestacion.** El diagrama del workflow es el mismo con demo encendido o apagado: los mismos 39 pasos, las mismas conexiones, los mismos endpoints. Lo unico que cambia es de donde sale la respuesta de dos de esos pasos.
 
 ```
                           MODO PRODUCCION          MODO DEMO
@@ -313,7 +330,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 666 tests pasan (633 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 764 tests pasan (731 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -370,7 +387,9 @@ domain/          <- Modelos, enums, constantes. Sin dependencias externas.
 
 | Cambio necesario | Archivos tocados | Archivos intactos |
 |---|---|---|
-| Cambiar Anthropic por OpenAI | `llm/client.py` unicamente | Todo lo demas |
+| Cambiar Anthropic por otro proveedor | Nada: se elige desde el panel o con `CB_LLM_PROVIDER` | Todo el codebase |
+| Agregar un proveedor nuevo | Una entrada en `llm/client.py` (`PROVEEDORES`) | Todo lo demas |
+| Un modelo que necesite otro trato | Una entrada en `llm/adaptadores.py` | Todo lo demas |
 | Cambiar Qdrant por Pinecone | `rag/indexer.py` + `rag/retriever.py` | Todo lo demas |
 | Agregar nuevo endpoint | Un archivo en `routes/` | Todas las rutas existentes |
 | Agregar nueva politica | `POST /api/policies/` (llamada API, sin codigo) | Todo el codebase |
@@ -379,7 +398,20 @@ domain/          <- Modelos, enums, constantes. Sin dependencias externas.
 
 **Modularidad en n8n:** Agregar una nueva fuente de datos (por ejemplo, un API de fraud scoring externo) es un nodo HTTP Request mas en S2. El resto del workflow queda intacto. Agregar un nuevo nivel de riesgo es una rama mas en el Switch de S4.
 
-**Cliente LLM basado en Protocol:** `llm/client.py` define un `Protocol` llamado `LLMClient`. `AnthropicClient` lo implementa. Los tests usan `MockLLMClient`. Cambiar de proveedor requiere implementar el Protocol -- ninguno de los call sites cambia.
+**Cliente LLM basado en Protocol:** `llm/client.py` define un `Protocol` llamado `LLMClient` con dos implementaciones: `AnthropicClient` (SDK) y `OpenAICompatibleClient` (HTTP crudo), que cubre a los once proveedores de `PROVEEDORES` porque casi todos hablan el mismo dialecto. Los tests usan `MockLLMClient`.
+
+**`LLMManager` es la unica puerta.** Nadie fuera de el toca un cliente: los servicios dicen que PASO necesitan —evaluar politicas, sintetizar, juzgar— y reciben un `LLMResult`. La razon no es estetica. Mientras el que llama pueda elegir el cliente, puede elegir el equivocado, y eso paso: el juez resolvia el servicio del modo demo y despues llamaba al de produccion, asi que la mitad del pipeline se iba por Anthropic sin credito mientras la otra mitad corria en Gemini.
+
+**`llm/adaptadores.py`: un adaptador por familia de modelo.** El sistema esta calibrado para Claude, y el resto necesita traduccion. Lo que cambia, medido y no supuesto:
+
+| | Claude | Modelos que razonan (Gemini, o-series, R1) |
+|---|---|---|
+| `max_tokens` | solo la salida | pensamiento **y** salida, sin reportarlo |
+| Piso necesario | 4.096 alcanza | 16.384 — con 4.096 corta a mitad de frase |
+| Reintentos | los hace el SDK | los hace el cliente HTTP: `httpx` solo reintenta fallos de conexion, y un 503 es una respuesta valida |
+| Frecuencia | sin limite conocido | 5/min en el free tier: la API espacia las llamadas sola |
+
+Agregar un modelo que se comporte distinto es agregar una entrada. Los limites por minuto son el piso conocido de cada familia y `CB_LLM_RPM` los pisa por proveedor, porque la cuota es de la cuenta y los proveedores la mueven.
 
 ---
 
@@ -718,8 +750,11 @@ quest_ML/
         parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/
           v1_policy_eval.py # v1.2 — evaluación de políticas
-          v1_resolution.py  # v3.0 — síntesis de resolución (Sonnet)
-          v1_judge.py       # v2.0 — LLM-as-Judge con rubrics
+          v1_resolution.py  # v3.1 — síntesis de resolución (Sonnet)
+          v1_judge.py       # v2.1 — LLM-as-Judge con rubrics
+        client.py           # Protocol LLMClient + Anthropic y OpenAI-compatible
+        manager.py          # LLMManager: la única puerta a los modelos
+        adaptadores.py      # Un adaptador por familia: tokens, reintentos, frecuencia
       analysis/
         analyzer.py         # SLA, patrones de error, riesgo, flags de cliente
       routes/               # Handlers thin (~20 líneas cada uno)
@@ -727,9 +762,11 @@ quest_ML/
         generator.py        # Jinja2 → HTML
         templates/
           case_report.html  # Reporte de caso (9 secciones + formulario HITL)
+          _estilos.css      # Los estilos van incrustados: el informe se abre sin red
           test_panel.html   # Panel interactivo de testing
       observability/
         tracer.py           # LangfuseTracer + NoOpTracer (Protocol)
+        trazador_local.py   # TrazadorLocal: mismo Protocol, anota en SQLite
       data/
         db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
@@ -740,7 +777,7 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 666 tests (unit + integration + E2E)
+  tests/                      # 764 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 21 decisiones técnicas con razonamiento
@@ -785,7 +822,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-666 tests en 32 archivos (unit + integration + E2E):
+764 tests en 32 archivos (unit + integration + E2E):
 
 ```
 tests/

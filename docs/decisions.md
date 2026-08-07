@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 666 tests pasando (633 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 764 tests pasando (731 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -318,7 +318,17 @@ Traducir en la frontera en vez de renombrar los campos del contrato mantiene la 
 
 El problema es concreto: si la clave del servidor se queda sin crédito, quien abre el panel ve un error y se va con la idea de que el sistema está roto.
 
-**Decisión:** Un modo demo, encendido por defecto (`CB_DEMO_MODE`), con un toggle en el panel. En ese modo **no se llama al modelo** —no es que intente y falle: no gasta—. Los casos de ejemplo viajan con su análisis ya calculado:
+**Decisión:** Un modo demo, encendido por defecto (`CB_DEMO_MODE`), con un toggle en el panel. **El sistema está hecho para Claude** —Haiku evalúa políticas, Sonnet sintetiza y juzga, y los prompts están afinados para esa configuración— pero en modo demo cae a **`gemini-flash-lite-latest`**, que tiene free tier: el pipeline corre entero, de verdad, sobre cualquier transacción del dataset, y no consume la cuenta de nadie.
+
+Correr con un modelo gratuito cuesta lo mismo que no correr, y devuelve un análisis de ahora en vez de una grabación. Por eso es el camino principal:
+
+| Situación | Qué pasa |
+|---|---|
+| Modo demo **con** un modelo de free tier configurado | Corre el pipeline completo con ese modelo |
+| Modo demo **sin** free tier configurado | Responde con el análisis guardado de los tres casos de ejemplo |
+| Modo producción | Corre con Claude, usando la clave que trae quien consulta |
+
+Cuando no hay free tier, los casos de ejemplo viajan con su análisis ya calculado:
 
 | | |
 |---|---|
@@ -327,16 +337,22 @@ El problema es concreto: si la clave del servidor se queda sin crédito, quien a
 
 Con el JSON, `POST /api/analyze/resolve` y `POST /api/analyze/judge` responden sin modelo, y **el workflow de n8n corre entero**: las siete consultas de contexto son reales, el compilado es real y el informe se genera de verdad. Lo único pregrabado es lo que hubiera contestado el modelo.
 
+**El modo demo no cambia quién orquesta.** Es sobre plata, no sobre arquitectura: los nodos de n8n llaman a esta misma API, que resuelve el modelo del demo igual. Elegir «n8n Production» en el panel pasa por n8n en los dos modos.
+
 Quien manda `api_key` en la petición corre el pipeline completo con su propia cuenta, y el modo demo no le aplica.
 
 **Un caso que no está guardado recibe el más cercano en riesgo.** La comparación es por score antifraude y nada más: es la única medida de riesgo disponible sin correr el pipeline, y es la que decide POL-FRD-001. Meterle método de pago o país sería comparar otra cosa.
 
-**Razonamiento:** La alternativa era consultar el saldo antes de gastar, pero Anthropic no expone el crédito restante en su API —el Admin API reporta consumo, no saldo—. Y aunque lo expusiera, "intentar y caer parado" sigue costando la llamada fallida. No llamar es más barato y más simple.
+**Razonamiento:** La alternativa era consultar el saldo antes de gastar, pero Anthropic no expone el crédito restante en su API —el Admin API reporta consumo, no saldo—. Y aunque lo expusiera, "intentar y caer parado" sigue costando la llamada fallida.
+
+La versión inicial de esta decisión era no llamar al modelo en absoluto, y servir la grabación. Funcionaba, pero un análisis grabado envejece: cambian los prompts, cambian las políticas, y lo que se muestra deja de ser lo que el sistema haría hoy. Con un free tier el problema desaparece —correr no cuesta— así que la grabación quedó como respaldo y no como plan.
+
+**Lo que el modelo gratuito no da es la calidad de la configuración documentada**, y eso se declara en el propio informe: el juez corre en el mismo modelo que resolvió, así que uno más chico se penaliza dos veces —razona con menos profundidad y después se puntúa a sí mismo—. El informe dice que la nota puede desviarse hasta **±2.5 puntos** y que para el mejor resultado va Anthropic en modo producción. El orden de magnitud es observado: el mismo `TXN-00051` que en desarrollo daba alrededor de 9 salió 6.8 con Flash Lite.
 
 Lo que hace que esto sea honesto y no un truco es que se declara por todos lados, siempre:
 
-- el HTML abre con un cartel **DEMO (Caso prearmado)**
-- la respuesta lleva la cabecera `X-Modo-Demo` y `cost_usd: 0.0`
+- el HTML abre con un cartel: **ANÁLISIS REAL (modelo gratuito)** si corrió, **DEMO (Caso prearmado)** si es la grabación — y el primero nombra el modelo que lo produjo
+- la respuesta lleva la cabecera `X-Modo-Demo` o `X-Modelo-Gratuito`, y `cost_usd: 0.0`
 - el servidor deja un `WARNING` en el log
 - cuando el caso mostrado no es el pedido, el cartel **nombra las dos transacciones**
 
@@ -346,7 +362,9 @@ Lo que hace que esto sea honesto y no un truco es que se declara por todos lados
 - (+) El sistema se evalúa de punta a punta, incluido n8n, sin clave y sin costo
 - (+) El toggle deja elegir: mirar sin gastar, o correr de verdad con tu cuenta
 - (+) La marca viaja en el HTML, en la cabecera, en el uso y en el log: no hay forma de confundirse
-- (-) Sólo tres casos tienen análisis propio; el resto recibe el más cercano en riesgo
+- (+) Con free tier corre sobre **cualquiera** de las 100 transacciones, no sólo sobre tres
+- (-) Los resultados del modelo gratuito no son los de la configuración documentada, y hay que decirlo en cada informe
+- (-) Sin free tier sólo tres casos tienen análisis propio; el resto recibe el más cercano en riesgo
 - (-) El análisis guardado envejece: si cambian los prompts o las políticas, deja de reflejar lo que haría el sistema hoy
 - (-) Un archivo más que mantener por cada caso de ejemplo que se agregue
 

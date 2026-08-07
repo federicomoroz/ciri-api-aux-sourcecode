@@ -29,8 +29,8 @@ si vas más lejos:
 | Hace falta si… | Qué | Dónde se pone |
 |---|---|---|
 | Sólo querés mirar el circuito, el panel o los informes | **Nada** | — |
-| Querés analizar un caso que no es de los tres de ejemplo | Una API key de Anthropic | Campo **API key** del panel, o `api_key` en el body |
-| Querés ejecutar a través de tu propia instancia de n8n | La URL de tu n8n | Campo **n8n URL** del panel |
+| Querés correr en la configuración documentada (Claude) en vez del modelo gratuito | Una API key de Anthropic | Campo **API key** del panel, o `api_key` en el body |
+| Querés ejecutar a través de tu propia instancia de n8n | Una URL **pública** de n8n — al webhook lo llama la API, no tu navegador | Campo **n8n URL** del panel. Si tu n8n es local, levantá el proyecto con Docker y usá su panel |
 | Importaste el workflow del formulario | El path del formulario | Nodo **Form Trigger** → campo **Form Path** → `chargeback-form` |
 | Importaste los workflows y querés que los fallos se registren | El error handler | **Settings → Error Workflow → `workflow_ciri_errors`** |
 | Vas a correr todo en tu máquina con Docker | Dos claves con free tier | `.env`: `CB_ANTHROPIC_API_KEY` y `CB_VOYAGE_API_KEY` |
@@ -60,22 +60,34 @@ Ninguna requiere instalar nada ni configurar claves. Si preferís correr todo en
 
 ### Dos modos, con un toggle en el panel
 
-Investigar un caso cuesta dinero real —dos modelos, varias llamadas—. Evaluar una entrega no debería consumir la cuenta de nadie, así que el panel arranca en **modo demo** y el toggle cambia al otro:
+**El sistema está hecho para Claude**: Haiku evalúa las políticas, Sonnet sintetiza y juzga, y los prompts están afinados para esa configuración. Pero investigar un caso cuesta dinero real, y evaluar una entrega no debería consumir la cuenta de nadie — así que el panel arranca en **modo demo**, que cae a un modelo con free tier, y el toggle cambia al otro:
 
 | | **Modo demo** (por defecto) | **Modo producción** |
 |---|---|---|
-| **Qué casos** | Los 3 de ejemplo | Cualquier transacción del dataset |
-| **Llama al modelo** | **No.** No es que intente y falle: no gasta | Sí, el pipeline completo |
-| **Hace falta clave** | No | Sí — la del panel, o la del servidor si tiene |
-| **Qué devuelve** | El informe ya generado, al instante | El análisis recién hecho |
+| **Qué modelo** | `gemini-flash-lite-latest` — free tier | **Claude**: Haiku para políticas, Sonnet para síntesis y juez |
+| **Qué casos** | Cualquier transacción del dataset | Cualquier transacción del dataset |
+| **Llama al modelo** | Sí: el pipeline corre entero, de verdad | Sí, el pipeline completo |
+| **Hace falta clave** | No — usa la del servidor | Sí, la tuya de Anthropic, sólo mientras el panel esté abierto |
+| **Qué devuelve** | Un análisis de ahora, con su desvío declarado | El análisis en la configuración documentada |
 
-**Si cargás tu API key, se usa la tuya y no la del servidor.** Esa es la forma de ver el sistema trabajando de verdad sobre cualquier caso, gastando de tu cuenta.
+**El modo demo corre de verdad, no recita.** Cuesta lo mismo que no correr y devuelve un análisis de ahora en vez de una grabación de hace semanas.
 
-**Un caso sin análisis guardado recibe el más cercano en riesgo.** Si pedís `TXN-00004` y el modelo no está disponible, se responde con el ejemplo cuyo score antifraude está más cerca, y el cartel nombra las dos transacciones: *"pediste TXN-00004, esto es TXN-00051"*. El informe es entero del caso prestado — nunca los datos de una transacción con la resolución de otra.
+**Lo que el modelo gratuito no da es la calidad de la configuración documentada, y el informe lo dice.** El juez corre en el mismo modelo que resolvió, así que uno más chico se penaliza dos veces: razona con menos profundidad y después se puntúa a sí mismo. Cada informe declara que la nota puede desviarse hasta **±2.5 puntos** y que para el mejor resultado va Anthropic en modo producción. El orden de magnitud es observado: el mismo `TXN-00051` que en desarrollo daba alrededor de 9 salió 6.8 con Flash Lite.
 
-Un informe prearmado nunca se hace pasar por uno recién hecho. Se declara en cuatro lugares: el cartel **DEMO (Caso prearmado)** que abre el HTML, la cabecera `X-Modo-Demo`, el uso que informa `cost_usd: 0.0`, y un warning en el log del servidor.
+**Si cargás tu API key, se usa la tuya y no la del servidor.** Esa es la forma de ver el sistema en su configuración real.
 
-Esto vale también para el workflow de n8n: corre entero en modo demo, con las siete consultas de contexto reales y el informe generado de verdad. Lo único pregrabado es lo que hubiera contestado el modelo. El porqué y los trade-offs, en `docs/decisions.md`, decisión 14.
+**Si no hay free tier configurado, el modo demo recita en vez de correr**, y ahí sí sirve el análisis guardado de los tres casos de ejemplo. Un caso sin análisis guardado recibe el más cercano en riesgo: el cartel nombra las dos transacciones —*"pediste TXN-00004, esto es TXN-00051"*— y el informe es entero del caso prestado, nunca los datos de una transacción con la resolución de otra.
+
+**Un informe siempre dice cómo se produjo**, y son dos carteles distintos:
+
+| Cartel | Qué significa |
+|---|---|
+| **ANÁLISIS REAL (modelo gratuito)** | Corrió recién, con RAG, guardrails y juez. Nombra el modelo y declara el ±2.5 |
+| **DEMO (Caso prearmado)** | Es el resultado guardado de una corrida anterior |
+
+Además viaja en la cabecera (`X-Modelo-Gratuito` o `X-Modo-Demo`), en el uso (`cost_usd: 0.0`) y en un warning del log.
+
+Esto vale también para el workflow de n8n: **el modo demo no cambia quién orquesta.** Es sobre plata, no sobre arquitectura — los nodos llaman a esta misma API, que resuelve el modelo del demo igual. El porqué y los trade-offs, en `docs/decisions.md`, decisión 14.
 
 Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, búsqueda semántica de políticas y precedentes, riesgo del comercio, SLA e informes. El default del servidor se cambia con `CB_DEMO_MODE=false`.
 
@@ -85,9 +97,9 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 Los tres archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
 
-**«n8n y la API»** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
+**«n8n y la API»** — quién le pide qué a quién. Las catorce llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
-**«el circuito completo»** — el circuito completo. Los 29 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+**«el circuito completo»** — el circuito completo. Los 39 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
 
 **«el RAG»** — la cadena entera de recuperación, seguida con un caso real: qué se indexa y qué no, cómo el código arma la consulta, por qué las dos colecciones se buscan con criterios opuestos, cómo se formatea el contexto y por dónde el índice se escribe solo.
 
@@ -127,7 +139,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 | Archivo | Qué es |
 |---|---|
 | `workflow_ciri_agent.json` | El orquestador: 45 nodos, 39 ejecutables |
-| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 29 pasos igual |
+| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 39 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 
 Tres pasos manuales al importar, inevitables porque n8n reasigna identificadores al recibir un workflow:
@@ -246,7 +258,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 666 en 32 archivos; los de `unit/` e `integration/` corren
+**Tests:** `pytest tests/ -v`. Son 764 en 32 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
 validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.

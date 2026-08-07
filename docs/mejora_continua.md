@@ -609,7 +609,20 @@ CB_LANGFUSE_SECRET_KEY=sk-lf-...
 CB_LANGFUSE_HOST=https://cloud.langfuse.com
 ```
 
-Cuando `CB_LANGFUSE_ENABLED=false` (por defecto), todas las llamadas al tracer son no-ops — el wrapper `NoOpTracer` retorna objetos vacios que absorben llamadas sin error.
+Cuando `CB_LANGFUSE_ENABLED=false` (por defecto) **se sigue midiendo**: en lugar del
+`NoOpTracer` corre `TrazadorLocal`, que implementa el mismo Protocol y anota trazas,
+generaciones y puntajes en la SQLite del proyecto. Nadie aguas arriba sabe cual de los dos
+esta corriendo.
+
+La razon es que faltaba Langfuse no significa que no haya nada que medir: la latencia de cada
+llamada existe igual, los tokens los informa el proveedor, y el costo de una corrida gratuita
+es un dato —cero— y no una ausencia. Lo que Langfuse aporta y el registro local no es la traza
+distribuida, el historico largo y su UI.
+
+`GET /api/langfuse/stats` devuelve `fuente: "langfuse"` o `fuente: "local"`, y el panel lo
+declara en pantalla: los numeros locales son de ese proceso y no sobreviven a un reinicio.
+
+El `NoOpTracer` sigue existiendo para los tests, que no tienen por que escribir en disco.
 
 ---
 

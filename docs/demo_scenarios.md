@@ -33,7 +33,7 @@ El panel de pruebas está disponible en `http://localhost:8000/panel`.
 
 ### El formulario, como segunda vía de entrada
 
-`http://localhost:5678/form/chargeback-form` — al enviar el formulario, ese workflow llama al webhook del orquestador, así que el caso corre los 29 pasos igual que por el webhook.
+`http://localhost:5678/form/chargeback-form` — al enviar el formulario, ese workflow llama al webhook del orquestador, así que el caso corre los 39 pasos igual que por el webhook.
 
 Para probarlo sin navegador hay un detalle: n8n nombra los inputs `field-0`, `field-1`, `field-2` por posición, no por su etiqueta.
 

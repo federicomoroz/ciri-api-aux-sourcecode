@@ -4,23 +4,209 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte de Contracargo — TXN-00051</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .badge-blocker { @apply bg-red-700 text-white px-3 py-1 rounded-full font-bold text-sm; }
-        .badge-high { @apply bg-orange-500 text-white px-3 py-1 rounded-full font-bold text-sm; }
-        .badge-medium { @apply bg-yellow-500 text-black px-3 py-1 rounded-full font-bold text-sm; }
-        .badge-low { @apply bg-green-500 text-white px-3 py-1 rounded-full font-bold text-sm; }
-        .verdict-blocker { background: #dc2626; color: white; }
-        .verdict-fail { background: #f97316; color: white; }
-        .verdict-warning { background: #eab308; color: black; }
-        .verdict-pass { background: #22c55e; color: white; }
-        .verdict-not_applicable { background: #94a3b8; color: white; }
-        .log-error { border-left: 4px solid #dc2626; background: #fef2f2; }
-        .log-warn { border-left: 4px solid #f97316; background: #fff7ed; }
-        .log-info { border-left: 4px solid #94a3b8; background: #f8fafc; }
-        .score-bar { height: 8px; border-radius: 4px; background: #e2e8f0; }
-        .score-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #22c55e, #3b82f6); }
-    </style>
+    <style>/* Las utilidades de Tailwind que usa el informe, escritas a mano.
+ *
+ * El informe traia el script del CDN de Tailwind, que genera los estilos en el
+ * browser. Anda casi siempre, y por eso el problema tardo en aparecer: n8n
+ * sirve la respuesta del formulario HITL con
+ * `Content-Security-Policy: sandbox` sin `allow-same-origin`, el documento
+ * queda en un origen opaco y el script no llega a aplicar nada. El analista
+ * aprobaba un contracargo y recibia el informe sin una sola regla de estilo.
+ *
+ * Incrustarlo arregla eso y de paso saca tres dependencias que un entregable no
+ * deberia tener: internet, un CDN de terceros, y 400 KB de JavaScript por cada
+ * informe que se abre. Los HTML de `docs/examples/` se entregan en un ZIP: se
+ * abren desde el disco, y quien los mire puede estar en una red que bloquee
+ * CDNs.
+ *
+ * Son las 151 clases que la plantilla usa de verdad, con los valores de
+ * Tailwind 3.4. Si se agrega una clase nueva a `case_report.html` hay que
+ * agregarla aca — `tests/unit/test_report_generator.py` falla si falta.
+ */
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+*, ::before, ::after { box-sizing: border-box; border: 0 solid #e5e7eb; }
+html { -webkit-text-size-adjust: 100%; font-family: ui-sans-serif, system-ui, -apple-system,
+       "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.5; }
+body { margin: 0; }
+h1, h2, h3, h4, p, ul, ol, figure { margin: 0; }
+h1, h2, h3, h4 { font-size: inherit; font-weight: inherit; }
+ul, ol { padding: 0; list-style: none; }
+a { color: inherit; text-decoration: inherit; }
+table { border-collapse: collapse; text-indent: 0; }
+th, td { padding: 0; }
+button, input, textarea, select { font: inherit; color: inherit; margin: 0; }
+button { cursor: pointer; background: none; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+svg, img { display: block; max-width: 100%; }
+
+/* ── Layout ────────────────────────────────────────────────────────────── */
+.block { display: block; }
+.inline-block { display: inline-block; }
+.flex { display: flex; }
+.grid { display: grid; }
+.flex-1 { flex: 1 1 0%; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.justify-between { justify-content: space-between; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gap-2 { gap: .5rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.w-full { width: 100%; }
+.max-w-5xl { max-width: 64rem; }
+.max-h-80 { max-height: 20rem; }
+.min-h-screen { min-height: 100vh; }
+.overflow-x-auto { overflow-x: auto; }
+.overflow-y-auto { overflow-y: auto; }
+
+/* `space-y-*`: separacion entre hermanos, no del bloque contra el mundo. */
+.space-y-1 > * + * { margin-top: .25rem; }
+.space-y-2 > * + * { margin-top: .5rem; }
+.space-y-3 > * + * { margin-top: .75rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+
+/* ── Espaciado ─────────────────────────────────────────────────────────── */
+.p-2 { padding: .5rem; }   .p-3 { padding: .75rem; }
+.p-4 { padding: 1rem; }    .p-6 { padding: 1.5rem; }
+.px-2 { padding-left: .5rem; padding-right: .5rem; }
+.px-3 { padding-left: .75rem; padding-right: .75rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.px-8 { padding-left: 2rem; padding-right: 2rem; }
+.py-1 { padding-top: .25rem; padding-bottom: .25rem; }
+.py-2 { padding-top: .5rem; padding-bottom: .5rem; }
+.py-3 { padding-top: .75rem; padding-bottom: .75rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.pb-3 { padding-bottom: .75rem; }
+.pr-4 { padding-right: 1rem; }
+.mb-1 { margin-bottom: .25rem; }  .mb-2 { margin-bottom: .5rem; }
+.mb-4 { margin-bottom: 1rem; }    .mb-6 { margin-bottom: 1.5rem; }
+.mt-0\.5 { margin-top: .125rem; } .mt-1 { margin-top: .25rem; }
+.mt-2 { margin-top: .5rem; }      .mt-3 { margin-top: .75rem; }
+.mt-4 { margin-top: 1rem; }
+.ml-1 { margin-left: .25rem; }    .ml-2 { margin-left: .5rem; }
+
+/* ── Tipografia ────────────────────────────────────────────────────────── */
+.text-xs { font-size: .75rem; line-height: 1rem; }
+.text-sm { font-size: .875rem; line-height: 1.25rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+.text-5xl { font-size: 3rem; line-height: 1; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.font-black { font-weight: 900; }
+.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.italic { font-style: italic; }
+.uppercase { text-transform: uppercase; }
+.tracking-wide { letter-spacing: .025em; }
+.leading-relaxed { line-height: 1.625; }
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.whitespace-nowrap { white-space: nowrap; }
+
+/* ── Color del texto ───────────────────────────────────────────────────── */
+.text-white { color: #fff; }        .text-black { color: #000; }
+.text-gray-400 { color: #9ca3af; }  .text-gray-500 { color: #6b7280; }
+.text-gray-600 { color: #4b5563; }  .text-gray-700 { color: #374151; }
+.text-gray-800 { color: #1f2937; }  .text-gray-900 { color: #111827; }
+.text-red-600 { color: #dc2626; }   .text-red-700 { color: #b91c1c; }
+.text-green-500 { color: #22c55e; } .text-green-600 { color: #16a34a; }
+.text-green-700 { color: #15803d; }
+.text-blue-600 { color: #2563eb; }  .text-blue-700 { color: #1d4ed8; }
+.text-blue-800 { color: #1e40af; }
+.text-yellow-500 { color: #eab308; } .text-yellow-600 { color: #ca8a04; }
+.text-yellow-700 { color: #a16207; } .text-yellow-800 { color: #854d0e; }
+.text-orange-500 { color: #f97316; } .text-orange-600 { color: #ea580c; }
+.text-orange-700 { color: #c2410c; } .text-orange-800 { color: #9a3412; }
+.text-amber-900 { color: #78350f; }
+
+/* ── Fondo ─────────────────────────────────────────────────────────────── */
+.bg-white { background-color: #fff; }
+.bg-gray-50 { background-color: #f9fafb; }   .bg-gray-100 { background-color: #f3f4f6; }
+.bg-red-50 { background-color: #fef2f2; }    .bg-red-100 { background-color: #fee2e2; }
+.bg-red-600 { background-color: #dc2626; }   .bg-red-700 { background-color: #b91c1c; }
+.bg-green-50 { background-color: #f0fdf4; }  .bg-green-100 { background-color: #dcfce7; }
+.bg-green-500 { background-color: #22c55e; } .bg-green-600 { background-color: #16a34a; }
+.bg-blue-50 { background-color: #eff6ff; }   .bg-blue-600 { background-color: #2563eb; }
+.bg-yellow-50 { background-color: #fefce8; } .bg-yellow-400 { background-color: #facc15; }
+.bg-yellow-500 { background-color: #eab308; }
+.bg-orange-50 { background-color: #fff7ed; } .bg-orange-100 { background-color: #ffedd5; }
+.bg-orange-500 { background-color: #f97316; }
+.bg-purple-50 { background-color: #faf5ff; }
+.bg-amber-50 { background-color: #fffbeb; }
+
+/* ── Bordes y sombras ──────────────────────────────────────────────────── */
+.border { border-width: 1px; }
+.border-2 { border-width: 2px; }
+.border-b { border-bottom-width: 1px; }
+.border-l-4 { border-left-width: 4px; }
+.border-gray-50 { border-color: #f9fafb; }   .border-gray-100 { border-color: #f3f4f6; }
+.border-gray-300 { border-color: #d1d5db; }
+.border-red-200 { border-color: #fecaca; }
+.border-blue-200 { border-color: #bfdbfe; }
+.border-yellow-200 { border-color: #fef08a; } .border-yellow-400 { border-color: #facc15; }
+.border-orange-400 { border-color: #fb923c; }
+.border-purple-100 { border-color: #f3e8ff; }
+.border-amber-400 { border-color: #fbbf24; }
+.rounded { border-radius: .25rem; }
+.rounded-lg { border-radius: .5rem; }
+.rounded-xl { border-radius: .75rem; }
+.rounded-2xl { border-radius: 1rem; }
+.rounded-full { border-radius: 9999px; }
+.shadow { box-shadow: 0 1px 3px rgb(0 0 0 / .1), 0 1px 2px -1px rgb(0 0 0 / .1); }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / .1), 0 4px 6px -4px rgb(0 0 0 / .1); }
+
+/* ── Interaccion ───────────────────────────────────────────────────────── */
+.cursor-pointer { cursor: pointer; }
+.transition { transition: all .15s cubic-bezier(.4, 0, .2, 1); }
+.hover\:bg-gray-50:hover { background-color: #f9fafb; }
+.hover\:bg-yellow-600:hover { background-color: #ca8a04; }
+.focus\:border-yellow-500:focus { border-color: #eab308; }
+.focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+    .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ── Propias del informe ───────────────────────────────────────────────── */
+/* Antes usaban `@apply`, que solo existe con Tailwind cargado. */
+.badge-blocker, .badge-high, .badge-medium, .badge-low {
+    padding: .25rem .75rem; border-radius: 9999px; font-weight: 700;
+    font-size: .875rem; line-height: 1.25rem;
+}
+.badge-blocker { background-color: #b91c1c; color: #fff; }
+.badge-high { background-color: #f97316; color: #fff; }
+.badge-medium { background-color: #eab308; color: #000; }
+.badge-low { background-color: #22c55e; color: #fff; }
+.verdict-blocker { background: #dc2626; color: #fff; }
+.verdict-fail { background: #f97316; color: #fff; }
+.verdict-warning { background: #eab308; color: #000; }
+.verdict-pass { background: #22c55e; color: #fff; }
+.verdict-not_applicable { background: #94a3b8; color: #fff; }
+.log-error { border-left: 4px solid #dc2626; background: #fef2f2; }
+.log-warn { border-left: 4px solid #f97316; background: #fff7ed; }
+.log-info { border-left: 4px solid #94a3b8; background: #f8fafc; }
+.score-bar { height: 8px; border-radius: 4px; background: #e2e8f0; }
+.score-fill { height: 100%; border-radius: 4px;
+              background: linear-gradient(90deg, #22c55e, #3b82f6); }
+
+/* Al imprimir o guardar como PDF, el color de los badges es informacion. */
+@media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { background: #fff; }
+}
+</style>
 </head>
 <body class="bg-gray-50 min-h-screen" data-risk-level="BLOCKER">
 <div class="max-w-5xl mx-auto px-4 py-8">
