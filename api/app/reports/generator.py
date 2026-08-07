@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from jinja2 import Environment, FileSystemLoader
 
 from ..data.precomputados import CARTEL, cartel_modelo_gratis
-from ..domain.constants import REPORT_TEMPLATE_NAME
+from ..domain.constants import DEMO_DESVIO_JUEZ, REPORT_TEMPLATE_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ class ReportGenerator:
             **data,
             generated_at=generado,
             cartel_demo=_cartel_de(data),
+            desvio_juez=DEMO_DESVIO_JUEZ,
             datos_del_caso=_json_para_html(data),
         )
 

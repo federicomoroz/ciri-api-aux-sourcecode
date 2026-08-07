@@ -22,6 +22,8 @@ import logging
 import os
 import re
 
+from ..domain.constants import DEMO_DESVIO_JUEZ
+
 logger = logging.getLogger(__name__)
 
 # El nombre del archivo lleva el caso: report_<riesgo>_<TXN>.html
@@ -98,14 +100,16 @@ def cartel_modelo_gratis(modelo: dict) -> str:
         f'<div style="{_ESTILO_CARTEL}">'
         f'<b style="letter-spacing:.03em">{ETIQUETA_GRATIS}</b> &nbsp;Este informe se genero '
         "recien: el pipeline corrio entero, con RAG, guardrails y juez. Se uso el modelo "
+        "gratuito "
         f"<b>{modelo.get('modelo', '')}</b> ({modelo.get('proveedor', '')}) para que evaluar "
         "el sistema no requiera cuenta propia."
         '<div style="margin-top:9px;font-size:12.5px;opacity:.85">'
-        "<b>Los resultados pueden variar.</b> La configuracion documentada es Claude "
-        "(Haiku + Sonnet) y los prompts estan afinados para ella: un modelo mas chico "
-        "puede citar menos evidencia o razonar con menos profundidad sobre los precedentes. "
-        "Para ver el sistema en su configuracion real, pasa a <b>modo produccion</b> y "
-        "carga tu clave de Anthropic — se usa solo mientras el panel este abierto."
+        f"<b>La nota del juez puede desviarse hasta ±{DEMO_DESVIO_JUEZ:.1f} puntos</b> y debe "
+        "tomarse a fines informativos. La configuracion documentada es Claude (Haiku + "
+        "Sonnet) y los prompts estan afinados para ella: un modelo mas chico puede citar "
+        "menos evidencia o razonar con menos profundidad sobre los precedentes, y el juez "
+        "lo penaliza. Para obtener los mejores resultados, use <b>Anthropic en modo "
+        "produccion</b>: se carga la clave en el panel y se usa solo mientras este abierto."
         "</div></div>"
     )
 

@@ -306,7 +306,7 @@
                 <div class="text-5xl font-black {% if judge_evaluation.overall_score >= 7 %}text-green-600{% elif judge_evaluation.overall_score >= 5 %}text-yellow-500{% else %}text-red-600{% endif %}">
                     {{ "%.1f"|format(judge_evaluation.overall_score) }}
                 </div>
-                <p class="text-xs text-gray-500">/ 10.0</p>
+                <p class="text-xs text-gray-500">/ 10.0{% if resolution and resolution.demo_modelo %} <span class="whitespace-nowrap">± {{ "%.1f"|format(desvio_juez) }}</span>{% endif %}</p>
                 <span class="inline-block mt-1 px-3 py-1 rounded-full text-xs font-bold {% if judge_evaluation.approved %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %}">
                     {% if judge_evaluation.approved %}✓ APROBADO{% else %}✗ RECHAZADO{% endif %}
                 </span>
@@ -327,6 +327,18 @@
                 {% endif %}
             </div>
         </div>
+
+        {# El desvio se declara junto a la nota y no solo arriba: el informe se
+           lee salteado, y esta seccion es la que se cita fuera de contexto. #}
+        {% if resolution and resolution.demo_modelo %}
+        <div class="bg-amber-50 border-l-4 border-amber-400 rounded-lg p-3 mb-6 text-sm text-amber-900">
+            Esta nota la puso <b>{{ resolution.demo_modelo.modelo }}</b>, un modelo gratuito,
+            evaluándose a sí mismo. Puede desviarse hasta <b>±{{ "%.1f"|format(desvio_juez) }} puntos</b>
+            respecto de la configuración documentada (Claude Haiku + Sonnet) y debe tomarse
+            <b>a fines informativos</b>. Para obtener los mejores resultados, use Anthropic en
+            modo producción.
+        </div>
+        {% endif %}
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             {% if judge_evaluation.strengths %}

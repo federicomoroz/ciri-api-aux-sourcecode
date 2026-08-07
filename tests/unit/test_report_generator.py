@@ -216,3 +216,57 @@ class TestQueDeclaraElInforme:
         modelo = {"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"}
         html = generator.render(self._con(minimal_report_data, demo=True, demo_modelo=modelo))
         assert _con_cartel(html, cartel_modelo_gratis(modelo)).count(ETIQUETA_GRATIS) == 1
+
+
+class TestElDesvioDeLaNotaSeDeclara:
+    """La nota de un modelo gratuito no es la nota del sistema.
+
+    El juez corre en el mismo modelo que resolvio, asi que un modelo mas chico
+    se penaliza dos veces: razona con menos profundidad y despues se puntua a si
+    mismo. Medido sobre TXN-00051, que en desarrollo daba alrededor de 9 y con
+    Gemini Flash Lite dio 6.8.
+
+    Declararlo no es una disculpa: es lo que separa una nota informativa de una
+    medicion del sistema. La seccion del juez es ademas la que se cita fuera de
+    contexto, asi que el aviso va ahi y no solo en el cartel de arriba.
+    """
+
+    MODELO = {"proveedor": "gemini", "modelo": "gemini-flash-lite-latest"}
+
+    def _demo(self, data: dict) -> dict:
+        return {**data, "resolution": {**data["resolution"], "demo": True,
+                                       "demo_modelo": self.MODELO}}
+
+    def test_el_desvio_aparece_junto_a_la_nota(self, generator, minimal_report_data):
+        from api.app.domain.constants import DEMO_DESVIO_JUEZ
+
+        html = generator.render(self._demo(minimal_report_data))
+        assert f"±{DEMO_DESVIO_JUEZ:.1f} puntos" in html
+
+    def test_dice_que_es_informativo(self, generator, minimal_report_data):
+        html = generator.render(self._demo(minimal_report_data))
+        assert "fines informativos" in html
+
+    def test_deriva_a_anthropic_para_el_mejor_resultado(self, generator, minimal_report_data):
+        html = generator.render(self._demo(minimal_report_data))
+        assert "Anthropic en" in html and "producción" in html
+
+    def test_nombra_el_modelo_que_puso_la_nota(self, generator, minimal_report_data):
+        """Sin el nombre, el desvio no se le puede atribuir a nadie."""
+        html = generator.render(self._demo(minimal_report_data))
+        assert self.MODELO["modelo"] in html
+
+    def test_una_corrida_normal_no_relativiza_su_nota(self, generator, minimal_report_data):
+        """Con la configuracion documentada la nota vale lo que dice."""
+        html = generator.render(minimal_report_data)
+        assert "fines informativos" not in html
+        assert "puntos</b>" not in html
+
+    def test_el_cartel_de_arriba_tambien_lo_dice(self, generator, minimal_report_data):
+        """Quien no baja hasta la seccion del juez igual se entera."""
+        from api.app.domain.constants import DEMO_DESVIO_JUEZ
+
+        html = generator.render(self._demo(minimal_report_data))
+        cartel = html.split("Evaluación de Calidad")[0]
+        assert f"±{DEMO_DESVIO_JUEZ:.1f} puntos" in cartel
+        assert "gratuito" in cartel

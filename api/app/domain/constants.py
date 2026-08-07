@@ -56,6 +56,7 @@ __all__ = [
     "LLM_RPM_ABIERTO",
     "LLM_RPM_VENTANA_S",
     "LLM_RPM_PAUSA_MINIMA_S",
+    "DEMO_DESVIO_JUEZ",
     "LLM_DEFAULT_MAX_RETRIES",
     "LLM_DEFAULT_TEMPERATURE",
     # Judge
@@ -400,6 +401,16 @@ LLM_RPM_GEMINI_FREE: int = 5          # Flash Lite da 15; el Flash grande, 5
 LLM_RPM_ABIERTO: int = 30             # el free tier de Groq; el resto es mas holgado
 LLM_RPM_VENTANA_S: float = 60.0       # «por minuto» es esta ventana
 LLM_RPM_PAUSA_MINIMA_S: float = 0.05  # para no repetir el calculo en vano
+
+# ── Desvio del juez con un modelo gratuito ──────────────────────────────────
+# Cuanto puede moverse la nota del juez cuando el pipeline no corre en la
+# configuracion documentada (Haiku + Sonnet). Se declara en el informe para que
+# la nota se lea como orientativa y no como una medicion del sistema.
+#
+# El orden de magnitud es observado, no teorico: el mismo TXN-00051 que en
+# desarrollo daba alrededor de 9 salio 6.8 con Gemini Flash Lite. No es un
+# intervalo de confianza —no hay muestra para eso— sino una cota declarada.
+DEMO_DESVIO_JUEZ: float = 2.5
 
 # ── LLM Pricing (USD per 1M tokens) ─────────────────────────────────────────
 LLM_PRICING: dict[str, tuple[float, float]] = {
