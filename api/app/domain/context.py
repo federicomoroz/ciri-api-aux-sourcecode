@@ -26,6 +26,9 @@ class CaseContext:
     similar_cases: list[dict] = field(default_factory=list)
     merchant_risk: dict = field(default_factory=dict)
     client_history: dict = field(default_factory=dict)
+    # Resultado de Analyzer.check_sla: dias habiles transcurridos contra el
+    # limite de la politica. De aca sale la compensacion, que es determinista.
+    sla: dict = field(default_factory=dict)
 
     @property
     def transaction_id(self) -> str:

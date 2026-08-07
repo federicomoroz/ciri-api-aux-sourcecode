@@ -27,6 +27,10 @@ def search_policies(
     payment_method: str | None = None,
     fraud_score: int | None = None,
     country: str | None = None,
+    top_k: int | None = Query(
+        default=None, ge=1,
+        description="Cuantas politicas devolver. Por defecto, todas las indexadas.",
+    ),
     retriever: QdrantRetriever = Depends(get_retriever),
 ) -> dict:
     """Semantic search over Qdrant 'policies' collection.
@@ -37,6 +41,7 @@ def search_policies(
         payment_method=payment_method or "",
         fraud_score=fraud_score or FRAUD_SCORE_DEFAULT,
         country=country or "",
+        top_k=top_k,
     )
     return envolver_resultados(results, format_policies_for_prompt(results), q)
 

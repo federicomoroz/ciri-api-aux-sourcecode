@@ -1,3 +1,4 @@
+# PROMPT VERSION: v3.1 | DATE: 2025-08 | CHANGES: El SLA entra al contexto y la compensacion pasa a ser determinista (POL-SLA-004). Antes se le pedia decidirla sin darle el dato.
 # PROMPT VERSION: v3.0 | DATE: 2025-07 | CHANGES: Unlock analytical reasoning for Sonnet. Code decides, LLM reasons.
 # PURPOSE: Justify a pre-determined chargeback resolution using evidence + analysis
 # OUTPUT: Resolution JSON object (action/risk/verdicts are pre-determined by system)
@@ -22,8 +23,8 @@ REGLAS ESTRICTAS:
    - Si un dato no existe en su seccion, escribe "No disponible" — NUNCA inventes.
    - NUNCA copies datos de PRECEDENTES a la transaccion actual.
    - CONTEO: total_chargebacks en HISTORIAL DEL CLIENTE = conteo PREVIO al caso actual. Si lo citas, escribe "N chargebacks previos (sin contar el actual)".
-5. compensation_applicable es true SOLO si se incumplio el SLA (POL-SLA-004).
-6. compensation_amount_usd maxima es USD 15 segun POL-SLA-004.
+5. compensation_applicable y compensation_amount_usd: si aparecen en DECISION DETERMINADA, COPIALOS EXACTAMENTE. El sistema los calculo contando dias habiles contra el limite de la politica (POL-SLA-004) — no los recalcules ni los discutas. Si NO aparecen, no hubo dato de SLA: dejalos en false y 0.0.
+6. Si compensation_applicable es true, explica en justification por que, citando los dias transcurridos, el limite y la politica de la seccion CUMPLIMIENTO DE SLA.
 7. next_steps: entre 2 y 5 pasos. Formato: "[verbo] + [dato] + [responsable]".
 8. confidence: 0.9+ si todos PASS, 0.7-0.9 si hay FAILs claros, 0.5-0.7 si hay datos faltantes.
 9. Responde UNICAMENTE con JSON valido. En espanol. Sin texto adicional.
@@ -112,6 +113,10 @@ USER_TEMPLATE = """## TRANSACCION
 - requires_hitl: {determined_hitl}
 {determined_hitl_reason}
 - precedent_summary: {determined_precedent_summary}
+{determined_compensation}
+
+## CUMPLIMIENTO DE SLA (calculado por el sistema en dias habiles — NO recalcular)
+{sla}
 
 ## EVALUACION DE POLITICAS (determinada por modulo separado — citar pero NO re-evaluar)
 {policy_verdicts}
@@ -147,11 +152,21 @@ def render(
     precedent_count: int,
     log_count: int,
     determined_outcome: dict | None = None,
+    sla: dict | None = None,
 ) -> tuple[str, str]:
     outcome = determined_outcome or {}
     hitl_reason_line = ""
     if outcome.get("hitl_reason"):
         hitl_reason_line = f"- hitl_reason: {outcome['hitl_reason']}"
+
+    # Sin dato de SLA no se listan estos campos: pedirle al modelo que copie un
+    # valor que el sistema no calculo seria pedirle que invente.
+    compensation_lines = ""
+    if "compensation_applicable" in outcome:
+        compensation_lines = (
+            f"- compensation_applicable: {str(outcome['compensation_applicable']).lower()}\n"
+            f"- compensation_amount_usd: {outcome['compensation_amount_usd']}"
+        )
 
     user = USER_TEMPLATE.format(
         transaction=bloque_json(transaction),
@@ -170,5 +185,7 @@ def render(
         determined_hitl=outcome.get("requires_hitl", False),
         determined_hitl_reason=hitl_reason_line,
         determined_precedent_summary=outcome.get("precedent_summary", "Sin precedentes relevantes."),
+        determined_compensation=compensation_lines,
+        sla=bloque_json(sla) if sla else "SLA no calculado para este caso.",
     )
     return SYSTEM, user

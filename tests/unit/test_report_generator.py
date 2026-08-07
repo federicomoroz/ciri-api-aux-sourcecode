@@ -103,3 +103,54 @@ class TestReportGenerator:
         }
         html = generator.render(minimal_report_data)
         assert isinstance(html, str)
+
+
+class TestFormularioHITL:
+    """El formulario del informe es uno de los dos disparadores del feedback.
+
+    Regresion: mandaba 5 campos y ninguno era la resolucion. Sin ella,
+    `FeedbackService.submit` registra el feedback pero no indexa el caso como
+    precedente — la mitad del circuito de mejora continua no corria nunca.
+    """
+
+    @staticmethod
+    def _con_hitl(data: dict) -> dict:
+        return {
+            **data,
+            "resolution": {**data["resolution"], "requires_hitl": True,
+                           "hitl_reason": "Riesgo alto con cliente VIP"},
+            "motivo": "Cargo no reconocido",
+        }
+
+    def test_el_formulario_manda_la_resolucion(self, generator, minimal_report_data):
+        html = generator.render(self._con_hitl(minimal_report_data))
+        assert "hitl-form" in html, "el formulario HITL no se renderizo"
+        assert "resolution: _resolucionDelCaso()" in html
+        assert "datos-del-caso" in html
+
+    def test_el_formulario_manda_el_motivo(self, generator, minimal_report_data):
+        """El motivo es el campo contra el que se matchean los precedentes futuros."""
+        html = generator.render(self._con_hitl(minimal_report_data))
+        assert 'name="motivo" value="Cargo no reconocido"' in html
+        assert "motivo: data.motivo" in html
+
+    def test_la_resolucion_viaja_en_el_bloque_de_datos(self, generator, minimal_report_data):
+        import json
+
+        html = generator.render(self._con_hitl(minimal_report_data))
+        crudo = html.split('id="datos-del-caso">')[1].split("</script>")[0]
+        datos = json.loads(crudo.replace("\u003c", "<").replace("\u003e", ">").replace("\u0026", "&"))
+        assert datos["resolution"]["recommended_action"]
+        assert datos["resolution"]["requires_hitl"] is True
+
+    def test_sin_hitl_no_hay_formulario(self, generator, minimal_report_data):
+        html = generator.render(minimal_report_data)
+        assert "hitl-form" not in html
+
+    def test_la_marca_de_calidad_baja_se_muestra(self, generator, minimal_report_data):
+        """`Marcar — Calidad Baja` escribia un campo que ninguna plantilla leia."""
+        data = {**minimal_report_data, "judge_evaluation": {
+            **minimal_report_data["judge_evaluation"],
+            "quality_flag": "LOW_QUALITY — Revisar resolución manualmente",
+        }}
+        assert "LOW_QUALITY" in generator.render(data)

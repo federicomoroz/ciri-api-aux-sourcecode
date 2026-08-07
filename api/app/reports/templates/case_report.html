@@ -296,6 +296,11 @@
     <section class="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-100">
         <h2 class="text-xl font-bold text-gray-800 mb-4">🏆 Evaluación de Calidad (LLM-as-Judge)</h2>
         {% if judge_evaluation %}
+        {% if judge_evaluation.quality_flag %}
+        <div class="bg-orange-50 border-l-4 border-orange-400 rounded-lg p-3 mb-4 text-sm text-orange-800 font-semibold">
+            ⚠️ {{ judge_evaluation.quality_flag }}
+        </div>
+        {% endif %}
         <div class="flex items-center gap-6 mb-6">
             <div class="text-center">
                 <div class="text-5xl font-black {% if judge_evaluation.overall_score >= 7 %}text-green-600{% elif judge_evaluation.overall_score >= 5 %}text-yellow-500{% else %}text-red-600{% endif %}">
@@ -358,6 +363,7 @@
         <form id="hitl-form" class="space-y-4">
             <input type="hidden" name="transaction_id" value="{{ transaction.id }}">
             <input type="hidden" name="judge_score" value="{{ judge_evaluation.overall_score if judge_evaluation else 0 }}">
+            <input type="hidden" name="motivo" value="{{ motivo or '' }}">
 
             <div>
                 <p class="font-semibold text-gray-700 mb-2">Decisión del Analista</p>
@@ -390,6 +396,17 @@
             </button>
         </form>
         <script>
+            function _resolucionDelCaso() {
+                try {
+                    return JSON.parse(
+                        document.getElementById('datos-del-caso').textContent
+                    ).resolution || null;
+                } catch (err) {
+                    console.error('No se pudo leer la resolucion del informe', err);
+                    return null;
+                }
+            }
+
             document.getElementById('hitl-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const data = Object.fromEntries(new FormData(e.target));
@@ -407,6 +424,12 @@
                             analyst_notes: data.analyst_notes || '',
                             final_outcome: data.analyst_decision,
                             judge_score: parseFloat(data.judge_score) || 0,
+                            motivo: data.motivo || null,
+                            // Sin la resolucion el backend registra el feedback
+                            // pero no puede indexar el caso como precedente, que
+                            // es la mitad del circuito de mejora continua. Se
+                            // reusa el bloque que el informe ya embebe.
+                            resolution: _resolucionDelCaso(),
                         })
                     });
                     if (resp.ok) {

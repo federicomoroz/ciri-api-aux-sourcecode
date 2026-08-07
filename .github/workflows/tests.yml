@@ -39,12 +39,18 @@ jobs:
       - name: Tests
         run: pytest tests/unit tests/integration -q --cov=api/app --cov-report=term-missing
 
-      - name: Verificar que el workflow de n8n sea importable
+      # Un workflow puede importar sin errores y no hacer nada: un Wait sin modo
+      # de reanudacion es un sleep, un nodo HTTP sin reintentos desmiente al
+      # mensaje de error que los promete, y un errorWorkflow que no viaja en el
+      # export deja los Stop and Error sin destino. Nada de eso rompe al importar
+      # y todo eso rompe en produccion, asi que se comprueba aca.
+      - name: Verificar que el workflow de n8n sea importable y este cableado
         run: |
           python - <<'PY'
           import json, sys
           from pathlib import Path
 
+          fallas = []
           for f in sorted(Path("n8n").glob("*.json")):
               w = json.loads(f.read_text(encoding="utf-8"))
               nombres = {n["name"] for n in w["nodes"]}
@@ -59,5 +65,20 @@ jobs:
                   rotas += [f"origen inexistente: {o}" for o in origen_faltante]
               if rotas:
                   sys.exit(f"{f.name}: conexiones rotas -> {rotas}")
+
+              es_manejador = "errors" in f.name
+              if not es_manejador and not w.get("settings", {}).get("errorWorkflow"):
+                  fallas.append(f"{f.name}: sin errorWorkflow — los Stop and Error no derivan a ningun lado")
+
+              for n in w["nodes"]:
+                  if n["type"] == "n8n-nodes-base.wait" and not n["parameters"].get("resume"):
+                      fallas.append(f"{f.name}: '{n['name']}' no define `resume` — es un sleep, no una compuerta humana")
+                  if n["type"] == "n8n-nodes-base.httpRequest" and not n.get("retryOnFail"):
+                      fallas.append(f"{f.name}: '{n['name']}' es HTTP sin retryOnFail")
+
               print(f"  {f.name}: {len(w['nodes'])} nodos, conexiones consistentes")
+
+          if fallas:
+              sys.exit("\n".join(["Workflows mal cableados:", *(f"  - {x}" for x in fallas)]))
+          print("Cableado verificado: errorWorkflow, Wait con resume, reintentos HTTP")
           PY

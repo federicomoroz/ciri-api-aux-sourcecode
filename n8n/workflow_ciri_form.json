@@ -74,7 +74,7 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 5000,
+      "waitBetweenTries": 2000,
       "onError": "continueErrorOutput"
     },
     {
@@ -163,19 +163,6 @@
     },
     {
       "parameters": {
-        "errorMessage": "={{ 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'la API no respondio') }}"
-      },
-      "id": "5c048133-a9a8-4070-b6e9-bf370114c9c1",
-      "name": "Propagar → Error Handler",
-      "type": "n8n-nodes-base.stopAndError",
-      "typeVersion": 1,
-      "position": [
-        10912,
-        3120
-      ]
-    },
-    {
-      "parameters": {
         "content": "## Formulario de ingesta\n\nDemuestra el **Form Trigger** nativo de n8n como segunda via de entrada.\n\nURL: `/form/chargeback-form` sobre esta instancia.\n\n**Que hace:** dispara el webhook del workflow orquestador (`/webhook/chargeback-agent`) sobre esta misma instancia. No llama a la API por su cuenta: el formulario es una segunda via de entrada **al agente**, asi que corre los 29 nodos de orquestacion igual que el webhook.\n\n**Sin configurar nada** apunta a `http://localhost:5678`, que es esta instancia. Si tu n8n escucha en otro puerto, crear la variable `N8N_BASE_URL`.\n\n**Errores, con el mismo criterio que el workflow principal:**\n\n• Identificador mal formado: es un error de quien completa, no del sistema. Se corta antes de llamar a la API y se explica el formato. **No pasa por el error handler**: alertar por cada tipeo marcaria la ejecucion como fallida y mandaria un mail, enterrando las fallas reales. Queda registrado como `WARN` en el log operativo, que es donde sirve para ver si el formulario se entiende.\n\n• La API falla tras 3 reintentos: primero se le responde a la persona, y despues «Propagar → Error Handler» hace fallar la ejecucion. Ahi entra `workflow_ciri_errors`, que registra la alerta y avisa por mail.\n\n**Para que eso funcione:** Settings → Error Workflow → elegir `workflow_ciri_errors`. Mismo paso que en el workflow principal.",
         "height": 460,
         "width": 772,
@@ -209,7 +196,34 @@
         10640,
         3280
       ],
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "{{ $('Form Trigger — Formulario').first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com' }}/api/alerts/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event_type: 'form_analysis_failed', severity: 'ERROR', message: 'Fallo la investigacion iniciada desde el formulario para ' + ($('Form Trigger — Formulario').first().json['Transaction ID'] || 'sin identificador').trim() + ': ' + (($('Disparar el Orquestador').first().json.error || {}).message || 'la API no respondio'), source: 'n8n-form', transaction_id: ($('Form Trigger — Formulario').first().json['Transaction ID'] || '').trim() || null, metadata: { origen: 'formulario' } }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "5c048133-a9a8-4070-b6e9-bf370114c9c1",
+      "name": "Registrar Fallo del Análisis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        10640,
+        3120
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     }
   ],
   "pinData": {},
@@ -236,28 +250,6 @@
         ],
         [
           {
-            "node": "Respuesta — Formato Invalido",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respuesta — Fallo el Analisis": {
-      "main": [
-        [
-          {
-            "node": "Propagar → Error Handler",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respuesta — Formato Invalido": {
-      "main": [
-        [
-          {
             "node": "Registrar Entrada Rechazada",
             "type": "main",
             "index": 0
@@ -276,6 +268,28 @@
         ],
         [
           {
+            "node": "Registrar Fallo del Análisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Entrada Rechazada": {
+      "main": [
+        [
+          {
+            "node": "Respuesta — Formato Invalido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Fallo del Análisis": {
+      "main": [
+        [
+          {
             "node": "Respuesta — Fallo el Analisis",
             "type": "main",
             "index": 0
@@ -290,7 +304,8 @@
     "binaryMode": "separate",
     "availableInMCP": false,
     "timeSavedMode": "fixed",
-    "callerPolicy": "workflowsFromSameOwner"
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "ciriErrorHandler"
   },
   "versionId": "5f50cb14-a0d8-4fa5-bfb6-bea659e8d0f9",
   "meta": {

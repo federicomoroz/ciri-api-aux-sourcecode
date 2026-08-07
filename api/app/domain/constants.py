@@ -13,6 +13,7 @@ __all__ = [
     "SLA_VIP_DAYS",
     "SLA_STANDARD_DAYS",
     "SLA_EXTENDED_DAYS",
+    "SLA_COMPENSATION_MAX_USD",
     # Client risk
     "CLIENT_RECIDIVIST_THRESHOLD",
     "CLIENT_GEO_ANOMALY_THRESHOLD",
@@ -27,7 +28,7 @@ __all__ = [
     # RAG
     "SIMILAR_CASES_SCORE_THRESHOLD",
     "SIMILAR_CASES_TOP_K",
-    "POLICIES_TOP_K",
+    "POLICIES_TOP_K_FALLBACK",
     "POLICIES_SCORE_THRESHOLD",
     "EMBEDDING_DIM",
     # LLM
@@ -129,6 +130,7 @@ __all__ = [
 SLA_VIP_DAYS: int = 5
 SLA_STANDARD_DAYS: int = 10
 SLA_EXTENDED_DAYS: int = 15
+SLA_COMPENSATION_MAX_USD: float = 15.0   # POL-SLA-004: tope por incumplir el plazo
 
 # ── Client Risk Thresholds ──────────────────────────────────────────────────
 CLIENT_RECIDIVIST_THRESHOLD: int = 3       # chargebacks > N → "recidivist"
@@ -157,7 +159,11 @@ BLOCKER_POLICY_CODES: frozenset[str] = frozenset({"POL-EXC-003"})
 # ── RAG ─────────────────────────────────────────────────────────────────────
 SIMILAR_CASES_SCORE_THRESHOLD: float = 0.40  # min cosine similarity for case results
 SIMILAR_CASES_TOP_K: int = 5
-POLICIES_TOP_K: int = 17                     # retrieve all; LLM filters relevance
+# El corpus de politicas se recupera entero: es chico y el LLM filtra relevancia.
+# "Entero" se resuelve contando la coleccion en cada busqueda, no con un numero
+# fijo — con el 17 del dataset escrito a mano, la politica 18 quedaba afuera del
+# contexto en silencio. Este valor solo se usa si el conteo falla.
+POLICIES_TOP_K_FALLBACK: int = 64
 POLICIES_SCORE_THRESHOLD: float = 0.0        # no floor — return everything, rank later
 EMBEDDING_DIM: int = 1024                    # voyage-multilingual-2 (Voyage AI API)
 
@@ -273,7 +279,7 @@ LLM_PRICING_FALLBACK_KEY: str = "sonnet"
 SECONDS_TO_MS: int = 1000
 
 # ── Pipeline ────────────────────────────────────────────────────────────────
-PIPELINE_MAX_WORKERS: int = 4
+PIPELINE_MAX_WORKERS: int = 5   # logs, RAG, riesgo de comercio, historial, SLA
 PIPELINE_THREAD_TIMEOUT_S: int = 60
 
 # ── Alert Event Types ───────────────────────────────────────────────────────

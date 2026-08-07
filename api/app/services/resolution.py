@@ -23,6 +23,7 @@ from ..domain.constants import (
     LLM_MAX_CRITICAL_LOGS,
     RISK_FRAUD_SEVERE,
     RISK_HIGH_MIN_FAILS,
+    SLA_COMPENSATION_MAX_USD,
     TRACE_JUDGE,
     TRACE_RESOLVE,
 )
@@ -69,6 +70,7 @@ class ResolutionService:
             tx_merchant=ctx.transaction.get("merchant", ""),
         )
         outcome["precedent_summary"] = precedent_summary
+        outcome.update(self._determine_compensation(ctx.sla, ctx.transaction))
 
         resolution, synth_result = self._synthesize_resolution(
             ctx, policy_verdicts, self._summarize_logs(ctx.logs), trace_id, outcome,
@@ -86,6 +88,9 @@ class ResolutionService:
         resolution["precedent_summary"] = precedent_summary
         if outcome["hitl_reason"]:
             resolution["hitl_reason"] = outcome["hitl_reason"]
+        if "compensation_applicable" in outcome:
+            resolution["compensation_applicable"] = outcome["compensation_applicable"]
+            resolution["compensation_amount_usd"] = outcome["compensation_amount_usd"]
 
         warnings += self._validate_resolution(resolution, ctx.transaction)
         usage = {
@@ -150,6 +155,7 @@ class ResolutionService:
             precedent_count=len(ctx.similar_cases),
             log_count=len(ctx.logs),
             determined_outcome=determined_outcome,
+            sla=ctx.sla,
         )
         result = self.llm_resolution.complete(sys_res, usr_res, trace_id=trace_id)
         resolution = validate_llm_output(result.text, ResolutionOutput, {})
@@ -418,6 +424,31 @@ class ResolutionService:
         return ResolutionOutcome.APPROVE, False, None
 
     @staticmethod
+    def _determine_compensation(sla: dict, tx_data: dict) -> dict:
+        """Compensacion a partir del SLA ya calculado. Sin LLM.
+
+        POL-SLA-004: incumplir el plazo habilita compensacion, con tope fijo. Los
+        dias habiles ya los conto `Analyzer.check_sla`; aca solo se lee su
+        resultado, porque un umbral contra una fecha es exactamente lo que el
+        codigo resuelve mejor que un modelo.
+
+        Sin dato de SLA no hay nada que determinar: se devuelve vacio y la
+        decision queda en el modelo, sujeta a `_validate_resolution`.
+        """
+        if not sla or "within_sla" not in sla:
+            return {}
+        incumplido = not sla.get("within_sla", True)
+        monto = float(tx_data.get("amount_usd", 0) or 0)
+        return {
+            "compensation_applicable": incumplido,
+            # Compensar mas que el cargo original no tiene sentido, y el tope de
+            # la politica es un maximo, no un monto fijo.
+            "compensation_amount_usd": (
+                round(min(SLA_COMPENSATION_MAX_USD, monto), 2) if incumplido and monto else 0.0
+            ),
+        }
+
+    @staticmethod
     def _determine_outcome(policy_verdicts: list[dict], tx_data: dict) -> dict:
         """Accion y riesgo a partir de los veredictos. Sin LLM.
 
@@ -487,6 +518,14 @@ class ResolutionService:
                 f"GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — "
                 f"corregido a {outcome['recommended_action']} (requiere revision humana)"
             )
+        if "compensation_applicable" in outcome:
+            propuesta_comp = bool(llm_proposal.get("compensation_applicable", False))
+            if propuesta_comp != outcome["compensation_applicable"]:
+                warnings.append(
+                    f"GUARDRAIL: el modelo propuso compensation_applicable={propuesta_comp} "
+                    f"contra un SLA que dice {outcome['compensation_applicable']} — "
+                    f"corregido segun POL-SLA-004"
+                )
 
         for w in warnings:
             logger.warning("%s", w)

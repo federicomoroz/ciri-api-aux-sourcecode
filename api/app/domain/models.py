@@ -22,6 +22,9 @@ class ResolveRequest(BaseModel):
     client_history: dict
     motivo: str | None = None
     cliente_vip: bool = False
+    # n8n ya lo manda desde que existe el nodo `Verificar SLA`. Sin este campo
+    # Pydantic lo descartaba en silencio y la llamada se pagaba para nada.
+    sla: dict = {}
 
     def to_context(self) -> CaseContext:
         """Los nombres del contrato con n8n, traducidos al tipo interno."""
@@ -34,6 +37,7 @@ class ResolveRequest(BaseModel):
             similar_cases=self.similar_cases,
             merchant_risk=self.merchant_risk,
             client_history=self.client_history,
+            sla=self.sla,
         )
 
 

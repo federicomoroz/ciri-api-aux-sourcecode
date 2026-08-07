@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from api.app.domain.constants import POLICIES_TOP_K_FALLBACK
 from api.app.domain.enums import PaymentMethod
 from api.app.rag.retriever import QdrantRetriever, QueryBuilder
 
@@ -167,3 +168,51 @@ class TestReranking:
         results = [self._make_result(0.99, PaymentMethod.CRYPTO, "COL")]
         reranked = QdrantRetriever._rerank(results, PaymentMethod.CRYPTO, "COL")
         assert reranked[0].score == 1.0
+
+
+class TestLimiteDeRecuperacionDePoliticas:
+    """El corpus se recupera entero, tenga las 17 del dataset o las que le carguen.
+
+    Regresion: el limite era la constante 17. Cargar la politica 18 por
+    `POST /api/policies/` la indexaba bien y la listaba bien, pero la peor
+    rankeada de las 18 quedaba fuera del contexto del LLM sin log ni aviso.
+    """
+
+    @staticmethod
+    def _retriever(total: int | None = None, falla: bool = False):
+        client = MagicMock()
+        if falla:
+            client.count.side_effect = RuntimeError("Qdrant no responde")
+        else:
+            client.count.return_value = MagicMock(count=total)
+        client.query_points.return_value = MagicMock(points=[])
+        embedder = MagicMock()
+        embedder.encode.return_value = [MagicMock(tolist=lambda: [0.0] * 1024)]
+        return QdrantRetriever(client, embedder), client
+
+    def test_recupera_las_18_cuando_hay_18(self):
+        retriever, client = self._retriever(total=18)
+        retriever.search_policies(motivo="fraude")
+        assert client.query_points.call_args.kwargs["limit"] == 18
+
+    def test_recupera_las_200_cuando_hay_200(self):
+        retriever, client = self._retriever(total=200)
+        retriever.search_policies(motivo="fraude")
+        assert client.query_points.call_args.kwargs["limit"] == 200
+
+    def test_un_top_k_explicito_manda_sobre_el_conteo(self):
+        retriever, client = self._retriever(total=200)
+        retriever.search_policies(motivo="fraude", top_k=5)
+        assert client.query_points.call_args.kwargs["limit"] == 5
+        client.count.assert_not_called()
+
+    def test_si_no_se_puede_contar_usa_el_limite_por_defecto(self):
+        retriever, client = self._retriever(falla=True)
+        retriever.search_policies(motivo="fraude")
+        assert client.query_points.call_args.kwargs["limit"] == POLICIES_TOP_K_FALLBACK
+
+    def test_una_coleccion_vacia_no_pide_limite_cero(self):
+        """Qdrant rechaza limit=0; el conteo no puede traducirse literal."""
+        retriever, client = self._retriever(total=0)
+        retriever.search_policies(motivo="fraude")
+        assert client.query_points.call_args.kwargs["limit"] >= 1

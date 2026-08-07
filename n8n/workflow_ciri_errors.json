@@ -80,7 +80,10 @@
         750,
         300
       ],
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -159,5 +162,6 @@
   },
   "staticData": null,
   "tags": [],
-  "triggerCount": 1
+  "triggerCount": 1,
+  "id": "ciriErrorHandler"
 }

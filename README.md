@@ -2,12 +2,12 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-467%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-524%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
 ![Qdrant](https://img.shields.io/badge/Qdrant-vector%20DB-dc382c)
-![Judge](https://img.shields.io/badge/Judge%20Score-9.1%2F10-gold)
+![Judge](https://img.shields.io/badge/Judge%20Score-8.7%2F10-gold)
 
 Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transacción, sus logs, las políticas que aplican, qué se resolvió en casos parecidos, el riesgo del comercio y el historial del cliente—, propone una resolución justificada y se autoevalúa. Los casos de riesgo alto frenan y esperan a un analista.
 
@@ -79,7 +79,7 @@ Los dos archivos HTML numerados de esta carpeta. Se abren en cualquier navegador
 
 **«n8n y la API»** — quién le pide qué a quién. Las trece llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
-**«el circuito completo»** — el circuito completo. Los 29 pasos en orden de ejecución más las 3 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+**«el circuito completo»** — el circuito completo. Los 29 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
 
 ### 2. El panel web
 
@@ -116,7 +116,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 
 | Archivo | Qué es |
 |---|---|
-| `workflow_ciri_agent.json` | El orquestador: 38 nodos, 32 ejecutables |
+| `workflow_ciri_agent.json` | El orquestador: 39 nodos, 33 ejecutables |
 | `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 29 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 
@@ -220,7 +220,7 @@ sólo el código que la API necesita para funcionar.
 |---|---|
 | `docs/ejes.md` | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
 | `docs/architecture.md` | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
-| `docs/decisions.md` | 14 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
+| `docs/decisions.md` | 16 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
 | `docs/prompts.md` | Los prompts, versionados, y por qué cambiaron |
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
@@ -228,7 +228,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 467 en 27 archivos; los de `unit/` e `integration/` corren
+**Tests:** `pytest tests/ -v`. Son 524 en 29 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
 validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.

@@ -50,9 +50,18 @@ class AnalyzerFalso:
     def client_flags(self, client_id):
         return {"client_id": client_id, "total_chargebacks": 0, "flags": []}
 
+    def check_sla(self, case_open_date, country, cliente_vip=False):
+        return {"within_sla": False, "days_elapsed": 12, "sla_limit_days": 10,
+                "sla_type": "standard", "policy_reference": "POL-SLA-002",
+                "compensation_applicable": True}
+
 
 class ResolucionFalsa:
+    def __init__(self):
+        self.ultimo_ctx = None
+
     def resolve(self, ctx):
+        self.ultimo_ctx = ctx
         return {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER,
                 "policy_verdicts": [], "guardrail_warnings": [],
                 "_usage": {"input_tokens": 10, "output_tokens": 5, "call_count": 2}}
@@ -85,6 +94,16 @@ class TestRun:
         assert usage["input_tokens"] == 13
         assert usage["output_tokens"] == 7
         assert usage["call_count"] == 3
+
+    def test_el_sla_llega_al_contexto(self, pipeline):
+        """Regresion: el pipeline directo no consultaba el SLA y n8n si.
+
+        Los dos caminos tienen que armar el mismo contexto, o el informe
+        depende de por donde entro el caso.
+        """
+        pipeline.run(REQ)
+        assert pipeline.resolution_svc.ultimo_ctx.sla["within_sla"] is False
+        assert pipeline.resolution_svc.ultimo_ctx.sla["days_elapsed"] == 12
 
     def test_guarda_el_informe_en_cache(self, pipeline):
         """Regresion: el pipeline leia el cache y nunca lo llenaba."""
@@ -121,7 +140,7 @@ class TestRunStreaming:
         assert pasos[0] == "start"
         assert pasos[-1] == "done"
         for esperado in ("cache_check", "transaction", "logs", "policies", "cases",
-                         "resolving", "resolved", "judging", "judged"):
+                         "sla", "resolving", "resolved", "judging", "judged"):
             assert esperado in pasos
 
     def test_tambien_cachea(self, pipeline):

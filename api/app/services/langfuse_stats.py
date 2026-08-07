@@ -112,16 +112,28 @@ class LangfuseStatsService:
 
     # ── Agregacion ──────────────────────────────────────────────────────
 
-    @staticmethod
-    def _resumir_traza(traza, observaciones: list, puntaje: float | None) -> dict:
-        """Tokens, latencia y puntaje de una traza."""
+    def _resumir_traza(self, traza, observaciones: list, puntaje: float | None) -> dict:
+        """Tokens, latencia, costo y puntaje de una traza.
+
+        El costo se acumula por observacion y con el modelo de cada una. Sumar
+        todos los tokens y aplicarles un unico precio cotizaba a tarifa de Haiku
+        las llamadas que corren en Sonnet: en la configuracion de produccion son
+        dos de las tres, y son las caras.
+        """
         entrada = salida = 0
-        latencia = 0.0
+        latencia = costo = 0.0
         for obs in observaciones:
             uso = _campo(obs, "usage", {})
-            entrada += _campo(uso, "input", 0)
-            salida += _campo(uso, "output", 0)
+            obs_in = _campo(uso, "input", 0)
+            obs_out = _campo(uso, "output", 0)
+            entrada += obs_in
+            salida += obs_out
             latencia += _campo(obs, "latency", 0)
+            modelo = _campo(obs, "model", "")
+            costo += estimar_costo_usd(
+                (modelo if isinstance(modelo, str) else "") or self._model_name,
+                obs_in, obs_out,
+            )
         return {
             "trace_id": str(_campo(traza, "id", "")),
             "name": str(_campo(traza, "name", "")),
@@ -129,6 +141,7 @@ class LangfuseStatsService:
             "tokens_in": entrada,
             "tokens_out": salida,
             "tokens": entrada + salida,
+            "cost_usd": round(costo, 6),
             "latency_s": round(latencia, 2),
             "score": puntaje,
         }
@@ -141,7 +154,7 @@ class LangfuseStatsService:
         return {
             "total_traces": len(filas),
             "total_tokens": entrada + salida,
-            "cost_usd": round(estimar_costo_usd(self._model_name, entrada, salida), 4),
+            "cost_usd": round(sum(f["cost_usd"] for f in filas), 4),
             "avg_judge_score": round(sum(puntajes) / len(puntajes), 2) if puntajes else None,
             "avg_latency_s": round(sum(latencias) / len(latencias), 2) if latencias else None,
         }

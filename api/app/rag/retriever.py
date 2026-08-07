@@ -3,7 +3,7 @@ RAG retriever with deterministic query builder.
 
 Design decisions:
 - QueryBuilder is deterministic (no LLM). Reproducible, zero cost, faster.
-- policies: retrieve ALL 17 (small corpus). LLM filters. threshold=0.0
+- policies: retrieve ALL (small corpus, counted per query). LLM filters. threshold=0.0
 - historical_cases: top-5, threshold=0.40 (semantic similarity)
 """
 
@@ -17,7 +17,7 @@ from ..domain.constants import (
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
     LATAM_COUNTRIES,
     POLICIES_SCORE_THRESHOLD,
-    POLICIES_TOP_K,
+    POLICIES_TOP_K_FALLBACK,
     RERANK_COUNTRY_BOOST,
     RERANK_MAX_SCORE,
     RERANK_PAYMENT_METHOD_BOOST,
@@ -92,11 +92,29 @@ class QdrantRetriever:
         vectors = self.embedder.encode(texts)
         return [v.tolist() for v in vectors]
 
+    def _total_politicas(self) -> int:
+        """Cuantas politicas hay indexadas ahora mismo.
+
+        El limite de recuperacion era la constante 17 — las del dataset. Cargar
+        la politica 18 por la API la indexaba bien, pero la peor rankeada de las
+        18 desaparecia del contexto del LLM sin log ni aviso. El corpus es chico
+        y contar es barato: se pregunta en vez de asumir.
+        """
+        try:
+            total = self.client.count(self.policies_collection, exact=True).count
+            return max(1, total)
+        except Exception as e:
+            logger.warning(
+                "No se pudo contar %s (%s): se recupera hasta %d politicas",
+                self.policies_collection, e, POLICIES_TOP_K_FALLBACK,
+            )
+            return POLICIES_TOP_K_FALLBACK
+
     def _query_policies(
         self,
         vector: list[float],
         query: str,
-        top_k: int = POLICIES_TOP_K,
+        top_k: int | None = None,
         score_threshold: float = POLICIES_SCORE_THRESHOLD,
     ) -> list[dict]:
         """Busca politicas con un vector ya calculado."""
@@ -104,7 +122,7 @@ class QdrantRetriever:
             results = self.client.query_points(
                 collection_name=self.policies_collection,
                 query=vector,
-                limit=top_k,
+                limit=top_k or self._total_politicas(),
                 score_threshold=score_threshold,
                 with_payload=True,
             ).points
@@ -149,11 +167,13 @@ class QdrantRetriever:
         payment_method: str = "",
         fraud_score: int = FRAUD_SCORE_DEFAULT,
         country: str = "",
-        top_k: int = POLICIES_TOP_K,
+        top_k: int | None = None,
         score_threshold: float = POLICIES_SCORE_THRESHOLD,
     ) -> list[dict]:
         """Semantic search over policies collection.
-        Returns ALL policies (small corpus; LLM will filter relevance)."""
+
+        Sin `top_k` devuelve TODAS las politicas indexadas, sean 17 o 200: el
+        corpus es chico y el LLM filtra relevancia."""
         query = QueryBuilder.for_policies(motivo, channel, payment_method, fraud_score, country)
         return self._query_policies(self._embed(query), query, top_k, score_threshold)
 

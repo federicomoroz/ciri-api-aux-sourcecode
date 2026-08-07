@@ -2024,6 +2024,7 @@ const STEPS = [
   { label: 'Recuperando casos similares...',             detail: 'Voyage AI embeddings' },
   { label: 'Evaluando riesgo del comercio...',           detail: 'CB ratio + flags' },
   { label: 'Verificando historial del cliente...',       detail: 'Chargebacks + flags' },
+  { label: 'Verificando cumplimiento de SLA...',         detail: 'Dias habiles vs limite de politica' },
   { label: 'Sintetizando resolucion con LLM...',         detail: 'Haiku (eval) + Sonnet (sintesis)' },
   { label: 'Ejecutando juez de calidad...',              detail: 'LLM-as-Judge · 5 criterios' },
   { label: 'Generando informe final...',                 detail: 'Jinja2 template render' },
@@ -2032,8 +2033,8 @@ const STEPS = [
 // Maps SSE step names → STEPS indices for real-time updates
 const STEP_INDEX = {
   cache_check: 0, transaction: 1, logs: 2, policies: 3,
-  cases: 4, merchant_risk: 5, client_flags: 6,
-  resolving: 7, resolved: 7, judging: 8, judged: 8, done: 9,
+  cases: 4, merchant_risk: 5, client_flags: 6, sla: 7,
+  resolving: 8, resolved: 8, judging: 9, judged: 9, done: 10,
 };
 
 // ─── STATE ────────────────────────────────────────────────
@@ -2696,6 +2697,7 @@ function _buildStepDetail(step, ev) {
     case 'cases':         return `${ev.count} precedentes similares`;
     case 'merchant_risk': return `CB ratio: ${(ev.cb_ratio*100).toFixed(1)}%` + (ev.flags?.length ? ` · flags: ${ev.flags.join(', ')}` : '');
     case 'client_flags':  return `${ev.total_chargebacks} CB previos` + (ev.flags?.length ? ` · flags: ${ev.flags.join(', ')}` : '');
+    case 'sla':           return `${ev.within_sla ? 'Dentro de SLA' : 'FUERA de SLA'}: ${ev.days_elapsed}d habiles / ${ev.sla_limit_days}d (${ev.sla_type})`;
     case 'resolving':     return 'Haiku (eval) + Sonnet (sintesis) + guardrails...';
     case 'resolved':      return `${ev.action} · ${ev.risk_level} · ${ev.verdicts} veredictos · ${ev.blockers} blocker · ${ev.fails} fail` + (ev.warnings ? ` · ${ev.warnings} warning(s)` : '');
     case 'judging':       return 'Sonnet · 5 criterios · score 1-10...';

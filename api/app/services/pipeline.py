@@ -68,6 +68,14 @@ class PipelineService:
             executor.submit(
                 self.analyzer.client_flags, tx.get("client_id", ""),
             ): "client",
+            # El pipeline directo espeja al orquestador: si n8n consulta el SLA
+            # antes de sintetizar, aca tambien, o los dos caminos no dan lo mismo.
+            executor.submit(
+                self.analyzer.check_sla,
+                case_open_date=str(tx.get("date", "")),
+                country=country,
+                cliente_vip=req.cliente_vip,
+            ): "sla",
         }
 
     def _judge(self, ctx: CaseContext, resolution: dict) -> dict:
@@ -134,6 +142,7 @@ class PipelineService:
             transaction=tx, motivo=req.motivo, cliente_vip=req.cliente_vip,
             logs=futures_results["logs"], policies=policies, similar_cases=similar_cases,
             merchant_risk=futures_results["merchant"], client_history=futures_results["client"],
+            sla=futures_results["sla"],
         )
 
         # Steps 7+8 — resolve + judge
@@ -181,6 +190,7 @@ class PipelineService:
         similar_cases = []
         merchant_risk = {}
         client_history = {}
+        sla = {}
 
         with ThreadPoolExecutor(max_workers=PIPELINE_MAX_WORKERS) as executor:
             futures = self._submit_context_futures(executor, tx, req)
@@ -211,11 +221,20 @@ class PipelineService:
                         "total_chargebacks": client_history.get("total_chargebacks", 0),
                         "flags": client_history.get("flags", []),
                     })
+                elif name == "sla":
+                    sla = result
+                    yield ("sla", {
+                        "within_sla": sla.get("within_sla", True),
+                        "days_elapsed": sla.get("days_elapsed", 0),
+                        "sla_limit_days": sla.get("sla_limit_days", 0),
+                        "sla_type": sla.get("sla_type", ""),
+                    })
 
         ctx = CaseContext(
             transaction=tx, motivo=req.motivo, cliente_vip=req.cliente_vip,
             logs=logs, policies=policies, similar_cases=similar_cases,
             merchant_risk=merchant_risk, client_history=client_history,
+            sla=sla,
         )
 
         # Resolve (LLM)

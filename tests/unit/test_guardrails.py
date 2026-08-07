@@ -389,11 +389,14 @@ class TestGuardrailsEnElPipelineCompleto:
 
         return ResolutionService(llm=LLMGuionado(), tracer=NoOpTracer())
 
-    def _resolver(self, sintesis: dict, veredicto: str = VerdictType.BLOCKER) -> dict:
+    def _resolver(
+        self, sintesis: dict, veredicto: str = VerdictType.BLOCKER, sla: dict | None = None,
+    ) -> dict:
         return self._servicio(sintesis, veredicto).resolve(
             CaseContext(
                 transaction=self.TX, policies=self.POLICIES,
                 motivo="No reconoce la compra", cliente_vip=False,
+                sla=sla or {},
             )
         )
 
@@ -425,3 +428,81 @@ class TestGuardrailsEnElPipelineCompleto:
         })
         assert r["recommended_action"] == ResolutionOutcome.REJECT
         assert r["guardrail_warnings"] == []
+
+    # ── Compensacion: la decide el SLA, no el modelo ────────────────────
+
+    DENTRO_DE_SLA = {"within_sla": True, "days_elapsed": 3, "sla_limit_days": 10,
+                     "sla_type": "standard", "compensation_applicable": False}
+    FUERA_DE_SLA = {"within_sla": False, "days_elapsed": 14, "sla_limit_days": 10,
+                    "sla_type": "standard", "compensation_applicable": True}
+
+    COHERENTE = {
+        "recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER,
+        "confidence": 0.8, "justification": "cripto irreversible",
+    }
+
+    def test_el_sla_incumplido_habilita_compensacion_aunque_el_modelo_diga_que_no(self):
+        r = self._resolver(
+            {**self.COHERENTE, "compensation_applicable": False, "compensation_amount_usd": 0.0},
+            sla=self.FUERA_DE_SLA,
+        )
+        assert r["compensation_applicable"] is True
+        assert r["compensation_amount_usd"] == 15.0   # tope POL-SLA-004
+
+    def test_el_sla_cumplido_anula_la_compensacion_que_invento_el_modelo(self):
+        r = self._resolver(
+            {**self.COHERENTE, "compensation_applicable": True, "compensation_amount_usd": 15.0},
+            sla=self.DENTRO_DE_SLA,
+        )
+        assert r["compensation_applicable"] is False
+        assert r["compensation_amount_usd"] == 0.0
+        assert any("compensation_applicable=True" in w and "POL-SLA-004" in w
+                   for w in r["guardrail_warnings"]), (
+            "la contradiccion con el SLA se corrigio pero no quedo registrada"
+        )
+
+    def test_coincidir_con_el_sla_no_genera_advertencia(self):
+        r = self._resolver(
+            {**self.COHERENTE, "compensation_applicable": True, "compensation_amount_usd": 15.0},
+            sla=self.FUERA_DE_SLA,
+        )
+        assert r["compensation_applicable"] is True
+        assert r["guardrail_warnings"] == []
+
+    def test_sin_dato_de_sla_no_se_toca_lo_que_propuso_el_modelo(self):
+        """Sin SLA no hay nada que determinar: forzar false seria inventar igual."""
+        r = self._resolver(
+            {**self.COHERENTE, "compensation_applicable": True, "compensation_amount_usd": 15.0},
+            sla={},
+        )
+        assert r["compensation_applicable"] is True
+        assert r["guardrail_warnings"] == []
+
+
+class TestDetermineCompensation:
+    """POL-SLA-004 calculado por codigo: dias habiles vs limite, con tope."""
+
+    TX = {"amount_usd": 100.0}
+
+    def test_fuera_de_sla_habilita_el_tope(self):
+        r = ResolutionService._determine_compensation(
+            {"within_sla": False}, self.TX,
+        )
+        assert r == {"compensation_applicable": True, "compensation_amount_usd": 15.0}
+
+    def test_dentro_de_sla_no_compensa(self):
+        r = ResolutionService._determine_compensation(
+            {"within_sla": True}, self.TX,
+        )
+        assert r == {"compensation_applicable": False, "compensation_amount_usd": 0.0}
+
+    def test_no_compensa_mas_que_el_cargo_original(self):
+        """Un cargo de USD 4 no puede generar una compensacion de USD 15."""
+        r = ResolutionService._determine_compensation(
+            {"within_sla": False}, {"amount_usd": 4.0},
+        )
+        assert r["compensation_amount_usd"] == 4.0
+
+    def test_sin_sla_no_determina_nada(self):
+        assert ResolutionService._determine_compensation({}, self.TX) == {}
+        assert ResolutionService._determine_compensation({"days_elapsed": 3}, self.TX) == {}

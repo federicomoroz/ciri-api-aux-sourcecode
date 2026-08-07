@@ -145,3 +145,77 @@ class TestLangfuseStatsEnabled:
             # Sonnet pricing: (500/1M)*3.00 + (200/1M)*15.00
             expected = (500 / 1_000_000) * 3.00 + (200 / 1_000_000) * 15.00
             assert abs(result["summary"]["cost_usd"] - expected) < 0.0001
+
+
+class TestCostoPorModelo:
+    """El costo se cotiza con el modelo de cada llamada, no con uno solo.
+
+    Regresion: se sumaban todos los tokens de la traza y se les aplicaba
+    `settings.llm_model` — Haiku. En la configuracion de produccion dos de las
+    tres llamadas corren en Sonnet, que sale casi cuatro veces mas: el panel
+    informaba un costo sistematicamente bajo.
+    """
+
+    @pytest.fixture
+    def mock_tracer(self):
+        tracer = MagicMock()
+        tracer._enabled = True
+        tracer.__class__.__name__ = "LangfuseTracer"
+        return tracer
+
+    @staticmethod
+    def _observacion(modelo: str, entrada: int, salida: int):
+        obs = MagicMock()
+        obs.trace_id = "trace-001"
+        obs.usage = MagicMock()
+        obs.usage.input = entrada
+        obs.usage.output = salida
+        obs.latency = 1.0
+        obs.model = modelo
+        return obs
+
+    def _stats(self, mock_tracer, observaciones):
+        traza = MagicMock()
+        traza.id = "trace-001"
+        traza.name = "resolve_chargeback"
+        traza.timestamp = "2024-01-01T12:00:00Z"
+
+        trazas = MagicMock()
+        trazas.data = [traza]
+        mock_tracer.langfuse.fetch_traces.return_value = trazas
+
+        obs_resp = MagicMock()
+        obs_resp.data = observaciones
+        mock_tracer.langfuse.fetch_observations.return_value = obs_resp
+
+        puntajes = MagicMock()
+        puntajes.data = []
+        mock_tracer.langfuse.client.score.get.return_value = puntajes
+
+        with patch(
+            "api.app.services.langfuse_stats.LangfuseStatsService.enabled",
+            new_callable=lambda: property(lambda self: True),
+        ):
+            svc = LangfuseStatsService(mock_tracer, "claude-haiku-4-5-20251001")
+            return svc.get_stats()
+
+    def test_cada_llamada_paga_su_propia_tarifa(self, mock_tracer):
+        result = self._stats(mock_tracer, [
+            self._observacion("claude-haiku-4-5-20251001", 1_000_000, 0),   # USD 0.80
+            self._observacion("claude-sonnet-4-6", 1_000_000, 0),           # USD 3.00
+        ])
+        assert result["summary"]["cost_usd"] == pytest.approx(3.80, abs=0.001)
+
+    def test_cotizar_todo_a_un_solo_modelo_subestimaba(self, mock_tracer):
+        """Con la formula vieja, 2M tokens de entrada daban USD 1.60."""
+        result = self._stats(mock_tracer, [
+            self._observacion("claude-sonnet-4-6", 1_000_000, 0),
+            self._observacion("claude-sonnet-4-6", 1_000_000, 0),
+        ])
+        assert result["summary"]["cost_usd"] == pytest.approx(6.00, abs=0.001)
+
+    def test_sin_modelo_en_la_observacion_usa_el_configurado(self, mock_tracer):
+        obs = self._observacion("", 1_000_000, 0)
+        obs.model = ""
+        result = self._stats(mock_tracer, [obs])
+        assert result["summary"]["cost_usd"] == pytest.approx(0.80, abs=0.001)
