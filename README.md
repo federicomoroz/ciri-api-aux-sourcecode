@@ -126,7 +126,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 
 | Archivo | Qué es |
 |---|---|
-| `workflow_ciri_agent.json` | El orquestador: 39 nodos, 33 ejecutables |
+| `workflow_ciri_agent.json` | El orquestador: 40 nodos, 34 ejecutables |
 | `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 29 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 

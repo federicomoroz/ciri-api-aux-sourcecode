@@ -216,7 +216,8 @@ class TestDerivacion:
         sw = nodo(wf, "Switch — Derivación")
         primera = sw["parameters"]["rules"]["values"][0]["conditions"]["conditions"][0]
         assert "requires_hitl" in primera["leftValue"]
-        assert salidas(wf, "Switch — Derivación")[0] == ["Wait — Aprobación HITL"]
+        assert salidas(wf, "Switch — Derivación")[0] == ["Avisar — Formulario HITL"]
+        assert salidas(wf, "Avisar — Formulario HITL")[0] == ["Wait — Aprobación HITL"]
 
     @pytest.mark.parametrize("archivo", TODOS)
     def test_toda_expresion_de_url_empieza_con_igual(self, archivo):
@@ -228,3 +229,38 @@ class TestDerivacion:
             and not n["parameters"]["url"].startswith("=")
         ]
         assert not malas, f"urls que n8n no va a evaluar: {malas}"
+
+
+class TestElFormularioDeAprobacionSeAnuncia:
+    """La URL del formulario del Wait solo existe mientras se corre.
+
+    n8n la genera al llegar al nodo y la expone en `$execution.resumeFormUrl`,
+    que **solo se puede leer antes**. Si nadie la manda a ningun lado, el caso
+    queda esperando una decision que nadie puede tomar: quien disparo el webhook
+    se cuelga hasta que vence el plazo y no hay link en ninguna parte. Pasaba con
+    todo caso HIGH, que es la mayoria — cualquier FAIL de politica deriva ahi.
+    """
+
+    def test_el_aviso_va_antes_del_wait(self):
+        """Despues del Wait la URL ya no se puede leer: el orden es el arreglo."""
+        wf = cargar(ORQUESTADOR)
+        assert salidas(wf, "Avisar — Formulario HITL")[0] == ["Wait — Aprobación HITL"]
+
+    def test_manda_la_url_del_formulario(self):
+        cuerpo = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")["parameters"]["jsonBody"]
+        assert "$execution.resumeFormUrl" in cuerpo
+
+    def test_va_a_las_alertas_que_el_panel_lista(self):
+        """Un aviso que no se puede leer no es un aviso."""
+        url = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")["parameters"]["url"]
+        assert url.endswith("/api/alerts/")
+        assert url.startswith("=")
+
+    def test_dice_de_que_transaccion_es(self):
+        cuerpo = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")["parameters"]["jsonBody"]
+        assert "transaction_id" in cuerpo
+
+    def test_si_el_aviso_falla_el_caso_igual_espera(self):
+        """Perder el link es molesto; aprobar solo un riesgo alto, no."""
+        n = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")
+        assert n["onError"] == "continueRegularOutput"

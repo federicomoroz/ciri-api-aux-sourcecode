@@ -10,7 +10,7 @@ Una nota sobre el stack: este proyecto fue construido con las restricciones real
 
 **Contexto:** El sistema necesita un orquestador para las investigaciones de contracargos. n8n tiene un nodo "AI Agent" que le da al LLM control sobre qué tools llamar y en qué orden. La alternativa es orquestación explícita con nodos nombrados.
 
-**Decisión:** Usar 39 nodos explícitos en n8n (33 ejecutables + 6 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
+**Decisión:** Usar 40 nodos explícitos en n8n (34 ejecutables + 6 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
 
 **Razonamiento:** En una fintech, un regulador o un oficial de compliance necesita ver exactamente qué pasó, en qué orden, para cada caso. Un AI Agent es una caja negra — el LLM decide el flujo en runtime, lo que lo hace no-determinístico e imposible de auditar. Con nodos explícitos, cada investigación sigue los mismos pasos en el mismo orden: 7 llamadas de contexto → evaluación de políticas → síntesis de resolución → Judge → ruteo por riesgo. El flujo queda visible en el canvas de n8n, versionado como JSON, y es reproducible.
 

@@ -67,7 +67,7 @@
     },
     {
       "parameters": {
-        "content": "## 🟠 Etapa 4 — Enrutamiento por riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Responder\n• HIGH → Wait → Procesar HITL → Registrar Feedback → Generar Reporte → Responder\n\n**HITL (Human-in-the-Loop):**\n• Solo HIGH: el Wait abre un formulario y **espera a un analista hasta 24 h**\n• Sin respuesta en ese plazo el caso **no se aprueba**: sale marcado `PENDING_HITL` y no se registra ninguna decisión de analista\n• Sólo una decisión humana manda la resolución al feedback, que es lo que la indexa como precedente\n\n**Respuesta:**\n• El webhook devuelve HTML listo (POST /api/reports/html con Jinja2)\n• Así lo consume cualquier cliente: browser, otro workflow, un bot\n• Atajo de caché: si hubo cache hit, el HTML ya está armado y se responde directo, sin volver a renderizar\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n• Si falla la generación del informe, el webhook devuelve error — nunca un 200 vacío",
+        "content": "## 🟠 Etapa 4 — Enrutamiento por riesgo\n\n**Qué hace:**\n• Switch enruta por nivel de riesgo\n• BLOCKER/MEDIUM/LOW → Generar Reporte → Responder\n• HIGH → Avisar Formulario → Wait → Procesar HITL → Registrar Feedback → Generar Reporte → Responder\n\n**HITL (Human-in-the-Loop):**\n• La URL del formulario se genera al correr y **solo se puede leer antes** del Wait (`$execution.resumeFormUrl`): por eso el nodo *Avisar Formulario* la publica en `POST /api/alerts/`, donde el panel la lista. Sin eso el caso espera una decisión que nadie sabe dónde tomar\n• Solo HIGH: el Wait abre un formulario y **espera a un analista hasta 24 h**\n• Sin respuesta en ese plazo el caso **no se aprueba**: sale marcado `PENDING_HITL` y no se registra ninguna decisión de analista\n• Sólo una decisión humana manda la resolución al feedback, que es lo que la indexa como precedente\n\n**Respuesta:**\n• El webhook devuelve HTML listo (POST /api/reports/html con Jinja2)\n• Así lo consume cualquier cliente: browser, otro workflow, un bot\n• Atajo de caché: si hubo cache hit, el HTML ya está armado y se responde directo, sin volver a renderizar\n\n**Error handling:**\n• Error output → Stop and Error → Error Handler\n• Si falla la generación del informe, el webhook devuelve error — nunca un 200 vacío",
         "height": 1728,
         "width": 1344,
         "color": 6
@@ -1051,6 +1051,32 @@
         90128,
         32832
       ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/alerts/",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event_type: 'hitl_form_ready', severity: 'WARN', message: 'El caso ' + $json.resolution.transaction_id + ' espera la decision de un analista. Formulario de aprobacion: ' + $execution.resumeFormUrl, source: 'n8n:wait-hitl', transaction_id: $json.resolution.transaction_id, metadata: { form_url: $execution.resumeFormUrl, risk_level: $json.resolution.risk_level, hitl_reason: $json.resolution.hitl_reason || '', vence_en_horas: 24 } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a17f0c94-6d31-4a52-9f0e-3b8c21d47e05",
+      "name": "Avisar — Formulario HITL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        89424,
+        32864
+      ],
+      "notesInFlow": true,
+      "notes": "Publica la URL del formulario ANTES del Wait: despues ya no se puede leer.",
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     }
   ],
   "pinData": {},
@@ -1438,35 +1464,46 @@
       "main": [
         [
           {
+            "node": "Avisar — Formulario HITL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Avisar — Formulario HITL": {
+      "main": [
+        [
+          {
             "node": "Wait — Aprobación HITL",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
