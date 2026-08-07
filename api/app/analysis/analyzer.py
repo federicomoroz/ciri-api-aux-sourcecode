@@ -244,9 +244,15 @@ class Analyzer:
         # reglas viven en codigo. Cuantos dias concede esa politica es un dato
         # suyo, y sale de SQLite: editar POL-SLA-002 por la API cambia el plazo
         # sin deploy. Antes se editaba el texto y el numero seguia siendo 10.
+        # Un pais vacio es un dato que falta, no un pais fuera de LATAM. Caia en
+        # la rama internacional y se llevaba el plazo extendido de quince dias:
+        # el sistema le concedia mas tiempo al caso por no saber de donde era.
+        # Ante la duda se aplica el limite estandar, que es el mas exigente de
+        # los dos, y queda registrado que el pais no se conocia.
+        pais_desconocido = not (country or "").strip()
         if cliente_vip:
             codigo, sla_type, quien = "POL-EXC-002", SLA_TYPE_VIP, "clientes VIP"
-        elif country not in LATAM_COUNTRIES:
+        elif not pais_desconocido and country not in LATAM_COUNTRIES:
             codigo, sla_type, quien = "POL-EXC-004", SLA_TYPE_EXTENDED, "comercios internacionales"
         else:
             codigo, sla_type, quien = "POL-SLA-002", SLA_TYPE_STANDARD, "resolucion estandar"
@@ -269,4 +275,5 @@ class Analyzer:
             "medido_desde": open_date.isoformat(),
             "medido_hasta": corte.isoformat(),
             "caso_cerrado": cerrado,
+            "pais_desconocido": pais_desconocido,
         }

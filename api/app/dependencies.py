@@ -91,8 +91,27 @@ def _conectar_servicios(settings: Settings) -> dict:
     }
 
 
+def _indice_de_politicas_viejo(qdrant: QdrantClient, coleccion: str) -> bool:
+    """Si los puntos indexados no traen la semantica de la politica, estan viejos.
+
+    `puede_bloquear` y `sla_dias` se agregaron despues de que las colecciones ya
+    existieran. El guardrail tiene un respaldo para ese caso, pero mientras el
+    indice no se actualice «la politica decide si puede bloquear» sigue siendo
+    cierto sólo a medias. Reindexar cuesta una llamada de embeddings sobre un
+    corpus de 17 documentos: es mas barato que la ambiguedad.
+    """
+    try:
+        puntos, _ = qdrant.scroll(coleccion, limit=1, with_payload=True)
+    except Exception as e:
+        logger.warning("No se pudo inspeccionar %s: %s", coleccion, e)
+        return False
+    if not puntos:
+        return False
+    return "puede_bloquear" not in (puntos[0].payload or {})
+
+
 def _indexar_si_hace_falta(indexer: QdrantIndexer, qdrant: QdrantClient, db: Database, settings: Settings) -> None:
-    """Indexa en el primer arranque. Si Qdrant ya tiene datos, no hace nada."""
+    """Indexa en el primer arranque, o cuando el indice quedo desactualizado."""
     indexer.ensure_collections()
     try:
         faltan_politicas = qdrant.get_collection(settings.qdrant_policies_collection).points_count == 0
@@ -101,10 +120,16 @@ def _indexar_si_hace_falta(indexer: QdrantIndexer, qdrant: QdrantClient, db: Dat
         logger.warning("Could not check Qdrant collection counts, will re-index: %s", e)
         faltan_politicas = faltan_casos = True
 
+    if not faltan_politicas and _indice_de_politicas_viejo(
+        qdrant, settings.qdrant_policies_collection
+    ):
+        logger.info("Las politicas indexadas no traen `puede_bloquear`: se reindexan")
+        faltan_politicas = True
+
     if not (faltan_politicas or faltan_casos):
         return
 
-    logger.info("Qdrant collections empty — indexing from SQLite (first-run or reset)")
+    logger.info("Indexando desde SQLite (primer arranque, reset, o indice desactualizado)")
     if faltan_politicas:
         politicas = db.get_all_policies()
         if politicas:

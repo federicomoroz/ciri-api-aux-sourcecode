@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-566%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-576%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -14,8 +14,10 @@ Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transac
 > **Sobre el 9.1:** es el promedio del Juez sobre las corridas de desarrollo con la configuración
 > v3.0. Los tres informes que viajan en este paquete promedian 8.67 — son los tres casos más
 > contenciosos del dataset, elegidos por cubrir los tres caminos del enrutador y no por su puntaje.
-> Aquellas corridas no dejaron artefacto y hoy no son reproducibles sin saldo de API: el número, su
-> método y esa deuda están en [`docs/mejora_continua.md`](docs/mejora_continua.md#como-se-midio-el-91).
+> Aquellas corridas no dejaron artefacto y hoy no son reproducibles sin saldo de API. El instrumento
+> para volver a medir sí viaja: `python scripts/evaluar.py --n 20` corre la muestra, escribe el
+> detalle caso por caso en `docs/evaluaciones/` y reporta el costo. El método completo está en
+> [`docs/mejora_continua.md`](docs/mejora_continua.md#como-se-midio-el-91).
 
 ---
 
@@ -240,7 +242,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 566 en 29 archivos; los de `unit/` e `integration/` corren
+**Tests:** `pytest tests/ -v`. Son 576 en 30 archivos; los de `unit/` e `integration/` corren
 sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
 validación de los workflows de n8n. El desglose está en
 `docs/architecture.md`.

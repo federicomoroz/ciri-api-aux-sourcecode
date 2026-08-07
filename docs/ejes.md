@@ -147,6 +147,8 @@ Documento completo: [`mejora_continua.md`](mejora_continua.md).
 El LLM-as-Judge puntúa cada resolución sobre 5 criterios (1–10). Bajo 7.0 el caso se marca
 `LOW_QUALITY` y sigue viaje con la marca puesta; sobre 8.0 se convierte en precedente.
 
+**Medir la calidad, no sólo puntuarla.** `scripts/evaluar.py` corre N casos del dataset por el pipeline completo y escribe a `docs/evaluaciones/` un JSON con el score de cada uno, el promedio por criterio, la configuración usada y el costo. El muestreo lleva semilla fija, así que la misma invocación devuelve la misma muestra: es lo que convierte un número publicado en un número auditable.
+
 **Verificar** — editar una política en caliente y ver que el RAG cambia:
 ```bash
 curl -X PUT https://ciri-chargeback-agent.onrender.com/api/policies/POL-FRD-001 \

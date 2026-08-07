@@ -20,10 +20,17 @@ Cuando arrancamos, el promedio del Judge era **8.2/10**. Funcionaba, pero habia 
 
 ### Como se midio el 9.1
 
-**Que es:** el promedio del `overall_score` del Juez sobre las corridas de desarrollo con la
-configuracion v3.0 — modelo dual (Haiku para evaluacion de politicas, Sonnet para sintesis y
-juicio), prompts v1.2 / v3.0 / v2.0. Cada corrida es un caso del dataset atravesando el pipeline
+**Que es:** el promedio del `overall_score` del Juez sobre las corridas manuales de desarrollo
+con la configuracion v3.0 — modelo dual (Haiku para evaluacion de politicas, Sonnet para sintesis
+y juicio), prompts v1.2 / v3.0 / v2.0. Cada corrida es un caso del dataset atravesando el pipeline
 completo, y el Juez la puntua sobre los cinco criterios de la rubrica.
+
+**Como se tomo la muestra, con precision:** casos elegidos **al azar y a mano** durante el
+desarrollo, corridos de a uno desde el panel. **No se registro cuantos fueron.** Es un promedio
+observado, no una evaluacion sistematica: sirve para ver que la configuracion v3.0 rendia mejor
+que las anteriores —que es para lo que se uso— y no alcanza para publicarlo como metrica de
+calidad con intervalo de confianza. Decirlo asi es preferible a presentar como sistematico algo
+que no lo fue.
 
 **Que no es:** el promedio de los tres informes que viajan en este paquete. Esos tres promedian
 **8.67**, y la diferencia no es ruido: son los tres casos **mas contenciosos** del dataset,
@@ -48,9 +55,27 @@ un dato.
 **Lo que quedo sin guardar.** Las corridas que produjeron el 9.1 no dejaron artefacto: no habia
 harness de evaluacion que volcara los resultados a disco, Langfuse estaba desactivado y la SQLite
 de Render es efimera. El numero es real y la configuracion esta documentada, pero **no es
-reproducible desde este paquete**. Es la deuda mas concreta que queda: lo que corresponde es un
-`scripts/evaluar.py` que corra el set completo, escriba los scores a un archivo versionado y lo
-publique junto al badge, para que el numero se pueda auditar y no solo leer.
+reproducible desde este paquete**.
+
+**El instrumento si viaja.** `scripts/evaluar.py` es lo que faltaba: corre N casos por el pipeline
+completo, junta los scores del Juez y escribe un JSON versionable con el detalle caso por caso, el
+promedio por criterio, la configuracion usada —modelos, temperatura, versiones de prompt leidas de
+sus cabeceras— y el costo real.
+
+```bash
+python scripts/evaluar.py --n 20                 # 20 casos al azar, semilla fija
+python scripts/evaluar.py --todos --tope-usd 4   # el dataset entero, con tope de gasto
+python scripts/evaluar.py --casos TXN-00051,TXN-00042
+```
+
+El muestreo es reproducible: «al azar» usa una semilla fija, asi que la misma invocacion devuelve
+la misma muestra y el resultado se puede volver a obtener. El script aborta antes de gastar si
+falta la clave, corta si se pasa del tope, e imprime el costo acumulado mientras corre — unos
+USD 0.037 por caso segun la estimacion de mas abajo.
+
+**No se corrio.** Hacerlo requiere saldo de API que hoy no hay, asi que el badge sigue mostrando el
+9.1 de las corridas manuales y esta seccion explica de donde sale. La proxima medicion sale de
+`docs/evaluaciones/` y ahi si es auditable: el archivo se cita junto al numero.
 
 ---
 

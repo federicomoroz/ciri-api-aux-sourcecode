@@ -50,7 +50,9 @@ class QueryBuilder:
             parts.append("criptomonedas no reversible blocker")
         if fraud_score < FRAUD_SCORE_HIGH_RISK_THRESHOLD:
             parts.append("transaccion de alto riesgo fraude score bajo")
-        if country not in LATAM_COUNTRIES:
+        # Sin pais no se enriquece: afirmar «fuera de LATAM» sobre un dato que
+        # falta sesga la busqueda hacia las politicas de plazo extendido.
+        if country and country not in LATAM_COUNTRIES:
             parts.append("internacional fuera LATAM plazo extendido")
         if channel == Channel.IVR:
             parts.append("limite monto IVR")
