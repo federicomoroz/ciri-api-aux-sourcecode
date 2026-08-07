@@ -47,6 +47,15 @@ __all__ = [
     "LLM_CREDIT_EXHAUSTED_MARKER",
     "LLM_DEFAULT_MAX_TOKENS",
     "LLM_MAX_TOKENS_COMPATIBLE",
+    "LLM_MAX_TOKENS_ABIERTO",
+    "LLM_RETRY_STATUS",
+    "LLM_RETRY_BASE_WAIT_S",
+    "LLM_RETRY_MAX_WAIT_S",
+    "LLM_RPM_SIN_LIMITE",
+    "LLM_RPM_GEMINI_FREE",
+    "LLM_RPM_ABIERTO",
+    "LLM_RPM_VENTANA_S",
+    "LLM_RPM_PAUSA_MINIMA_S",
     "LLM_DEFAULT_MAX_RETRIES",
     "LLM_DEFAULT_TEMPERATURE",
     # Judge
@@ -363,8 +372,34 @@ LLM_DEFAULT_MAX_TOKENS: int = 4096
 # No se sube el default de Anthropic porque ahi seria pagar por un techo que no
 # se usa: Claude no gasta presupuesto en razonamiento oculto.
 LLM_MAX_TOKENS_COMPATIBLE: int = 16384
+# Los modelos abiertos (Llama, Qwen, Mistral) no razonan sobre el presupuesto,
+# pero son mas verbosos que Claude: un piso intermedio evita truncar la lista de
+# veredictos sin reservar el techo completo de un razonador.
+LLM_MAX_TOKENS_ABIERTO: int = 8192
 LLM_DEFAULT_MAX_RETRIES: int = 2
 LLM_DEFAULT_TEMPERATURE: float = 0.3
+
+# ── Reintento de fallos transitorios ────────────────────────────────────────
+# Codigos que mejoran si se insiste. Un 4xx que no sea 429 no: la clave sigue
+# siendo invalida y el modelo sigue sin existir por mas que se vuelva a pedir.
+LLM_RETRY_STATUS: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+LLM_RETRY_BASE_WAIT_S: float = 2.0    # espera del primer reintento, se duplica
+LLM_RETRY_MAX_WAIT_S: float = 20.0    # techo, incluso si el proveedor pide mas
+
+# ── Frecuencia de llamadas ──────────────────────────────────────────────────
+# Pedidos por minuto que tolera cada familia. Reintentar un 429 es reaccionar
+# tarde —la llamada ya se gasto—, asi que si el limite se conoce conviene no
+# llegar. Un analisis son tres llamadas casi seguidas: dos investigaciones a la
+# vez ya rozan el techo de un free tier.
+#
+# Dependen de la CUENTA y no del modelo, y los proveedores los mueven. Por eso
+# son el piso por defecto y no la ultima palabra: `CB_LLM_RPM` los pisa por
+# proveedor sin tocar codigo (ver `Settings.llm_rpm`).
+LLM_RPM_SIN_LIMITE: int = 0           # no se conoce ninguno: no se espacia
+LLM_RPM_GEMINI_FREE: int = 5          # Flash Lite da 15; el Flash grande, 5
+LLM_RPM_ABIERTO: int = 30             # el free tier de Groq; el resto es mas holgado
+LLM_RPM_VENTANA_S: float = 60.0       # «por minuto» es esta ventana
+LLM_RPM_PAUSA_MINIMA_S: float = 0.05  # para no repetir el calculo en vano
 
 # ── LLM Pricing (USD per 1M tokens) ─────────────────────────────────────────
 LLM_PRICING: dict[str, tuple[float, float]] = {

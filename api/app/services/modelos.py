@@ -133,41 +133,45 @@ class ModelosService:
         """Cambio la configuracion: los clientes cacheados ya no sirven."""
         self.manager.invalidar()
 
+    def completar(
+        self, paso: str, system: str, user: str,
+        *, demo: bool = False, api_key: str = "", trace_id: str | None = None, **extra,
+    ):
+        """La respuesta del modelo que le toca a ESE paso, en ESE modo.
+
+        Es lo unico que necesita saber quien arma un prompt: el nombre del paso.
+        Que proveedor, que modelo y con que credencial se resuelve aca, y hablar
+        con el es del manager. Asi el llamador no puede equivocarse de cliente,
+        porque no tiene ninguno para equivocarse.
+        """
+        config = (self.config_demo() if demo else self.vigente())
+        if config is None:
+            config = self.vigente()
+        cfg = config[paso]
+        return self.manager.completar(
+            cfg["proveedor"], cfg["modelo"], system, user,
+            api_key=api_key, trace_id=trace_id, **extra,
+        )
+
     # ── La unica fabrica ────────────────────────────────────────────────
 
     def servicio(
         self, *, demo: bool = False, api_key: str = "", override: dict | None = None,
     ):
-        """Un `ResolutionService` listo, con los clientes que correspondan.
+        """Un `ResolutionService` para este modo. Devuelve None si demo no aplica.
 
-        **Nadie mas arma clientes.** Las rutas, el panel y los scripts piden un
-        servicio y no saben con que modelo hablan — que es lo que permite que
-        elegirlo sea configuracion. Hubo un momento en que tres lugares
-        distintos ensamblaban lo mismo, y alcanzo con que uno quedara desfasado
-        para que el panel dijera una cosa y n8n hiciera otra.
-
-        `demo` usa el modelo del modo demo con la clave del servidor; sin uno
-        configurado devuelve None y el llamador decide su respaldo. Sin `demo`,
-        la configuracion de produccion, con la clave y la eleccion que traiga
-        esta peticion.
+        No recibe clientes: recibe el modo. El servicio pide por paso y esta
+        clase traduce. Antes esto armaba tres clientes y se los entregaba, que
+        es como el juez termino corriendo en el proveedor equivocado.
         """
         from .resolution import ResolutionService
 
-        if demo:
-            clientes = self.clientes_demo()
-            if clientes is None:
-                return None
-        elif api_key or override:
-            clientes = self.clientes_para(override, api_key=api_key)
-        else:
-            # Sin nada propio: el servicio resuelve el cliente en cada uso, asi
-            # cambiar el modelo desde el panel no exige reiniciar.
-            return ResolutionService(tracer=self.tracer, modelos=self)
-
+        if demo and self.modelo_demo() is None:
+            return None
+        if override:
+            self._override = override
         return ResolutionService(
-            clientes[PASO_POLITICAS], self.tracer,
-            llm_resolution=clientes[PASO_RESOLUCION],
-            llm_judge=clientes[PASO_JUEZ],
+            tracer=self.tracer, modelos=self, demo=demo, api_key=api_key,
         )
 
     # ── Para el panel ───────────────────────────────────────────────────

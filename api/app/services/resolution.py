@@ -50,43 +50,50 @@ class ResolutionService:
         llm_resolution: LLMClient | None = None,
         llm_judge: LLMClient | None = None,
         modelos=None,
+        demo: bool = False,
+        api_key: str = "",
     ):
-        """Un cliente por paso, fijo o resuelto en cada uso.
+        """Este servicio no conoce clientes de modelo. Pide por paso.
 
-        Con `modelos` (un `ModelosService`) los tres clientes se piden **en el
-        momento de usarlos**. Sostenerlos en atributos parecia inocente y no lo
-        era: el servicio se arma una vez en el arranque, asi que cambiar el
-        modelo desde el panel actualizaba el panel y dejaba a `/api/analyze/*`
-        —que es lo que llama n8n— corriendo el modelo viejo hasta reiniciar. El
-        panel decia una cosa y el sistema hacia otra.
+        Con `modelos` (un `ModelosService`), cada llamada dice **que paso** es y
+        recibe la respuesta: que proveedor, que modelo y con que credencial lo
+        deciden el servicio de configuracion y el `LLMManager`, que es el unico
+        que sabe que existen los clientes.
 
-        Sin `modelos` se usan los clientes que le pasen, que es lo que hacen los
-        tests y el pipeline efimero de BYOK.
+        No es una preferencia de estilo. Mientras el que llama podia elegir el
+        cliente, podia elegir el equivocado — y paso: el juez resolvia el
+        servicio del modo demo y despues invocaba al de produccion, asi que la
+        mitad del pipeline se iba por Anthropic sin credito. Ahora el unico
+        parametro es el nombre del paso, y no hay forma de equivocarlo en
+        silencio.
 
-        `llm_judge` cae en el de sintesis si no se especifica: evaluar y resolver
-        piden un razonamiento parecido, asi que compartir modelo es un default
-        razonable — pero ahora es un default, no una atadura.
+        `demo` y `api_key` viajan con el servicio: son el modo de esta
+        ejecucion, no una decision por llamada.
+
+        Los clientes explicitos siguen aceptandose para los tests, que quieren
+        guionar respuestas sin levantar la configuracion entera.
         """
         self._modelos = modelos
+        self._demo = demo
+        self._api_key = api_key
         self._llm = llm
         self._llm_resolution = llm_resolution or llm
         self._llm_judge = llm_judge or self._llm_resolution
         self.tracer = tracer
 
-    @property
-    def llm(self) -> LLMClient:
-        return self._cliente(PASO_POLITICAS, self._llm)
-
-    @property
-    def llm_resolution(self) -> LLMClient:
-        return self._cliente(PASO_RESOLUCION, self._llm_resolution)
-
-    @property
-    def llm_judge(self) -> LLMClient:
-        return self._cliente(PASO_JUEZ, self._llm_judge)
-
-    def _cliente(self, paso: str, fijo: LLMClient | None) -> LLMClient:
-        return self._modelos.cliente(paso) if self._modelos is not None else fijo
+    def _completar(self, paso: str, system: str, user: str, trace_id: str | None = None):
+        """La respuesta del modelo de ese paso."""
+        if self._modelos is not None:
+            return self._modelos.completar(
+                paso, system, user,
+                demo=self._demo, api_key=self._api_key, trace_id=trace_id,
+            )
+        fijo = {
+            PASO_POLITICAS: self._llm,
+            PASO_RESOLUCION: self._llm_resolution,
+            PASO_JUEZ: self._llm_judge,
+        }[paso]
+        return fijo.complete(system, user, trace_id=trace_id)
 
     def resolve(self, ctx: CaseContext) -> dict:
         """Full resolution pipeline: policy eval -> log summary -> resolution synthesis -> guardrails.
@@ -168,7 +175,7 @@ class ResolutionService:
             merchant_risk=ctx.merchant_risk,
             client_history=ctx.client_history,
         )
-        result = self.llm.complete(sys_eval, usr_eval, trace_id=trace_id)
+        result = self._completar(PASO_POLITICAS, sys_eval, usr_eval, trace_id)
         verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])
         verdicts = self._sanitize_verdicts(verdicts, ctx.policies)
         return verdicts, result
@@ -255,7 +262,7 @@ class ResolutionService:
             determined_outcome=determined_outcome,
             sla=ctx.sla,
         )
-        result = self.llm_resolution.complete(sys_res, usr_res, trace_id=trace_id)
+        result = self._completar(PASO_RESOLUCION, sys_res, usr_res, trace_id)
         resolution = validate_llm_output(result.text, ResolutionOutput, {})
         return self._con_piso(resolution, determined_outcome or {}), result
 
@@ -318,7 +325,7 @@ class ResolutionService:
             resolution=judge_resolution,
             propuesta=resolution.get("_propuesta_del_modelo"),
         )
-        llm_result = self.llm_judge.complete(system, user, trace_id=trace_id)
+        llm_result = self._completar(PASO_JUEZ, system, user, trace_id)
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})
 
         if "overall_score" not in result and "criteria" in result:

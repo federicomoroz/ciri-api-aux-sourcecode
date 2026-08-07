@@ -242,13 +242,14 @@ class TestReintentoDeLoTransitorio:
     def test_respeta_el_retry_after_del_proveedor(self):
         import httpx
 
-        from api.app.llm.client import RETRY_MAX_WAIT_S, OpenAICompatibleClient
+        from api.app.domain.constants import LLM_RETRY_MAX_WAIT_S
+        from api.app.llm.client import OpenAICompatibleClient
 
         r = httpx.Response(429, headers={"Retry-After": "7"})
         assert OpenAICompatibleClient._espera(r, 0) == 7.0
         # Y no se queda esperando un numero absurdo.
         r = httpx.Response(429, headers={"Retry-After": "9999"})
-        assert OpenAICompatibleClient._espera(r, 0) == RETRY_MAX_WAIT_S
+        assert OpenAICompatibleClient._espera(r, 0) == LLM_RETRY_MAX_WAIT_S
 
     def test_sin_retry_after_la_espera_crece(self):
         import httpx
@@ -257,3 +258,118 @@ class TestReintentoDeLoTransitorio:
 
         r = httpx.Response(503)
         assert OpenAICompatibleClient._espera(r, 1) > OpenAICompatibleClient._espera(r, 0)
+
+
+class TestFrecuenciaDeLlamadas:
+    """No pasarse de los pedidos por minuto del proveedor.
+
+    Un 429 se reintenta, pero reintentarlo es reaccionar tarde: la llamada ya se
+    gasto contra la cuota diaria. Medido contra el free tier de Gemini, que da 5
+    por minuto en el Flash grande: un analisis dispara tres llamadas casi
+    seguidas, asi que dos investigaciones a la vez ya se pasan.
+
+    El espaciado vive en el manager y no en el cliente porque la cuota es del
+    PROVEEDOR: si dos pasos del pipeline corren en modelos distintos de la misma
+    casa, comparten el techo.
+    """
+
+    @staticmethod
+    def _manager(monkeypatch, **ajustes):
+        """Un manager con reloj falso: el test controla el tiempo."""
+        from types import SimpleNamespace
+
+        from api.app.llm.manager import LLMManager
+        from api.app.observability.tracer import NoOpTracer
+
+        reloj = {"t": 1000.0, "dormido": 0.0}
+        monkeypatch.setattr("time.monotonic", lambda: reloj["t"])
+
+        def dormir(s):
+            reloj["dormido"] += s
+            reloj["t"] += s      # el reloj avanza, si no el bucle no termina
+
+        monkeypatch.setattr("time.sleep", dormir)
+        settings = SimpleNamespace(llm_rpm={}, **ajustes)
+        m = LLMManager(settings, NoOpTracer())
+        m.reloj = reloj
+        return m
+
+    def test_por_debajo_del_limite_no_espera(self, monkeypatch):
+        """La primera investigacion es la que alguien esta mirando."""
+        m = self._manager(monkeypatch)
+        for _ in range(5):
+            m._espaciar("gemini", "gemini-flash-latest")
+        assert m.reloj["dormido"] == 0.0
+
+    def test_al_llegar_al_limite_espera_a_que_se_libere(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        for _ in range(5):                       # llena la ventana en t=1000
+            m._espaciar("gemini", "gemini-flash-latest")
+        m._espaciar("gemini", "gemini-flash-latest")   # la sexta tiene que esperar
+        assert m.reloj["dormido"] == pytest.approx(60.0, abs=0.1)
+
+    def test_una_llamada_vieja_ya_no_cuenta(self, monkeypatch):
+        """La ventana es deslizante: no se acumula deuda para siempre."""
+        m = self._manager(monkeypatch)
+        for _ in range(5):
+            m._espaciar("gemini", "gemini-flash-latest")
+        m.reloj["t"] += 61.0                     # paso el minuto
+        m._espaciar("gemini", "gemini-flash-latest")
+        assert m.reloj["dormido"] == 0.0
+
+    def test_anthropic_no_se_espacia(self, monkeypatch):
+        """Es un plan pago con su propio limite: frenarlo seria inventar uno."""
+        m = self._manager(monkeypatch)
+        for _ in range(50):
+            m._espaciar("anthropic", "claude-haiku-4-5-20251001")
+        assert m.reloj["dormido"] == 0.0
+
+    def test_cada_proveedor_lleva_su_propia_cuenta(self, monkeypatch):
+        """Gastar la de Gemini no tiene por que frenar a Groq."""
+        m = self._manager(monkeypatch)
+        for _ in range(5):
+            m._espaciar("gemini", "gemini-flash-latest")
+        m._espaciar("groq", "llama-3.3-70b-versatile")
+        assert m.reloj["dormido"] == 0.0
+
+    def test_la_configuracion_pisa_al_adaptador(self, monkeypatch):
+        """La cuota es de la cuenta: un plan pago no arrastra el free tier."""
+        m = self._manager(monkeypatch)
+        m.settings.llm_rpm = {"gemini": 15}
+        assert m.rpm_de("gemini", "gemini-flash-lite-latest") == 15
+        for _ in range(15):
+            m._espaciar("gemini", "gemini-flash-lite-latest")
+        assert m.reloj["dormido"] == 0.0
+
+    def test_se_puede_apagar_el_espaciado(self, monkeypatch):
+        """Cero significa «no se conoce limite», y sirve para desactivarlo."""
+        from api.app.domain.constants import LLM_RPM_SIN_LIMITE
+
+        m = self._manager(monkeypatch)
+        m.settings.llm_rpm = {"gemini": LLM_RPM_SIN_LIMITE}
+        for _ in range(30):
+            m._espaciar("gemini", "gemini-flash-latest")
+        assert m.reloj["dormido"] == 0.0
+
+    def test_completar_espacia_antes_de_llamar(self, monkeypatch):
+        """El espaciado esta en el camino real, no solo disponible."""
+        m = self._manager(monkeypatch)
+        pasos = []
+        monkeypatch.setattr(m, "_espaciar", lambda p, mo: pasos.append(("espacio", p)))
+        monkeypatch.setattr(
+            m, "cliente",
+            lambda p, mo, k="": SimpleNamespaceCliente(pasos),
+        )
+        m.completar("gemini", "gemini-flash-latest", "s", "u")
+        assert pasos == [("espacio", "gemini"), ("llamada",)]
+
+
+class SimpleNamespaceCliente:
+    """Un cliente que solo anota que lo llamaron."""
+
+    def __init__(self, pasos):
+        self.pasos = pasos
+
+    def complete(self, *a, **k):
+        self.pasos.append(("llamada",))
+        return "ok"

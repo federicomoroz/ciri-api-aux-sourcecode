@@ -22,9 +22,18 @@ fabrica, esa clase de divergencia no tiene donde aparecer.
 from __future__ import annotations
 
 import logging
+import threading
+import time
+from collections import deque
 
 from ..config import Settings
+from ..domain.constants import (
+    LLM_RPM_PAUSA_MINIMA_S,
+    LLM_RPM_SIN_LIMITE,
+    LLM_RPM_VENTANA_S,
+)
 from ..observability.tracer import Tracer
+from .adaptadores import adaptador_de
 from .client import AnthropicClient, LLMClient, OpenAICompatibleClient, base_url_de
 
 logger = logging.getLogger(__name__)
@@ -37,6 +46,11 @@ class LLMManager:
         self.settings = settings
         self.tracer = tracer
         self._cache: dict[tuple[str, str], LLMClient] = {}
+        # Cuando se llamo a cada proveedor, para no pasarse de su frecuencia.
+        # Las rutas sincronicas de FastAPI corren en un pool de hilos, asi que
+        # dos investigaciones simultaneas comparten esto y hay que sincronizar.
+        self._llamadas: dict[str, deque[float]] = {}
+        self._candado = threading.Lock()
 
     # ── Credenciales ────────────────────────────────────────────────────
 
@@ -86,7 +100,74 @@ class LLMManager:
         return OpenAICompatibleClient(
             api_key=clave, model=modelo, base_url=base,
             tracer=self.tracer, max_retries=self.settings.llm_max_retries,
+            proveedor=proveedor,
         )
+
+    def completar(
+        self, proveedor: str, modelo: str, system: str, user: str,
+        *, api_key: str = "", trace_id: str | None = None, **extra,
+    ):
+        """Le pide una respuesta al modelo que corresponda. Es LA puerta.
+
+        Nadie fuera de esta clase toca un cliente. Los llamadores dicen que
+        proveedor y que modelo —o mejor, dicen que PASO y otro lo traduce— y
+        reciben un `LLMResult`. La diferencia no es estetica: mientras el que
+        llama pueda elegir el cliente, puede elegir el equivocado, y eso ya paso.
+        El juez resolvia el servicio del modo demo y despues llamaba al de
+        produccion, asi que la mitad del pipeline se iba por Anthropic sin
+        credito mientras la otra mitad corria en Gemini.
+
+        Las diferencias entre modelos —cuanto presupuesto de tokens necesita uno
+        que razona, que errores vale la pena reintentar— se resuelven adentro,
+        que es donde se sabe con quien se esta hablando.
+        """
+        self._espaciar(proveedor, modelo)
+        return self.cliente(proveedor, modelo, api_key).complete(
+            system, user, trace_id=trace_id, **extra,
+        )
+
+    def rpm_de(self, proveedor: str, modelo: str) -> int:
+        """Pedidos por minuto que se le permiten a esa combinacion.
+
+        El adaptador pone el piso conocido de la familia; `CB_LLM_RPM` lo pisa,
+        porque la cuota es de la cuenta y no del modelo: quien pague un plan no
+        tiene por que arrastrar el techo del free tier.
+        """
+        override = (getattr(self.settings, "llm_rpm", None) or {}).get(proveedor)
+        if override is not None:
+            return int(override)
+        return adaptador_de(proveedor, modelo).pedidos_por_minuto
+
+    def _espaciar(self, proveedor: str, modelo: str) -> None:
+        """Espera lo justo para no pasarse de los pedidos por minuto.
+
+        Reintentar un 429 es reaccionar tarde: la llamada ya se gasto y el
+        proveedor ya la rechazo. Si el limite se conoce, conviene no llegar.
+
+        Ventana deslizante y no un intervalo fijo: mientras se este por debajo
+        del techo no se espera nada, y recien cuando la ventana esta llena se
+        duerme hasta que la llamada mas vieja cumpla el minuto. Un intervalo
+        fijo le agregaria latencia a la primera investigacion, que es justo la
+        que alguien va a estar mirando.
+        """
+        limite = self.rpm_de(proveedor, modelo)
+        if limite <= LLM_RPM_SIN_LIMITE:
+            return
+        while True:
+            with self._candado:
+                ahora = time.monotonic()
+                ventana = self._llamadas.setdefault(proveedor, deque())
+                while ventana and ahora - ventana[0] >= LLM_RPM_VENTANA_S:
+                    ventana.popleft()
+                if len(ventana) < limite:
+                    ventana.append(ahora)
+                    return
+                espera = LLM_RPM_VENTANA_S - (ahora - ventana[0])
+            logger.info(
+                "%s esta en su limite de %d/min: se espera %.1fs antes de llamar",
+                proveedor, limite, espera,
+            )
+            time.sleep(max(espera, LLM_RPM_PAUSA_MINIMA_S))
 
     def invalidar(self) -> None:
         """Suelta los clientes cacheados para que el proximo se arme de nuevo."""

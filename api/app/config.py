@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     llm_temperature: float = LLM_DEFAULT_TEMPERATURE
     llm_max_tokens: int = LLM_DEFAULT_MAX_TOKENS
     llm_max_retries: int = LLM_DEFAULT_MAX_RETRIES
+    # Pedidos por minuto por proveedor: `{"gemini": 15}`. Pisa el default del
+    # adaptador. Existe porque la cuota es de la CUENTA —un plan pago no tiene
+    # por que arrastrar el techo del free tier— y porque los proveedores la
+    # mueven sin aviso: cambiarla no deberia ser un deploy.
+    llm_rpm: dict[str, int] = {}
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
