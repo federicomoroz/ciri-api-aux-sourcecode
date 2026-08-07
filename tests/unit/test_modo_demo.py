@@ -755,3 +755,48 @@ class TestElPanelLlevaAlFormulario:
 
         sucio = _pagina_hacia_el_formulario("TXN-1", 'http://x/"><script>alert(1)</script>')
         assert "<script>alert" not in sucio
+
+
+class TestElPipelineConN8nSeHabilitaCuandoResponde:
+    """No se ofrece un modo que no va a poder correr.
+
+    El selector traia «n8n Test» y «n8n Production» siempre elegibles, y lo que
+    pasara despues dependia de una URL que podia no existir. Ahora arrancan
+    deshabilitadas y se habilitan cuando la API confirma que llega.
+
+    Quien verifica importa: antes lo probaba el NAVEGADOR con `fetch(no-cors)`,
+    que responde otra pregunta —si vos llegas a esa URL—. Al webhook lo llama la
+    API, que puede estar en otra red: con la API en un contenedor,
+    `http://localhost:5678` abre el editor en tu browser y desde el contenedor
+    es la API misma. El badge daba verde y la consulta moria.
+    """
+
+    @property
+    def panel(self) -> str:
+        from pathlib import Path
+
+        return Path("api/app/reports/templates/test_panel.html").read_text(encoding="utf-8")
+
+    def test_las_opciones_de_n8n_arrancan_deshabilitadas(self):
+        html = self.panel
+        assert '<option value="test" disabled>' in html
+        assert '<option value="production" disabled>' in html
+        assert '<option value="direct" selected>' in html, "Directo tiene que seguir siendo el default"
+
+    def test_la_verificacion_la_hace_la_api(self):
+        """Un chequeo que pasa mientras la llamada real falla es peor que ninguno."""
+        html = self.panel
+        assert "/api/panel/n8n-status" in html
+        assert "mode: 'no-cors'" not in html, "volvio a probar desde el navegador"
+
+    def test_se_habilitan_solo_si_la_api_llega(self):
+        html = self.panel
+        assert "if (d.available) {" in html
+        assert "habilitarModosN8n(true" in html
+
+    def test_si_deja_de_responder_se_vuelve_a_directo(self):
+        """Dejarlo elegido prometeria una orquestacion que la consulta no tendra."""
+        assert "if (!puede && usaN8n()) mode.value = 'direct';" in self.panel
+
+    def test_se_explica_que_la_llamada_la_hace_la_api(self):
+        assert "la llamada la hace la API, no tu navegador" in self.panel

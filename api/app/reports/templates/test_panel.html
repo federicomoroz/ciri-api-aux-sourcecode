@@ -1647,8 +1647,8 @@
       <label class="pipeline-label">Pipeline:</label>
       <select class="pipeline-select" id="pipeline-mode" onchange="onModoPipeline()" title="Directo = sin n8n (gratis). Test/Prod = via n8n (1 ejecucion).">
         <option value="direct" selected>Directo (sin n8n)</option>
-        <option value="test">n8n Test</option>
-        <option value="production">n8n Production</option>
+        <option value="test" disabled>n8n Test</option>
+        <option value="production" disabled>n8n Production</option>
       </select>
     </span>
     <span class="pipeline-selector">
@@ -2819,44 +2819,67 @@ function refrescarBotonPorN8n() {
   }
 }
 
-function onN8nUrlChange() {
-  const url  = getN8nUrl();
+function habilitarModosN8n(puede, motivo) {
   const mode = $('pipeline-mode');
+  ['test', 'production'].forEach(v => {
+    const op = [...mode.options].find(o => o.value === v);
+    op.disabled = !puede;
+    op.title    = puede ? '' : motivo;
+  });
+  // Si estaba elegido y dejo de poder usarse, se vuelve a Directo: dejarlo
+  // seleccionado prometeria una orquestacion que la consulta no va a tener.
+  if (!puede && usaN8n()) mode.value = 'direct';
+  refrescarBotonPorN8n();
+}
+
+function onN8nUrlChange() {
+  const url = getN8nUrl();
   clearTimeout(verificacionN8n);
 
   if (!url) {
-    if (usaN8n()) {
-      marcarN8n('requerida', 'required',
-        'El modo ' + mode.value + ' ejecuta en TU n8n, y este servidor no puede adivinar donde esta. Pega la URL base, o volve a Directo.');
-    } else {
-      marcarN8n('opcional', '', 'Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.');
-    }
-    refrescarBotonPorN8n();
+    // Sin URL propia queda la del servidor, si la tiene. `verificarN8n` la
+    // consulta igual: puede haber una configurada y andando.
+    marcarN8n('opcional', '', 'Si importaste el workflow en tu n8n, pega su URL. Dejalo vacio para usar el pipeline directo.');
+    verificacionN8n = setTimeout(() => verificarN8n('', ''), 200);
     return;
   }
-  if (mode.value === 'direct') mode.value = 'test';
-  refrescarBotonPorN8n();
 
   const crudo = ($('inp-n8n-url').value || '').trim().replace(/\/+$/, '');
   const aviso = (crudo && normalizarUrlN8n(crudo) !== crudo) ? ' Se usa la base: ' + url : '';
-  marcarN8n('verificando', '', 'Probando si responde...' + aviso);
+  marcarN8n('verificando', '', 'Probando si la API llega...' + aviso);
+  habilitarModosN8n(false, 'Verificando la URL...');
   verificacionN8n = setTimeout(() => verificarN8n(url, aviso), 600);
 }
 
-// La instancia suele estar en la maquina de quien mira, no en internet, asi que
-// la prueba la hace el navegador. Con no-cors no se puede leer la respuesta,
-// pero alcanza para distinguir "algo contesta" de "no hay nada escuchando".
+// La prueba la hace LA API, no el navegador. Antes la hacia el navegador con
+// `fetch(no-cors)`, y eso responde otra pregunta: si vos llegas a esa URL. Quien
+// llama al webhook es la API, y puede estar en otra red — con la API en un
+// contenedor, `http://localhost:5678` abre el editor en tu browser y desde el
+// contenedor es la API misma. El badge daba verde y la consulta moria.
 async function verificarN8n(url, aviso) {
-  const corte = new AbortController();
-  const reloj = setTimeout(() => corte.abort(), 4000);
   try {
-    await fetch(url + '/healthz', { mode: 'no-cors', signal: corte.signal, cache: 'no-store' });
-    marcarN8n('responde', 'ok', 'Hay algo escuchando en ' + url + '.' + aviso);
+    const r = await fetch(API_BASE + '/api/panel/n8n-status'
+                          + (url ? '?n8n_base_url=' + encodeURIComponent(url) : ''));
+    const d = await r.json();
+
+    if (!d.configured) {
+      marcarN8n('opcional', '', 'Pega la URL de tu n8n para poder elegir el pipeline con orquestacion.');
+      habilitarModosN8n(false, 'Falta la URL de tu n8n');
+      return;
+    }
+    if (d.available) {
+      marcarN8n('responde', 'ok', 'La API llega a ' + d.url + '. Ya podes elegir el pipeline con n8n.' + aviso);
+      habilitarModosN8n(true, '');
+    } else {
+      marcarN8n('no responde', 'required',
+        'La API no llega a ' + d.url + '. Ojo: la llamada la hace la API, no tu navegador, '
+        + 'asi que una URL local puede no servir aunque a vos te abra el editor.' + aviso);
+      habilitarModosN8n(false, 'La API no llega a esa URL');
+    }
   } catch {
-    marcarN8n('no responde', 'required',
-      'No se pudo contactar ' + url + '. Revisa que n8n este corriendo y que la URL sea la base, no la del editor.' + aviso);
+    marcarN8n('no responde', 'required', 'No se pudo verificar la URL.' + aviso);
+    habilitarModosN8n(false, 'No se pudo verificar la URL');
   } finally {
-    clearTimeout(reloj);
     refrescarBotonPorN8n();
   }
 }
