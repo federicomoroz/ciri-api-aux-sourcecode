@@ -186,12 +186,13 @@ class ModelosService:
         """
         config = self.con_override(override)
         proveedores = {cfg["proveedor"] for cfg in config.values()}
-        if "anthropic" in proveedores:
+        if not all(self._hay_clave(p) for p in proveedores):
             return False
-        return all(
-            PROVEEDORES_SUGERIDOS.get(p, {}).get("gratis") and self._hay_clave(p)
-            for p in proveedores
-        )
+        if all(PROVEEDORES_SUGERIDOS.get(p, {}).get("gratis") for p in proveedores):
+            return True
+        # Proveedor de pago: correr en modo demo gasta dinero de quien monto el
+        # deploy. Se hace solo si lo pidio explicitamente.
+        return bool(getattr(self.settings, "demo_ejecuta_siempre", False))
 
     def clave_de(self, proveedor: str) -> str:
         """La credencial del servidor para ese proveedor, si la hay.

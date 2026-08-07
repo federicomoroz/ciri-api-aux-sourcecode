@@ -2386,6 +2386,8 @@ function renderModelos() {
     ).join('');
 
     let etiqueta = '<span class="paso-gratis pago">de pago</span>';
+    // «de pago» no es una advertencia de que algo esta mal: es informacion para
+    // decidir. Lo que si conviene marcar es un proveedor elegido sin clave.
     if (prov && prov.gratis) {
       etiqueta = prov.tiene_clave
         ? '<span class="paso-gratis">free tier</span>'

@@ -51,6 +51,13 @@ class Settings(BaseSettings):
     # trae su propia API key corre el pipeline completo igual.
     demo_mode: bool = True
     demo_reports_path: str = "data/informes_demo"
+    # En modo demo el pipeline corre de verdad si el proveedor configurado es de
+    # free tier: no cuesta nada y un analisis de ahora vale mas que una
+    # grabacion. Con un proveedor de pago —OpenAI, Anthropic— eso gastaria
+    # dinero de quien monto el deploy, asi que hace falta decirlo:
+    # `CB_DEMO_EJECUTA_SIEMPRE=true`. Con gpt-4o-mini son centavos por caso,
+    # pero la decision de gastarlos es de quien paga, no del codigo.
+    demo_ejecuta_siempre: bool = False
 
     # Langfuse
     langfuse_public_key: str = ""

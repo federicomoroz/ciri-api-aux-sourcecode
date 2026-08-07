@@ -42,6 +42,7 @@ def settings_falsas(**extra):
         "anthropic_api_key": "clave-del-servidor",
         "llm_api_key": "",
         "llm_api_keys": {},
+        "demo_ejecuta_siempre": False,
         "llm_max_retries": 2,
         "llm_base_url": "",
     }
@@ -288,3 +289,61 @@ class TestLaEleccionDeLaSesion:
 
     def test_devuelve_un_cliente_por_paso(self, servicio):
         assert set(servicio.clientes_para(self.OVERRIDE)) == set(PASOS_DEL_PIPELINE)
+
+
+class TestTarifas:
+    """El costo que informa el panel tiene que ser el real.
+
+    Sin entradas propias, `gpt-4o-mini` caia en la tarifa de referencia —la de
+    Sonnet— y el panel informaba veinte veces mas de lo que costaba.
+    """
+
+    @pytest.mark.parametrize("modelo,esperado", [
+        ("gpt-4o-mini", 0.15),
+        ("gpt-4o-mini-2024-07-18", 0.15),
+        ("gpt-4o", 2.50),
+        ("gpt-4o-2024-11-20", 2.50),
+        ("claude-haiku-4-5-20251001", 0.80),
+        ("claude-sonnet-4-6", 3.00),
+    ])
+    def test_cada_modelo_cotiza_con_su_tarifa(self, modelo, esperado):
+        from api.app.llm.pricing import estimar_costo_usd
+
+        assert estimar_costo_usd(modelo, 1_000_000, 0) == pytest.approx(esperado)
+
+    def test_el_mini_no_se_cotiza_como_el_grande(self):
+        """`gpt-4o` es subcadena de `gpt-4o-mini`: el orden del diccionario decide."""
+        from api.app.llm.pricing import estimar_costo_usd
+
+        mini = estimar_costo_usd("gpt-4o-mini", 1_000_000, 0)
+        grande = estimar_costo_usd("gpt-4o", 1_000_000, 0)
+        assert mini < grande, "el mini se esta cotizando con la tarifa del grande"
+
+
+class TestGastarEsUnaDecisionExplicita:
+    """En modo demo, correr con un proveedor de pago gasta plata del deploy."""
+
+    def _svc(self, proveedor, **extra):
+        svc = ModelosService(
+            DBFalsa(), settings_falsas(llm_api_keys={proveedor: "clave"}, **extra),
+            MagicMock(), lambda s, m, t: MagicMock(),
+        )
+        for paso in PASOS_DEL_PIPELINE:
+            svc.guardar(paso, proveedor, "un-modelo")
+        return svc
+
+    def test_con_free_tier_corre_sin_preguntar(self):
+        assert self._svc("groq").todo_es_gratis() is True
+
+    def test_con_proveedor_de_pago_no_corre_por_defecto(self):
+        assert self._svc("openai").todo_es_gratis() is False
+
+    def test_con_proveedor_de_pago_corre_si_lo_pidieron(self):
+        assert self._svc("openai", demo_ejecuta_siempre=True).todo_es_gratis() is True
+
+    def test_sin_clave_no_corre_aunque_sea_gratis(self):
+        svc = ModelosService(DBFalsa(), settings_falsas(llm_api_keys={}, llm_api_key=""),
+                             MagicMock(), lambda s, m, t: MagicMock())
+        for paso in PASOS_DEL_PIPELINE:
+            svc.guardar(paso, "groq", "llama")
+        assert svc.todo_es_gratis() is False

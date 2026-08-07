@@ -348,10 +348,20 @@ LLM_DEFAULT_TEMPERATURE: float = 0.3
 
 # ── LLM Pricing (USD per 1M tokens) ─────────────────────────────────────────
 LLM_PRICING: dict[str, tuple[float, float]] = {
-    # model_substring: (input_cost, output_cost) per 1M tokens
+    # subcadena del modelo: (costo entrada, costo salida) por millon de tokens.
+    # Se busca por subcadena porque los identificadores traen sufijos de fecha y
+    # version. El orden importa: la primera que matchea gana, asi que las mas
+    # especificas van antes ("gpt-4o-mini" antes que "gpt-4o").
     "haiku": (0.80, 4.00),
     "sonnet": (3.00, 15.00),
     "opus": (15.00, 75.00),
+    # OpenAI. Sin estas entradas, `gpt-4o-mini` caia en la tarifa de referencia
+    # —la de Sonnet— y el panel informaba un costo veinte veces mayor al real.
+    "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4o": (2.50, 10.00),
+    "o4-mini": (1.10, 4.40),
+    # Los proveedores de free tier no tienen tarifa: `_costo` no los consulta.
 }
 LLM_PRICING_PER_MTOK: int = 1_000_000
 
