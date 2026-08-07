@@ -150,7 +150,7 @@
   <p class="eyebrow">Agente Inteligente de Contracargos · CIRI</p>
   <h1>Qué cuidan los tests</h1>
   <p class="bajada">
-    Son <b>749</b>, y lo que los distingue no es la cantidad: <b>53 de ellos no verifican
+    Son <b>771</b>, y lo que los distingue no es la cantidad: <b>53 de ellos no verifican
     código</b>. Verifican el entregable — que el workflow de n8n esté cableado, que los números
     del README sean los reales, que los informes que viajan se abran sin internet. Cosas que no
     rompen ningún import y rompen la entrega.
@@ -158,11 +158,11 @@
 
   <div class="cifras">
     <div class="cifra">
-      <b>749</b><span>funciones de test</span>
-      <p class="nota">639 unit · 77 integration · 33 E2E</p>
+      <b>771</b><span>funciones de test</span>
+      <p class="nota">657 unit · 81 integration · 33 E2E</p>
     </div>
     <div class="cifra">
-      <b style="color:var(--pasa)">88,9%</b><span>cobertura de sentencias</span>
+      <b style="color:var(--pasa)">89,3%</b><span>cobertura de sentencias</span>
       <p class="nota">el número del CI, sobre un checkout limpio. Falla por debajo de 85</p>
     </div>
     <div class="cifra">
@@ -185,7 +185,7 @@
 
     <div class="capas">
       <div class="capa">
-        <div class="capa-n"><b>639</b><span>unit</span></div>
+        <div class="capa-n"><b>657</b><span>unit</span></div>
         <div>
           <p class="capa-t">La lógica, aislada<span class="marca m-ci">en cada push</span></p>
           <p class="capa-d">
@@ -196,7 +196,7 @@
         </div>
       </div>
       <div class="capa">
-        <div class="capa-n"><b>77</b><span>integration</span></div>
+        <div class="capa-n"><b>81</b><span>integration</span></div>
         <div>
           <p class="capa-t">Las piezas juntas<span class="marca m-ci">en cada push</span></p>
           <p class="capa-d">
@@ -335,6 +335,26 @@
         <span class="como">Un comercio suspendido pintado de verde, o un umbral que se mueve y el informe no</span>
         <span class="quien">test_report_generator</span>
       </div>
+      <div class="reg-fila">
+        <span class="que">El SLA se medía desde la fecha de compra cuando no había reclamo abierto</span>
+        <span class="como">489 días de incumplimiento y USD 15 de compensación en un caso recién iniciado</span>
+        <span class="quien">test_analysis</span>
+      </div>
+      <div class="reg-fila">
+        <span class="que">Editar una política no invalidaba los informes cacheados</span>
+        <span class="como">Se reindexaba en Qdrant y el informe salía igual, byte a byte</span>
+        <span class="quien">test_policies_crud</span>
+      </div>
+      <div class="reg-fila">
+        <span class="que">El stream del panel se quedaba mudo durante los pasos largos</span>
+        <span class="como">El navegador cortaba solo y culpaba al cold start con el servicio caliente</span>
+        <span class="quien">test_modo_demo</span>
+      </div>
+      <div class="reg-fila">
+        <span class="que">El informe declaraba una versión de prompt que no era la que corrió</span>
+        <span class="como">Decía <code>v1_</code> —el nombre del módulo— para prompts que van por v3.1</span>
+        <span class="quien">test_report_generator</span>
+      </div>
     </div>
   </section>
 
@@ -346,7 +366,7 @@
       volver</b>, y eso sólo se ve leyendo por qué se escribió cada test.
     </p>
     <p>
-      Los doce de arriba tienen algo en común: <b>ninguno rompía un import</b>. El workflow se
+      Los dieciséis de arriba tienen algo en común: <b>ninguno rompía un import</b>. El workflow se
       importaba, el informe se generaba, el panel devolvía HTML. Fallaban donde no había nadie
       mirando — en la respuesta HTTP, en el cartel, en el archivo que viaja en el ZIP. Por eso
       la suite mira el entregable y no sólo el código.

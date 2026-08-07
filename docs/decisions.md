@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 749 tests pasando (716 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 771 tests pasando (738 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -204,11 +204,13 @@ La ganancia real —no repetir trabajo— la da igual el caché exacto: la misma
 **Trade-offs:**
 - (+) Un acierto no puede devolver la resolución de otro caso: la clave es la transacción
 - (+) Cero llamadas a la API de embeddings y cero latencia de búsqueda vectorial
-- (+) La invalidación es trivial y explícita: la clave es el caso
+- (+) La invalidación es trivial y explícita: la clave es el caso, y editar una política lo vacía
 - (-) No aprovecha casos parecidos, que es justamente lo que un caché semántico prometía
 - (-) La tasa de acierto depende de que se repitan consultas sobre la misma transacción
 
-**En producción:** TTL sobre las entradas para que un cambio de política no siga sirviendo informes viejos, e invalidación explícita al editar una política. Si algún día se quisiera aprovechar casos parecidos, el lugar correcto no es la resolución final sino la evaluación de políticas, que sí depende del texto de la política y no de la transacción — y aun ahí habría que versionar el caché por hash de la política.
+**La invalidación al editar una política ya está.** Era deuda declarada acá y resultó ser el agujero más caro del proyecto: reindexar en Qdrant funcionaba, pero el informe salía del caché —que no sabe con qué políticas se generó— así que se editaba una política, se volvía a pedir el mismo caso y salía el HTML anterior byte a byte. La decisión de arquitectura número 2 de este documento era cierta en el índice e **invisible donde el usuario mira**, que desde afuera es lo mismo que no andar. Las tres rutas de escritura de `routes/policies.py` vacían el caché entero: una política aplica a cualquier transacción, así que no hay forma de saber cuáles informes quedaron viejos sin volver a evaluarlos.
+
+**En producción:** TTL sobre las entradas, para el caso de que cambie algo que el sistema no observa. Si algún día se quisiera aprovechar casos parecidos, el lugar correcto no es la resolución final sino la evaluación de políticas, que sí depende del texto de la política y no de la transacción — y aun ahí habría que versionar el caché por hash de la política.
 
 ---
 

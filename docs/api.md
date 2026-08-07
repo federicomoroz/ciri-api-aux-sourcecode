@@ -221,6 +221,20 @@ curl -X POST https://ciri-chargeback-agent.onrender.com/api/sla/check \
  "compensation_applicable": true}
 ```
 
+**El reloj corre sobre el reclamo, no sobre la compra.** Con `transaction_id`, las fechas salen
+del caso histórico: su apertura y, si está cerrado, su cierre. Sin caso registrado —53 de las 100
+transacciones del dataset— **el plazo no se mide**:
+
+```json
+{"within_sla": null, "days_elapsed": null, "sla_limit_days": 10,
+ "compensation_applicable": false, "sin_reclamo_registrado": true}
+```
+
+Entre la compra y el reclamo pueden pasar meses. Contarlos como plazo de resolución daba 489 días
+de incumplimiento y USD 15 de compensación en un caso recién abierto, y el informe lo afirmaba al
+lado del veredicto de la misma política diciendo que no correspondía. La compensación se paga
+cuando **consta** que el plazo se incumplió, no cuando no consta nada.
+
 ---
 
 ## Análisis con IA
