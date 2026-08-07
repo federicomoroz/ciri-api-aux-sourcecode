@@ -967,7 +967,8 @@
         "limitType": "afterTimeInterval",
         "resumeAmount": 24,
         "resumeUnit": "hours",
-        "options": {}
+        "options": {},
+        "responseMode": "responseNode"
       },
       "id": "1b858ffe-adeb-42be-bd5c-2d0966e52950",
       "name": "Wait — Aprobación HITL",

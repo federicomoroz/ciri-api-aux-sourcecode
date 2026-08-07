@@ -264,3 +264,48 @@ class TestElFormularioDeAprobacionSeAnuncia:
         """Perder el link es molesto; aprobar solo un riesgo alto, no."""
         n = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")
         assert n["onError"] == "continueRegularOutput"
+
+
+class TestElFormularioDelWaitSeSirve:
+    """El formulario devolvia 500 y nadie podia aprobar nada.
+
+    Un Wait con `resume: form` sirve una pagina, o sea produce una respuesta
+    HTTP. Si aguas abajo hay un `Respond to Webhook`, n8n exige que el Wait
+    declare quien responde; con el default (`onReceived`) se niega a servir la
+    pagina y tira «Unused Respond to Webhook node found in the workflow».
+
+    O sea que la rama HITL entera —la mayoria de los casos— nunca se pudo
+    completar. No se veia porque el error recien aparece al ABRIR el formulario,
+    y hasta ahora nadie tenia su URL para abrirlo.
+    """
+
+    @staticmethod
+    def _waits_con_formulario(wf):
+        return [n for n in wf["nodes"]
+                if n["type"] == "n8n-nodes-base.wait"
+                and n["parameters"].get("resume") == "form"]
+
+    @pytest.mark.parametrize("archivo", TODOS)
+    def test_declara_quien_responde_si_hay_respond_abajo(self, archivo):
+        wf = cargar(archivo)
+        hay_respond = any(
+            n["type"] == "n8n-nodes-base.respondToWebhook" for n in wf["nodes"]
+        )
+        if not hay_respond:
+            pytest.skip("sin nodo Respond, el default sirve")
+        malos = [
+            n["name"] for n in self._waits_con_formulario(wf)
+            if n["parameters"].get("responseMode") != "responseNode"
+        ]
+        assert not malos, f"el formulario de estos Wait va a devolver 500: {malos}"
+
+    def test_el_analista_recibe_el_informe_al_aprobar(self):
+        """`responseNode` no es un tramite: es lo que cierra el circuito.
+
+        Quien aprueba recibe el informe terminado en el mismo browser donde
+        acaba de decidir, en vez de aprobar a ciegas y buscarlo despues.
+        """
+        wf = cargar(ORQUESTADOR)
+        wait = nodo(wf, "Wait — Aprobación HITL")
+        assert wait["parameters"]["responseMode"] == "responseNode"
+        assert "Generar Reporte" in salidas(wf, "Procesar Respuesta HITL")[0]
