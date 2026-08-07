@@ -47,6 +47,9 @@ logger = logging.getLogger(__name__)
 # Los unicos veredictos que significan algo. Se deriva del enum para que agregar
 # uno nuevo no deje esta lista atras.
 _VERDICTOS_VALIDOS = frozenset(v.value for v in VerdictType)
+# Los mismos, para el mensaje que lee una persona. Enumerarlos a mano hacia
+# que agregar un veredicto dejara el mensaje mintiendo.
+_VEREDICTOS_LEGIBLES = "/".join(sorted(_VERDICTOS_VALIDOS))
 
 
 class ResolutionService:
@@ -704,9 +707,8 @@ class ResolutionService:
                 ),
                 "requires_hitl": True,
                 "hitl_reason": (
-                    "El modelo devolvio veredictos que no son PASS/FAIL/BLOCKER/WARNING/"
-                    f"NOT_APPLICABLE en {', '.join(ilegibles)} — revisar la salida del modelo "
-                    "antes de decidir"
+                    f"El modelo devolvio veredictos que no son {_VEREDICTOS_LEGIBLES} en "
+                    f"{', '.join(ilegibles)} — revisar la salida del modelo antes de decidir"
                 ),
             }
 

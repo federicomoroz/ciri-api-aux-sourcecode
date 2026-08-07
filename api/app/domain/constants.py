@@ -66,6 +66,7 @@ __all__ = [
     # RAG / Retrieval
     "FRAUD_SCORE_DEFAULT",
     "FRAUD_SCORE_HIGH_RISK_THRESHOLD",
+    "FRAUD_SCORE_MODERADO",
     # Pattern detection
     "MERCHANT_TIMEOUT_PATTERN_MIN_COUNT",
     # LLM context limits
@@ -449,6 +450,10 @@ JUDGE_AUTO_INDEX_THRESHOLD: float = 8.0  # judge_score >= N → auto-index as pr
 # ── RAG / Retrieval ───────────────────────────────────────────────────────────
 FRAUD_SCORE_DEFAULT: int = 50  # default fraud score when not provided
 FRAUD_SCORE_HIGH_RISK_THRESHOLD: int = 30  # score < N → high risk query enrichment
+# Banda intermedia, solo para presentacion: el informe pinta el score de rojo
+# por debajo del umbral de riesgo alto, de amarillo hasta aca, y de verde por
+# encima. No decide nada — la decision la toman los veredictos de politica.
+FRAUD_SCORE_MODERADO: int = 60
 
 # ── Pattern detection ─────────────────────────────────────────────────────────
 MERCHANT_TIMEOUT_PATTERN_MIN_COUNT: int = 2  # MERCHANT_NO_RESPONSE events >= N → pattern

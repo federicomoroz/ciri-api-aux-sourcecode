@@ -10,7 +10,16 @@ from datetime import UTC, datetime
 from jinja2 import Environment, FileSystemLoader
 
 from ..data.precomputados import CARTEL, cartel_modelo_gratis
-from ..domain.constants import DEMO_DESVIO_JUEZ, REPORT_TEMPLATE_NAME
+from ..domain.constants import (
+    CLIENT_RECIDIVIST_THRESHOLD,
+    DEMO_DESVIO_JUEZ,
+    FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+    FRAUD_SCORE_MODERADO,
+    JUDGE_APPROVAL_THRESHOLD,
+    JUDGE_NEEDS_REVIEW_THRESHOLD,
+    REPORT_TEMPLATE_NAME,
+)
+from ..domain.enums import MerchantFlag, ResolutionOutcome, RiskLevel, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +62,20 @@ class ReportGenerator:
             generated_at=generado,
             cartel_demo=_cartel_de(data),
             desvio_juez=DEMO_DESVIO_JUEZ,
+            # Los enums y los umbrales entran al contexto en vez de repetirse
+            # dentro de la plantilla. Escritos a mano, renombrar un valor la
+            # dejaba pintando de verde a un comercio suspendido y mover un
+            # umbral en `constants.py` no cambiaba lo que el informe muestra:
+            # dos fuentes de verdad para el mismo numero, y ninguna falla.
+            RiskLevel=RiskLevel,
+            ResolutionOutcome=ResolutionOutcome,
+            Severity=Severity,
+            MerchantFlag=MerchantFlag,
+            umbral_score_alto=FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+            umbral_score_moderado=FRAUD_SCORE_MODERADO,
+            umbral_juez_aprueba=JUDGE_APPROVAL_THRESHOLD,
+            umbral_juez_revisa=JUDGE_NEEDS_REVIEW_THRESHOLD,
+            umbral_cliente_reincidente=CLIENT_RECIDIVIST_THRESHOLD,
             datos_del_caso=_json_para_html(data),
         )
 

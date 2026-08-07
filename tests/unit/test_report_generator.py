@@ -340,3 +340,75 @@ class TestElInformeSeBastaSolo:
         css = Path("api/app/reports/templates/_estilos.css").read_text(encoding="utf-8")
         assert "@media (min-width: 768px)" in css
         assert r"md\:grid-cols-3" in css
+
+
+class TestLaPlantillaNoRepiteUmbralesNiEnums:
+    """Un umbral escrito en la plantilla es una segunda fuente de verdad.
+
+    `case_report.html` tenia `cb_ratio > 0.01` —el umbral absoluto de industria
+    que el proyecto dice haber eliminado— justo debajo de la frase «los umbrales
+    viven en constants.py, en un solo lugar». Sobre este dataset pintaba de rojo
+    a los quince comercios.
+
+    Y tenia los valores de los enums escritos a mano: renombrar uno dejaba la
+    plantilla cayendo al `else` sin fallar nada — un comercio suspendido pintado
+    de verde, un BLOCKER con el badge de LOW.
+
+    Ahora los umbrales y los enums entran por el contexto. Este test existe
+    porque esa clase de error no rompe el render: sale un informe entero,
+    correcto de forma y equivocado de fondo.
+    """
+
+    @property
+    def plantilla(self) -> str:
+        from pathlib import Path
+
+        return Path("api/app/reports/templates/case_report.html").read_text(encoding="utf-8")
+
+    def test_ninguna_condicion_compara_contra_un_numero(self):
+        import re
+
+        crudos = [
+            c for c in re.findall(r"\{%\s*(?:if|elif)\s+([^%]{0,120}?)\s*%\}", self.plantilla)
+            if re.search(r"[<>]=?\s*[0-9]", c)
+        ]
+        assert not crudos, f"umbrales escritos en la plantilla: {crudos}"
+
+    def test_ninguna_condicion_compara_contra_el_valor_de_un_enum(self):
+        import re
+
+        crudos = [
+            c for c in re.findall(r"\{%\s*(?:if|elif)\s+([^%]{0,120}?)\s*%\}", self.plantilla)
+            if re.search(r"==\s*'[A-Z_]{3,}'", c)
+        ]
+        assert not crudos, f"valores de enum escritos en la plantilla: {crudos}"
+
+    def test_los_umbrales_que_usa_son_los_de_constants(self):
+        """Si no, mover el numero en un lado no cambia lo que el informe muestra."""
+        from api.app.domain import constants
+
+        for nombre, constante in [
+            ("umbral_score_alto", constants.FRAUD_SCORE_HIGH_RISK_THRESHOLD),
+            ("umbral_score_moderado", constants.FRAUD_SCORE_MODERADO),
+            ("umbral_juez_aprueba", constants.JUDGE_APPROVAL_THRESHOLD),
+            ("umbral_juez_revisa", constants.JUDGE_NEEDS_REVIEW_THRESHOLD),
+            ("umbral_cliente_reincidente", constants.CLIENT_RECIDIVIST_THRESHOLD),
+        ]:
+            assert nombre in self.plantilla, f"la plantilla no usa {nombre}"
+            assert constante is not None
+
+    def test_el_color_del_ratio_sale_de_los_flags_y_no_del_numero(self, generator, minimal_report_data):
+        """Con el 0.01, un comercio limpio con ratio alto salia en rojo igual."""
+        from api.app.domain.enums import MerchantFlag
+
+        def pintado(flags):
+            riesgo = {"total_transactions": 4, "cb_ratio": 0.75, "total_chargebacks": 3,
+                      "total_volume_usd": 1000, "tier": "E", "flags": flags}
+            html = generator.render({**minimal_report_data, "merchant_risk": riesgo})
+            i = html.find("Ratio CB")
+            return html[max(0, i - 400):i]
+
+        assert "text-red-600" in pintado([MerchantFlag.SUSPENDED_MERCHANT.value])
+        assert "text-yellow-600" in pintado([MerchantFlag.HIGH_CB_RATIO.value])
+        # Mismo ratio, sin flags: el analyzer no lo marco, y el informe no lo inventa.
+        assert "text-green-600" in pintado([])
