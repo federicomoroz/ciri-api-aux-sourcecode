@@ -262,60 +262,64 @@ class TestLaClaveDelVisitanteManda:
     """En modo produccion, la clave de la peticion reemplaza a la del servidor.
 
     Es lo que hace que evaluar el sistema a fondo no le cueste nada al dueño del
-    repositorio: quien trae su clave gasta de su cuenta.
+    repositorio: quien trae su clave gasta de su cuenta. Y desde que el modelo de
+    cada paso se elige por configuracion, el pipeline efimero tiene que respetar
+    esa eleccion: la clave cambia, la configuracion no.
     """
 
-    def test_el_pipeline_efimero_usa_la_clave_de_la_peticion(self, monkeypatch):
+    @staticmethod
+    def _panel_falso(monkeypatch, registro):
         from types import SimpleNamespace
         from unittest.mock import MagicMock
 
         import api.app.routes.panel as panel
 
-        claves_usadas = []
-
-        def cliente_falso(api_key, model, tracer):
-            claves_usadas.append(api_key)
-            return MagicMock()
-
-        monkeypatch.setattr(panel, "AnthropicClient", cliente_falso)
+        modelos = MagicMock()
+        modelos.cliente.side_effect = lambda paso, api_key="": registro.setdefault(
+            (paso, api_key), MagicMock()
+        )
         monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
         monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
 
         base = SimpleNamespace(db=None, retriever=None, analyzer=None, report_gen=None)
         cfg = SimpleNamespace(llm_model="haiku", llm_model_resolution="sonnet")
-        peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(tracer=MagicMock())))
+        peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+            tracer=MagicMock(), modelos_service=modelos,
+        )))
+        return panel, base, cfg, peticion, modelos
+
+    def test_los_tres_pasos_se_construyen_con_la_clave_de_la_peticion(self, monkeypatch):
+        registro = {}
+        panel, base, cfg, peticion, modelos = self._panel_falso(monkeypatch, registro)
 
         with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
             pass
 
-        assert claves_usadas == [CLAVE_PROPIA, CLAVE_PROPIA]
+        pedidos = [llamada.kwargs.get("api_key") for llamada in modelos.cliente.call_args_list]
+        assert pedidos == [CLAVE_PROPIA] * 3, "algun paso no uso la clave del visitante"
+
+    def test_pide_un_cliente_por_cada_paso_del_pipeline(self, monkeypatch):
+        from api.app.domain.constants import PASOS_DEL_PIPELINE
+
+        registro = {}
+        panel, base, cfg, peticion, modelos = self._panel_falso(monkeypatch, registro)
+
+        with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
+            pass
+
+        pasos = [llamada.args[0] for llamada in modelos.cliente.call_args_list]
+        assert set(pasos) == set(PASOS_DEL_PIPELINE)
 
     def test_los_clientes_se_cierran_al_terminar(self, monkeypatch):
         """Cada uno abre su pool de conexiones: sin cerrar, quedan colgados."""
-        from types import SimpleNamespace
-        from unittest.mock import MagicMock
-
-        import api.app.routes.panel as panel
-
-        creados = []
-
-        def cliente_falso(api_key, model, tracer):
-            c = MagicMock()
-            creados.append(c)
-            return c
-
-        monkeypatch.setattr(panel, "AnthropicClient", cliente_falso)
-        monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
-        monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
-
-        base = SimpleNamespace(db=None, retriever=None, analyzer=None, report_gen=None)
-        cfg = SimpleNamespace(llm_model="haiku", llm_model_resolution="sonnet")
-        peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(tracer=MagicMock())))
+        registro = {}
+        panel, base, cfg, peticion, _ = self._panel_falso(monkeypatch, registro)
 
         with panel._byok_pipeline(CLAVE_PROPIA, base, cfg, peticion):
             pass
 
-        assert all(c.close.called for c in creados)
+        assert registro, "no se construyo ningun cliente"
+        assert all(c.close.called for c in registro.values())
 
 
 class TestElAnalisisGuardado:

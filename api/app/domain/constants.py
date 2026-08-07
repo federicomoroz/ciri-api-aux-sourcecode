@@ -23,6 +23,13 @@ __all__ = [
     "MERCHANT_SUSPENDED_VS_BASELINE",
     "MERCHANT_HIGH_VS_BASELINE",
     "MERCHANT_STRATEGIC_VOLUME",
+    # Modelos por paso
+    "PASO_POLITICAS",
+    "PASO_RESOLUCION",
+    "PASO_JUEZ",
+    "PASOS_DEL_PIPELINE",
+    "PASOS_DESCRIPCION",
+    "PROVEEDORES_SUGERIDOS",
     # Guardrails
     "GUARDRAIL_MAX_COMPENSATION_RATIO",
     "GUARDRAIL_MAX_CONFIDENCE",
@@ -157,6 +164,97 @@ CLIENT_GEO_ANOMALY_THRESHOLD: int = 3      # distinct countries > N → "geo_ano
 MERCHANT_SUSPENDED_VS_BASELINE: float = 1.5   # cb_ratio > linea_base × N → "suspended_merchant"
 MERCHANT_HIGH_VS_BASELINE: float = 1.15       # cb_ratio > linea_base × N → "high_cb_ratio"
 MERCHANT_STRATEGIC_VOLUME: float = 1_000_000.0  # total_volume_usd > N → is_strategic
+
+
+# ── Modelos por paso ────────────────────────────────────────────────────────
+# El pipeline hace tres llamadas y cada una es una tarea distinta: comparar
+# datos contra reglas, redactar un analisis, y puntuar ese analisis con una
+# rubrica. No tienen por que correr en el mismo modelo, y elegirlo no deberia
+# requerir un deploy.
+#
+# Lo de siempre: el valor vigente vive en SQLite (`configuracion_modelos`, que
+# el panel edita) y esto es el default con el que arranca. Las claves NO se
+# guardan: viajan por peticion o salen del entorno.
+PASO_POLITICAS = "policy_eval"
+PASO_RESOLUCION = "resolution"
+PASO_JUEZ = "judge"
+PASOS_DEL_PIPELINE: tuple[str, ...] = (PASO_POLITICAS, PASO_RESOLUCION, PASO_JUEZ)
+
+PASOS_DESCRIPCION: dict[str, dict[str, str]] = {
+    PASO_POLITICAS: {
+        "titulo": "Evaluacion de politicas",
+        "detalle": "Compara la transaccion contra cada politica recuperada y emite un veredicto. "
+                   "Tarea mecanica: un modelo rapido alcanza.",
+        "prompt": "v1_policy_eval",
+    },
+    PASO_RESOLUCION: {
+        "titulo": "Sintesis de la resolucion",
+        "detalle": "Redacta la justificacion, razona sobre los precedentes y arma los next_steps. "
+                   "Es donde el razonamiento se nota.",
+        "prompt": "v1_resolution",
+    },
+    PASO_JUEZ: {
+        "titulo": "Juez de calidad",
+        "detalle": "Puntua la resolucion sobre cinco criterios con rubrica. "
+                   "Evaluar bien es tan dificil como resolver bien.",
+        "prompt": "v1_judge",
+    },
+}
+
+# Proveedores conocidos y algunos modelos suyos, para que el panel sugiera en vez
+# de exigir que se escriba de memoria. La lista no restringe: el campo acepta
+# cualquier identificador que el proveedor entienda.
+PROVEEDORES_SUGERIDOS: dict[str, dict] = {
+    "anthropic": {
+        "nombre": "Anthropic",
+        "gratis": False,
+        "modelos": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"],
+        "consola": "https://console.anthropic.com/settings/keys",
+        "formato_clave": "sk-ant-api03-...",
+    },
+    "groq": {
+        "nombre": "Groq",
+        "gratis": True,
+        "modelos": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b"],
+        "consola": "https://console.groq.com/keys",
+        "formato_clave": "gsk_...",
+    },
+    "gemini": {
+        "nombre": "Google Gemini",
+        "gratis": True,
+        "modelos": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+        "consola": "https://aistudio.google.com/apikey",
+        "formato_clave": "AIza...",
+    },
+    "openrouter": {
+        "nombre": "OpenRouter",
+        "gratis": True,
+        "modelos": ["meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-32b:free"],
+        "consola": "https://openrouter.ai/keys",
+        "formato_clave": "sk-or-v1-...",
+    },
+    "cerebras": {
+        "nombre": "Cerebras",
+        "gratis": True,
+        "modelos": ["llama-3.3-70b"],
+        "consola": "https://cloud.cerebras.ai/platform",
+        "formato_clave": "csk-...",
+    },
+    "github": {
+        "nombre": "GitHub Models",
+        "gratis": True,
+        "modelos": ["gpt-4o-mini"],
+        "consola": "https://github.com/settings/tokens",
+        "formato_clave": "github_pat_... o ghp_...",
+    },
+    "openai": {
+        "nombre": "OpenAI",
+        "gratis": False,
+        "modelos": ["gpt-4o-mini", "gpt-4o"],
+        "consola": "https://platform.openai.com/api-keys",
+        "formato_clave": "sk-proj-...",
+    },
+}
 
 # ── Guardrails ──────────────────────────────────────────────────────────────
 GUARDRAIL_MAX_COMPENSATION_RATIO: float = 1.1   # comp > amount × N → warning

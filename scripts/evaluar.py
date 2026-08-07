@@ -15,10 +15,19 @@ despues sale de ese archivo, y cualquiera puede volver a generarlo.
 
 Que cuesta
 ----------
-Tres llamadas al modelo por caso (evaluacion de politicas con Haiku, sintesis y
-juicio con Sonnet). Con la estimacion de `docs/mejora_continua.md` son unos
-USD 0.037 por caso: veinte casos rondan los USD 0.75. El script imprime el costo
-acumulado mientras corre y aborta si se pasa del tope que se le indique.
+Tres llamadas por caso, una por paso del pipeline, con el modelo que cada paso
+tenga configurado —lo que el panel edita en «Modelo por paso»—.
+
+Con Anthropic son unos USD 0.037 por caso: veinte casos rondan los USD 0.75. El
+script imprime el costo acumulado mientras corre y corta si se pasa del tope.
+
+**Puede salir cero.** Groq, Gemini, OpenRouter, Cerebras y GitHub Models tienen
+free tier y hablan el protocolo de OpenAI. Poniendo los tres pasos en uno de
+ellos —desde el panel o con `CB_LLM_PROVIDER`— el dataset completo se mide sin
+pagar nada. Ojo con la lectura: los prompts estan afinados para Claude y la
+configuracion documentada es Haiku + Sonnet, asi que **un score medido con otro
+proveedor no es el score del sistema entregado**. Sirve para verificar que el
+pipeline es independiente del proveedor y como punto de comparacion.
 
 Uso
 ---
@@ -29,7 +38,8 @@ Uso
     python scripts/evaluar.py --n 30 --tope-usd 1.5
     python scripts/evaluar.py --n 20 --salida docs/evaluaciones/2026-08-07.json
 
-Necesita `CB_ANTHROPIC_API_KEY` y `CB_VOYAGE_API_KEY` en el entorno o en `.env`,
+Necesita la clave del proveedor configurado —`CB_ANTHROPIC_API_KEY`, o
+`CB_LLM_API_KEY` para cualquier otro—, `CB_VOYAGE_API_KEY` para los embeddings,
 y Qdrant en pie con las colecciones indexadas.
 """
 
@@ -51,7 +61,6 @@ sys.path.insert(0, str(RAIZ))
 from api.app.analysis.analyzer import Analyzer  # noqa: E402
 from api.app.config import Settings  # noqa: E402
 from api.app.data.db import Database  # noqa: E402
-from api.app.llm.client import AnthropicClient  # noqa: E402
 from api.app.llm.pricing import estimar_costo_usd  # noqa: E402
 from api.app.observability.tracer import NoOpTracer  # noqa: E402
 from api.app.rag.embedder import FastEmbedder  # noqa: E402
@@ -72,7 +81,12 @@ CRITERIOS = (
 def _servicios(settings: Settings):
     from qdrant_client import QdrantClient
 
+    from api.app.dependencies import construir_llm
+    from api.app.domain.constants import PASO_JUEZ, PASO_POLITICAS, PASO_RESOLUCION
+    from api.app.services.modelos import ModelosService
+
     db = Database(settings.sqlite_path)
+    db.ensure_modelos_table()
     qdrant = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, timeout=30)
     retriever = QdrantRetriever(
         qdrant, FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key),
@@ -80,18 +94,15 @@ def _servicios(settings: Settings):
         cases_collection=settings.qdrant_cases_collection,
     )
     tracer = NoOpTracer()
-    llm = AnthropicClient(
-        api_key=settings.anthropic_api_key, model=settings.llm_model,
-        tracer=tracer, max_retries=settings.llm_max_retries,
+    # Se mide la configuracion que el sistema tiene puesta —la que edita el
+    # panel—, no una fija: medir algo distinto de lo que corre no sirve de nada.
+    modelos = ModelosService(db, settings, tracer, construir_llm)
+    servicio = ResolutionService(
+        modelos.cliente(PASO_POLITICAS), tracer,
+        llm_resolution=modelos.cliente(PASO_RESOLUCION),
+        llm_judge=modelos.cliente(PASO_JUEZ),
     )
-    llm_resolucion = (
-        AnthropicClient(
-            api_key=settings.anthropic_api_key, model=settings.llm_model_resolution,
-            tracer=tracer, max_retries=settings.llm_max_retries,
-        )
-        if settings.llm_model_resolution else llm
-    )
-    return db, retriever, Analyzer(db), ResolutionService(llm, tracer, llm_resolution=llm_resolucion)
+    return db, retriever, Analyzer(db), servicio, modelos
 
 
 def _contexto(db: Database, retriever: QdrantRetriever, analyzer: Analyzer, tx: dict, motivo: str):
@@ -133,15 +144,28 @@ def _elegir(db: Database, args) -> list[dict]:
     return todas[: args.n]
 
 
-def _costo(resolucion: dict, juicio: dict, settings: Settings) -> float:
-    """Cotiza cada llamada con su modelo: la sintesis y el juicio son las caras."""
+def _costo(resolucion: dict, juicio: dict, config: dict) -> float:
+    """Cotiza cada llamada con el modelo de SU paso.
+
+    Un proveedor con free tier no tiene tarifa cargada y cuenta cero, que es lo
+    correcto: el punto de correrlo asi es justamente que no cuesta.
+    """
+    from api.app.domain.constants import PASO_JUEZ, PASO_POLITICAS, PASO_RESOLUCION
+
     r, j = resolucion.get("_usage", {}), juicio.get("_usage", {})
-    modelo_sintesis = settings.llm_model_resolution or settings.llm_model
-    # La evaluacion de politicas es una de las dos llamadas que cuenta `resolve`.
+
+    def cotizar(paso: str, entrada: int, salida: int) -> float:
+        cfg = config[paso]
+        if cfg["proveedor"] != "anthropic":
+            return 0.0   # free tier: no hay tarifa que aplicar
+        return estimar_costo_usd(cfg["modelo"], entrada, salida)
+
+    # `resolve` cuenta dos llamadas juntas —politicas y sintesis—: se reparten.
+    mitad_in, mitad_out = r.get("input_tokens", 0) // 2, r.get("output_tokens", 0) // 2
     return (
-        estimar_costo_usd(settings.llm_model, r.get("input_tokens", 0) // 2, r.get("output_tokens", 0) // 2)
-        + estimar_costo_usd(modelo_sintesis, r.get("input_tokens", 0) // 2, r.get("output_tokens", 0) // 2)
-        + estimar_costo_usd(modelo_sintesis, j.get("input_tokens", 0), j.get("output_tokens", 0))
+        cotizar(PASO_POLITICAS, mitad_in, mitad_out)
+        + cotizar(PASO_RESOLUCION, mitad_in, mitad_out)
+        + cotizar(PASO_JUEZ, j.get("input_tokens", 0), j.get("output_tokens", 0))
     )
 
 
@@ -157,10 +181,14 @@ def main() -> int:
     args = p.parse_args()
 
     settings = Settings()
-    if not settings.anthropic_api_key:
-        sys.exit("falta CB_ANTHROPIC_API_KEY: este script gasta modelo de verdad")
+    if not (settings.anthropic_api_key or settings.llm_api_key):
+        sys.exit(
+            "falta la clave del modelo: CB_ANTHROPIC_API_KEY, o CB_LLM_API_KEY si usas "
+            "un proveedor con free tier (groq, gemini, openrouter, cerebras, github)"
+        )
 
-    db, retriever, analyzer, servicio = _servicios(settings)
+    db, retriever, analyzer, servicio, modelos = _servicios(settings)
+    config_modelos = modelos.vigente()
     casos = _elegir(db, args)
     print(f"Evaluando {len(casos)} casos · tope USD {args.tope_usd} · motivo: «{args.motivo}»\n")
 
@@ -180,7 +208,7 @@ def main() -> int:
             filas.append({"transaction_id": tx["id"], "error": f"{type(e).__name__}: {e}"})
             continue
 
-        gastado += _costo(resolucion, juicio, settings)
+        gastado += _costo(resolucion, juicio, config_modelos)
         score = float(juicio.get("overall_score", 0.0))
         filas.append({
             "transaction_id": tx["id"],
@@ -222,8 +250,10 @@ def main() -> int:
         "promedio_por_criterio": por_criterio,
         "costo_usd": round(gastado, 4),
         "configuracion": {
-            "modelo_evaluacion": settings.llm_model,
-            "modelo_sintesis_y_juicio": settings.llm_model_resolution or settings.llm_model,
+            "modelos_por_paso": {
+                paso: {"proveedor": cfg["proveedor"], "modelo": cfg["modelo"]}
+                for paso, cfg in modelos.vigente().items()
+            },
             "temperatura": settings.llm_temperature,
             "prompts": _versiones_de_prompt(),
             "muestreo": (

@@ -1,0 +1,210 @@
+"""Elegir el modelo de cada paso, sin deploy.
+
+El pipeline hace tres llamadas y cada una es una tarea distinta. La eleccion
+vive en SQLite —el panel la edita— y el default en `constants.py`. Lo que estos
+tests fijan es lo que hace que eso sea seguro y util: que lo guardado pise al
+default paso por paso, que cambiar uno no arrastre a los otros, que el cliente
+se renueve al guardar, y que **las claves no se guarden nunca**.
+"""
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from api.app.domain.constants import (
+    PASO_JUEZ,
+    PASO_POLITICAS,
+    PASO_RESOLUCION,
+    PASOS_DEL_PIPELINE,
+)
+from api.app.services.modelos import ModelosService
+
+
+class DBFalsa:
+    def __init__(self):
+        self.filas = {}
+
+    def get_modelos(self):
+        return dict(self.filas)
+
+    def save_modelo(self, paso, proveedor, modelo):
+        self.filas[paso] = {"proveedor": proveedor, "modelo": modelo, "actualizado": "2026-08-07"}
+
+    def reset_modelos(self):
+        self.filas.clear()
+
+
+def settings_falsas(**extra):
+    base = {
+        "llm_provider": "anthropic",
+        "llm_model": "claude-haiku-4-5-20251001",
+        "llm_model_resolution": "claude-sonnet-4-6",
+        "anthropic_api_key": "clave-del-servidor",
+        "llm_api_key": "",
+        "llm_max_retries": 2,
+        "llm_base_url": "",
+    }
+    base.update(extra)
+
+    class S:
+        def __init__(self, d):
+            self.__dict__.update(d)
+
+        def model_copy(self, update=None):
+            return S({**self.__dict__, **(update or {})})
+
+    return S(base)
+
+
+@pytest.fixture
+def servicio():
+    """El constructor devuelve una marca en vez de un cliente: se inspecciona."""
+    construidos = []
+
+    def constructor(settings, modelo, tracer):
+        marca = MagicMock()
+        marca.modelo = modelo
+        marca.proveedor = settings.llm_provider
+        marca.api_key = settings.llm_api_key or settings.anthropic_api_key
+        construidos.append(marca)
+        return marca
+
+    svc = ModelosService(DBFalsa(), settings_falsas(), MagicMock(), constructor)
+    svc.construidos = construidos
+    return svc
+
+
+class TestConfiguracionVigente:
+    def test_sin_nada_guardado_manda_el_default(self, servicio):
+        vigente = servicio.vigente()
+        assert vigente[PASO_POLITICAS]["modelo"] == "claude-haiku-4-5-20251001"
+        assert vigente[PASO_RESOLUCION]["modelo"] == "claude-sonnet-4-6"
+        assert vigente[PASO_JUEZ]["modelo"] == "claude-sonnet-4-6"
+        assert not any(v["personalizado"] for v in vigente.values())
+
+    def test_lo_guardado_pisa_al_default(self, servicio):
+        servicio.guardar(PASO_JUEZ, "groq", "llama-3.3-70b-versatile")
+        vigente = servicio.vigente()
+        assert vigente[PASO_JUEZ]["proveedor"] == "groq"
+        assert vigente[PASO_JUEZ]["personalizado"] is True
+
+    def test_cambiar_un_paso_no_arrastra_a_los_otros(self, servicio):
+        """Es todo el punto: tres llamadas distintas, tres decisiones distintas."""
+        servicio.guardar(PASO_JUEZ, "groq", "llama-3.3-70b-versatile")
+        vigente = servicio.vigente()
+        assert vigente[PASO_POLITICAS]["proveedor"] == "anthropic"
+        assert vigente[PASO_RESOLUCION]["proveedor"] == "anthropic"
+        assert not vigente[PASO_POLITICAS]["personalizado"]
+
+    def test_cada_paso_trae_su_descripcion(self, servicio):
+        for paso, cfg in servicio.vigente().items():
+            assert cfg["titulo"] and cfg["detalle"] and cfg["prompt"], paso
+
+    def test_estan_los_tres_pasos_y_solo_esos(self, servicio):
+        assert set(servicio.vigente()) == set(PASOS_DEL_PIPELINE)
+
+    def test_restablecer_vuelve_al_default(self, servicio):
+        servicio.guardar(PASO_JUEZ, "groq", "x")
+        servicio.restablecer()
+        assert not any(v["personalizado"] for v in servicio.vigente().values())
+
+    def test_un_paso_inexistente_se_rechaza(self, servicio):
+        with pytest.raises(ValueError, match="paso desconocido"):
+            servicio.guardar("inventado", "groq", "x")
+
+    def test_un_modelo_vacio_se_rechaza(self, servicio):
+        with pytest.raises(ValueError, match="vacio"):
+            servicio.guardar(PASO_JUEZ, "groq", "   ")
+
+    def test_si_la_base_falla_se_cae_al_default_en_vez_de_romper(self, servicio):
+        servicio.db.get_modelos = MagicMock(side_effect=RuntimeError("sqlite caido"))
+        vigente = servicio.vigente()
+        assert vigente[PASO_JUEZ]["modelo"] == "claude-sonnet-4-6"
+
+
+class TestClientes:
+    def test_el_cliente_usa_el_proveedor_y_modelo_del_paso(self, servicio):
+        servicio.guardar(PASO_JUEZ, "groq", "llama-3.3-70b-versatile")
+        cliente = servicio.cliente(PASO_JUEZ)
+        assert cliente.proveedor == "groq"
+        assert cliente.modelo == "llama-3.3-70b-versatile"
+
+    def test_se_cachea_hasta_que_alguien_lo_cambia(self, servicio):
+        primero = servicio.cliente(PASO_JUEZ)
+        assert servicio.cliente(PASO_JUEZ) is primero
+        servicio.guardar(PASO_JUEZ, "groq", "otro")
+        assert servicio.cliente(PASO_JUEZ) is not primero
+
+    def test_guardar_cierra_los_clientes_viejos(self, servicio):
+        viejo = servicio.cliente(PASO_JUEZ)
+        servicio.guardar(PASO_JUEZ, "groq", "otro")
+        assert viejo.close.called, "el pool de conexiones quedo colgado"
+
+    def test_dos_pasos_distintos_dan_clientes_distintos(self, servicio):
+        servicio.guardar(PASO_JUEZ, "groq", "llama")
+        assert servicio.cliente(PASO_JUEZ) is not servicio.cliente(PASO_POLITICAS)
+
+
+class TestLasClavesNoSeGuardan:
+    """Una instancia publica que persistiera claves ajenas es un incidente."""
+
+    def test_la_clave_de_la_peticion_no_toca_la_base(self, servicio):
+        servicio.cliente(PASO_JUEZ, api_key="sk-del-visitante")
+        assert servicio.db.get_modelos() == {}
+
+    def test_el_cliente_con_clave_propia_no_se_cachea(self, servicio):
+        propio = servicio.cliente(PASO_JUEZ, api_key="sk-del-visitante")
+        del_servidor = servicio.cliente(PASO_JUEZ)
+        assert propio is not del_servidor
+        assert del_servidor.api_key == "clave-del-servidor"
+
+    def test_la_clave_del_visitante_no_pisa_la_del_proceso(self, servicio):
+        servicio.cliente(PASO_JUEZ, api_key="sk-del-visitante")
+        assert servicio.settings.anthropic_api_key == "clave-del-servidor"
+
+    def test_la_clave_de_la_peticion_llega_al_cliente(self, servicio):
+        assert servicio.cliente(PASO_JUEZ, api_key="sk-del-visitante").api_key == "sk-del-visitante"
+
+
+class TestCatalogo:
+    def test_marca_cuales_son_gratis(self, servicio):
+        gratis = {p["id"] for p in servicio.catalogo() if p["gratis"]}
+        assert "groq" in gratis and "gemini" in gratis
+        assert "anthropic" not in gratis
+
+    def test_dice_cual_tiene_clave_cargada(self, servicio):
+        catalogo = {p["id"]: p for p in servicio.catalogo()}
+        assert catalogo["anthropic"]["tiene_clave"] is True
+        assert catalogo["groq"]["tiene_clave"] is False
+
+    def test_cada_proveedor_sugiere_al_menos_un_modelo(self, servicio):
+        assert all(p["modelos"] for p in servicio.catalogo())
+
+    def test_los_compatibles_traen_su_base_url(self, servicio):
+        catalogo = {p["id"]: p for p in servicio.catalogo()}
+        assert catalogo["groq"]["base_url"].startswith("https://")
+        assert catalogo["anthropic"]["base_url"] == "", "Anthropic no va por el cliente compatible"
+
+
+class TestElPanelSabeDondeSacarLaClave:
+    """Elegir un proveedor sin decir de donde sale su clave deja a medias.
+
+    El campo de API key del panel decia «Anthropic» y pedia `sk-ant-...` sin
+    importar que proveedor estuviera configurado.
+    """
+
+    def test_cada_proveedor_dice_donde_sacar_la_clave(self, servicio):
+        for p in servicio.catalogo():
+            assert p["consola"].startswith("https://"), p["id"]
+            assert p["formato_clave"], p["id"]
+
+    def test_los_formatos_no_son_todos_el_de_anthropic(self, servicio):
+        formatos = {p["id"]: p["formato_clave"] for p in servicio.catalogo()}
+        assert formatos["anthropic"].startswith("sk-ant")
+        assert formatos["groq"].startswith("gsk")
+        assert formatos["gemini"].startswith("AIza")
+
+    def test_hay_al_menos_tres_proveedores_gratis_con_consola(self, servicio):
+        gratis = [p for p in servicio.catalogo() if p["gratis"]]
+        assert len(gratis) >= 3
+        assert all(p["consola"] for p in gratis)

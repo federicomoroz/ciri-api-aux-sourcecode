@@ -306,6 +306,39 @@ class Database:
 
     # --- Alerts (operational event log) ---
 
+    def ensure_modelos_table(self) -> None:
+        """La eleccion de modelo por paso del pipeline, editable sin deploy."""
+        self._escribir(
+            """CREATE TABLE IF NOT EXISTS configuracion_modelos (
+                   paso TEXT PRIMARY KEY,
+                   proveedor TEXT NOT NULL,
+                   modelo TEXT NOT NULL,
+                   actualizado TEXT NOT NULL
+               )"""
+        )
+
+    def get_modelos(self) -> dict[str, dict]:
+        """Lo elegido para cada paso. Vacio si nadie lo cambio nunca."""
+        return {
+            f["paso"]: {
+                "proveedor": f["proveedor"],
+                "modelo": f["modelo"],
+                "actualizado": f["actualizado"],
+            }
+            for f in self._consultar("SELECT * FROM configuracion_modelos")
+        }
+
+    def save_modelo(self, paso: str, proveedor: str, modelo: str) -> None:
+        self._escribir(
+            "INSERT OR REPLACE INTO configuracion_modelos "
+            "(paso, proveedor, modelo, actualizado) VALUES (?,?,?,?)",
+            (paso, proveedor, modelo, datetime.now(UTC).isoformat()),
+        )
+
+    def reset_modelos(self) -> None:
+        """Vuelve a los valores por defecto de `constants.py`."""
+        self._escribir("DELETE FROM configuracion_modelos")
+
     def ensure_alerts_table(self) -> None:
         self._escribir(
             """CREATE TABLE IF NOT EXISTS alerts (

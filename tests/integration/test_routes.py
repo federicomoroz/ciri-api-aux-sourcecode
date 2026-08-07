@@ -88,6 +88,20 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     # MagicMock responde que si a cualquier capacidad que se le consulte.
     app.state.langfuse_stats_service = LangfuseStatsService(NoOpTracer(), "claude-sonnet-4-6")
 
+    from api.app.dependencies import construir_llm
+    from api.app.services.modelos import ModelosService
+
+    app.state.settings.llm_provider = "anthropic"
+    app.state.settings.llm_model = "claude-haiku-4-5-20251001"
+    app.state.settings.llm_model_resolution = "claude-sonnet-4-6"
+    app.state.settings.llm_base_url = ""
+    app.state.settings.llm_api_key = ""
+    app.state.settings.anthropic_api_key = "test"
+    db.ensure_modelos_table()
+    app.state.modelos_service = ModelosService(
+        db, app.state.settings, mock_tracer, construir_llm,
+    )
+
     # Ensure report cache table exists
     db.ensure_report_cache_table()
 
@@ -365,3 +379,54 @@ def test_langfuse_stats_disabled(test_client_routes):
     assert data["enabled"] is False
     assert data["summary"] is None
     assert data["recent_traces"] == []
+
+
+class TestConfiguracionDeModelos:
+    """Elegir el modelo de cada paso es una peticion HTTP, no un deploy."""
+
+    def test_devuelve_los_tres_pasos_y_el_catalogo(self, test_client_routes):
+        cliente, _, _ = test_client_routes
+        d = cliente.get("/api/config/modelos").json()
+        assert set(d["pasos"]) == {"policy_eval", "resolution", "judge"}
+        assert any(p["gratis"] for p in d["proveedores"]), "ningun proveedor con free tier"
+
+    def test_guardar_cambia_solo_ese_paso(self, test_client_routes):
+        cliente, _, _ = test_client_routes
+        cliente.post("/api/config/modelos/reset")
+        r = cliente.put("/api/config/modelos/judge",
+                       json={"proveedor": "groq", "modelo": "llama-3.3-70b-versatile"})
+        assert r.status_code == 200
+        pasos = cliente.get("/api/config/modelos").json()["pasos"]
+        assert pasos["judge"]["proveedor"] == "groq"
+        assert pasos["policy_eval"]["personalizado"] is False
+        cliente.post("/api/config/modelos/reset")
+
+    def test_un_paso_inexistente_da_422(self, test_client_routes):
+        cliente, _, _ = test_client_routes
+        r = cliente.put("/api/config/modelos/inventado", json={"proveedor": "groq", "modelo": "x"})
+        assert r.status_code == 422
+
+    def test_un_modelo_vacio_da_422(self, test_client_routes):
+        cliente, _, _ = test_client_routes
+        r = cliente.put("/api/config/modelos/judge", json={"proveedor": "groq", "modelo": "   "})
+        assert r.status_code == 422
+
+    def test_reset_vuelve_al_default(self, test_client_routes):
+        cliente, _, _ = test_client_routes
+        cliente.put("/api/config/modelos/judge", json={"proveedor": "groq", "modelo": "x"})
+        cliente.post("/api/config/modelos/reset")
+        pasos = cliente.get("/api/config/modelos").json()["pasos"]
+        assert not any(p["personalizado"] for p in pasos.values())
+
+    def test_el_endpoint_no_acepta_credenciales(self):
+        """Lo que se elige es *que* modelo, nunca *con que credencial*."""
+        from api.app.domain.models import ModeloPasoUpdate
+
+        campos = set(ModeloPasoUpdate.model_fields)
+        assert campos == {"proveedor", "modelo"}
+        assert not any("key" in c or "clave" in c or "token" in c for c in campos)
+
+    def test_el_panel_trae_la_seccion_de_modelos(self, test_client_routes):
+        cliente, _, _ = test_client_routes
+        html = cliente.get("/panel").text
+        assert "modelos-section" in html and "cargarModelos()" in html

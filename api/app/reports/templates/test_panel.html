@@ -498,6 +498,98 @@
     .api-key-toggle:hover { color: var(--text); }
 
     /* ─────────────────────────────────────────────
+       MODELO POR PASO
+       El pipeline hace tres llamadas y cada una es
+       una tarea distinta: se eligen por separado.
+       ───────────────────────────────────────────── */
+    .modelos-section { margin-bottom: 10px; }
+    .modelos-head {
+      display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 6px;
+    }
+    .modelos-head .form-label { margin-bottom: 0; }
+    .modelos-estado {
+      margin-left: auto; font-size: 10.5px; color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+    .modelos-estado.ok    { color: var(--green); }
+    .modelos-estado.error { color: var(--red); }
+
+    .paso-row {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 0 8px;
+      padding: 8px 10px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-bottom: none;
+    }
+    .paso-row:first-of-type { border-radius: 4px 4px 0 0; }
+    .paso-row:last-of-type  { border-bottom: 1px solid var(--border); border-radius: 0 0 4px 4px; }
+    .paso-n {
+      font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted);
+      line-height: 1.7;
+    }
+    .paso-titulo {
+      font-size: 12px; font-weight: 600; display: flex; align-items: center;
+      gap: 6px; flex-wrap: wrap;
+    }
+    .paso-prompt {
+      font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+      font-weight: 400;
+    }
+    .paso-detalle {
+      font-size: 10.5px; color: var(--text-dim); line-height: 1.45; margin: 2px 0 6px;
+    }
+    .paso-campos { display: flex; gap: 6px; flex-wrap: wrap; }
+    .paso-campos select,
+    .paso-campos input {
+      background: var(--field-bg);
+      border: 2px solid;
+      border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+      color: var(--text);
+      font-family: var(--font-mono); font-size: 11px;
+      padding: 3px 5px; outline: none;
+    }
+    .paso-campos select { flex: 0 0 auto; min-width: 108px; }
+    .paso-campos input  { flex: 1 1 150px; min-width: 0; }
+    .paso-campos select:focus,
+    .paso-campos input:focus {
+      border-color: var(--accent) var(--bevel-light) var(--bevel-light) var(--accent);
+    }
+    .paso-gratis {
+      font-size: 9.5px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .5px; padding: 1px 4px; border-radius: 3px;
+      background: #d1fae5; color: #065f46;
+    }
+    .paso-gratis.pago  { background: #fef3c7; color: #92400e; }
+    .paso-gratis.sin-clave { background: #fee2e2; color: #991b1b; }
+    .paso-cambiado .paso-titulo::after {
+      content: 'sin guardar'; font-size: 9.5px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      padding: 1px 4px; border-radius: 3px; background: var(--accent-light); color: var(--accent);
+    }
+    .modelos-acciones { display: flex; gap: 6px; margin-top: 6px; }
+    .modelos-acciones button {
+      font-family: var(--font); font-size: 11px; padding: 4px 10px; cursor: pointer;
+      background: var(--surface);
+      border: 2px solid;
+      border-color: var(--bevel-light) var(--bevel-darker) var(--bevel-darker) var(--bevel-light);
+      color: var(--text);
+    }
+    .modelos-acciones button:active { border-color: var(--bevel-darker) var(--bevel-light) var(--bevel-light) var(--bevel-darker); }
+    .modelos-acciones button:disabled { color: var(--text-muted); cursor: default; }
+    .modelos-acciones .primario { font-weight: 600; }
+    .modelos-acciones select {
+      margin-left: auto;
+      background: var(--field-bg);
+      border: 2px solid;
+      border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+      color: var(--text); font-family: var(--font); font-size: 11px; padding: 3px 5px;
+    }
+
+
+    /* ─────────────────────────────────────────────
        TRANSACTION FILTERS
     ───────────────────────────────────────────── */
     .filter-bar {
@@ -1768,6 +1860,29 @@
         </p>
       </div>
 
+
+      <!-- Modelo por paso del pipeline -->
+      <div class="modelos-section" id="modelos-section">
+        <div class="modelos-head">
+          <span class="form-label">Modelo por paso</span>
+          <span class="modelos-estado" id="modelos-estado"></span>
+        </div>
+        <p class="form-hint" style="margin:-2px 0 6px">
+          El pipeline hace tres llamadas y cada una es una tarea distinta. Se guardan en el
+          servidor y valen para la proxima investigacion. <b>Las claves no se guardan</b>: van
+          en el campo de arriba o en el entorno.
+        </p>
+        <div id="modelos-pasos"></div>
+        <datalist id="modelos-sugeridos"></datalist>
+        <div class="modelos-acciones">
+          <button type="button" class="primario" id="btn-modelos-save" onclick="guardarModelos()" disabled>Guardar</button>
+          <button type="button" onclick="restablecerModelos()">Restablecer</button>
+          <select id="sel-todos-proveedor" onchange="aplicarATodos(this.value)" aria-label="Usar un proveedor en los tres pasos">
+            <option value="">Usar en los tres pasos...</option>
+          </select>
+        </div>
+      </div>
+
       <!-- n8n URL (BYON8N) -->
       <div class="api-key-section" id="n8n-url-section">
         <div class="api-key-header">
@@ -2221,6 +2336,208 @@ function onCustomFormChange() {
 function deactivateCustom() {
   isCustom = false;
   if (selectedIdx === null) disableSubmit('Seleccionar escenario');
+}
+
+// ─── MODELO POR PASO ──────────────────────────────────────
+// El pipeline hace tres llamadas —evaluar politicas, sintetizar, juzgar— y cada
+// una es una tarea distinta. La eleccion se guarda en el servidor (SQLite) y el
+// default vive en constants.py. Las claves NO se guardan nunca: viajan por
+// peticion o salen del entorno.
+let modelosConfig  = null;   // lo que devolvio el servidor
+let modelosEditado = {};     // lo tocado y todavia sin guardar
+
+async function cargarModelos() {
+  try {
+    const r = await fetch(API_BASE + '/api/config/modelos');
+    if (!r.ok) throw new Error(r.status);
+    modelosConfig  = await r.json();
+    modelosEditado = {};
+    renderModelos();
+  } catch (e) {
+    const sec = $('modelos-section');
+    if (sec) sec.style.display = 'none';   // sin la ruta, la seccion no estorba
+  }
+}
+
+function _proveedorDe(id) {
+  return (modelosConfig.proveedores || []).find(p => p.id === id);
+}
+
+function renderModelos() {
+  const cont = $('modelos-pasos');
+  if (!cont || !modelosConfig) return;
+
+  const orden = ['policy_eval', 'resolution', 'judge'];
+  cont.innerHTML = orden.map((paso, i) => {
+    const cfg   = { ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) };
+    const prov  = _proveedorDe(cfg.proveedor);
+    const sucio = !!modelosEditado[paso];
+
+    const opciones = (modelosConfig.proveedores || []).map(p =>
+      `<option value="${p.id}"${p.id === cfg.proveedor ? ' selected' : ''}>${p.nombre}</option>`
+    ).join('');
+
+    let etiqueta = '<span class="paso-gratis pago">de pago</span>';
+    if (prov && prov.gratis) {
+      etiqueta = prov.tiene_clave
+        ? '<span class="paso-gratis">free tier</span>'
+        : '<span class="paso-gratis sin-clave">falta clave</span>';
+    } else if (prov && !prov.tiene_clave) {
+      etiqueta = '<span class="paso-gratis sin-clave">falta clave</span>';
+    }
+
+    return `
+      <div class="paso-row${sucio ? ' paso-cambiado' : ''}">
+        <span class="paso-n">${i + 1}</span>
+        <div>
+          <div class="paso-titulo">
+            ${cfg.titulo}
+            <span class="paso-prompt">${cfg.prompt}</span>
+            ${etiqueta}
+          </div>
+          <p class="paso-detalle">${cfg.detalle}</p>
+          <div class="paso-campos">
+            <select onchange="onProveedorPaso('${paso}', this.value)"
+                    aria-label="Proveedor para ${cfg.titulo}">${opciones}</select>
+            <input list="modelos-sugeridos" value="${cfg.modelo}"
+                   placeholder="identificador del modelo"
+                   oninput="onModeloPaso('${paso}', this.value)"
+                   aria-label="Modelo para ${cfg.titulo}" spellcheck="false" />
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  actualizarSugerencias();
+  sincronizarCampoDeClave();
+  $('btn-modelos-save').disabled = Object.keys(modelosEditado).length === 0;
+  const est = $('modelos-estado');
+  const propios = orden.filter(x => modelosConfig.pasos[x].personalizado).length;
+  est.className = 'modelos-estado';
+  est.textContent = propios ? `${propios}/3 personalizados` : 'valores por defecto';
+}
+
+function actualizarSugerencias() {
+  // La lista sugiere los modelos de los proveedores elegidos, sin restringir:
+  // el campo acepta cualquier identificador que el proveedor entienda.
+  const usados = new Set(['policy_eval', 'resolution', 'judge'].map(paso =>
+    ({ ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) }).proveedor
+  ));
+  const modelos = [];
+  usados.forEach(id => {
+    const p = _proveedorDe(id);
+    if (p) modelos.push(...p.modelos);
+  });
+  $('modelos-sugeridos').innerHTML = [...new Set(modelos)]
+    .map(m => `<option value="${m}"></option>`).join('');
+
+  const sel = $('sel-todos-proveedor');
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">Usar en los tres pasos...</option>'
+      + (modelosConfig.proveedores || []).map(p =>
+          `<option value="${p.id}">${p.nombre}${p.gratis ? ' (gratis)' : ''}</option>`).join('');
+  }
+}
+
+function onProveedorPaso(paso, proveedor) {
+  const actual = { ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) };
+  const prov = _proveedorDe(proveedor);
+  // Al cambiar de proveedor, el modelo anterior casi seguro no existe alla:
+  // se propone el primero del nuevo en vez de dejar uno invalido.
+  const modelo = (prov && prov.modelos[0]) || actual.modelo;
+  modelosEditado[paso] = { proveedor, modelo };
+  renderModelos();
+}
+
+function onModeloPaso(paso, modelo) {
+  const actual = { ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) };
+  if (modelo === modelosConfig.pasos[paso].modelo &&
+      actual.proveedor === modelosConfig.pasos[paso].proveedor) {
+    delete modelosEditado[paso];
+  } else {
+    modelosEditado[paso] = { proveedor: actual.proveedor, modelo };
+  }
+  $('btn-modelos-save').disabled = Object.keys(modelosEditado).length === 0;
+}
+
+function aplicarATodos(proveedor) {
+  // Lo que casi todo el mundo quiere: los tres pasos en el mismo proveedor.
+  // Con proveedores mezclados una sola clave no alcanza, y el panel lo avisa.
+  if (!proveedor) return;
+  ['policy_eval', 'resolution', 'judge'].forEach(paso => onProveedorPaso(paso, proveedor));
+  $('sel-todos-proveedor').value = '';
+}
+
+function sincronizarCampoDeClave() {
+  // El campo de API key tiene que pedir la clave DEL proveedor elegido: hasta
+  // que se pudo cambiar de proveedor, siempre era la de Anthropic.
+  if (!modelosConfig) return;
+  const usados = [...new Set(['policy_eval', 'resolution', 'judge'].map(paso =>
+    ({ ...modelosConfig.pasos[paso], ...(modelosEditado[paso] || {}) }).proveedor
+  ))];
+  const label = document.querySelector('label[for="inp-api-key"]');
+  const input = $('inp-api-key');
+  const hint  = $('api-key-hint');
+  if (!label || !input || !hint) return;
+
+  if (usados.length > 1) {
+    const nombres = usados.map(id => (_proveedorDe(id) || {}).nombre || id).join(' + ');
+    label.textContent = 'API Key';
+    input.placeholder = '';
+    hint.innerHTML = `Los pasos usan <b>${nombres}</b>. Una sola clave no sirve para dos `
+      + `proveedores distintos: elegi uno solo con <b>Usar en los tres pasos</b>, o deja `
+      + `que el servidor use las suyas.`;
+    return;
+  }
+
+  const prov = _proveedorDe(usados[0]);
+  if (!prov) return;
+  label.textContent = `API Key de ${prov.nombre}`;
+  input.placeholder = prov.formato_clave;
+  hint.innerHTML = `Usa tu propia key — cada uno consume su cuota. `
+    + (prov.gratis ? '<b>Tiene free tier.</b> ' : '')
+    + `<a href="${prov.consola}" target="_blank" style="color:var(--accent)">Obtener key</a>`;
+}
+
+async function guardarModelos() {
+  const est = $('modelos-estado');
+  const btn = $('btn-modelos-save');
+  btn.disabled = true;
+  est.className = 'modelos-estado';
+  est.textContent = 'guardando...';
+  try {
+    for (const [paso, cfg] of Object.entries(modelosEditado)) {
+      const r = await fetch(`${API_BASE}/api/config/modelos/${paso}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || r.status);
+    }
+    await cargarModelos();
+    est.className = 'modelos-estado ok';
+    est.textContent = 'guardado';
+  } catch (e) {
+    est.className = 'modelos-estado error';
+    est.textContent = 'no se pudo guardar: ' + e.message;
+    btn.disabled = false;
+  }
+}
+
+async function restablecerModelos() {
+  const est = $('modelos-estado');
+  est.className = 'modelos-estado';
+  est.textContent = 'restableciendo...';
+  try {
+    const r = await fetch(API_BASE + '/api/config/modelos/reset', { method: 'POST' });
+    if (!r.ok) throw new Error(r.status);
+    await cargarModelos();
+    est.className = 'modelos-estado ok';
+    est.textContent = 'valores por defecto';
+  } catch (e) {
+    est.className = 'modelos-estado error';
+    est.textContent = 'no se pudo restablecer';
+  }
 }
 
 // ─── MODO DEMO ───────────────────────────────────────────
@@ -3326,6 +3643,7 @@ disableSubmit('Seleccionar escenario');
 checkHealth();
 checkServerKey();
 loadDemoStatus();
+cargarModelos();
 setInterval(checkHealth, 30_000);
 loadTransactions();
 renderHistory();

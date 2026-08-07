@@ -93,6 +93,12 @@ class PolicyUpdate(BaseModel):
     sla_dias: int | None = Field(default=None, gt=0)
 
 
+class ModeloPasoUpdate(BaseModel):
+    """Cambio de modelo para un paso del pipeline. Sin credenciales, a proposito."""
+    proveedor: str = Field(min_length=1)
+    modelo: str = Field(min_length=1)
+
+
 class ReportRequest(BaseModel):
     transaction: dict
     resolution: dict

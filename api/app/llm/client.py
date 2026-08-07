@@ -22,7 +22,7 @@ from ..domain.constants import (
     SECONDS_TO_MS,
     TRACE_LLM_CALL,
 )
-from ..observability.tracer import Tracer
+from ..observability.tracer import NoOpTracer, Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -114,3 +114,123 @@ class AnthropicClient:
             self.client.close()
         except Exception:
             logger.debug("No se pudo cerrar el cliente Anthropic", exc_info=True)
+
+
+# Bases compatibles con OpenAI que hoy tienen free tier real. La lista es
+# comodidad, no restriccion: `CB_LLM_BASE_URL` acepta cualquier endpoint que
+# hable el mismo protocolo.
+PROVEEDORES: dict[str, str] = {
+    "groq": "https://api.groq.com/openai/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "github": "https://models.inference.ai.azure.com",
+    "cerebras": "https://api.cerebras.ai/v1",
+    "openai": "https://api.openai.com/v1",
+}
+
+
+class OpenAICompatibleClient:
+    """`LLMClient` contra cualquier endpoint que hable el protocolo de OpenAI.
+
+    Existe por dos razones, y la segunda importa mas que la primera.
+
+    La primera es practica: Anthropic no tiene free tier, y medir la calidad del
+    agente sobre el dataset completo cuesta dinero. Groq y Gemini —entre otros—
+    exponen endpoints compatibles con OpenAI y regalan cuota suficiente para
+    correr `scripts/evaluar.py` sin pagar nada.
+
+    La segunda es que `docs/architecture.md` afirma que cambiar de proveedor es
+    implementar el Protocol y que ningun call site cambia. Mientras hubo una sola
+    implementacion, eso era una afirmacion sin demostrar. Esta clase es la prueba:
+    no toca un solo llamador.
+
+    **Un score medido con otro proveedor no es el score del sistema entregado.**
+    Los prompts estan afinados para Claude y la configuracion documentada es
+    Haiku + Sonnet. Lo que una corrida asi mide es que el pipeline es
+    independiente del proveedor, y da un punto de comparacion — no reemplaza a la
+    medicion sobre la configuracion real.
+
+    Se habla HTTP directo con httpx, que ya es dependencia, en vez de sumar el
+    SDK de OpenAI: el contrato que se usa es un POST con cuatro campos.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        base_url: str,
+        tracer: Tracer | None = None,
+        max_retries: int = LLM_DEFAULT_MAX_RETRIES,
+    ):
+        if not base_url:
+            raise ValueError("OpenAICompatibleClient necesita base_url")
+        self.model = model
+        self.tracer = tracer or NoOpTracer()
+        self.client = httpx.Client(
+            base_url=base_url.rstrip("/"),
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=httpx.Timeout(LLM_TIMEOUT_S, connect=10.0),
+            transport=httpx.HTTPTransport(retries=max_retries),
+        )
+
+    def complete(
+        self,
+        system: str,
+        user: str,
+        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
+        temperature: float = LLM_DEFAULT_TEMPERATURE,
+        trace_id: str | None = None,
+    ) -> LLMResult:
+        start = time.time()
+        try:
+            respuesta = self.client.post("/chat/completions", json={
+                "model": self.model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            })
+            respuesta.raise_for_status()
+            cuerpo = respuesta.json()
+        except httpx.HTTPStatusError as e:
+            # El cuerpo del error dice mas que el codigo: cuota agotada, modelo
+            # inexistente y clave invalida son todos 4xx.
+            logger.error(
+                "Error del proveedor (%s): %s", e.response.status_code, e.response.text[:300],
+            )
+            raise
+        except Exception as e:
+            logger.error("Unexpected LLM error: %s", e)
+            raise
+
+        latency_ms = (time.time() - start) * SECONDS_TO_MS
+        text = cuerpo["choices"][0]["message"]["content"] or ""
+        uso = cuerpo.get("usage") or {}
+        entrada, salida = uso.get("prompt_tokens", 0), uso.get("completion_tokens", 0)
+
+        self.tracer.generation(
+            name=TRACE_LLM_CALL, model=self.model,
+            input=user[:LLM_TRUNCATION_LENGTH], output=text[:LLM_TRUNCATION_LENGTH],
+            tokens_in=entrada, tokens_out=salida,
+            latency_ms=latency_ms, trace_id=trace_id,
+        )
+        logger.info(
+            "LLM call completed: model=%s tokens_in=%d tokens_out=%d latency=%.0fms",
+            self.model, entrada, salida, latency_ms,
+        )
+        return LLMResult(text=text, input_tokens=entrada, output_tokens=salida)
+
+    def close(self) -> None:
+        try:
+            self.client.close()
+        except Exception:
+            logger.debug("No se pudo cerrar el cliente HTTP", exc_info=True)
+
+
+def base_url_de(proveedor: str, explicita: str = "") -> str:
+    """La URL del proveedor, o la que le pasen. Vacio si es Anthropic."""
+    if explicita:
+        return explicita
+    return PROVEEDORES.get((proveedor or "").lower().strip(), "")

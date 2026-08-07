@@ -279,6 +279,47 @@ curl -X PUT https://ciri-chargeback-agent.onrender.com/api/policies/POL-FRD-001 
 
 ---
 
+## Configuración de modelos
+
+El pipeline hace tres llamadas —evaluación de políticas, síntesis y juez— y cada una elige su
+proveedor y su modelo por separado. La elección se guarda en SQLite y se aplica a la siguiente
+investigación: no hay que reiniciar nada. El default vive en `constants.py`.
+
+**Las claves no pasan por acá.** Se elige *qué* modelo, nunca *con qué credencial*: las claves
+viajan por petición o salen del entorno.
+
+### `GET /api/config/modelos`
+
+Devuelve la configuración vigente por paso —con su descripción, el prompt que usa y si está
+personalizado— más el catálogo de proveedores: cuáles tienen free tier, cuál tiene clave cargada,
+y dónde se saca cada una.
+
+```bash
+curl -s https://ciri-chargeback-agent.onrender.com/api/config/modelos | jq '.pasos | keys'
+# ["judge", "policy_eval", "resolution"]
+
+curl -s .../api/config/modelos | jq '[.proveedores[] | select(.gratis) | .id]'
+# ["groq", "gemini", "openrouter", "cerebras", "github"]
+```
+
+### `PUT /api/config/modelos/{paso}`
+
+`paso` es `policy_eval`, `resolution` o `judge`. Cualquier otro da `422`, igual que un modelo vacío.
+
+```bash
+curl -X PUT .../api/config/modelos/judge   -H "Content-Type: application/json"   -d '{"proveedor": "groq", "modelo": "llama-3.3-70b-versatile"}'
+```
+
+Cambiar un paso no toca a los otros: se puede dejar la evaluación de políticas en Haiku y mover
+sólo el juez.
+
+### `POST /api/config/modelos/reset`
+
+Borra lo guardado y vuelve al default. No lo pisa con valores: lo borra, así que el default sigue
+siendo el de `constants.py` aunque cambie.
+
+---
+
 ## Informes
 
 ### `POST /api/reports/html`

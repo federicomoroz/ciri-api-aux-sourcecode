@@ -16,7 +16,8 @@ from .analysis.analyzer import Analyzer
 from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
-from .llm.client import AnthropicClient
+from .domain.constants import PASO_JUEZ, PASO_POLITICAS, PASO_RESOLUCION
+from .llm.client import AnthropicClient, OpenAICompatibleClient, base_url_de
 from .observability.contacto_n8n import ContactoN8n
 from .observability.tracer import LangfuseTracer, NoOpTracer
 from .rag.embedder import FastEmbedder
@@ -26,6 +27,7 @@ from .rag.updater import RAGUpdater
 from .reports.generator import ReportGenerator
 from .services.feedback import FeedbackService
 from .services.langfuse_stats import LangfuseStatsService
+from .services.modelos import ModelosService
 from .services.pipeline import PipelineService
 from .services.resolution import ResolutionService
 
@@ -49,7 +51,28 @@ def _preparar_sqlite(settings: Settings) -> Database:
     db.ensure_report_cache_table()
     db.ensure_alerts_table()
     db.ensure_policies_semantics()
+    db.ensure_modelos_table()
     return db
+
+
+def construir_llm(settings: Settings, modelo: str, tracer) -> AnthropicClient | OpenAICompatibleClient:
+    """El cliente del modelo, segun el proveedor configurado.
+
+    Un solo lugar decide cual se instancia. Los llamadores reciben algo que
+    cumple `LLMClient` y no saben —ni necesitan saber— con quien hablan: es la
+    afirmacion que `architecture.md` hace sobre el Protocol, hecha efectiva.
+    """
+    base = base_url_de(settings.llm_provider, settings.llm_base_url)
+    if not base:
+        return AnthropicClient(
+            api_key=settings.anthropic_api_key, model=modelo,
+            tracer=tracer, max_retries=settings.llm_max_retries,
+        )
+    return OpenAICompatibleClient(
+        api_key=settings.llm_api_key or settings.anthropic_api_key,
+        model=modelo, base_url=base,
+        tracer=tracer, max_retries=settings.llm_max_retries,
+    )
 
 
 def _conectar_servicios(settings: Settings) -> dict:
@@ -63,12 +86,7 @@ def _conectar_servicios(settings: Settings) -> dict:
         if settings.langfuse_enabled
         else NoOpTracer()
     )
-    llm = AnthropicClient(
-        api_key=settings.anthropic_api_key,
-        model=settings.llm_model,
-        tracer=tracer,
-        max_retries=settings.llm_max_retries,
-    )
+    llm = construir_llm(settings, settings.llm_model, tracer)
     return {
         "qdrant": QdrantClient(
             url=settings.qdrant_url,
@@ -79,14 +97,8 @@ def _conectar_servicios(settings: Settings) -> dict:
         "tracer": tracer,
         "llm": llm,
         "llm_resolution": (
-            AnthropicClient(
-                api_key=settings.anthropic_api_key,
-                model=settings.llm_model_resolution,
-                tracer=tracer,
-                max_retries=settings.llm_max_retries,
-            )
-            if settings.llm_model_resolution
-            else llm
+            construir_llm(settings, settings.llm_model_resolution, tracer)
+            if settings.llm_model_resolution else llm
         ),
     }
 
@@ -186,8 +198,13 @@ async def lifespan(app: FastAPI):
         )
 
     analyzer = Analyzer(db)
+    # La eleccion de modelo por paso vive en SQLite y el panel la edita; este
+    # servicio la traduce en clientes y los renueva cuando cambia.
+    modelos = ModelosService(db, settings, tracer, construir_llm)
     resolution_service = ResolutionService(
-        externos["llm"], tracer, llm_resolution=externos["llm_resolution"],
+        modelos.cliente(PASO_POLITICAS), tracer,
+        llm_resolution=modelos.cliente(PASO_RESOLUCION),
+        llm_judge=modelos.cliente(PASO_JUEZ),
     )
     report_generator = ReportGenerator()
 
@@ -207,6 +224,7 @@ async def lifespan(app: FastAPI):
     app.state.pipeline_service = PipelineService(
         db, retriever, analyzer, resolution_service, report_generator,
     )
+    app.state.modelos_service = modelos
     app.state.langfuse_stats_service = LangfuseStatsService(tracer, settings.llm_model)
     app.state.contacto_n8n = ContactoN8n()
 
@@ -255,6 +273,10 @@ def get_feedback_service(request: Request) -> FeedbackService:
 
 def get_pipeline_service(request: Request) -> PipelineService:
     return request.app.state.pipeline_service
+
+
+def get_modelos_service(request: Request) -> ModelosService:
+    return request.app.state.modelos_service
 
 
 def get_langfuse_stats_service(request: Request) -> LangfuseStatsService:

@@ -35,10 +35,12 @@ from ..domain.constants import (
     N8N_TIMEOUT_S,
     N8N_WEBHOOK_PATH,
     N8N_WEBHOOK_TEST_PATH,
+    PASO_JUEZ,
+    PASO_POLITICAS,
+    PASO_RESOLUCION,
     RISK_FRAUD_SEVERE,
 )
 from ..domain.models import AnalyzeRequest
-from ..llm.client import AnthropicClient
 from ..reports.generator import ReportGenerator
 from ..services.pipeline import PipelineService
 from ..services.resolution import ResolutionService
@@ -52,26 +54,32 @@ router = APIRouter(tags=["panel"])
 def _byok_pipeline(api_key: str, base: PipelineService, settings: Settings, request: Request):
     """Pipeline efimero con la API key del visitante.
 
-    Los clientes se cierran al salir: son de un solo uso y cada uno abre su
-    propio pool de conexiones. Sin esto, cada request con BYOK dejaba dos pools
-    colgados hasta que pasara el recolector.
+    Respeta la eleccion de modelo por paso: quien trae su clave corre la misma
+    configuracion que el servidor, con su credencial. Los clientes se cierran al
+    salir — son de un solo uso y cada uno abre su propio pool de conexiones. Sin
+    esto, cada request con BYOK dejaba pools colgados hasta el recolector.
     """
     tracer = request.app.state.tracer
-    llm = AnthropicClient(api_key=api_key, model=settings.llm_model, tracer=tracer)
-    llm_res = (
-        AnthropicClient(api_key=api_key, model=settings.llm_model_resolution, tracer=tracer)
-        if settings.llm_model_resolution else llm
-    )
+    modelos = request.app.state.modelos_service
+    clientes = {
+        paso: modelos.cliente(paso, api_key=api_key)
+        for paso in (PASO_POLITICAS, PASO_RESOLUCION, PASO_JUEZ)
+    }
     try:
         yield PipelineService(
             db=base.db, retriever=base.retriever, analyzer=base.analyzer,
-            resolution_svc=ResolutionService(llm, tracer, llm_resolution=llm_res),
+            resolution_svc=ResolutionService(
+                clientes[PASO_POLITICAS], tracer,
+                llm_resolution=clientes[PASO_RESOLUCION],
+                llm_judge=clientes[PASO_JUEZ],
+            ),
             report_gen=base.report_gen,
         )
     finally:
-        llm.close()
-        if llm_res is not llm:
-            llm_res.close()
+        for cliente in set(clientes.values()):
+            cerrar = getattr(cliente, "close", None)
+            if cerrar:
+                cerrar()
 
 
 def _es_falta_de_saldo(exc: Exception) -> bool:

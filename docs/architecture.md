@@ -313,7 +313,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 576 tests pasan (543 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 608 tests pasan (575 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -529,7 +529,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Consecuencias:**
 - Cada pieza de logica se testea con `pytest` independientemente de n8n
-- 543 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
+- 575 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
 - 33 tests E2E adicionales corren contra la API real desplegada en Render (LLM real, Qdrant real, sin mocks)
 - n8n es reemplazable (Temporal, Airflow, un cron job) sin tocar FastAPI
 - La documentacion OpenAPI en `/docs` se autogenera y siempre esta actualizada
@@ -740,10 +740,10 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 576 tests (unit + integration + E2E)
+  tests/                      # 608 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
-    decisions.md              # 20 decisiones técnicas con razonamiento
+    decisions.md              # 21 decisiones técnicas con razonamiento
     prompts.md                # Prompts documentados con versionado
     rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
     mejora_continua.md        # Feedback loop, Judge, guardrails
@@ -759,7 +759,7 @@ quest_ML/
 ## La Suite de Tests
 
 Corren solos en cada push y cada pull request
-(`.github/workflows/tests.yml`): lint, los 543 de `unit` e `integration` con
+(`.github/workflows/tests.yml`): lint, los 575 de `unit` e `integration` con
 cobertura, y una validacion de que los tres JSON de n8n sean importables —nodos
 que existen y conexiones que apuntan a algo—. Un workflow roto no compila nada,
 asi que sin ese paso el problema aparecia recien al importarlo a mano.
@@ -785,7 +785,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-576 tests en 30 archivos (unit + integration + E2E):
+608 tests en 31 archivos (unit + integration + E2E):
 
 ```
 tests/

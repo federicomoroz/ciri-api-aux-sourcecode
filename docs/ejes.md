@@ -87,6 +87,8 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 | `v1_resolution.py` | v3.1 | Sonnet |
 | `v1_judge.py` | v2.1 | Sonnet |
 
+**El modelo de cada paso se elige por separado**, desde el panel, y se guarda en SQLite: `constants.py` tiene el default y cambiarlo no es un deploy. Son tres tareas distintas —comparar contra reglas, redactar, aplicar una rúbrica— y no hay motivo para que compartan modelo por defecto de implementación. Además de Anthropic hay cinco proveedores con free tier soportados vía `OpenAICompatibleClient`, que es la segunda implementación del `Protocol` y la prueba de que cambiar de proveedor no toca ningún llamador. Ver `decisions.md#21`.
+
 ---
 
 ## 4. Automatización — *Clasificación, derivación, reportes, alertas*

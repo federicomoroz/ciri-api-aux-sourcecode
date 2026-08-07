@@ -12,6 +12,15 @@ from .domain.constants import (
 class Settings(BaseSettings):
     # LLM
     anthropic_api_key: str = ""
+    # Proveedor del modelo. Por defecto Anthropic, que es la configuracion
+    # documentada. Cualquier otro valor usa el cliente compatible con OpenAI:
+    # groq, gemini, openrouter, github, cerebras, openai — o `llm_base_url`
+    # apuntando a donde sea. Existe porque Anthropic no tiene free tier y medir
+    # el sistema sobre el dataset completo cuesta dinero; un score medido asi
+    # NO es el score de la configuracion entregada, y esta dicho en la doc.
+    llm_provider: str = "anthropic"
+    llm_base_url: str = ""     # gana sobre `llm_provider` si viene
+    llm_api_key: str = ""      # si esta vacia se usa `anthropic_api_key`
     llm_model: str = "claude-haiku-4-5-20251001"
     llm_model_resolution: str = ""  # optional: stronger model for synthesis (call 2)
     llm_temperature: float = LLM_DEFAULT_TEMPERATURE

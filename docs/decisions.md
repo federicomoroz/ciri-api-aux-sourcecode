@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 576 tests pasando (543 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 608 tests pasando (575 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -544,3 +544,44 @@ razonamiento produjo.
   y está declarado como tal
 - (-) Un prompt más largo y con una sección condicional: si falta la propuesta, el Juez cae al
   comportamiento anterior y lo anota en `weaknesses`
+
+---
+
+## 21. El modelo de cada paso es configuración, no código
+
+**Decisión:** Los tres pasos del pipeline —evaluación de políticas, síntesis y juez— eligen su
+proveedor y su modelo por separado. La elección vive en la tabla `configuracion_modelos` de
+SQLite, el panel la edita en caliente, y `constants.py` guarda el default. **Las claves no se
+guardan nunca.**
+
+**Razonamiento:** Ya había dos modelos —Haiku para evaluar, Sonnet para sintetizar y juzgar—,
+pero la asignación estaba en `.env` y cambiarla era un redeploy. Y estaba mal repartida: el juez
+compartía cliente con la síntesis porque `llm_resolution` servía para los dos, no porque alguien
+hubiera decidido que evaluar y resolver piden lo mismo.
+
+Son tres tareas distintas. Comparar datos contra reglas es mecánico. Redactar un análisis conectando
+precedentes pide razonamiento. Aplicar una rúbrica de cinco criterios es una tercera cosa —y
+posiblemente la que más conviene separar del modelo que escribió lo que se juzga—. Que cada una
+pueda elegir su modelo es lo que permite responder empíricamente en vez de por intuición.
+
+**El motivo inmediato fue más terrenal:** Anthropic no tiene free tier, y sin crédito el sistema no
+se puede medir. Groq, Gemini, OpenRouter, Cerebras y GitHub Models sí lo tienen y todos hablan el
+protocolo de OpenAI, así que `OpenAICompatibleClient` —una implementación más del `Protocol`, sin
+tocar un solo llamador— abre esa puerta. De paso demuestra algo que `architecture.md` afirmaba sin
+evidencia: que cambiar de proveedor es implementar el Protocol.
+
+**Las claves son la parte que importa.** Se elige *qué* modelo, nunca *con qué credencial*: el
+endpoint no acepta claves y hay un test que lo fija. Viajan por petición —el campo del panel— o
+salen del entorno. Una instancia pública sin autenticación que persistiera claves ajenas sería un
+incidente esperando.
+
+**Trade-offs:**
+- (+) Probar «¿y si el juez corre en otro modelo?» es un desplegable y un botón, no un deploy
+- (+) El sistema se puede medir entero sin pagar, con un proveedor de free tier
+- (+) El `Protocol` de `LLMClient` deja de ser una afirmación y pasa a tener dos implementaciones
+- (-) **Un score medido con otro proveedor no es el score del sistema entregado.** Los prompts
+  están afinados para Claude; medir con Llama mide otra cosa. Está dicho en el panel, en el
+  `.env.example` y en el harness
+- (-) Tres proveedores distintos a la vez no funcionan con una sola clave BYOK. El panel lo avisa
+  y ofrece «usar en los tres pasos»
+- (-) Una tabla más y un servicio más para algo que antes eran dos variables de entorno

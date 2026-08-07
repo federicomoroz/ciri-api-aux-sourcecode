@@ -40,9 +40,20 @@ logger = logging.getLogger(__name__)
 
 
 class ResolutionService:
-    def __init__(self, llm: LLMClient, tracer: Tracer, llm_resolution: LLMClient | None = None):
+    def __init__(
+        self,
+        llm: LLMClient,
+        tracer: Tracer,
+        llm_resolution: LLMClient | None = None,
+        llm_judge: LLMClient | None = None,
+    ):
+        # Un cliente por paso. `llm_judge` cae en el de sintesis si no se
+        # especifica, que era el comportamiento anterior: evaluar y resolver
+        # piden un razonamiento parecido, asi que compartir modelo es un default
+        # razonable — pero ahora es un default, no una atadura.
         self.llm = llm
         self.llm_resolution = llm_resolution or llm
+        self.llm_judge = llm_judge or self.llm_resolution
         self.tracer = tracer
 
     def resolve(self, ctx: CaseContext) -> dict:
@@ -238,7 +249,7 @@ class ResolutionService:
             resolution=judge_resolution,
             propuesta=resolution.get("_propuesta_del_modelo"),
         )
-        llm_result = self.llm_resolution.complete(system, user, trace_id=trace_id)
+        llm_result = self.llm_judge.complete(system, user, trace_id=trace_id)
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})
 
         if "overall_score" not in result and "criteria" in result:
