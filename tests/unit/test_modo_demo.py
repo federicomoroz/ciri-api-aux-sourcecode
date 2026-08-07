@@ -800,3 +800,20 @@ class TestElPipelineConN8nSeHabilitaCuandoResponde:
 
     def test_se_explica_que_la_llamada_la_hace_la_api(self):
         assert "la llamada la hace la API, no tu navegador" in self.panel
+
+    def test_tambien_se_deshabilita_si_n8n_se_cae_despues(self):
+        """Verificar al pegar la URL no alcanza: puede caerse con el panel abierto.
+
+        El chequeo periodico ponia el chip en rojo y dejaba el modo elegido,
+        esperando una orquestacion que ya no estaba.
+        """
+        html = self.panel
+        cuerpo = html[html.index("async function checkHealth"):html.index("async function loadLangfuseStats")]
+        assert "habilitarModosN8n(" in cuerpo, "el chequeo periodico no toca el selector"
+        assert "setInterval(checkHealth, 30_000)" in html
+
+    def test_si_no_se_pudo_ni_preguntar_tampoco_se_ofrece(self):
+        html = self.panel
+        cuerpo = html[html.index("async function checkHealth"):html.index("async function loadLangfuseStats")]
+        catch = cuerpo[cuerpo.rindex("} catch {"):]
+        assert "habilitarModosN8n(false" in catch

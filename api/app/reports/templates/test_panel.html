@@ -3585,6 +3585,25 @@ async function checkHealth() {
       : !data.configured ? 'n8n \u2014 peg\u00e1 tu URL'
       :                    'n8n \u2717 (fallback)');
 
+    // Este chequeo corre cada 30s, asi que tambien cubre que n8n se caiga con
+    // el panel ya abierto: no alcanza con verificar al pegar la URL. Antes el
+    // chip se ponia en rojo y el modo seguia elegido, esperando una
+    // orquestacion que ya no estaba.
+    habilitarModosN8n(
+      data.available,
+      !data.configured ? 'Falta la URL de tu n8n'
+                       : 'La API no llega a ' + (data.url || 'esa URL'));
+    // El texto de ayuda solo se toca si el campo esta vacio: si lo esta
+    // escribiendo, manda `onN8nUrlChange` y este pisaria lo que dice.
+    if (!data.available && !$('inp-n8n-url').value.trim()) {
+      marcarN8n(
+        data.configured ? 'no responde' : 'opcional',
+        data.configured ? 'required' : '',
+        data.configured
+          ? 'La API dejo de llegar a ' + data.url + '. El pipeline volvio a Directo.'
+          : 'Pega la URL de tu n8n para poder elegir el pipeline con orquestacion.');
+    }
+
     // Store n8n base URL for modal link
     if (data.url) n8nEditorUrl = data.url;
 
@@ -3602,7 +3621,9 @@ async function checkHealth() {
       $('n8n-form-section').style.display = 'none';
     }
   } catch {
+    // Si ni siquiera se pudo preguntar, tampoco se ofrece el modo.
     setChip('hc-n8n', 'warn', 'n8n \u2717 (fallback)');
+    habilitarModosN8n(false, 'No se pudo verificar n8n');
   }
 }
 
