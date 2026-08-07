@@ -313,7 +313,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez es **8.7/10** sobre los escenarios de demo, y los 564 tests pasan (531 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 566 tests pasan (533 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -529,7 +529,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Consecuencias:**
 - Cada pieza de logica se testea con `pytest` independientemente de n8n
-- 531 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
+- 533 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
 - 33 tests E2E adicionales corren contra la API real desplegada en Render (LLM real, Qdrant real, sin mocks)
 - n8n es reemplazable (Temporal, Airflow, un cron job) sin tocar FastAPI
 - La documentacion OpenAPI en `/docs` se autogenera y siempre esta actualizada
@@ -620,7 +620,7 @@ Ademas, las busquedas de politicas y casos se hacen en un solo batch de embeddin
 - La evaluacion de politicas (la llamada mas predecible) usa el modelo mas rapido y economico
 - La sintesis de resolucion y el juez de calidad (donde el razonamiento importa) usan el modelo mas capaz
 - Reduccion de costo total por caso de ~21% vs usar Sonnet para todo (~$0.037 contra ~$0.047; el desglose por llamada esta en `mejora_continua.md`)
-- Score promedio del Juez: 8.7/10 con esta configuracion
+- Score promedio del Juez: 9.1/10 con esta configuracion
 - Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo base para todo -- sin friccion en tests
 
 **Alternativas descartadas:** Un solo modelo para todo -- mas simple, pero pagar Sonnet por evaluacion de politicas es desperdiciar presupuesto; tres modelos distintos -- overhead de configuracion no justificado para 3 llamadas.
@@ -739,7 +739,7 @@ quest_ML/
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
-  tests/                      # 564 tests (unit + integration + E2E)
+  tests/                      # 566 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 20 decisiones técnicas con razonamiento
@@ -758,7 +758,7 @@ quest_ML/
 ## La Suite de Tests
 
 Corren solos en cada push y cada pull request
-(`.github/workflows/tests.yml`): lint, los 531 de `unit` e `integration` con
+(`.github/workflows/tests.yml`): lint, los 533 de `unit` e `integration` con
 cobertura, y una validacion de que los tres JSON de n8n sean importables —nodos
 que existen y conexiones que apuntan a algo—. Un workflow roto no compila nada,
 asi que sin ese paso el problema aparecia recien al importarlo a mano.
@@ -784,7 +784,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-564 tests en 29 archivos (unit + integration + E2E):
+566 tests en 29 archivos (unit + integration + E2E):
 
 ```
 tests/

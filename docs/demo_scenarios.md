@@ -59,7 +59,7 @@ El sistema utiliza una estrategia de dos modelos para optimizar costo y calidad:
 | Síntesis de resolución (call 2) | `claude-sonnet-4` | Mayor capacidad de razonamiento para generar justificaciones citadas |
 | Juez de calidad (call 3) | `claude-sonnet-4` | Evaluación crítica — requiere juicio calibrado (5 criterios, score 1-10) |
 
-El score promedio del Juez en los escenarios de prueba es **8.7/10**, lo que indica alta consistencia entre la evaluación de políticas y la síntesis final.
+Los tres escenarios de esta página promedian **8.7/10** — son los tres casos más contenciosos del dataset, elegidos por cubrir los tres niveles de riesgo y no por su puntaje. Sobre el conjunto de corridas de desarrollo el promedio fue **9.1/10**; la metodología está en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91).
 
 ---
 

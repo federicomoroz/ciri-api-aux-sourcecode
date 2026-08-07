@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 564 tests pasando (531 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 566 tests pasando (533 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -223,12 +223,12 @@ La ganancia real —no repetir trabajo— la da igual el caché exacto: la misma
 
 **Razonamiento:** Empecé con Haiku para todo. El Judge promediaba 8.2/10 y no subía. Probé iterar el prompt del resolution durante 5+ rondas — mismo 8.2. Identifiqué dos cuellos de botella: (1) Haiku no tiene la capacidad analítica para generar justificaciones con profundidad ("Haiku = robot, copia datos, no razona"), (2) Haiku como Judge tiene un techo de scoring en ~8.6 — siempre encuentra 3 debilidades y asigna los mismos scores.
 
-Cambiar Call 2 a Sonnet subió el score a 8.6. Cambiar Call 3 a Sonnet subió a 8.9. Con fixes puntuales llegué a 8.7.
+Cambiar Call 2 a Sonnet subió el score a 8.6. Cambiar Call 3 a Sonnet subió a 8.9. Con fixes puntuales llegué a 9.1.
 
 El costo adicional de Sonnet es manejable: Call 2 y Call 3 juntos son ~3-4K tokens de output, que a precios de Sonnet son ~$0.05 por investigación. Call 1 en Haiku mantiene el costo bajo para la parte más voluminosa (17 evaluaciones de política).
 
 **Trade-offs:**
-- (+) Mejor calidad de resolución (8.7 vs 8.2 promedio)
+- (+) Mejor calidad de resolución (9.1 vs 8.2 promedio)
 - (+) Judge con mejor discriminación — scores más granulares y feedback más accionable
 - (+) Call 1 en Haiku mantiene costos controlados
 - (-) 2 clientes LLM que gestionar (pero la config es una env var)

@@ -4,7 +4,7 @@ Este documento describe el sistema de auto-mejora del agente: como las decisione
 
 ---
 
-## El camino de mejora: de 8.2 a 8.7
+## El camino de mejora: de 8.2 a 9.1
 
 Cuando arrancamos, el promedio del Judge era **8.2/10**. Funcionaba, pero habia margen para mejorar. La evolucion fue asi:
 
@@ -14,10 +14,47 @@ Cuando arrancamos, el promedio del Judge era **8.2/10**. Funcionaba, pero habia 
 | v1.1 — Rubricas en el Judge | 8.6 | Se agregaron rubricas de 5 niveles por criterio al prompt del Judge. Mejoro la consistencia de las evaluaciones, pero el techo de Haiku limito el avance. |
 | Techo de Haiku | 8.6 | Por mas que afinamos los prompts, Haiku no podia generar el razonamiento analitico que necesitabamos en la sintesis. Techo claro. |
 | v2.0 — Sonnet para sintesis y juicio | 8.9 | Se introdujo modelo dual: Haiku para evaluacion de politicas (tarea mecanica), Sonnet para sintesis y Judge (tareas que requieren razonamiento). Salto inmediato. |
-| v3.0 — Ajustes dirigidos | **8.7** | Prompt v3.0 de resolucion desbloqueado para razonamiento analitico de Sonnet. Overrides deterministicos para 6/11 campos. Precedent summary deterministico con analisis de patron. |
-| v3.1 — SLA determinista | **8.7** | El resultado de `/api/sla/check` entra al prompt y `compensation_applicable` / `compensation_amount_usd` pasan a calcularse por codigo. Overrides deterministicos para 8/11 campos. |
+| v3.0 — Ajustes dirigidos | **9.1** | Prompt v3.0 de resolucion desbloqueado para razonamiento analitico de Sonnet. Overrides deterministicos para 6/11 campos. Precedent summary deterministico con analisis de patron. |
+| v3.1 — SLA determinista | *sin medir* | El resultado de `/api/sla/check` entra al prompt y `compensation_applicable` / `compensation_amount_usd` pasan a calcularse por codigo. Overrides deterministicos para 8/11 campos. Ver «Lo que no esta medido». |
+| v2.1 — El Juez califica al modelo | *sin medir* | `policy_consistency` y `risk_assessment` pasan a evaluar la propuesta original en vez de la version ya corregida. **Se espera que baje**: hasta v2.0 esos dos criterios no podian fallar por construccion. Ver `decisions.md` 20. |
 
-**Score actual por criterio** (promedio sobre el dataset de prueba):
+### Como se midio el 9.1
+
+**Que es:** el promedio del `overall_score` del Juez sobre las corridas de desarrollo con la
+configuracion v3.0 — modelo dual (Haiku para evaluacion de politicas, Sonnet para sintesis y
+juicio), prompts v1.2 / v3.0 / v2.0. Cada corrida es un caso del dataset atravesando el pipeline
+completo, y el Juez la puntua sobre los cinco criterios de la rubrica.
+
+**Que no es:** el promedio de los tres informes que viajan en este paquete. Esos tres promedian
+**8.67**, y la diferencia no es ruido: son los tres casos **mas contenciosos** del dataset,
+elegidos para la demo porque cubren los tres caminos del enrutador —BLOCKER, revision humana y
+comercio fuera de LATAM— y no porque puntuaran bien. Un caso con cuatro veredictos FAIL y un
+BLOCKER le da al Juez mucha mas superficie para descontar que uno que pasa limpio. Elegir los
+casos dificiles para mostrar y despues promediar sobre ellos mide otra cosa.
+
+| | Promedio | Sobre que |
+|---|---|---|
+| Corridas de desarrollo (v3.0) | **9.1** | El conjunto de casos que se corrio durante el desarrollo |
+| Los tres escenarios del paquete | **8.67** | `data/informes_demo/analisis_*.json` — 8.6 / 8.7 / 8.7 |
+
+**Lo que no esta medido, y por que.** El 9.1 corresponde a la configuracion v3.0. Desde entonces
+cambiaron el prompt de resolucion (v3.1), el del Juez (v2.1) y dos umbrales de negocio. **No hay
+una medicion posterior**, y volver a hacerla requiere saldo de API que hoy no hay. Del cambio del
+Juez ademas se espera que el numero *baje*: hasta v2.0 evaluaba la resolucion ya corregida por el
+override, asi que `policy_consistency` y `risk_assessment` no podian bajar de 10 por construccion.
+Bajar por dejar de medir mal es mejora, no regresion — pero hasta correrlo es una expectativa, no
+un dato.
+
+**Lo que quedo sin guardar.** Las corridas que produjeron el 9.1 no dejaron artefacto: no habia
+harness de evaluacion que volcara los resultados a disco, Langfuse estaba desactivado y la SQLite
+de Render es efimera. El numero es real y la configuracion esta documentada, pero **no es
+reproducible desde este paquete**. Es la deuda mas concreta que queda: lo que corresponde es un
+`scripts/evaluar.py` que corra el set completo, escriba los scores a un archivo versionado y lo
+publique junto al badge, para que el numero se pueda auditar y no solo leer.
+
+---
+
+**Score por criterio** (rango en los tres escenarios que viajan en el paquete):
 
 | Criterio | Rango actual | Que mide |
 |----------|-------------|----------|

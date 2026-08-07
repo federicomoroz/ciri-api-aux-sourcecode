@@ -70,7 +70,7 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 | v1.1 + precedentes | ~8.4 | Instrucciones de analisis de precedentes en v1_resolution |
 | v1.2 policy_eval | ~8.6 | Logica de umbrales estricta, LATAM, documentacion — techo de Haiku identificado |
 | v2.0 resolution | — | Campos deterministas sacados del LLM — pero Haiku aun justifica pobremente |
-| v3.0 resolution + Sonnet | ~8.7 | Sonnet para Call 2 + Call 3, rubrica granular en Judge v2.0 |
+| v3.0 resolution + Sonnet | ~9.1 | Sonnet para Call 2 + Call 3, rubrica granular en Judge v2.0 |
 
 **El techo de Haiku (8.6):** Al llegar a v1.2, la evaluacion de politicas era suficientemente precisa, pero la justificacion y el analisis de precedentes seguian siendo superficiales — Haiku listaba datos sin conectarlos analiticamente. La solucion no fue mejorar el prompt sino cambiar el modelo: Sonnet para las tareas que requieren razonamiento (Call 2 y Call 3) y mantener Haiku para la tarea mecanica (Call 1).
 

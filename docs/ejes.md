@@ -142,7 +142,7 @@ Documento completo: [`mejora_continua.md`](mejora_continua.md).
 | Captura de feedback | `POST /api/feedback` — el analista corrige la resolución. Dos disparadores: el nodo `Registrar Feedback HITL` en n8n y el formulario embebido en el informe. **Los dos mandan la resolución completa y el motivo**, que es lo que permite indexar el caso; sin eso el feedback se registraba pero el precedente nunca nacía |
 | Detección de alucinaciones | `resolution.py::_detect_divergence` compara lo que propuso el modelo contra la decisión determinística **antes** de sobrescribirla, que es la única ventana en que la contradicción es observable, y la deja registrada en `guardrail_warnings`. Más `_validate_resolution` sobre los campos que el modelo sí controla (compensación, confianza) |
 | Actualización del RAG | Dos caminos: Judge ≥ 8.0 reindexa el caso como precedente, y `PUT /api/policies/{code}` reindexa la política al instante, sin deploy |
-| Versionado de prompts | Cabecera de versión + changelog en cada archivo de `llm/prompts/`; la evolución 8.2 → 8.7 del Judge score está trazada en `prompts.md` |
+| Versionado de prompts | Cabecera de versión + changelog en cada archivo de `llm/prompts/`; la evolución 8.2 → 9.1 del Judge score está trazada en `prompts.md` |
 
 El LLM-as-Judge puntúa cada resolución sobre 5 criterios (1–10). Bajo 7.0 el caso se marca
 `LOW_QUALITY` y sigue viaje con la marca puesta; sobre 8.0 se convierte en precedente.
