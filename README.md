@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-745%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-749%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -105,7 +105,7 @@ Están en orden de lectura: primero **qué** hace el circuito, después **cómo*
 
 **«el RAG»** — la cadena entera de recuperación, seguida con un caso real: qué se indexa y qué no, cómo el código arma la consulta, por qué las dos colecciones se buscan con criterios opuestos, cómo se formatea el contexto y por dónde el índice se escribe solo.
 
-**«los tests»** — qué defecto concreto no puede volver. Las tres capas, la cobertura por paquete y los ocho errores reales que hoy tienen un test que los fija. Ninguno de esos ocho rompía un import.
+**«los tests»** — qué defecto concreto no puede volver. Las tres capas, la cobertura por paquete y los doce errores reales que hoy tienen un test que los fija. Ninguno de los doce rompía un import.
 
 ### 2. El panel web
 
@@ -274,7 +274,7 @@ sólo el código que la API necesita para funcionar.
 pytest tests/unit tests/integration -q --cov=api/app --cov-fail-under=85
 ```
 
-**745 tests** en 32 archivos y **87,8% de cobertura** sobre `api/app` — el número que
+**749 tests** en 32 archivos y **88,9% de cobertura** sobre `api/app` — el número que
 reporta el CI sobre un checkout limpio, que es el reproducible: medido con un `.env` cargado
 sube unas décimas, porque se ejecutan ramas que sin configuración no corren. Los de `unit/` e `integration/` corren sin n8n ni Qdrant levantados; los 33 de
 `e2e/` llaman a la API publicada y al modelo, así que quedan fuera del CI a propósito —un test

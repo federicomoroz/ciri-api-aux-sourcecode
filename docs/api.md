@@ -398,9 +398,16 @@ puede aparecer como precedente. Se comprueba en `GET /health`.
 | `POST /api/alerts/` | Registrar un evento operativo |
 | `GET /api/alerts/` | Los más recientes, del más nuevo al más viejo |
 
-Las alertas tienen dos severidades con dos orígenes: `ERROR` son fallas que llegan desde el
-workflow de errores de n8n, y `WARN` son entradas rechazadas en el formulario. Separarlas es lo
-que evita que un tipeo entierre una caída real.
+Las alertas tienen dos severidades y tres orígenes. `ERROR`: fallas que llegan desde el workflow
+de errores de n8n, y los rechazos automáticos por BLOCKER. `WARN`: entradas rechazadas en el
+formulario, y los casos que quedan esperando a un analista. Separar las severidades es lo que
+evita que un tipeo entierre una caída real.
+
+**Las que nacen de una resolución se emiten donde la resolución nace**, no en la ruta que la
+pidió: es el único punto por el que pasan los cuatro caminos —el webhook de n8n, el pipeline
+directo, el panel y la llamada suelta—. Con la emisión en la capa de ruta, un caso resuelto por
+el pipeline directo derivaba a una persona sin dejar rastro, y el mismo caso por n8n sí lo
+dejaba. Que un HITL figure o no en el log según por dónde entró es un problema de auditoría.
 
 ```bash
 curl https://ciri-chargeback-agent.onrender.com/health

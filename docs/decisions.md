@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 764 tests pasando (731 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 749 tests pasando (716 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -423,6 +423,18 @@ ausencia de una decisión, la respuesta correcta es no tomar ninguna.
 De ahí se sigue la segunda mitad: sólo una decisión humana manda la resolución a `/api/feedback`,
 que es lo que la convierte en precedente. Un caso que nadie revisó no puede volverse el ejemplo
 con el que se resuelve el siguiente.
+
+**El mismo principio, un nivel más abajo: un veredicto que no se puede leer tampoco aprueba.**
+El parseo no traduce los veredictos inválidos a propósito —adivinar el enum más parecido sería
+decidir por el modelo—, así que llegaban crudos a `_determine_outcome`, donde un veredicto que
+decía `BLOCKED` en vez de `BLOCKER` valía exactamente lo mismo que uno que dice `PASS`. Un caso
+cripto con score 8 cuyos dos veredictos venían mal escritos salía **APPROVE, sin HITL y sin un
+solo warning**; con los enums bien escritos, el mismo caso daba REJECT + BLOCKER.
+
+Importa desde que el modo demo corre con modelos que no son Claude: los prompts piden el enum
+exacto y los modelos más chicos escriben `BLOCKED` o `FAILED`. Ahora un veredicto ilegible se
+trata igual que la lista vacía —no es evidencia favorable, es evidencia que no se pudo leer— y
+el motivo del HITL nombra la política cuyo veredicto no se entendió.
 
 **Trade-offs:**
 - (+) Ningún caso de riesgo alto se resuelve sin que una persona lo haya visto

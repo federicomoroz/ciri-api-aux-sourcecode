@@ -150,7 +150,7 @@
   <p class="eyebrow">Agente Inteligente de Contracargos · CIRI</p>
   <h1>Qué cuidan los tests</h1>
   <p class="bajada">
-    Son <b>764</b>, y lo que los distingue no es la cantidad: <b>53 de ellos no verifican
+    Son <b>749</b>, y lo que los distingue no es la cantidad: <b>53 de ellos no verifican
     código</b>. Verifican el entregable — que el workflow de n8n esté cableado, que los números
     del README sean los reales, que los informes que viajan se abran sin internet. Cosas que no
     rompen ningún import y rompen la entrega.
@@ -158,11 +158,11 @@
 
   <div class="cifras">
     <div class="cifra">
-      <b>764</b><span>funciones de test</span>
-      <p class="nota">621 unit · 74 integration · 33 E2E</p>
+      <b>749</b><span>funciones de test</span>
+      <p class="nota">639 unit · 77 integration · 33 E2E</p>
     </div>
     <div class="cifra">
-      <b style="color:var(--pasa)">87,8%</b><span>cobertura de sentencias</span>
+      <b style="color:var(--pasa)">88,9%</b><span>cobertura de sentencias</span>
       <p class="nota">el número del CI, sobre un checkout limpio. Falla por debajo de 85</p>
     </div>
     <div class="cifra">
@@ -185,7 +185,7 @@
 
     <div class="capas">
       <div class="capa">
-        <div class="capa-n"><b>621</b><span>unit</span></div>
+        <div class="capa-n"><b>639</b><span>unit</span></div>
         <div>
           <p class="capa-t">La lógica, aislada<span class="marca m-ci">en cada push</span></p>
           <p class="capa-d">
@@ -196,7 +196,7 @@
         </div>
       </div>
       <div class="capa">
-        <div class="capa-n"><b>74</b><span>integration</span></div>
+        <div class="capa-n"><b>77</b><span>integration</span></div>
         <div>
           <p class="capa-t">Las piezas juntas<span class="marca m-ci">en cada push</span></p>
           <p class="capa-d">
@@ -229,29 +229,29 @@
 
     <div class="cob">
       <div class="fila"><span class="fila-n">domain</span>
-        <div class="pista"><div class="relleno" style="width:100%"></div></div>
-        <span class="fila-v"><b>100%</b> · 323</span></div>
+        <div class="pista"><div class="relleno" style="width:100.0%"></div></div>
+        <span class="fila-v"><b>100,0%</b> · 324</span></div>
       <div class="fila"><span class="fila-n">reports</span>
-        <div class="pista"><div class="relleno" style="width:100%"></div></div>
-        <span class="fila-v"><b>100%</b> · 26</span></div>
+        <div class="pista"><div class="relleno" style="width:100.0%"></div></div>
+        <span class="fila-v"><b>100,0%</b> · 27</span></div>
       <div class="fila"><span class="fila-n">services</span>
-        <div class="pista"><div class="relleno" style="width:94.5%"></div></div>
-        <span class="fila-v"><b>94,5%</b> · 602</span></div>
+        <div class="pista"><div class="relleno" style="width:94.7%"></div></div>
+        <span class="fila-v"><b>94,7%</b> · 624</span></div>
       <div class="fila"><span class="fila-n">analysis</span>
         <div class="pista"><div class="relleno" style="width:92.1%"></div></div>
         <span class="fila-v"><b>92,1%</b> · 114</span></div>
-      <div class="fila"><span class="fila-n">data</span>
-        <div class="pista"><div class="relleno" style="width:90.8%"></div></div>
-        <span class="fila-v"><b>90,8%</b> · 295</span></div>
       <div class="fila"><span class="fila-n">llm</span>
         <div class="pista"><div class="relleno" style="width:90.5%"></div></div>
         <span class="fila-v"><b>90,5%</b> · 315</span></div>
+      <div class="fila"><span class="fila-n">data</span>
+        <div class="pista"><div class="relleno" style="width:89.5%"></div></div>
+        <span class="fila-v"><b>89,5%</b> · 295</span></div>
       <div class="fila"><span class="fila-n">rag</span>
         <div class="pista"><div class="relleno" style="width:87.2%"></div></div>
         <span class="fila-v"><b>87,2%</b> · 327</span></div>
       <div class="fila"><span class="fila-n">routes</span>
-        <div class="pista"><div class="relleno baja" style="width:78.2%"></div></div>
-        <span class="fila-v"><b>78,2%</b> · 596</span></div>
+        <div class="pista"><div class="relleno baja" style="width:82.6%"></div></div>
+        <span class="fila-v"><b>82,6%</b> · 591</span></div>
       <div class="fila"><span class="fila-n">observability</span>
         <div class="pista"><div class="relleno baja" style="width:70.3%"></div></div>
         <span class="fila-v"><b>70,3%</b> · 138</span></div>
@@ -315,6 +315,26 @@
         <span class="como">Un número sin procedencia se desmiente con un comando</span>
         <span class="quien">test_documentacion_verificable</span>
       </div>
+      <div class="reg-fila">
+        <span class="que">Un veredicto con el enum mal escrito auto-aprobaba el contracargo</span>
+        <span class="como">Cripto con score 8 y veredictos <code>BLOCKED</code>/<code>FAILED</code> → <code>APPROVE</code>, sin HITL y sin warnings</span>
+        <span class="quien">test_guardrails</span>
+      </div>
+      <div class="reg-fila">
+        <span class="que">El botón «Analizar» del panel publicado devolvía un error</span>
+        <span class="como">El guard preguntaba por claves de Anthropic y cortaba antes de mirar el modo demo</span>
+        <span class="quien">test_panel_n8n</span>
+      </div>
+      <div class="reg-fila">
+        <span class="que">Las alertas dependían de por dónde entraba el caso</span>
+        <span class="como">Un HITL por el pipeline directo no dejaba rastro; el mismo caso por n8n sí</span>
+        <span class="quien">test_guardrails</span>
+      </div>
+      <div class="reg-fila">
+        <span class="que">Umbrales y enums repetidos dentro de la plantilla del informe</span>
+        <span class="como">Un comercio suspendido pintado de verde, o un umbral que se mueve y el informe no</span>
+        <span class="quien">test_report_generator</span>
+      </div>
     </div>
   </section>
 
@@ -326,7 +346,7 @@
       volver</b>, y eso sólo se ve leyendo por qué se escribió cada test.
     </p>
     <p>
-      Los ocho de arriba tienen algo en común: <b>ninguno rompía un import</b>. El workflow se
+      Los doce de arriba tienen algo en común: <b>ninguno rompía un import</b>. El workflow se
       importaba, el informe se generaba, el panel devolvía HTML. Fallaban donde no había nadie
       mirando — en la respuesta HTTP, en el cartel, en el archivo que viaja en el ZIP. Por eso
       la suite mira el entregable y no sólo el código.

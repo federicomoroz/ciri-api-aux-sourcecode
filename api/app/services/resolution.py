@@ -654,6 +654,7 @@ class ResolutionService:
         - Algun requires_human_review → PENDING_HITL (red de seguridad)
         - Todo PASS/WARNING → APPROVE + riesgo LOW o MEDIUM
         - Sin veredictos → PENDING_HITL: no hay evidencia de nada
+        - Con veredictos ilegibles → PENDING_HITL: la evidencia no se pudo leer
         """
         if not policy_verdicts:
             # Falla cerrado. "Ninguna politica fallo" y "no se evaluo ninguna
