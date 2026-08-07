@@ -222,7 +222,11 @@ PROVEEDORES_SUGERIDOS: dict[str, dict] = {
     "gemini": {
         "nombre": "Google Gemini",
         "gratis": True,
-        "modelos": ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+        # Los alias `-latest` y no una version fija: Google deja de habilitar
+        # modelos a cuentas nuevas sin previo aviso. `gemini-2.5-flash` estaba
+        # aca y ya devuelve «no longer available to new users» — el alias sigue
+        # al modelo vigente y no se muere solo.
+        "modelos": ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-3-flash-preview"],
         "consola": "https://aistudio.google.com/apikey",
         "formato_clave": "AIza...",
     },
