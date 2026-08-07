@@ -438,8 +438,9 @@ class TestLLMManager:
         assert m.cliente("groq", "llama") is not cliente
 
     def test_cerrar_todos_no_repite(self, monkeypatch):
+        """Un mismo cliente en dos pasos se cierra una sola vez."""
         m = self._manager(monkeypatch)
-        uno = m.cliente("groq", "llama")
+        uno = m.cliente("groq", "llama", api_key="sk-visitante")
         m.cerrar_todos({"a": uno, "b": uno})
         assert uno.close.call_count == 1
 
@@ -452,3 +453,33 @@ class TestLLMManager:
         assert isinstance(m.cliente("anthropic", "claude-haiku-4-5-20251001"), AnthropicClient)
         assert isinstance(m.cliente("groq", "llama-3.3-70b-versatile"), OpenAICompatibleClient)
         m.invalidar()
+
+    def test_no_cierra_los_clientes_compartidos(self, monkeypatch):
+        """Regresion: la primera peticion andaba y la segunda moria.
+
+        Un cliente sin clave propia sale del cache y lo reusa la proxima
+        peticion. El pipeline efimero los cerraba a todos al terminar, asi que
+        el siguiente encontraba el pool muerto: «Cannot send a request, as the
+        client has been closed». No se veia desde el panel porque ahi cada
+        visitante trae su clave —esos si son efimeros— y aparecio recien cuando
+        el modo demo empezo a correr con la del servidor.
+        """
+        m = self._manager(monkeypatch)
+        compartido = m.cliente("gemini", "flash")
+        m.cerrar_todos({"a": compartido})
+        assert not compartido.close.called, "se cerro un cliente que van a reusar"
+        assert m.cliente("gemini", "flash") is compartido
+
+    def test_si_cierra_los_de_la_peticion(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        propio = m.cliente("gemini", "flash", api_key="sk-visitante")
+        m.cerrar_todos({"a": propio})
+        assert propio.close.called
+
+    def test_una_mezcla_cierra_solo_lo_que_corresponde(self, monkeypatch):
+        m = self._manager(monkeypatch)
+        compartido = m.cliente("gemini", "flash")
+        propio = m.cliente("groq", "llama", api_key="sk-visitante")
+        m.cerrar_todos({"a": compartido, "b": propio})
+        assert not compartido.close.called
+        assert propio.close.called

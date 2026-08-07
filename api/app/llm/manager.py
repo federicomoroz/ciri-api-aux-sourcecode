@@ -103,10 +103,27 @@ class LLMManager:
             except Exception:
                 logger.debug("No se pudo cerrar un cliente", exc_info=True)
 
+    def es_compartido(self, cliente: LLMClient) -> bool:
+        """Si este cliente esta en el cache y lo van a reusar otras peticiones."""
+        return any(c is cliente for c in self._cache.values())
+
     def cerrar_todos(self, clientes) -> None:
-        """Cierra un conjunto de clientes efimeros, sin repetir."""
+        """Cierra los clientes de una peticion, **salteando los compartidos**.
+
+        Un cliente construido sin clave propia sale del cache y lo reusa la
+        proxima peticion. Cerrarlo al terminar dejaba su pool de conexiones
+        inservible: la primera peticion andaba y la segunda moria con
+        «Cannot send a request, as the client has been closed». El panel no lo
+        veia porque cada visitante traia su clave —esos si son efimeros— y
+        aparecio recien cuando el modo demo empezo a correr con la clave del
+        servidor.
+
+        El llamador no tiene por que saber cual es cual: pide cerrar y aca se
+        decide.
+        """
         vistos = set()
         for cliente in (clientes or {}).values():
-            if id(cliente) not in vistos:
-                vistos.add(id(cliente))
-                self._cerrar(cliente)
+            if id(cliente) in vistos or self.es_compartido(cliente):
+                continue
+            vistos.add(id(cliente))
+            self._cerrar(cliente)

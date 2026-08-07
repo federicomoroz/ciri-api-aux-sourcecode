@@ -78,21 +78,22 @@ def _pipeline_efimero(
             report_gen=base.report_gen,
         )
     finally:
-        for cliente in set(clientes.values()):
-            cerrar = getattr(cliente, "close", None)
-            if cerrar:
-                cerrar()
+        # El manager sabe cuales son suyos y cuales de esta peticion: cerrar a
+        # mano cerraba tambien los compartidos y los dejaba inservibles.
+        modelos.manager.cerrar_todos(clientes)
 
 
 @contextmanager
 def _pipeline_demo(base: PipelineService, request: Request):
     """Pipeline con el modelo del modo demo y la clave del servidor.
 
-    Es el que hace que evaluar el sistema no requiera cuenta propia. Los
-    clientes se cierran al salir, igual que en el efimero de produccion.
+    Es el que hace que evaluar el sistema no requiera cuenta propia. Al salir se
+    le pide al manager que cierre lo que sea de esta peticion; los compartidos
+    los conserva el, porque los reusa la proxima.
     """
     tracer = request.app.state.tracer
-    clientes = request.app.state.modelos_service.clientes_demo() or {}
+    modelos = request.app.state.modelos_service
+    clientes = modelos.clientes_demo() or {}
     try:
         yield PipelineService(
             db=base.db, retriever=base.retriever, analyzer=base.analyzer,
@@ -104,10 +105,9 @@ def _pipeline_demo(base: PipelineService, request: Request):
             report_gen=base.report_gen,
         )
     finally:
-        for cliente in set(clientes.values()):
-            cerrar = getattr(cliente, "close", None)
-            if cerrar:
-                cerrar()
+        # El manager sabe cuales son suyos y cuales de esta peticion: cerrar a
+        # mano cerraba tambien los compartidos y los dejaba inservibles.
+        modelos.manager.cerrar_todos(clientes)
 
 
 def _es_falta_de_saldo(exc: Exception) -> bool:

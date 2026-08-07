@@ -120,6 +120,14 @@ class AnthropicClient:
 # Bases compatibles con OpenAI que hoy tienen free tier real. La lista es
 # comodidad, no restriccion: `CB_LLM_BASE_URL` acepta cualquier endpoint que
 # hable el mismo protocolo.
+# Lo que vale la pena reintentar: sobrecarga del proveedor y limite de tasa.
+# Un 4xx que no sea 429 —clave invalida, modelo inexistente, peticion mal
+# formada— no mejora por insistir, y reintentarlo solo quema cuota.
+RETRY_STATUS: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+RETRY_BASE_WAIT_S: float = 2.0
+RETRY_MAX_WAIT_S: float = 20.0
+
+
 PROVEEDORES: dict[str, str] = {
     "groq": "https://api.groq.com/openai/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
@@ -171,6 +179,7 @@ class OpenAICompatibleClient:
             raise ValueError("OpenAICompatibleClient necesita base_url")
         self.model = model
         self.tracer = tracer or NoOpTracer()
+        self.max_retries = max_retries
         self.client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -192,28 +201,15 @@ class OpenAICompatibleClient:
         # Se sube solo si el llamador no pidio uno propio.
         if max_tokens == LLM_DEFAULT_MAX_TOKENS:
             max_tokens = LLM_MAX_TOKENS_COMPATIBLE
-        try:
-            respuesta = self.client.post("/chat/completions", json={
-                "model": self.model,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-            })
-            respuesta.raise_for_status()
-            cuerpo = respuesta.json()
-        except httpx.HTTPStatusError as e:
-            # El cuerpo del error dice mas que el codigo: cuota agotada, modelo
-            # inexistente y clave invalida son todos 4xx.
-            logger.error(
-                "Error del proveedor (%s): %s", e.response.status_code, e.response.text[:300],
-            )
-            raise
-        except Exception as e:
-            logger.error("Unexpected LLM error: %s", e)
-            raise
+        cuerpo = self._pedir({
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        })
 
         latency_ms = (time.time() - start) * SECONDS_TO_MS
         eleccion = cuerpo["choices"][0]
@@ -240,6 +236,54 @@ class OpenAICompatibleClient:
             self.model, entrada, salida, latency_ms,
         )
         return LLMResult(text=text, input_tokens=entrada, output_tokens=salida)
+
+    def _pedir(self, carga: dict) -> dict:
+        """La peticion, reintentando lo que vale la pena reintentar.
+
+        `httpx.HTTPTransport(retries=...)` solo cubre fallos de conexion: un 503
+        llega como respuesta valida y no se reintenta. Y 503 es justo lo que
+        devuelve un free tier cuando el proveedor esta cargado — medido contra
+        Gemini: la primera llamada pasa y la siguiente rebota.
+
+        Se reintenta lo transitorio (429 y 5xx) con espera creciente, y se
+        respeta `Retry-After` cuando el proveedor lo manda. Un 4xx que no sea
+        429 no se reintenta: clave invalida, modelo inexistente o peticion mal
+        formada no mejoran por insistir.
+        """
+        ultimo: Exception | None = None
+        for intento in range(self.max_retries + 1):
+            try:
+                respuesta = self.client.post("/chat/completions", json=carga)
+                respuesta.raise_for_status()
+                return respuesta.json()
+            except httpx.HTTPStatusError as e:
+                codigo = e.response.status_code
+                # El cuerpo dice mas que el codigo: cuota agotada, modelo
+                # inexistente y clave invalida son todos 4xx.
+                logger.error(
+                    "Error del proveedor (%s): %s", codigo, e.response.text[:300],
+                )
+                if codigo not in RETRY_STATUS or intento == self.max_retries:
+                    raise
+                ultimo = e
+                espera = self._espera(e.response, intento)
+                logger.warning(
+                    "%s devolvio %s: reintento %d/%d en %.1fs",
+                    self.model, codigo, intento + 1, self.max_retries, espera,
+                )
+                time.sleep(espera)
+            except Exception as e:
+                logger.error("Unexpected LLM error: %s", e)
+                raise
+        raise ultimo   # pragma: no cover — el bucle sale por return o raise
+
+    @staticmethod
+    def _espera(respuesta: httpx.Response, intento: int) -> float:
+        """Lo que pide el proveedor, o espera creciente si no dice nada."""
+        cabecera = respuesta.headers.get("Retry-After", "")
+        if cabecera.isdigit():
+            return min(float(cabecera), RETRY_MAX_WAIT_S)
+        return min(RETRY_BASE_WAIT_S * (2 ** intento), RETRY_MAX_WAIT_S)
 
     def close(self) -> None:
         try:

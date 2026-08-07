@@ -283,6 +283,7 @@ class TestLaClaveDelVisitanteManda:
             return registro["clientes"]
 
         modelos.clientes_para.side_effect = clientes_para
+        modelos.clientes_demo.return_value = None
         monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
         monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
 
@@ -322,15 +323,22 @@ class TestLaClaveDelVisitanteManda:
 
         assert set(registro["clientes"]) == set(PASOS_DEL_PIPELINE)
 
-    def test_los_clientes_se_cierran_al_terminar(self, monkeypatch):
-        """Cada uno abre su pool de conexiones: sin cerrar, quedan colgados."""
+    def test_al_terminar_le_pide_al_manager_que_cierre(self, monkeypatch):
+        """Cada cliente abre su pool: sin cerrar, quedan colgados.
+
+        Cerrarlos es del manager y no de acá: él sabe cuáles son de esta
+        petición y cuáles comparte con las demás. Cerrar a mano cerraba también
+        los compartidos, y la petición siguiente moría con «Cannot send a
+        request, as the client has been closed» — ver `test_modelos.py`.
+        """
         registro = {}
         panel, base, peticion = self._panel_falso(monkeypatch, registro)
+        manager = peticion.app.state.modelos_service.manager
 
         with panel._pipeline_efimero(base, peticion, api_key=CLAVE_PROPIA):
             pass
 
-        assert all(c.close.called for c in registro["clientes"].values())
+        manager.cerrar_todos.assert_called_once_with(registro["clientes"])
 
 
 class TestElAnalisisGuardado:

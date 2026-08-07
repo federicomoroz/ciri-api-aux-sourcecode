@@ -169,3 +169,91 @@ class TestCuandoNoHayNadaQueRescatar:
         crudo = '[{"policy_code": "POL-X", "verdict": "TAL_VEZ"}]'
         salida = validate_llm_output(crudo, PolicyVerdictOutput, [])
         assert salida[0]["verdict"] == "TAL_VEZ", "se valido en silencio algo invalido"
+
+
+class TestReintentoDeLoTransitorio:
+    """Un free tier rechaza pedidos cuando el proveedor esta cargado.
+
+    Medido contra Gemini: la primera llamada pasa y la siguiente rebota con 503.
+    `httpx.HTTPTransport(retries=...)` no cubre eso —solo fallos de conexion—,
+    asi que el 503 llegaba como respuesta valida y tumbaba el analisis.
+    """
+
+    @staticmethod
+    def _cliente(respuestas, monkeypatch):
+        import httpx
+
+        from api.app.llm.client import OpenAICompatibleClient
+
+        c = OpenAICompatibleClient(api_key="k", model="m", base_url="https://x/v1")
+        monkeypatch.setattr("time.sleep", lambda _: None)   # sin esperas reales
+        llamadas = {"n": 0}
+
+        def post(_ruta, json=None):
+            i = min(llamadas["n"], len(respuestas) - 1)
+            llamadas["n"] += 1
+            estado, cuerpo = respuestas[i]
+            return httpx.Response(
+                estado, json=cuerpo, request=httpx.Request("POST", "https://x/v1/chat/completions"),
+            )
+
+        monkeypatch.setattr(c.client, "post", post)
+        c.llamadas = llamadas
+        return c
+
+    OK = (200, {"choices": [{"message": {"content": "hola"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+
+    def test_un_503_se_reintenta_y_sale_bien(self, monkeypatch):
+        c = self._cliente([(503, {"error": "sobrecargado"}), self.OK], monkeypatch)
+        assert c.complete("s", "u").text == "hola"
+        assert c.llamadas["n"] == 2
+
+    def test_un_429_tambien(self, monkeypatch):
+        c = self._cliente([(429, {"error": "rate limit"}), self.OK], monkeypatch)
+        assert c.complete("s", "u").text == "hola"
+
+    def test_una_clave_invalida_no_se_reintenta(self, monkeypatch):
+        """Insistir con un 401 solo quema tiempo: no va a mejorar."""
+        import httpx
+
+        c = self._cliente([(401, {"error": "clave invalida"})], monkeypatch)
+        with pytest.raises(httpx.HTTPStatusError):
+            c.complete("s", "u")
+        assert c.llamadas["n"] == 1
+
+    def test_un_modelo_inexistente_tampoco(self, monkeypatch):
+        import httpx
+
+        c = self._cliente([(404, {"error": "no such model"})], monkeypatch)
+        with pytest.raises(httpx.HTTPStatusError):
+            c.complete("s", "u")
+        assert c.llamadas["n"] == 1
+
+    def test_se_rinde_despues_del_ultimo_intento(self, monkeypatch):
+        """Reintentar para siempre convertiria una caida en un cuelgue."""
+        import httpx
+
+        c = self._cliente([(503, {"error": "x"})], monkeypatch)
+        with pytest.raises(httpx.HTTPStatusError):
+            c.complete("s", "u")
+        assert c.llamadas["n"] == c.max_retries + 1
+
+    def test_respeta_el_retry_after_del_proveedor(self):
+        import httpx
+
+        from api.app.llm.client import RETRY_MAX_WAIT_S, OpenAICompatibleClient
+
+        r = httpx.Response(429, headers={"Retry-After": "7"})
+        assert OpenAICompatibleClient._espera(r, 0) == 7.0
+        # Y no se queda esperando un numero absurdo.
+        r = httpx.Response(429, headers={"Retry-After": "9999"})
+        assert OpenAICompatibleClient._espera(r, 0) == RETRY_MAX_WAIT_S
+
+    def test_sin_retry_after_la_espera_crece(self):
+        import httpx
+
+        from api.app.llm.client import OpenAICompatibleClient
+
+        r = httpx.Response(503)
+        assert OpenAICompatibleClient._espera(r, 1) > OpenAICompatibleClient._espera(r, 0)
