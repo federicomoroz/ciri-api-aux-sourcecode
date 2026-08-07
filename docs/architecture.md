@@ -66,11 +66,18 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 ## Orquestacion Explicita con n8n
 
-**Como se hablan n8n y la API:** el diagrama **«n8n y la API»**, en la raiz de la entrega, resume la conversacion — las catorce llamadas en orden, que toca cada una y las dos veces que va al reves.
+Los cuatro diagramas de la raiz de la entrega estan numerados en orden de lectura: primero
+QUE hace el circuito, despues COMO se hablan las dos piezas.
 
-**El flujo completo, navegable:** el diagrama **«el circuito completo»**, tambien en la raiz, es una pagina autocontenida con los 39 pasos en orden de ejecucion, cada conexion trazada, el endpoint que llama cada nodo y una ficha explicativa al tocarlos. Se abre en cualquier navegador, sin conexion.
+**El flujo completo, navegable:** el diagrama **«el circuito completo»** es una pagina
+autocontenida con los 39 pasos en orden de ejecucion, cada conexion trazada, el endpoint que
+llama cada nodo y una ficha explicativa al tocarlos. Se genera desde el propio JSON del
+workflow (`tools/render_workflow_page.py`), asi que no puede quedar desfasado del flujo real.
 
-**El RAG, de punta a punta:** el diagrama **«el RAG»**, tambien en la raiz, sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
+**Como se hablan n8n y la API:** el diagrama **«n8n y la API»** resume la conversacion — las
+catorce llamadas en orden, que toca cada una y las dos veces que va al reves.
+
+**El RAG, de punta a punta:** el diagrama **«el RAG»** sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
 
 El workflow contiene **45 nodos (39 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 
@@ -822,7 +829,35 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-764 tests en 32 archivos (unit + integration + E2E):
+764 tests en 32 archivos (unit + integration + E2E) y **87,8% de cobertura** sobre `api/app`.
+Es el numero que reporta el CI sobre un checkout limpio, que es el reproducible: medido con un
+`.env` cargado sube unas decimas, porque se ejecutan ramas que sin configuracion no corren.
+El CI falla por debajo del 85%: el piso no esta para presumir un numero sino para que una
+caida se vea en el diff que la causo.
+
+| Paquete | Cobertura | Sentencias |
+|---|---|---|
+| `domain` | 100% | 323 |
+| `reports` | 100% | 26 |
+| `services` | 94,5% | 602 |
+| `analysis` | 92,1% | 114 |
+| `data` | 90,8% | 295 |
+| `llm` | 90,5% | 315 |
+| `rag` | 87,2% | 327 |
+| `routes` | 78,2% | 596 |
+| `observability` | 70,3% | 138 |
+
+Las dos mas bajas son las que mas dependen de que algo externo responda: en `routes`, las
+ramas de error de servicios caidos; en `observability`, los caminos que solo se ejecutan con
+Langfuse configurado. Cubrirlas del todo seria mockear el mundo hasta que el test deje de
+significar algo.
+
+**53 de esos tests no verifican codigo, verifican el entregable**: que el workflow de n8n este
+cableado (`test_workflows_n8n`, 33), que los numeros del README sean los reales y que los
+informes que viajan se abran sin internet (`test_documentacion_verificable`, 12), y que cada
+informe declare como se produjo (`test_informe_autodescriptivo`, 8). El diagrama
+**«los tests»** recorre los ocho defectos reales que hoy tienen un test que los fija — ninguno
+de los ocho rompia un import.
 
 ```
 tests/

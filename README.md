@@ -95,13 +95,17 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 ### 1. Ver el circuito, sin ejecutar nada
 
-Los tres archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
+Los cuatro archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
 
-**«n8n y la API»** — quién le pide qué a quién. Las catorce llamadas entre n8n y la API en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
+Están en orden de lectura: primero **qué** hace el circuito, después **cómo** se hablan las dos piezas.
 
-**«el circuito completo»** — el circuito completo. Los 39 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue.
+**«el circuito completo»** — los 39 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue. Se genera del propio JSON del workflow, así que no puede quedar desfasado del flujo real.
+
+**«n8n y la API»** — quién le pide qué a quién. Las catorce llamadas en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
 **«el RAG»** — la cadena entera de recuperación, seguida con un caso real: qué se indexa y qué no, cómo el código arma la consulta, por qué las dos colecciones se buscan con criterios opuestos, cómo se formatea el contexto y por dónde el índice se escribe solo.
+
+**«los tests»** — qué defecto concreto no puede volver. Las tres capas, la cobertura por paquete y los ocho errores reales que hoy tienen un test que los fija. Ninguno de esos ocho rompía un import.
 
 ### 2. El panel web
 
@@ -111,7 +115,13 @@ Elegís un caso del dataset, apretás **Analizar** y ves el pipeline ejecutarse 
 
 Es la forma más rápida de ver el sistema funcionando de punta a punta. No es un entregable de la consigna: es una herramienta para poder probarlo sin montar nada.
 
-El panel puede ejecutar de dos maneras: **Directo**, que corre el pipeline dentro de la API, o **a través de tu n8n**. Si elegís n8n hay que pegar la URL de tu instancia —este servidor no puede adivinar dónde corre—, y **si no responde te lo dice en vez de correr el pipeline directo por lo bajo**: un informe idéntico al real haciéndose pasar por una ejecución de la orquestación sería peor que un error.
+El panel puede ejecutar de dos maneras: **Directo**, que corre el pipeline dentro de la API, o **a través de tu n8n**. El selector arranca con las opciones de n8n **deshabilitadas**, y el orden es este:
+
+1. Pegás la URL de tu instancia en el campo **n8n URL**.
+2. La API prueba si llega — no tu navegador, porque **al webhook lo llama ella**. Una URL local no le sirve aunque a vos te abra el editor.
+3. Cuando responde, **recién ahí** se habilitan «n8n Test» y «n8n Production».
+
+Si deja de responder mientras mirás, el modo se apaga solo y vuelve a Directo: el chequeo corre cada 30 segundos. **Nunca se cae al pipeline directo por lo bajo** — un informe idéntico al real haciéndose pasar por una ejecución de la orquestación sería peor que un error.
 
 Y al revés: cuando tu n8n llama a esta API, el panel lo confirma —*"tu n8n llegó hasta esta API hace 40 segundos"*—. Es la única forma de saber, desde tu lado, que el workflow importado llega. No guarda de dónde vino: la API es pública y compartida.
 
@@ -258,10 +268,27 @@ sólo el código que la API necesita para funcionar.
 | `docs/api.md` | Los 28 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
-**Tests:** `pytest tests/ -v`. Son 764 en 32 archivos; los de `unit/` e `integration/` corren
-sin n8n ni Qdrant levantados, y se ejecutan solos en cada push junto con el lint y una
-validación de los workflows de n8n. El desglose está en
-`docs/architecture.md`.
+### Tests y cobertura
+
+```bash
+pytest tests/unit tests/integration -q --cov=api/app --cov-fail-under=85
+```
+
+**764 tests** en 32 archivos y **87,8% de cobertura** sobre `api/app` — el número que
+reporta el CI sobre un checkout limpio, que es el reproducible: medido con un `.env` cargado
+sube unas décimas, porque se ejecutan ramas que sin configuración no corren. Los de `unit/` e `integration/` corren sin n8n ni Qdrant levantados; los 33 de
+`e2e/` llaman a la API publicada y al modelo, así que quedan fuera del CI a propósito —un test
+que falla porque Render está dormido no informa nada.
+
+Cada push corre tres pasos: **lint**, **tests con piso de cobertura del 85%**, y una
+**verificación del cableado de los workflows de n8n** —que ningún Wait sea un sleep, que
+ningún nodo HTTP prometa reintentos que no tiene, que los Stop and Error tengan a dónde
+derivar—. Nada de eso rompe al importar el workflow, y todo eso rompe en producción.
+
+Lo que distingue a esta suite es que **53 de esos tests no verifican código**: que los números
+del README sean los reales, que los informes que viajan en el paquete se abran sin internet,
+que el workflow de n8n esté cableado y que ningún camino conteste `200` vacío. El diagrama **«los tests»** los recorre uno
+por uno, con el defecto concreto que cada uno fija.
 
 ---
 
