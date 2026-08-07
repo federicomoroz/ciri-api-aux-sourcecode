@@ -21,11 +21,11 @@
 
 **Orquestacion explicita con herramientas aumentadas por LLM** -- a veces llamado *Pipeline Agentico*.
 
-Esto no es un Agente de IA clasico. En un agente clasico, el LLM decide que herramientas llamar y en que orden. Aca, **n8n decide el flujo de forma explicita** -- 40 nodos (34 ejecutables + 6 sticky notes), siempre la misma secuencia, completamente auditable. El LLM solo razona sobre los datos que recibe; nunca controla el camino de ejecucion.
+Esto no es un Agente de IA clasico. En un agente clasico, el LLM decide que herramientas llamar y en que orden. Aca, **n8n decide el flujo de forma explicita** -- 45 nodos (39 ejecutables + 6 sticky notes), siempre la misma secuencia, completamente auditable. El LLM solo razona sobre los datos que recibe; nunca controla el camino de ejecucion.
 
 | | Agente IA clasico | Este sistema |
 |---|---|---|
-| Quien decide el flujo | El LLM | n8n (explicito, 40 nodos) |
+| Quien decide el flujo | El LLM | n8n (explicito, 45 nodos) |
 | Auditabilidad | Caja negra | Cada paso es un nodo visible |
 | Determinismo | No garantizado | Siempre la misma secuencia |
 | Debugging | Dificil | Nodo por nodo en el canvas |
@@ -38,7 +38,7 @@ El sistema se compone de capas con **una responsabilidad unica y claramente deli
 
 | Capa | Tecnologia | Responsabilidad |
 |---|---|---|
-| Orquestacion | n8n (40 nodos: 34 exec + 6 sticky) -- Cloud o self-hosted | QUE hacer y CUANDO -- webhook, secuenciamiento, control de flujo, visibilidad de guardrails, enrutamiento por riesgo |
+| Orquestacion | n8n (45 nodos: 39 exec + 6 sticky) -- Cloud o self-hosted | QUE hacer y CUANDO -- webhook, secuenciamiento, control de flujo, visibilidad de guardrails, enrutamiento por riesgo |
 | Logica de negocio | FastAPI (Render free tier) | COMO -- RAG retrieval, sintesis de resolucion con guardrails, feedback, auto-indexing |
 | Almacen semantico | Qdrant Cloud (free tier) | Verdad no estructurada -- politicas y casos historicos |
 | Almacen estructurado | SQLite | Verdad relacional -- transacciones, logs, feedback, audit trail |
@@ -72,7 +72,7 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 **El RAG, de punta a punta:** el diagrama **«el RAG»**, tambien en la raiz, sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
 
-El workflow contiene **40 nodos (34 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
+El workflow contiene **45 nodos (39 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 
 ```
 ETAPA 1 -- ENTRADA + CACHE (8 nodos)
@@ -124,7 +124,7 @@ este orden de prioridad: `api_base_url` del body del webhook -> variable `API_BA
 default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 
 **3 workflows n8n:**
-- `workflow_ciri_agent.json` — workflow principal (40 nodos: 34 exec + 6 sticky)
+- `workflow_ciri_agent.json` — workflow principal (45 nodos: 39 exec + 6 sticky)
 - `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL)
 - `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa)
 
@@ -506,7 +506,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Contexto:** Necesitabamos una capa de orquestacion que ofreciera un flujo visual y auditable para stakeholders no tecnicos, y que garantizara un orden de ejecucion determinista para cada investigacion de contracargo.
 
-**Decision:** Usar n8n con 40 nodos (34 ejecutables + 6 sticky notes) -- sin nodo AI Agent, sin tool calling decidido por LLM. Cada paso es un nodo visible. Los nodos nativos de n8n (IF, Switch, Merge, Wait) manejan unicamente el control de flujo; toda la logica de negocio se resuelve por HTTP contra FastAPI. Tanto el LLM de sintesis (`/api/analyze/resolve`) como el Juez (`/api/analyze/judge`) se llaman via FastAPI -- todas las interacciones con LLMs centralizadas con versionado de prompts, manejo de errores y observabilidad Langfuse consistente. Un nodo `Responder -- Reporte` unificado sirve todos los caminos de respuesta. Errores propagan a un Error Handler workflow separado via nodos `stopAndError`.
+**Decision:** Usar n8n con 45 nodos (39 ejecutables + 6 sticky notes) -- sin nodo AI Agent, sin tool calling decidido por LLM. Cada paso es un nodo visible. Los nodos nativos de n8n (IF, Switch, Merge, Wait) manejan unicamente el control de flujo; toda la logica de negocio se resuelve por HTTP contra FastAPI. Tanto el LLM de sintesis (`/api/analyze/resolve`) como el Juez (`/api/analyze/judge`) se llaman via FastAPI -- todas las interacciones con LLMs centralizadas con versionado de prompts, manejo de errores y observabilidad Langfuse consistente. Un nodo `Responder -- Reporte` unificado sirve todos los caminos de respuesta. Errores propagan a un Error Handler workflow separado via nodos `stopAndError`.
 
 **Consecuencias:**
 - Cada investigacion ejecuta exactamente los mismos pasos en el mismo orden, siempre
@@ -734,7 +734,7 @@ quest_ML/
         db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
-    workflow_ciri_agent.json  # Workflow principal (40 nodos: 34 exec + 6 sticky)
+    workflow_ciri_agent.json  # Workflow principal (45 nodos: 39 exec + 6 sticky)
     workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/

@@ -934,8 +934,8 @@
     {
       "parameters": {
         "resume": "form",
-        "formTitle": "CIRI — Aprobación de contracargo de riesgo alto",
-        "formDescription": "Este caso quedó detenido esperando la decisión de un analista. Sin respuesta dentro de las 24 horas, el caso NO se aprueba: sale marcado como pendiente y queda registrada la alerta.",
+        "formTitle": "=Aprobacion requerida — {{ $('Preparar Informe').first().json.resolution.transaction_id }}",
+        "formDescription": "=El analisis corrio entero —politicas, precedentes, guardrails y juez— y quedo en riesgo {{ $('Preparar Informe').first().json.resolution.risk_level }}. {{ $('Preparar Informe').first().json.resolution.hitl_reason || 'Al menos una politica fallo.' }} El sistema no cierra un caso asi por su cuenta. Al enviar esta decision se genera el informe completo. Sin respuesta en 24 horas el caso NO se aprueba: sale marcado como pendiente y queda registrada la alerta.",
         "formFields": {
           "values": [
             {
@@ -1078,6 +1078,113 @@
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aprobacion requerida — {{ $('Preparar Informe').first().json.resolution.transaction_id }}</title><style>body{margin:0;font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;background:#f9fafb;color:#1f2937;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.c{background:#fff;border-radius:16px;padding:32px;max-width:560px;box-shadow:0 10px 15px -3px rgb(0 0 0/.1)}.t{font-size:.75rem;letter-spacing:.05em;text-transform:uppercase;color:#c2410c;font-weight:700}h1{font-size:1.75rem;margin:.4rem 0 0}p{line-height:1.6;color:#4b5563;margin:.9rem 0 0}.m{margin-top:1.2rem;padding:12px 16px;background:#fff7ed;border-left:4px solid #fb923c;border-radius:8px;font-size:.9rem;color:#9a3412}a.b{display:inline-block;margin-top:1.4rem;background:#ea580c;color:#fff;padding:12px 24px;border-radius:9999px;font-weight:700;text-decoration:none}.s{margin-top:1.1rem;font-size:.8rem;color:#6b7280}</style></head><body><div class=\"c\"><p class=\"t\">Agente Inteligente de Contracargos · CIRI</p><h1>{{ $('Preparar Informe').first().json.resolution.transaction_id }} necesita una decision humana</h1><p>El analisis corrio entero —politicas, precedentes, guardrails y juez— y quedo en riesgo <b>{{ $('Preparar Informe').first().json.resolution.risk_level }}</b>. El sistema no cierra un caso asi por su cuenta.</p><div class=\"m\">{{ $('Preparar Informe').first().json.resolution.hitl_reason || 'Al menos una politica fallo: hace falta que un analista revise la evidencia.' }}</div><a class=\"b\" href=\"{{ $execution.resumeFormUrl }}\">Abrir el formulario de aprobacion</a><p class=\"s\">Al enviarlo se recibe el informe completo. Sin respuesta en 24 horas el caso <b>no</b> se aprueba: sale marcado como pendiente.</p></div></body></html>",
+        "options": {
+          "responseCode": 303,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              },
+              {
+                "name": "Location",
+                "value": "={{ $execution.resumeFormUrl }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "c3d5a1b7-2f48-4e6c-9a10-7b52ed389f41",
+      "name": "Responder — Requiere Aprobación",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        89408,
+        32992
+      ],
+      "notesInFlow": true,
+      "notes": "303 al formulario: se abre solo. El cuerpo queda para quien no redirija."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"El transaction_id no tiene el formato TXN-XXXXX\", transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "d41f9a02-8c17-4b3e-9f65-1e0a7c2d8b93",
+      "name": "Responder — Formato Inválido",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        84816,
+        32752
+      ],
+      "notesInFlow": true,
+      "notes": "400: lo mando mal quien llamo, no fallo el sistema."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: (($json.error?.message || '').includes('404') ? 'La transaccion no existe en la base' : 'No se pudo leer la transaccion: la API no respondio'), transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "options": {
+          "responseCode": "={{ ($json.error?.message || '').includes('404') ? 404 : 503 }}"
+        }
+      },
+      "id": "e52a0b13-9d28-4c4f-8071-2f1b8d3e9ca4",
+      "name": "Responder — API No Disponible",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        85888,
+        33456
+      ],
+      "notesInFlow": true,
+      "notes": "404 si el caso no existe, 503 si la API no respondio (cold start de Render)."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"El analisis con el modelo fallo\", transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "f63b1c24-0e39-4d50-9182-3a2c9e4f0db5",
+      "name": "Responder — Falla del Análisis",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        88304,
+        33280
+      ],
+      "notesInFlow": true,
+      "notes": "502: fallo un servicio de atras, no la peticion."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: \"El analisis termino pero no se pudo generar el informe HTML\", transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "a74c2d35-1f40-4e61-a293-4b3d0f5a1ec6",
+      "name": "Responder — Falla del Informe",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        90128,
+        32672
+      ],
+      "notesInFlow": true,
+      "notes": "502: el caso se resolvio; lo que fallo fue el render."
     }
   ],
   "pinData": {},
@@ -1104,7 +1211,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — TXN",
+            "node": "Responder — Formato Inválido",
             "type": "main",
             "index": 0
           }
@@ -1158,7 +1265,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — API",
+            "node": "Responder — API No Disponible",
             "type": "main",
             "index": 0
           }
@@ -1242,7 +1349,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — Análisis",
+            "node": "Responder — Falla del Análisis",
             "type": "main",
             "index": 0
           }
@@ -1260,7 +1367,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — Análisis",
+            "node": "Responder — Falla del Análisis",
             "type": "main",
             "index": 0
           }
@@ -1300,7 +1407,7 @@
         ],
         [
           {
-            "node": "Propagar → Error Handler — Informe",
+            "node": "Responder — Falla del Informe",
             "type": "main",
             "index": 0
           }
@@ -1504,7 +1611,62 @@
       "main": [
         [
           {
+            "node": "Responder — Requiere Aprobación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder — Requiere Aprobación": {
+      "main": [
+        [
+          {
             "node": "Wait — Aprobación HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder — Formato Inválido": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — TXN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder — API No Disponible": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder — Falla del Análisis": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — Análisis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder — Falla del Informe": {
+      "main": [
+        [
+          {
+            "node": "Propagar → Error Handler — Informe",
             "type": "main",
             "index": 0
           }

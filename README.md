@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-666%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-711%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -126,7 +126,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 
 | Archivo | Qué es |
 |---|---|
-| `workflow_ciri_agent.json` | El orquestador: 40 nodos, 34 ejecutables |
+| `workflow_ciri_agent.json` | El orquestador: 45 nodos, 39 ejecutables |
 | `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 29 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 

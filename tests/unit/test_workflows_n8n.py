@@ -138,11 +138,25 @@ class TestManejoDeErrores:
         )
 
     def test_un_fallo_al_generar_el_informe_no_responde_200_vacio(self):
+        """Este test se llamaba asi y verificaba otra cosa.
+
+        Comprobaba que la rama de error fuera al Error Handler, que es cierto y
+        no alcanza: el Error Handler es otra ejecucion y no contesta la peticion
+        original. La rama derivaba bien y el que llamaba seguia recibiendo
+        `200 | 0 bytes`. Ahora se verifica lo que el nombre promete.
+        """
         wf = cargar(ORQUESTADOR)
         assert nodo(wf, "Generar Reporte")["onError"] == "continueErrorOutput"
         ramas = salidas(wf, "Generar Reporte")
         assert len(ramas) == 2 and ramas[1], "la rama de error no va a ningun lado"
-        assert "Error Handler" in ramas[1][0]
+
+        respuesta = nodo(wf, ramas[1][0])
+        assert respuesta["type"] == "n8n-nodes-base.respondToWebhook", (
+            f"la rama de error entra a {ramas[1][0]}: nadie contesta la peticion"
+        )
+        assert respuesta["parameters"]["options"]["responseCode"] != 200
+        # Y despues sigue derivando, que era lo que este test ya cuidaba.
+        assert "Error Handler" in salidas(wf, respuesta["name"])[0][0]
 
     @pytest.mark.parametrize("archivo", TODOS)
     def test_no_hay_nodos_colgados_de_una_pantalla_de_cierre(self, archivo):
@@ -217,7 +231,7 @@ class TestDerivacion:
         primera = sw["parameters"]["rules"]["values"][0]["conditions"]["conditions"][0]
         assert "requires_hitl" in primera["leftValue"]
         assert salidas(wf, "Switch — Derivación")[0] == ["Avisar — Formulario HITL"]
-        assert salidas(wf, "Avisar — Formulario HITL")[0] == ["Wait — Aprobación HITL"]
+        assert salidas(wf, "Avisar — Formulario HITL")[0] == ["Responder — Requiere Aprobación"]
 
     @pytest.mark.parametrize("archivo", TODOS)
     def test_toda_expresion_de_url_empieza_con_igual(self, archivo):
@@ -242,9 +256,15 @@ class TestElFormularioDeAprobacionSeAnuncia:
     """
 
     def test_el_aviso_va_antes_del_wait(self):
-        """Despues del Wait la URL ya no se puede leer: el orden es el arreglo."""
+        """Despues del Wait la URL ya no se puede leer: el orden es el arreglo.
+
+        Los dos que la usan —la alerta y la respuesta al que llamo— tienen que
+        estar antes.
+        """
         wf = cargar(ORQUESTADOR)
-        assert salidas(wf, "Avisar — Formulario HITL")[0] == ["Wait — Aprobación HITL"]
+        cadena = ["Avisar — Formulario HITL", "Responder — Requiere Aprobación"]
+        for actual, siguiente in zip(cadena, cadena[1:] + ["Wait — Aprobación HITL"]):
+            assert salidas(wf, actual)[0] == [siguiente]
 
     def test_manda_la_url_del_formulario(self):
         cuerpo = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")["parameters"]["jsonBody"]
@@ -309,3 +329,123 @@ class TestElFormularioDelWaitSeSirve:
         wait = nodo(wf, "Wait — Aprobación HITL")
         assert wait["parameters"]["responseMode"] == "responseNode"
         assert "Generar Reporte" in salidas(wf, "Procesar Respuesta HITL")[0]
+
+
+class TestElFormularioSeAbreSolo:
+    """Que el link exista no alcanza: hay que llegar.
+
+    Primero no se publicaba en ningun lado. Despues se publicaba en una alerta,
+    que habia que ir a buscar. Despues en una pagina con un boton, que habia que
+    apretar. Cada paso dejaba el ultimo tramo a mano.
+    """
+
+    def test_el_formulario_dice_de_que_caso_es(self):
+        """Al redirigir, el formulario es lo PRIMERO que ve el analista.
+
+        Antes el contexto lo daba la pagina intermedia. Un formulario que pide
+        aprobar o rechazar sin decir que transaccion es, es una pregunta que no
+        se puede contestar.
+        """
+        wait = nodo(cargar(ORQUESTADOR), "Wait — Aprobación HITL")
+        assert "transaction_id" in wait["parameters"]["formTitle"]
+        descripcion = wait["parameters"]["formDescription"]
+        assert "risk_level" in descripcion and "hitl_reason" in descripcion
+
+    def test_el_formulario_sigue_avisando_que_vence(self):
+        wait = nodo(cargar(ORQUESTADOR), "Wait — Aprobación HITL")
+        assert "24 horas" in wait["parameters"]["formDescription"]
+        assert wait["parameters"]["limitWaitTime"] is True
+
+
+class TestNingunCaminoContestaVacio:
+    """Un 200 sin cuerpo es indistinguible de un exito, y eso pasaba mucho.
+
+    El webhook usa `responseMode: responseNode`: contesta lo que diga un nodo
+    `Respond to Webhook`, y si ninguno corre, n8n responde 200 con el cuerpo
+    vacio. Cada `stopAndError` cortaba la ejecucion antes de llegar a uno, asi
+    que un `transaction_id` mal formado, una transaccion inexistente y la API
+    caida se veian igual que un informe generado. Medido con curl: los tres
+    devolvian `HTTP 200 | 0 bytes`.
+
+    Lo mismo pasaba con el caso que necesita una persona: quedaba esperando y el
+    que llamo no se enteraba ni de eso ni de donde estaba el formulario.
+    """
+
+    STOP = "n8n-nodes-base.stopAndError"
+    RESPOND = "n8n-nodes-base.respondToWebhook"
+
+    @staticmethod
+    def _entradas(wf, nombre):
+        return [
+            origen for origen, salidas in wf["connections"].items()
+            for salida in salidas.get("main", [])
+            for c in (salida or []) if c["node"] == nombre
+        ]
+
+    @pytest.mark.parametrize("archivo", TODOS)
+    def test_todo_final_de_error_contesta_antes_de_cortar(self, archivo):
+        wf = cargar(archivo)
+        tipos = {n["name"]: n["type"] for n in wf["nodes"]}
+        if not any(t == "n8n-nodes-base.webhook" for t in tipos.values()):
+            pytest.skip("sin webhook no hay a quien contestarle")
+        mudos = [
+            n["name"] for n in wf["nodes"] if n["type"] == self.STOP
+            and not any(tipos.get(e) == self.RESPOND for e in self._entradas(wf, n["name"]))
+        ]
+        assert not mudos, f"cortan la ejecucion sin contestar: {mudos}"
+
+    def test_cada_falla_tiene_su_codigo(self):
+        """Un 400 y un 503 no son lo mismo: uno lo arregla quien llama."""
+        wf = cargar(ORQUESTADOR)
+        codigos = {
+            n["name"]: n["parameters"]["options"].get("responseCode")
+            for n in wf["nodes"] if n["type"] == self.RESPOND
+        }
+        assert codigos["Responder — Formato Inválido"] == 400
+        # Este es una expresion: 404 si el caso no existe, 503 si la API no
+        # respondio. Quien llama actua distinto — corrige el id, o reintenta.
+        assert "404" in str(codigos["Responder — API No Disponible"])
+        assert "503" in str(codigos["Responder — API No Disponible"])
+        assert codigos["Responder — Falla del Análisis"] == 502
+        assert codigos["Responder — Falla del Informe"] == 502
+        fijos = [c for c in codigos.values() if isinstance(c, int)]
+        assert all(200 <= c < 600 for c in fijos)
+
+    def test_ninguna_falla_contesta_200(self):
+        """Que el informe salga bien es lo unico que merece un 200."""
+        wf = cargar(ORQUESTADOR)
+        for n in wf["nodes"]:
+            if n["type"] != self.RESPOND or n["name"] == "Responder — Reporte":
+                continue
+            assert str(n["parameters"]["options"]["responseCode"]) != "200", n["name"]
+
+    def test_el_caso_que_espera_una_persona_va_derecho_al_formulario(self):
+        """Y se entera ANTES del Wait, que es cuando todavia hay a quien decirselo.
+
+        Con una pagina intermedia el formulario seguia sin abrirse: habia que
+        apretar un boton. Un 303 con `Location` lo abre solo.
+        """
+        wf = cargar(ORQUESTADOR)
+        assert salidas(wf, "Responder — Requiere Aprobación")[0] == ["Wait — Aprobación HITL"]
+        n = nodo(wf, "Responder — Requiere Aprobación")
+        assert n["parameters"]["options"]["responseCode"] == 303
+        cabeceras = {
+            e["name"].lower(): e["value"]
+            for e in n["parameters"]["options"]["responseHeaders"]["entries"]
+        }
+        assert "$execution.resumeFormUrl" in cabeceras.get("location", ""), (
+            "sin Location el 303 no lleva a ningun lado"
+        )
+        cuerpo = n["parameters"]["responseBody"]
+        assert "$execution.resumeFormUrl" in cuerpo, (
+            "la respuesta no lleva el link al formulario: hay que ir a buscarlo a las alertas"
+        )
+        # `$json` ahi es la respuesta de /api/alerts/, que no sabe nada del caso:
+        # la pagina salia con el id y el nivel de riesgo en blanco.
+        assert "$json.resolution" not in cuerpo, "lee la resolucion del nodo equivocado"
+        assert "$('Preparar Informe').first().json.resolution" in cuerpo
+
+    def test_el_aviso_de_aprobacion_no_depende_de_internet(self):
+        """Se sirve desde n8n, que ademas lo sandboxea: un CDN no cargaria."""
+        cuerpo = nodo(cargar(ORQUESTADOR), "Responder — Requiere Aprobación")["parameters"]["responseBody"]
+        assert "http://" not in cuerpo and "https://" not in cuerpo
