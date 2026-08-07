@@ -180,3 +180,38 @@ def test_el_readme_anuncia_el_riesgo_que_cada_caso_tiene():
         assert not (otros & set(fila.split())), (
             f"{txn} es {riesgo} y el README anuncia otro nivel: {fila.strip()}"
         )
+
+
+class TestLosInformesQueViajanSeAbrenSolos:
+    """Los HTML del entregable se abren desde el disco, no desde un servidor.
+
+    Traian los estilos del CDN de Tailwind. Quien reciba el ZIP puede abrirlos
+    sin red, o en una corporativa que bloquee CDNs, y ver los datos apilados en
+    texto plano. Son registros de corridas anteriores: se les cambio de donde
+    salen los estilos, no lo que dicen.
+    """
+
+    # `entregables/` no se versiona: en un clon limpio quedan los de
+    # `data/informes_demo`, que son los mismos que sirve el modo demo.
+    ENTREGADOS = sorted(
+        list(INFORMES.glob("*.html"))
+        + list((RAIZ / "entregables" / "Codigo" / "docs" / "examples").glob("*.html"))
+    )
+
+    def test_hay_informes_que_revisar(self):
+        """Si el glob deja de encontrarlos, este archivo pasa sin probar nada."""
+        assert self.ENTREGADOS, "no se encontro ningun informe entregado"
+
+    @pytest.mark.parametrize("informe", ENTREGADOS, ids=lambda p: p.name)
+    def test_no_pide_nada_a_la_red(self, informe):
+        t = informe.read_text(encoding="utf-8")
+        externos = [
+            u for u in re.findall(r'<(?:script|link|img|iframe)[^>]*\s(?:src|href)=["\']([^"\']+)', t)
+            if u.startswith(("http://", "https://", "//"))
+        ]
+        assert not externos, f"{informe.name} no se ve sin internet: {externos}"
+
+    @pytest.mark.parametrize("informe", ENTREGADOS, ids=lambda p: p.name)
+    def test_trae_sus_estilos_adentro(self, informe):
+        t = informe.read_text(encoding="utf-8")
+        assert ".rounded-2xl" in t and ".shadow-lg" in t
