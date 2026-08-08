@@ -6,6 +6,7 @@ Extracted from QdrantRetriever to keep retrieval and presentation concerns separ
 """
 
 from ..domain.constants import DISPLAY_FALLBACK, SIMILAR_CASES_SCORE_THRESHOLD
+from ..domain.decision import habilitada_para_bloquear
 
 # Synonym groups for mechanical motivo matching.
 # Each group is a (label, keywords) tuple — label is used in the summary
@@ -74,13 +75,22 @@ def annotate_by_motivo(
 
 
 def format_policies_for_prompt(policies: list[dict]) -> str:
-    """Format policies as numbered Markdown sections for LLM context."""
+    """Format policies as numbered Markdown sections for LLM context.
+
+    Cada politica llega marcada segun pueda emitir un BLOCKER o no. Ese dato
+    sale de la politica misma —`puede_bloquear`, que viaja en la carga de
+    Qdrant— y no de una lista de codigos: es lo que le permite al prompt pedir
+    «solo las marcadas pueden bloquear» en vez de nombrar POL-EXC-003 a mano.
+    Nombrarla a mano era la fuga del principio central: editarla por la API
+    para que dejara de bloquear no cambiaba lo que el prompt forzaba.
+    """
     if not policies:
         return "(No se encontraron politicas relevantes)"
     lines = []
     for i, p in enumerate(policies, 1):
         score_pct = int(p.get("score", 0) * 100)
-        lines.append(f"### Politica {i} (relevancia: {score_pct}%)")
+        marca = " [PUEDE BLOQUEAR]" if habilitada_para_bloquear(p) else ""
+        lines.append(f"### Politica {i}{marca} (relevancia: {score_pct}%)")
         lines.append(f"- Codigo: {p.get('code', DISPLAY_FALLBACK)}")
         lines.append(f"- Categoria: {p.get('category', DISPLAY_FALLBACK)}")
         lines.append(f"- Nombre: {p.get('name', DISPLAY_FALLBACK)}")

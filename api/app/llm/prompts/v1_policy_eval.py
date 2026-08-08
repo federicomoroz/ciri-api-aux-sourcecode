@@ -1,3 +1,4 @@
+# PROMPT VERSION: v1.4 | DATE: 2026-08 | CHANGES: Quien puede bloquear lo dice la marca [PUEDE BLOQUEAR] de cada politica, no su codigo escrito en el texto
 # PROMPT VERSION: v1.3 | DATE: 2026-08 | CHANGES: La lista de paises LATAM sale de domain.enums, no del texto
 # PURPOSE: Evaluate a transaction against all retrieved policies
 # OUTPUT: JSON array of PolicyVerdict objects
@@ -13,8 +14,8 @@ Veredictos posibles para cada politica:
 - PASS: la transaccion cumple esta politica (la condicion de violacion NO se cumple)
 - FAIL: la transaccion viola esta politica (la condicion de violacion SI se cumple)
 - BLOCKER: RESERVADO EXCLUSIVAMENTE para casos donde la transaccion es TECNICAMENTE IRREVERSIBLE (ej: cripto). Un comercio suspendido o un cliente riesgoso NO son BLOCKER — son FAIL con requires_human_review=true
-- WARNING: SOLO cuando FALTA un dato necesario para evaluar la condicion. Ejemplo: POL-FRD-002 requiere "3+ paises en 24h" — si hay 4 paises pero NO hay timestamps → WARNING, reasoning="4 paises (MEX,USA,CHL,PER) cumplen condicion geografica, pero sin timestamps no se puede verificar ventana de 24h"
-- NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion. Ejemplo: POL-EXC-002 VIP cuando el cliente NO es VIP
+- WARNING: SOLO cuando FALTA un dato necesario para evaluar la condicion. Ejemplo: una politica que requiere "3+ paises en 24h" — si hay 4 paises pero NO hay timestamps → WARNING, reasoning="4 paises (MEX,USA,CHL,PER) cumplen condicion geografica, pero sin timestamps no se puede verificar ventana de 24h"
+- NOT_APPLICABLE: la politica genuinamente no aplica a esta transaccion. Ejemplo: una politica de trato VIP cuando el cliente NO es VIP
 
 REGLAS ESTRICTAS:
 1. UMBRALES — LOGICA MATEMATICA ESTRICTA:
@@ -26,13 +27,16 @@ REGLAS ESTRICTAS:
    - CONTEO: total_chargebacks en HISTORIAL DEL CLIENTE = conteo PREVIO (sin incluir el caso actual). Reporta solo el valor del historial, no sumes el caso actual. Ejemplo: "total_chargebacks=2 (previos), umbral >3, 2 no supera >3 → PASS".
    - VENTANA TEMPORAL: Si la politica especifica una ventana (ej: "en 6 meses", "en 24h"), verifica si hay datos de fechas/timestamps para confirmar que los eventos estan dentro de esa ventana. Si NO hay timestamps, marca como WARNING: "N eventos cumplen condicion numerica pero sin timestamps no se puede confirmar ventana de [periodo]".
    - Evalua SOLO contra el criterio EXPLICITO de la politica. No inventes criterios alternativos (ej: no uses "CB rate" o "patron de reincidencia" si la politica dice "mas de N chargebacks").
-2. POL-EXC-003 aplica SIEMPRE como BLOCKER cuando el metodo de pago es "Cripto".
-3. POL-FRD-001 aplica como FAIL o BLOCKER cuando el score antifraude es inferior al umbral.
+2. QUIEN PUEDE BLOQUEAR — LO DICE LA POLITICA, NO SU CODIGO:
+   - Solo las politicas marcadas [PUEDE BLOQUEAR] en su encabezado pueden recibir el veredicto BLOCKER. Esa marca sale de la politica misma; si no esta, la politica NO puede bloquear por mas irreversible que parezca el caso.
+   - Una politica marcada recibe BLOCKER solo si ADEMAS su condicion se cumple y la transaccion es tecnicamente irreversible. Marcada + condicion que no se cumple = PASS.
+   - Una politica NO marcada cuya condicion se cumple es FAIL, con requires_human_review=true si el caso necesita una persona. Nunca BLOCKER.
+3. Las condiciones —umbrales, metodos de pago, plazos— se leen de la descripcion de cada politica. No apliques una condicion que la politica no diga, ni recuerdes reglas de politicas que no estan en esta lista.
 4. Un BLOCKER significa que la resolucion final DEBE rechazar el contracargo.
 5. Evalua TODAS las politicas proporcionadas. No omitas ninguna.
 6. USA TODOS LOS DATOS DISPONIBLES: transaccion, perfil de riesgo del comercio e historial del cliente. Si una politica requiere datos del comercio (cb_ratio, flags) o del cliente (total_chargebacks, countries), verificalos en las secciones correspondientes.
-7. NOT_APPLICABLE se usa SOLO cuando la politica genuinamente no aplica (ej: POL-EXC-002 VIP cuando el cliente NO es VIP). Si los datos existen para evaluar la politica, evaluala como PASS, FAIL o WARNING — no uses NOT_APPLICABLE.
-   IMPORTANTE: Si un comercio esta suspendido, las politicas de plazos de respuesta del comercio (ej: POL-CB-003) SIGUEN SIENDO RELEVANTES para el procesamiento del chargeback. No marques como NOT_APPLICABLE — evalua si el plazo aplica o usa WARNING con nota sobre la suspension.
+7. NOT_APPLICABLE se usa SOLO cuando la politica genuinamente no aplica (ej: una politica de trato VIP cuando el cliente NO es VIP). Si los datos existen para evaluar la politica, evaluala como PASS, FAIL o WARNING — no uses NOT_APPLICABLE.
+   IMPORTANTE: Si un comercio esta suspendido, las politicas de plazos de respuesta del comercio SIGUEN SIENDO RELEVANTES para el procesamiento del chargeback. No marques como NOT_APPLICABLE — evalua si el plazo aplica o usa WARNING con nota sobre la suspension.
 8. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
 9. DETERMINACION DE REGION (LATAM vs no-LATAM):
    - Distingue entre PAIS DE LA TRANSACCION (campo "country") y PAIS DEL COMERCIO (puede diferir si el merchant es internacional).
@@ -57,11 +61,24 @@ Datos: total_chargebacks=2 (previos, sin contar actual). Total incluyendo actual
 Respuesta correcta:
 {"policy_code":"POL-CB-005","verdict":"PASS","reasoning":"total_chargebacks=2 previos + 1 actual = 3 total. Umbral es >3 (mas de 3). 3 no supera >3 → politica no violada. Nota: cercano al umbral, monitorear en futuros casos.","requires_human_review":false}
 
-EJEMPLO 2 — Cripto → BLOCKER:
+EJEMPLO 2 — La marca habilita, la condicion decide:
 Transaccion: {"payment_method":"Cripto","fraud_score":12,"amount_usd":500.00,"country":"COL"}
-Politica: POL-EXC-003 — Criptomonedas: BLOCKER para todo contracargo con metodo de pago Cripto.
+Politica 4 [PUEDE BLOQUEAR] — POL-EXC-003, Criptomonedas: los pagos en cripto son irreversibles.
 Respuesta correcta:
-{"policy_code":"POL-EXC-003","verdict":"BLOCKER","reasoning":"Metodo de pago es Cripto (irreversible). BLOCKER automatico segun POL-EXC-003.","requires_human_review":false}
+{"policy_code":"POL-EXC-003","verdict":"BLOCKER","reasoning":"payment_method='Cripto' cumple la condicion de la politica, y la politica esta habilitada para bloquear. Pago irreversible.","requires_human_review":false}
+
+EJEMPLO 2b — La misma politica, sin que se cumpla la condicion:
+Transaccion: {"payment_method":"Tarjeta de credito","fraud_score":12}
+Politica 4 [PUEDE BLOQUEAR] — POL-EXC-003, Criptomonedas: los pagos en cripto son irreversibles.
+Respuesta correcta:
+{"policy_code":"POL-EXC-003","verdict":"NOT_APPLICABLE","reasoning":"payment_method='Tarjeta de credito': la condicion de la politica no se cumple. Estar habilitada para bloquear no la hace aplicable.","requires_human_review":false}
+
+EJEMPLO 2c — Condicion cumplida, pero SIN la marca:
+Transaccion: {"merchant":"TiendaX"}
+Politica 7 — POL-CB-002, Comercios suspendidos: no operan hasta regularizar.
+Perfil del comercio: {"status":"suspendido"}
+Respuesta correcta:
+{"policy_code":"POL-CB-002","verdict":"FAIL","reasoning":"El comercio esta suspendido y la condicion se cumple, pero la politica no esta habilitada para bloquear: una suspension es reversible, no tecnicamente irreversible. Queda para revision humana.","requires_human_review":true}
 
 EJEMPLO 3 — Region por country, no por merchant:
 Transaccion: {"merchant":"PayPal Store","country":"PER"}

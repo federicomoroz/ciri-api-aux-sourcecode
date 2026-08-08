@@ -63,14 +63,24 @@ def politicas_que_pueden_bloquear(policies: list[dict]) -> frozenset[str]:
     la columna existiera—, se cae a la semilla del dataset. Reindexar la
     politica, o editarla por la API, la trae al dia.
     """
-    codigos = {
-        p.get("code") for p in policies
-        if p.get("puede_bloquear") in (1, True, "1", "true")
-    }
-    sin_dato = {
-        p.get("code") for p in policies if "puede_bloquear" not in p
-    } & POLICY_SEED_BLOQUEANTES
-    return frozenset(codigos | sin_dato) - {None}
+    return frozenset(
+        p.get("code") for p in policies if habilitada_para_bloquear(p)
+    ) - {None}
+
+
+def habilitada_para_bloquear(policy: dict) -> bool:
+    """Si esta politica, sola, tiene permitido emitir un BLOCKER.
+
+    El mismo criterio que usa el conjunto de arriba, con una politica por vez:
+    lo necesita el formateador del prompt, para poder decirle al modelo cuales
+    pueden bloquear en vez de nombrarlas por codigo. Que sea una sola funcion
+    es lo que evita que el prompt y la degradacion posterior discrepen — si
+    discreparan, el modelo emitiria un BLOCKER que el codigo despues degrada,
+    y el veredicto quedaria distinto de lo que el prompt pidio.
+    """
+    if "puede_bloquear" in policy:
+        return policy["puede_bloquear"] in (1, True, "1", "true")
+    return policy.get("code") in POLICY_SEED_BLOQUEANTES
 
 
 def degradar_blockers_no_habilitados(verdicts: list[dict], policies: list[dict]) -> list[dict]:

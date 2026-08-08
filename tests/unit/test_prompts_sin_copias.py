@@ -62,3 +62,69 @@ class TestElUmbralDelJuezSaleDeLaConstante:
 
     def test_no_quedo_el_marcador_sin_reemplazar(self):
         assert "{umbral}" not in prompts.v1_judge.SYSTEM
+
+
+class TestNingunPromptDictaLoQueUnaPoliticaHace:
+    """Las politicas son datos: el prompt no puede traer su semantica escrita.
+
+    Hasta v1.3, dos reglas del system prompt decian «POL-EXC-003 aplica SIEMPRE
+    como BLOCKER cuando el metodo de pago es Cripto» y otra tanto para
+    POL-FRD-001. Editar esas politicas por la API —que es lo que el proyecto
+    ofrece como su principio central— no cambiaba lo que el prompt forzaba, y
+    borrarlas dejaba al prompt citando una politica inexistente.
+
+    Hoy quien puede bloquear se lo dice la marca `[PUEDE BLOQUEAR]` que el
+    formateador pone leyendo `puede_bloquear` de la politica. Los ejemplos si
+    pueden nombrar codigos: muestran la politica con su texto al lado, asi que
+    ensenian la forma del razonamiento y no una regla sobre un codigo.
+    """
+
+    # Donde arrancan los ejemplos. Antes de esta marca esta la parte imperativa
+    # del prompt, que es la que no puede nombrar politicas.
+    INICIO_DE_EJEMPLOS = "EJEMPLO"
+
+    def _parte_imperativa(self, modulo) -> str:
+        texto = modulo.SYSTEM
+        corte = texto.find(self.INICIO_DE_EJEMPLOS)
+        return texto[:corte] if corte != -1 else texto
+
+    def test_las_reglas_no_nombran_ninguna_politica(self):
+        import re
+
+        reglas = self._parte_imperativa(prompts.v1_policy_eval)
+        nombradas = set(re.findall(r"POL-[A-Z]{2,4}-\d{3}", reglas))
+        assert not nombradas, (
+            f"las reglas del prompt nombran {sorted(nombradas)}: editar esas "
+            "politicas por la API no cambiaria lo que el prompt fuerza"
+        )
+
+    def test_la_regla_generica_esta_en_su_lugar(self):
+        reglas = self._parte_imperativa(prompts.v1_policy_eval)
+        assert "[PUEDE BLOQUEAR]" in reglas, (
+            "sin la regla que apunta a la marca, el prompt no tiene forma de "
+            "saber quien puede bloquear"
+        )
+
+    def test_el_formateador_pone_la_marca_leyendo_la_politica(self):
+        from api.app.rag.formatter import format_policies_for_prompt
+
+        puede = {"code": "POL-XXX-001", "name": "n", "description": "d",
+                 "category": "c", "reference": "r", "puede_bloquear": True}
+        no_puede = {**puede, "code": "POL-XXX-002", "puede_bloquear": False}
+
+        texto = format_policies_for_prompt([puede, no_puede])
+        marcadas = [ln for ln in texto.splitlines() if "[PUEDE BLOQUEAR]" in ln]
+        assert len(marcadas) == 1, f"se marcaron {len(marcadas)} politicas, esperaba 1"
+
+    def test_apagar_la_marca_por_la_api_se_refleja_en_el_prompt(self):
+        """El escenario que el defecto hacia imposible."""
+        from api.app.rag.formatter import format_policies_for_prompt
+
+        cripto = {"code": "POL-EXC-003", "name": "Criptomonedas", "description": "d",
+                  "category": "c", "reference": "r", "puede_bloquear": True}
+        assert "[PUEDE BLOQUEAR]" in format_policies_for_prompt([cripto])
+
+        # Compliance la edita para que deje de bloquear.
+        assert "[PUEDE BLOQUEAR]" not in format_policies_for_prompt(
+            [{**cripto, "puede_bloquear": False}]
+        )
