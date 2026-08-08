@@ -58,11 +58,10 @@ class SumideroDeAlertas(Protocol):
 class Completador(Protocol):
     """Quien traduce «el paso X» en una respuesta del modelo que le toca.
 
-    Es la costura mas importante de `ResolutionService` y era el parametro
-    `modelos=None`, sin anotacion. Lo que hay del otro lado es `ModelosService`,
-    pero lo unico que este servicio necesita es esta llamada: no elige cliente ni
-    proveedor, dice que paso es y recibe el resultado. Mientras el que llama
-    pudiera elegir el cliente podia elegir el equivocado, y eso ya paso.
+    Es la costura mas importante de `ResolutionService`. Lo que hay del otro lado
+    es `ModelosService`, pero lo unico que este servicio necesita es esta llamada:
+    no elige cliente ni proveedor, dice que paso es y recibe el resultado. Que no
+    pueda elegir el cliente es la garantia de que no puede elegir el equivocado.
     """
 
     def completar(

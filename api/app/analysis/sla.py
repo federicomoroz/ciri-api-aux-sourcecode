@@ -141,10 +141,11 @@ class CalculadoraDeSLA:
         # Que politica aplica es una regla —depende del cliente y del pais—, y las
         # reglas viven en codigo. Cuantos dias concede esa politica es un dato
         # suyo, y sale de SQLite: editar POL-SLA-002 por la API cambia el plazo
-        # sin deploy. Antes se editaba el texto y el numero seguia siendo 10.
-        # Un pais vacio es un dato que falta, no un pais fuera de LATAM. Caia en
-        # la rama internacional y se llevaba el plazo extendido de quince dias:
-        # el sistema le concedia mas tiempo al caso por no saber de donde era.
+        # sin deploy, texto y numero a la vez.
+        #
+        # Un pais vacio es un dato que falta, no un pais fuera de LATAM: tratarlo
+        # como internacional le concederia quince dias en vez de diez, o sea mas
+        # tiempo por no saber de donde es.
         # Ante la duda se aplica el limite estandar, que es el mas exigente de
         # los dos, y queda registrado que el pais no se conocia.
         pais_desconocido = not (country or "").strip()

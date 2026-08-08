@@ -125,10 +125,9 @@ class LLMManager:
         Nadie fuera de esta clase toca un cliente. Los llamadores dicen que
         proveedor y que modelo —o mejor, dicen que PASO y otro lo traduce— y
         reciben un `LLMResult`. La diferencia no es estetica: mientras el que
-        llama pueda elegir el cliente, puede elegir el equivocado, y eso ya paso.
-        El juez resolvia el servicio del modo demo y despues llamaba al de
-        produccion, asi que la mitad del pipeline se iba por Anthropic sin
-        credito mientras la otra mitad corria en Gemini.
+        llama pueda elegir el cliente, puede elegir el equivocado, y en un
+        pipeline de tres pasos eso significa media investigacion corriendo en un
+        proveedor y media en otro.
 
         Las diferencias entre modelos —cuanto presupuesto de tokens necesita uno
         que razona, que errores vale la pena reintentar— se resuelven adentro,

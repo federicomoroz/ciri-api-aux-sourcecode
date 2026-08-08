@@ -66,9 +66,9 @@ def _invalidar_informes(db: Database, code: str) -> None:
     """Tocar una politica deja viejos todos los informes guardados.
 
     Reindexar en Qdrant no alcanza: el informe se sirve del cache, que no sabe
-    con que politicas se genero. Sin esto se editaba una politica, se volvia a
-    pedir el mismo caso y salia el HTML de antes — la feature andaba y no se
-    veia, que desde afuera es lo mismo que no andar.
+    con que politicas se genero. Sin invalidar, editar una politica cambiaria el
+    indice pero el mismo caso seguiria devolviendo el HTML anterior — la feature
+    andaria sin verse, que desde afuera es lo mismo que no andar.
 
     Best-effort: no poder vaciar el cache no puede tumbar la edicion, que ya se
     guardo y ya se indexo.

@@ -160,13 +160,12 @@ class ModelosService:
         """Un `ResolutionService` para este modo. Devuelve None si demo no aplica.
 
         No recibe clientes: recibe el modo. El servicio pide por paso y esta
-        clase traduce. Antes esto armaba tres clientes y se los entregaba, que
-        es como el juez termino corriendo en el proveedor equivocado.
+        clase traduce. Entregarle tres clientes armados dejaria que el llamador
+        eligiera el equivocado —el del modo demo para un paso y el de produccion
+        para otro— sin que nada lo impida.
 
         Tampoco recibe un override por peticion: para eso esta `clientes_para`,
-        que es lo que usa el panel. Habia un parametro `override` que se guardaba
-        en un atributo que nadie leia — prometia una eleccion por corrida que en
-        realidad se descartaba en silencio.
+        que es lo que usa el panel.
         """
         from .resolution import ResolutionService
 

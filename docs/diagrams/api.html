@@ -507,10 +507,10 @@
           mirando.
         </p>
         <p>
-          <b>Es un componente por una razón medida.</b> Vivía dentro de <code>LLMManager</code>, así
-          que el camino del modelo tenía control preventivo y el de embeddings no — y una tanda de
-          análisis contra el deploy se comió un 429 de Voyage que este reparto habría evitado. Una
-          capacidad que existe una vez y hace falta dos es un componente.
+          <b>Es un componente y no un método privado</b> porque lo necesitan dos caminos. Mientras
+          vivió dentro de <code>LLMManager</code>, el del modelo tenía control preventivo y el de
+          embeddings no — que es justo el que tiene el techo más bajo. Una capacidad que existe una
+          vez y hace falta dos es un componente.
         </p>
         <div class="antes-despues">
           <span>privado de <code>LLMManager</code></span>
@@ -528,11 +528,12 @@
       </summary>
       <div class="cuerpo">
         <p>
-          Los handlers de <code>main.py</code> clasificaban y escribían su texto; el streaming del
-          panel volvía a clasificar y escribía otro; la página HTML, un tercero. Las tres con
-          <code>MARKER in str(exc)</code> — la misma técnica que en n8n hacía que un 503 entrara por
-          la rama del 404, porque el mensaje traía adentro una página de 263 KB con «404» en el
-          nombre de una fuente.
+          Son tres los caminos que muestran un fallo: los handlers HTTP, el streaming del panel y la
+          página HTML de error. Si cada uno clasifica por su cuenta, la misma causa dice tres cosas
+          distintas según por dónde salga. Y clasificar por substring sobre el mensaje de la
+          excepción es frágil: ese mensaje puede traer adentro el cuerpo de la respuesta, así que
+          buscar «404» ahí matchea contra el nombre de un archivo y le atribuye a un 503 una causa
+          que no tiene.
         </p>
         <p>
           <code>domain/fallos.py</code> clasifica en orden de confianza: <b>tipo de excepción</b>,
@@ -620,8 +621,7 @@
 
   <h2>Cómo cumple SOLID</h2>
   <p class="sub">
-    No como declaración: cada letra abajo dice <b>qué se movió y qué se puede hacer ahora que antes
-    no se podía</b>. Los números salen de una auditoría que se corrió sobre el código y de la que
+    No como declaración: cada letra abajo dice <b>qué se movió y qué habilita</b>. Los números salen de una auditoría que se corrió sobre el código y de la que
     sobrevive el registro en <code>docs/decisions.md</code>.
   </p>
 
@@ -637,7 +637,7 @@
         <p>
           <code>ResolutionService</code> tenía <b>15 de sus 22 métodos declarados estáticos</b>:
           quince funciones puras viviendo dentro de una clase cuyo estado usaban siete métodos.
-          Cuando dos tercios de una clase no necesita la clase, el límite está mal trazado — y el
+          Cuando dos tercios de una clase no necesita su estado, el límite está en otro lado — y el
           propio código lo estaba señalando.
         </p>
         <p>
@@ -685,16 +685,21 @@
     <details class="letra">
       <summary>
         <span class="inicial">L</span>
-        <span><span class="titulo-letra">Un sustituto no puede mentir</span>
-        <span class="nota-letra">El tracer decía que observaba mientras no anotaba nada.</span></span>
+        <span><span class="titulo-letra">Cambiar una implementación por otra no puede cambiar lo que el sistema decide</span>
+        <span class="nota-letra">Y para eso, lo que una implementación declara tiene que ser cierto.</span></span>
       </summary>
       <div class="cuerpo">
         <p>
-          <code>LangfuseTracer</code> tragaba el fallo y dejaba <code>enabled</code> en
-          <code>True</code>. Como de esa propiedad depende la caída al registro local, el efecto era
-          medible y absurdo: <b>encender la observabilidad dejaba al panel con menos métricas que
-          apagarla</b>. Ahora se apaga a la primera y no reintenta — un host equivocado o una
-          credencial inválida no se arreglan solos.
+          Hay tres implementaciones de <code>Tracer</code> y el sistema tiene que poder usar
+          cualquiera sin cambiar de comportamiento. Eso exige que lo que declaran sea verdad:
+          <code>enabled</code> no significa «me configuraron», significa <b>«estoy observando»</b>,
+          y de esa respuesta depende que las métricas del panel salgan del servicio remoto o del
+          registro local.
+        </p>
+        <p>
+          Un tracer que deja <code>enabled</code> en <code>True</code> mientras sus llamadas fallan
+          <b>dejaría al panel con menos métricas encendido que apagado</b>. Por eso se apaga a la
+          primera y no reintenta: un host equivocado o una credencial inválida no se arreglan solos.
         </p>
         <p>
           El Protocol también se partió en dos. Escribir observaciones y leer lo observado son
@@ -753,10 +758,10 @@
           grafo de dependencias por el solo hecho de compartir archivo.
         </p>
         <p>
-          El registro de proveedores era el otro caso: estaba en tres tablas paralelas con la misma
-          clave, y olvidarse una fallaba en silencio — sin URL base, el modelo de Groq salía con la
-          credencial de Groq hacia la API de Anthropic, y el error hablaba de autenticación. Ahora
-          es una entrada y lanza diciendo cuál falta.
+          El registro de proveedores es el otro caso: con tres tablas paralelas bajo la misma clave,
+          olvidarse una falla en silencio — sin URL base, el modelo de Groq saldría con la
+          credencial de Groq hacia la API de Anthropic, y el error hablaría de autenticación. Es una
+          entrada, y un id que no está lanza diciendo cuál falta.
         </p>
         <div class="antes-despues">
           <span>3 tablas sincronizadas a mano</span>
@@ -827,7 +832,7 @@
      d:"El modelo evalúa las políticas y redacta. La acción, el riesgo y la compensación las fija el código a partir de esos veredictos: 8 de 11 campos son deterministas."},
     {v:"POST", r:"/api/analyze/judge", f:"llm", ms:26284,
      t:"Score 9,2 sobre cinco criterios",
-     d:"Califica la propuesta del modelo, no la corrección del código. Cuando calificaba la versión ya corregida, dos de los cinco criterios no podían bajar de 10 por construcción."},
+     d:"Califica la propuesta del modelo, no la corrección del código: sobre la versión ya corregida, dos de los cinco criterios no podrían bajar de 10 por construcción."},
     {v:"POST", r:"/api/alerts/", f:"sql", ms:283,
      t:"El caso necesita una persona",
      d:"Solo corre en esta rama. En un BLOCKER —cripto, por ejemplo— la decisión es automática y este paso no aparece: el recorrido son 12 llamadas en vez de 13."},

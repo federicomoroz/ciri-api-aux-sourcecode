@@ -65,9 +65,10 @@ def _conectar_servicios(settings: Settings) -> dict:
             host=settings.langfuse_host,
         )
         if settings.langfuse_enabled
-        # Sin Langfuse se anota igual, en la SQLite del proyecto. Antes era un
-        # tracer que no hacia nada y el panel se quedaba sin una sola metrica,
-        # aunque la latencia y los tokens estuvieran pasando por delante.
+        # Sin Langfuse se anota igual, en la SQLite del proyecto: la latencia de
+        # cada llamada existe, los tokens los informa el proveedor, y el costo de
+        # una corrida gratuita es un dato —cero— y no una ausencia. Lo que falta
+        # sin Langfuse es la traza distribuida y el historico, no los numeros.
         else TrazadorLocal(settings.sqlite_path)
     )
     manager = LLMManager(settings, tracer)

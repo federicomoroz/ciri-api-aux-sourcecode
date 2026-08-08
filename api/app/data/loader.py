@@ -219,8 +219,9 @@ def _insertar(conn: sqlite3.Connection, data: dict) -> None:
 
     Transacciones, casos y politicas se deduplican por su clave de negocio. Los
     logs no tienen una, asi que se reemplazan enteros: son datos de referencia
-    que solo salen del Excel y nadie escribe en runtime. Sin esto, cada corrida
-    del seed volvia a insertar las 150 filas y falseaba la deteccion de patrones.
+    que solo salen del Excel y nadie escribe en runtime. Reinsertarlos en cada
+    corrida del seed duplicaria las 150 filas y falsearia la deteccion de
+    patrones, que cuenta eventos repetidos.
     """
     now = datetime.now(UTC).isoformat()
 

@@ -28,9 +28,8 @@ def check_sla(
     # llamador no se mira**. El `or apertura` de antes era el agujero: si la
     # transaccion no tenia reclamo registrado —53 de las 100 del dataset— se caia
     # a lo que mandara el cliente, y el nodo de n8n manda la fecha de la compra.
-    # El arreglo anterior toco el otro llamador (`PipelineService`) y dejo este
-    # contrato abierto, asi que el defecto siguio vivo por el camino que la
-    # consigna pide: el orquestador.
+    # Resolverlo en el contrato y no solo en un llamador es lo que hace que los
+    # dos caminos —el panel y el orquestador— cuenten los mismos dias.
     if req.transaction_id:
         caso = db.get_case_for_transaction(req.transaction_id) or {}
         apertura = caso.get("open_date") or ""

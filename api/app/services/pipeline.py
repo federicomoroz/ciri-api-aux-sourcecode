@@ -88,10 +88,10 @@ class PipelineService:
         historico manda su apertura y, si esta cerrado, su cierre. Los dos
         caminos tienen que contar los mismos dias.
 
-        **Sin caso historico no se cae a la fecha de la transaccion.** Ese
-        `or fecha_tx` era el defecto: entre la compra y el reclamo pueden pasar
-        meses, y contarlos como plazo de resolucion daba 489 dias de
-        incumplimiento y USD 15 de compensacion en un caso recien abierto.
+        **Sin caso historico no se cae a la fecha de la transaccion.** Entre la
+        compra y el reclamo pueden pasar meses: contarlos como plazo de
+        resolucion convierte un caso recien abierto en cientos de dias de
+        incumplimiento, y dispara la compensacion de POL-SLA-004.
         """
         caso = self.db.get_case_for_transaction(txn_id) or {}
         return self.sla.check_sla(

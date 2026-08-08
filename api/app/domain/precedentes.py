@@ -1,4 +1,4 @@
-"""Como se le cuenta al modelo lo que ya paso, y lo que dicen los logs.
+"""Como se le cuentan al modelo los casos anteriores, y lo que dicen los logs.
 
 El resumen de precedentes **no lo escribe el modelo**: se arma aca, a partir de
 los casos que devolvio el RAG. Es una decision deliberada — si el resumen de la

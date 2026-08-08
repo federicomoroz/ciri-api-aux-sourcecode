@@ -107,11 +107,10 @@ class LangfuseTracer:
     def _rendirse(self, operacion: str, e: Exception) -> None:
         """Deja de decir que observa.
 
-        Antes se anotaba el fallo y `_enabled` seguia en `True`. El objeto quedaba
-        afirmando que observaba mientras no anotaba nada, y como
-        `LangfuseStatsService` pregunta justamente eso para decidir si cae al
-        registro local, **encender Langfuse dejaba al panel con menos metricas que
-        apagarlo**.
+        Un tracer que anota el fallo y deja `_enabled` en `True` queda afirmando
+        que observa mientras no anota nada. Y como `LangfuseStatsService` pregunta
+        justamente eso para decidir si cae al registro local, **encender Langfuse
+        dejaria al panel con menos metricas que apagarlo**.
 
         Se apaga a la primera y no se reintenta: los tres modos de falla reales
         —host equivocado, credenciales invalidas, una version del SDK que no tiene

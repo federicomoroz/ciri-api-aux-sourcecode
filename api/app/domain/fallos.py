@@ -5,17 +5,15 @@ Python: el `raise` desenrolla la pila y nadie tiene que hilar códigos de error 
 los retornos—. Lo que **no** puede estar repartido es la traducción a algo que
 quien lee entienda, y eso es lo que vive acá.
 
-Antes estaba en tres lugares y de tres maneras:
+Son tres los caminos que muestran un fallo: los handlers HTTP de `main.py`, el
+streaming del panel y la página HTML de error. Si cada uno clasifica por su
+cuenta, **la misma causa dice tres cosas distintas según por dónde salga**.
 
-- `main.py` clasificaba con `MARKER in str(exc).lower()` y escribía su texto,
-- `routes/panel.py` volvía a clasificar con los mismos marcadores y escribía otro,
-- la página HTML de error escribía un tercero.
-
-O sea: **la misma causa decía tres cosas distintas según por dónde saliera**, y
-las tres clasificaban por substring sobre el mensaje completo de la excepción. Esa
-fragilidad no es teórica — el workflow de n8n tenía un `.includes('404')` que un
-503 disparaba, porque el mensaje traía adentro una página HTML de 263 KB con
-«404» en el nombre de una fuente.
+Y clasificar por substring sobre el mensaje completo de la excepción es frágil de
+una manera concreta: el mensaje de un error HTTP puede traer adentro el cuerpo de
+la respuesta —una página de error de cientos de KB—, así que buscar «404» ahí
+matchea contra el nombre de un archivo de fuente y le atribuye a un 503 una causa
+que no tiene.
 
 **Por qué no alcanza con los `@app.exception_handler` de FastAPI.** Cubren el
 borde HTTP, pero no el streaming: cuando el SSE ya empezó a emitir, la respuesta

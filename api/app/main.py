@@ -159,8 +159,8 @@ async def manejar_error(request: Request, exc: Exception) -> JSONResponse:
 
     La clasificacion y los textos viven en `domain/fallos.py`, no aca: el mismo
     fallo tiene que decir lo mismo por esta ruta, por el streaming del panel y en
-    la pagina HTML de error. Antes cada camino clasificaba por su cuenta —los
-    tres con `MARKER in str(exc)`— y escribia su propia redaccion.
+    la pagina HTML de error. Con cada camino clasificando por su cuenta, la misma
+    causa terminaba con tres redacciones distintas.
     """
     fallo = clasificar(exc)
     if fallo is None:

@@ -62,10 +62,9 @@ class SLACheckRequest(BaseModel):
     # pasar meses y contarlos como plazo de resolucion inventa un incumplimiento.
     #
     # Es opcional a proposito: con `transaction_id` la ruta la resuelve del caso
-    # historico y **este campo se ignora**. Antes era obligatorio y servia de
-    # respaldo, asi que el nodo `Verificar SLA` de n8n mandaba la fecha de la
-    # transaccion y la usaba: el mismo caso daba «en plazo» por el panel y
-    # «489 dias de incumplimiento + USD 15» por el orquestador.
+    # historico y **este campo se ignora**. Que no sirva de respaldo es
+    # deliberado — un respaldo invita a mandar la fecha de la transaccion, y
+    # entonces el plazo se cuenta desde la compra y no desde el reclamo.
     case_open_date: str | None = None
     country: str
     cliente_vip: bool = False

@@ -300,11 +300,11 @@ class Database:
         estaban vigentes cuando se genero el informe, asi que despues de tocar
         una politica **todo** lo guardado quedo viejo.
 
-        Sin esto, la decision de arquitectura mas importante del proyecto —las
-        politicas son datos, editarlas no requiere deploy— era cierta en el
-        indice y no se veia en el informe: se editaba POL-FRD-001, se volvia a
-        pedir el mismo caso, y salia el HTML anterior byte a byte. El ejemplo
-        del propio README no funcionaba si el caso ya se habia corrido.
+        Es lo que sostiene la decision de arquitectura mas importante del
+        proyecto: las politicas son datos y editarlas no requiere deploy. Sin
+        invalidar, eso seria cierto en el indice pero no en el informe — se
+        editaria POL-FRD-001 y el mismo caso seguiria devolviendo el HTML
+        anterior byte a byte.
 
         Se vacia entero y no por caso: una politica aplica a cualquier
         transaccion, asi que no hay forma de saber cuales informes quedaron

@@ -71,9 +71,9 @@ class FastEmbedder:
         self._lock = threading.Lock()
         self._cache: dict[str, np.ndarray] = {}
         # El free tier de Voyage es el limite mas ajustado del sistema: 3 por
-        # minuto. Hasta que esto existio, el reparto de turnos solo lo tenia el
-        # camino del modelo, y una tanda de analisis seguidos comia un 429 —
-        # medido contra el deploy.
+        # minuto, y cada investigacion hace dos busquedas. Se pide turno antes de
+        # llamar en vez de reintentar despues del 429: reintentar es reaccionar
+        # tarde, la peticion ya se gasto.
         self._limitador = limitador or RateLimiter(ventana_s=EMBEDDING_VENTANA_S)
 
     def _ensure_loaded(self):

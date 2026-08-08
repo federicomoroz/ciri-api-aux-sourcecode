@@ -434,8 +434,8 @@ def _con_latido(eventos, cada_s: float = SSE_LATIDO_S):
     adentro de una llamada al modelo con esos mismos clientes**. Resultado:
     tokens que se gastan despues de que el usuario cerro la pestania, y un
     «client has been closed» que muere en una cola que ya nadie lee — un
-    `except: pass` a distancia. Antes de meter el hilo, el `yield from`
-    propagaba el `GeneratorExit` adentro del pipeline y cortaba ahi mismo.
+    `except: pass` a distancia — el hilo desacopla la emision del pipeline, asi
+    que el `GeneratorExit` ya no llega adentro y corta ahi mismo.
 
     Por eso el `finally` avisa que se abandono y espera al hilo. La espera esta
     acotada por el timeout del propio modelo, que es lo unico que puede estar
@@ -709,11 +709,9 @@ async def panel_analyze(
 
     # El modo demo es sobre PLATA, no sobre quien orquesta: pasar por n8n cuesta
     # lo mismo que no pasar, porque los nodos llaman a esta misma API y es ella
-    # la que resuelve el modelo del demo. Antes el modo demo devolvia antes de
-    # llegar al bloque de n8n, asi que quien elegia «n8n Production» en el panel
-    # recibia un informe del pipeline directo: parecia venir de la orquestacion
-    # sin haber pasado por ella. Medido: 74 ejecuciones de n8n antes de la
-    # consulta y 74 despues.
+    # la que resuelve el modelo del demo. Por eso el modo demo NO puede devolver
+    # antes de llegar al bloque de n8n: quien elige «n8n Production» tiene que
+    # recibir un informe que paso por la orquestacion, no uno que se le parece.
     #
     # El default del selector es «Directo (sin n8n)», asi que pedir n8n es una
     # eleccion explicita — la unica que no se puede ignorar en silencio.
@@ -746,9 +744,9 @@ async def panel_analyze(
         )
         respaldo = _respuesta_demo(req.transaction_id, settings, pipeline.db)
         if respaldo is not None:
-            # Sin esto, «cayo al informe guardado» y «el modelo esta bien
-            # configurado» se ven igual desde afuera: 200 y un HTML. El motivo
-            # viaja en la cabecera para poder distinguirlos sin leer los logs.
+            # «Cayo al informe guardado» y «el modelo esta bien configurado» se
+            # ven igual desde afuera: 200 y un HTML. El motivo viaja en la
+            # cabecera para poder distinguirlos sin leer los logs.
             respaldo.headers["X-Demo-Fallback"] = fallo[:180] or "desconocido"
             return respaldo
         return HTMLResponse(

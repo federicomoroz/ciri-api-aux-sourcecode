@@ -268,45 +268,46 @@
   <section>
     <h2>Lo que se fija y no es código</h2>
     <p class="intro">
-      Esta es la parte que no suele existir. Cada línea salió de <b>un defecto real</b>: algo
-      que pasaba el import, pasaba los tests, y rompía la entrega igual.
+      Esta es la parte que no suele existir. Cada línea es <b>una forma concreta de romper la
+      entrega sin romper un solo import</b>: cosas que un test de unidad no mira porque no viven
+      en una función, sino en el workflow, en la documentación o en un HTML que viaja.
     </p>
 
     <div class="reg">
-      <div class="reg-cab"><span>Qué se rompió</span><span>Cómo se veía</span><span>Quién lo fija ahora</span></div>
+      <div class="reg-cab"><span>Qué se vigila</span><span>Cómo se vería si fallara</span><span>Quién lo mira</span></div>
 
       <div class="reg-fila">
-        <span class="que">Un <code>stopAndError</code> cortaba antes de que ningún nodo respondiera</span>
-        <span class="como">Un <code>transaction_id</code> mal formado devolvía <code>200</code> con el cuerpo vacío: idéntico a un éxito</span>
+        <span class="que">Que el <code>stopAndError</code> corte antes de que ningún nodo responda</span>
+        <span class="como">Un <code>transaction_id</code> mal formado devolvería <code>200</code> con el cuerpo vacío: idéntico a un éxito</span>
         <span class="quien">test_workflows_n8n</span>
       </div>
       <div class="reg-fila">
-        <span class="que">El formulario de aprobación humana no tenía URL publicada</span>
-        <span class="como">El caso esperaba 24 h una decisión que nadie sabía dónde tomar</span>
+        <span class="que">Que el formulario de aprobación humana no publique su URL</span>
+        <span class="como">El caso esperaría 24 h una decisión que nadie sabría dónde tomar</span>
         <span class="quien">test_workflows_n8n</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Los informes traían los estilos de un CDN</span>
-        <span class="como">Abiertos desde el ZIP sin red, salían como texto plano apilado</span>
+        <span class="que">Que los informes dependan de un CDN para sus estilos</span>
+        <span class="como">Abiertos desde el ZIP sin red, saldrían como texto plano apilado</span>
         <span class="quien">test_documentacion_verificable</span>
       </div>
       <div class="reg-fila">
-        <span class="que">El panel elegía «n8n Production» y corría el pipeline directo</span>
-        <span class="como">Un informe que parecía venir de la orquestación sin haber pasado por ella</span>
+        <span class="que">Que elegir «n8n Production» corra el pipeline directo</span>
+        <span class="como">Un informe que parecería venir de la orquestación sin haber pasado por ella</span>
         <span class="quien">test_panel_n8n</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Un análisis recién calculado se rotulaba como grabación vieja</span>
-        <span class="como">El cartel decía «caso prearmado» sobre un análisis de hace un segundo</span>
+        <span class="que">Que un análisis recién calculado se rotule como grabación vieja</span>
+        <span class="como">El cartel diría «caso prearmado» sobre un análisis de hace un segundo</span>
         <span class="quien">test_report_generator</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Una corrida con modelo gratuito informaba un costo inventado</span>
-        <span class="como">Sin tarifa conocida caía en la de Sonnet: <code>$0,1050</code> por algo que salió cero</span>
+        <span class="que">Que una corrida con modelo gratuito informe un costo inventado</span>
+        <span class="como">Sin tarifa conocida caería en la de Sonnet: <code>$0,1050</code> por algo que sale cero</span>
         <span class="quien">test_langfuse_stats_fetch</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Los prompts podían no sobrevivir a un cambio de modelo</span>
+        <span class="que">Que los prompts no sobrevivan a un cambio de modelo</span>
         <span class="como">Razonamiento antes del JSON, comas colgando, la lista envuelta en un objeto</span>
         <span class="quien">test_compatibilidad_modelos</span>
       </div>
@@ -316,18 +317,18 @@
         <span class="quien">test_documentacion_verificable</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Un veredicto con el enum mal escrito auto-aprobaba el contracargo</span>
-        <span class="como">Cripto con score 8 y veredictos <code>BLOCKED</code>/<code>FAILED</code> → <code>APPROVE</code>, sin HITL y sin warnings</span>
+        <span class="que">Que un veredicto con el enum mal escrito auto-apruebe el contracargo</span>
+        <span class="como">Cripto con score 8 y veredictos <code>BLOCKED</code>/<code>FAILED</code> daría <code>APPROVE</code>, sin HITL y sin avisos</span>
         <span class="quien">test_guardrails</span>
       </div>
       <div class="reg-fila">
-        <span class="que">El botón «Analizar» del panel publicado devolvía un error</span>
-        <span class="como">El guard preguntaba por claves de Anthropic y cortaba antes de mirar el modo demo</span>
+        <span class="que">Que el botón «Analizar» del panel publicado devuelva un error</span>
+        <span class="como">Bastaría con preguntar por claves de Anthropic y no mirar el modo demo</span>
         <span class="quien">test_panel_n8n</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Las alertas dependían de por dónde entraba el caso</span>
-        <span class="como">Un HITL por el pipeline directo no dejaba rastro; el mismo caso por n8n sí</span>
+        <span class="que">Que las alertas dependan de por dónde entra el caso</span>
+        <span class="como">Un HITL por el pipeline directo no dejaría rastro; el mismo caso por n8n sí</span>
         <span class="quien">test_guardrails</span>
       </div>
       <div class="reg-fila">
@@ -336,18 +337,18 @@
         <span class="quien">test_report_generator</span>
       </div>
       <div class="reg-fila">
-        <span class="que">El SLA se medía desde la fecha de compra cuando no había reclamo abierto</span>
-        <span class="como">489 días de incumplimiento y USD 15 de compensación en un caso recién iniciado</span>
+        <span class="que">Que el SLA se mida desde la fecha de compra cuando no hay reclamo abierto</span>
+        <span class="como">Cientos de días de incumplimiento y USD 15 de compensación en un caso recién iniciado</span>
         <span class="quien">test_analysis</span>
       </div>
       <div class="reg-fila">
-        <span class="que">Editar una política no invalidaba los informes cacheados</span>
-        <span class="como">Se reindexaba en Qdrant y el informe salía igual, byte a byte</span>
+        <span class="que">Que editar una política no invalide los informes cacheados</span>
+        <span class="como">Se reindexaría en Qdrant y el informe saldría igual, byte a byte</span>
         <span class="quien">test_policies_crud</span>
       </div>
       <div class="reg-fila">
-        <span class="que">El stream del panel se quedaba mudo durante los pasos largos</span>
-        <span class="como">El navegador cortaba solo y culpaba al cold start con el servicio caliente</span>
+        <span class="que">Que el stream del panel se quede mudo durante los pasos largos</span>
+        <span class="como">El navegador cortaría solo, y parecería un cold start con el servicio caliente</span>
         <span class="quien">test_modo_demo</span>
       </div>
       <div class="reg-fila">
