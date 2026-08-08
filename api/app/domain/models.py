@@ -204,6 +204,16 @@ class ResolveResponse(BaseModel):
     hitl_reason: str | None = None
     guardrail_warnings: list[str] = []
     trace_id: str = ""
+    # Lo que propuso el modelo antes de que el codigo lo corrigiera. Tiene que
+    # viajar en la respuesta: el nodo `Juez de Calidad` de n8n reenvia a
+    # /api/analyze/judge lo que esta ruta devolvio, y sin este campo el juez
+    # califica la resolucion ya corregida en vez de la propuesta. Dos de sus
+    # cinco criterios —policy_consistency y risk_assessment— evaluan entonces
+    # lo que el codigo garantiza y no pueden bajar de 10 por construccion: el
+    # mismo caso sacaba distinta nota por n8n que por el panel, y la de n8n era
+    # la inflada. El pipeline directo nunca tuvo el problema porque no pasa por
+    # el serializador.
+    propuesta_del_modelo: dict | None = None
     # True cuando la corrida no fue la configuracion documentada: o salio del
     # analisis guardado, o corrio con el modelo gratuito del modo demo. Viaja
     # hasta el informe, que lo declara.

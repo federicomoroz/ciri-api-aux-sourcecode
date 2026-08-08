@@ -1,8 +1,10 @@
+# PROMPT VERSION: v2.2 | DATE: 2026-08 | CHANGES: El umbral de aprobacion sale de domain.constants, no del texto
 # PROMPT VERSION: v2.1 | DATE: 2025-08 | CHANGES: policy_consistency y risk_assessment evaluan la propuesta del modelo, no la version ya corregida por el override determinista.
 # PROMPT VERSION: v2.0 | DATE: 2025-07 | CHANGES: Granular scoring rubrics per criterion. Fix scoring ceiling.
 # PURPOSE: LLM-as-Judge to evaluate resolution quality across 5 criteria
 # OUTPUT: JudgeEvaluation JSON object
 
+from ...domain.constants import JUDGE_APPROVAL_THRESHOLD
 from ._shared import bloque_json
 
 SYSTEM = """Eres un supervisor de calidad de resoluciones de contracargos en una fintech latinoamericana.
@@ -72,7 +74,7 @@ CRITERIOS CON RUBRICA (cada uno se evalua de 1.0 a 10.0):
    - 1.0-4.9: Sin next_steps o completamente genericos
 
 overall_score = promedio aritmetico de los 5 criterios.
-approved = true si overall_score >= 7.0
+approved = true si overall_score >= {umbral}
 
 REGLAS:
 1. USA LA RUBRICA. Asigna el score que corresponda segun la descripcion del nivel. No redondees sistematicamente a .0 o .5 — usa el valor exacto que refleje la calidad (ej: 8.7, 9.2, 7.3).
@@ -98,6 +100,11 @@ Formato de respuesta:
   "strengths": ["Fortaleza 1 concreta", "Fortaleza 2 concreta"],
   "weaknesses": ["Debilidad 1 concreta", "Debilidad 2 concreta"]
 }"""
+
+# El umbral sale de la constante. Escrito aca ganaba: el codigo solo aplica
+# JUDGE_APPROVAL_THRESHOLD cuando el modelo omite `approved`, asi que mover la
+# constante cambiaba el color del informe pero no el flag que el modelo devuelve.
+SYSTEM = SYSTEM.replace("{umbral}", f"{JUDGE_APPROVAL_THRESHOLD}")
 
 USER_TEMPLATE = """## EVIDENCIA COMPLETA (contexto del caso)
 {full_context}

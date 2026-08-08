@@ -264,3 +264,47 @@ class TestReportCache:
         db.store_cached_report("key1", "<html>V1</html>")
         db.store_cached_report("key1", "<html>V2</html>")
         assert db.get_cached_report("key1") == "<html>V2</html>"
+
+
+class TestCualEsElCasoDeLaTransaccion:
+    """Una transaccion puede tener mas de un caso, y hay que elegir el mismo siempre.
+
+    En la base entregada son 10 de 100. Mientras cada consulta ordenaba a su
+    manera, el desplegable del panel precargaba el motivo del caso mas nuevo y
+    `check_sla` medía el reloj del mas viejo: en TXN-00002 el analisis salia de
+    un «Defecto de producto» de septiembre y el plazo, de un fraude de marzo. El
+    motivo ademas maneja la busqueda de precedentes en Qdrant, asi que la
+    divergencia se llevaba puesto el RAG y no solo la fecha.
+    """
+
+    @pytest.fixture
+    def con_dos_casos(self, db):
+        caso = (
+            "INSERT INTO cases (case_id, transaction_id, motivo, resolution, "
+            "resolution_days, analyst, open_date, close_date) VALUES (?,?,?,?,?,?,?,?)"
+        )
+        with db._conn() as c:
+            c.execute(
+                "INSERT INTO transactions (id, client_id, merchant, amount_usd, date, "
+                "payment_method, country, channel, device, fraud_score, status) "
+                "VALUES ('TXN-9','CLI-9','Airbnb',100.0,'2024-01-01','Tarjeta de credito',"
+                "'ARG','web','iOS',4,'completed')"
+            )
+            c.execute(caso, ("CB-VIEJO", "TXN-9", "Fraude con tarjeta robada",
+                             "Reembolsado", 19, "ana", "2024-03-30", "2024-04-18"))
+            c.execute(caso, ("CB-NUEVO", "TXN-9", "Defecto de producto",
+                             "Rechazado", 5, "ana", "2024-09-11", "2024-09-16"))
+            c.commit()
+        return db
+
+    def test_el_sla_mide_el_caso_que_se_esta_disputando(self, con_dos_casos):
+        assert con_dos_casos.get_case_for_transaction("TXN-9")["case_id"] == "CB-NUEVO"
+
+    def test_el_panel_y_el_sla_eligen_el_mismo_caso(self, con_dos_casos):
+        del_sla = con_dos_casos.get_case_for_transaction("TXN-9")["motivo"]
+        del_panel = next(
+            t["motivo"] for t in con_dos_casos.list_transactions_compact() if t["id"] == "TXN-9"
+        )
+        assert del_sla == del_panel, (
+            "el analisis se hace sobre un caso y el plazo se mide sobre otro"
+        )

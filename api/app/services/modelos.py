@@ -155,21 +155,22 @@ class ModelosService:
 
     # ── La unica fabrica ────────────────────────────────────────────────
 
-    def servicio(
-        self, *, demo: bool = False, api_key: str = "", override: dict | None = None,
-    ):
+    def servicio(self, *, demo: bool = False, api_key: str = ""):
         """Un `ResolutionService` para este modo. Devuelve None si demo no aplica.
 
         No recibe clientes: recibe el modo. El servicio pide por paso y esta
         clase traduce. Antes esto armaba tres clientes y se los entregaba, que
         es como el juez termino corriendo en el proveedor equivocado.
+
+        Tampoco recibe un override por peticion: para eso esta `clientes_para`,
+        que es lo que usa el panel. Habia un parametro `override` que se guardaba
+        en un atributo que nadie leia — prometia una eleccion por corrida que en
+        realidad se descartaba en silencio.
         """
         from .resolution import ResolutionService
 
         if demo and self.modelo_demo() is None:
             return None
-        if override:
-            self._override = override
         return ResolutionService(
             tracer=self.tracer, modelos=self, demo=demo, api_key=api_key,
             alertas=self.db.save_alert,

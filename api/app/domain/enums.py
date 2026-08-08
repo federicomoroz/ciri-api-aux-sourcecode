@@ -11,7 +11,19 @@ class PaymentMethod(StrEnum):
     VIRTUAL_ACCOUNT = "Cuenta Virtual"
 
 
-LATAM_COUNTRIES: set[str] = {"ARG", "BRA", "CHL", "COL", "MEX", "PER", "URY"}
+# Que cuenta como LATAM. Decide el plazo del SLA (`check_sla`), el enriquecimiento
+# de la consulta al RAG (`QueryBuilder`) y la evaluacion de POL-EXC-004.
+#
+# Estaban los 7 del dataset. El prompt de evaluacion de politicas traia su propia
+# lista de 20 escrita a mano, asi que para un ECU el codigo aplicaba plazo
+# extendido de no-LATAM y el LLM leia que ECU si era LATAM y marcaba la politica
+# como no aplicable: el informe mostraba las dos cosas en la misma pagina. Gana
+# la lista larga, que ademas es la geograficamente correcta, y el prompt ahora
+# la lee de aca.
+LATAM_COUNTRIES: set[str] = {
+    "ARG", "BOL", "BRA", "CHL", "COL", "CRI", "CUB", "DOM", "ECU", "GTM",
+    "HND", "HTI", "MEX", "NIC", "PAN", "PER", "PRY", "SLV", "URY", "VEN",
+}
 
 
 class Channel(StrEnum):

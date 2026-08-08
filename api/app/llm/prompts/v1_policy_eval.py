@@ -1,7 +1,8 @@
-# PROMPT VERSION: v1.2 | DATE: 2025-07 | CHANGES: Fix threshold equality logic, LATAM determination, document specificity
+# PROMPT VERSION: v1.3 | DATE: 2026-08 | CHANGES: La lista de paises LATAM sale de domain.enums, no del texto
 # PURPOSE: Evaluate a transaction against all retrieved policies
 # OUTPUT: JSON array of PolicyVerdict objects
 
+from ...domain.enums import LATAM_COUNTRIES
 from ._shared import bloque_json
 
 SYSTEM = """Eres un auditor de cumplimiento de politicas para una fintech latinoamericana especializada en contracargos.
@@ -35,7 +36,7 @@ REGLAS ESTRICTAS:
 8. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
 9. DETERMINACION DE REGION (LATAM vs no-LATAM):
    - Distingue entre PAIS DE LA TRANSACCION (campo "country") y PAIS DEL COMERCIO (puede diferir si el merchant es internacional).
-   - Paises LATAM: MEX, COL, ARG, BRA, CHL, PER, ECU, VEN, BOL, URY, PRY, CRI, PAN, GTM, HND, SLV, NIC, DOM, CUB, HTI.
+   - Paises LATAM: {latam}.
    - Si la politica refiere a "comercios fuera de LATAM", evalua el pais del COMERCIO (de PERFIL DE RIESGO DEL COMERCIO si esta disponible, o del campo merchant_country). Si no hay dato explicito del pais del comercio, usa WARNING: "country de transaccion es [X] (LATAM), pero pais del comercio [merchant] no confirmado — si el comercio es internacional, aplicarian plazos extendidos".
    - Si la politica refiere a la "operacion" o "transaccion", usa el campo "country" de la TRANSACCION.
 10. DOCUMENTACION: Si una politica requiere documentacion y marcas WARNING, ESPECIFICA que documentos faltan y si la ausencia BLOQUEA la decision actual o es un paso previo a la revision HITL. Ejemplo: "WARNING — no se encontro comprobante de entrega ni confirmacion de recepcion en notas. Documentos necesarios: comprobante de entrega, ID de seguimiento. No bloquea PENDING_HITL pero es requisito para resolucion definitiva."
@@ -67,6 +68,12 @@ Transaccion: {"merchant":"PayPal Store","country":"PER"}
 Politica: POL-EXC-004 — Plazos extendidos para comercios no-LATAM.
 Respuesta correcta:
 {"policy_code":"POL-EXC-004","verdict":"NOT_APPLICABLE","reasoning":"country=PER es LATAM. Politica aplica solo a comercios no-LATAM. Determinado por country de transaccion, no por nombre del comercio.","requires_human_review":false}"""
+
+# La lista de paises sale del dominio y no del texto del prompt. Escrita a mano
+# aca decia una cosa y `check_sla` aplicaba otra: para un ECU el codigo cobraba
+# plazo extendido de no-LATAM mientras el LLM leia que ECU era LATAM.
+# `.replace` y no `.format` porque el prompt tiene llaves de JSON de ejemplo.
+SYSTEM = SYSTEM.replace("{latam}", ", ".join(sorted(LATAM_COUNTRIES)))
 
 USER_TEMPLATE = """## TRANSACCION
 {transaction_json}

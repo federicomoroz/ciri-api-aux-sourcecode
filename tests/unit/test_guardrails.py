@@ -587,7 +587,7 @@ class TestElJuezCalificaAlModelo:
 
     def test_la_propuesta_se_captura_antes_del_override(self):
         r = TestGuardrailsEnElPipelineCompleto()._resolver(self.PROPUESTA_ALUCINADA)
-        propuesta = r["_propuesta_del_modelo"]
+        propuesta = r["propuesta_del_modelo"]
         assert propuesta["recommended_action"] == ResolutionOutcome.APPROVE, (
             "se capturo despues del override: quedo la decision del codigo"
         )
@@ -595,7 +595,7 @@ class TestElJuezCalificaAlModelo:
 
     def test_lleva_los_campos_que_el_override_pisa(self):
         r = TestGuardrailsEnElPipelineCompleto()._resolver(self.PROPUESTA_ALUCINADA)
-        assert set(r["_propuesta_del_modelo"]) == {
+        assert set(r["propuesta_del_modelo"]) == {
             "recommended_action", "risk_level", "requires_hitl",
             "compensation_applicable", "confidence",
         }
@@ -634,11 +634,32 @@ class TestElJuezCalificaAlModelo:
         svc = ResolutionService(llm=LLMEspia(), tracer=NoOpTracer())
         svc.judge(
             resolution={"recommended_action": ResolutionOutcome.REJECT,
-                        "_propuesta_del_modelo": {"recommended_action": ResolutionOutcome.APPROVE}},
+                        "propuesta_del_modelo": {"recommended_action": ResolutionOutcome.APPROVE}},
             full_context={"transaction": {"id": "TXN-00051"}},
         )
         entregada = capturado["user"].split("## RESOLUCION ENTREGADA")[1].split("##")[0]
-        assert "_propuesta_del_modelo" not in entregada
+        assert "propuesta_del_modelo" not in entregada
+
+    def test_la_propuesta_sobrevive_al_serializador_de_la_respuesta(self):
+        """El camino de n8n pasa por HTTP; el del panel no.
+
+        `Juez de Calidad` reenvia a /api/analyze/judge lo que devolvio
+        /api/analyze/resolve, o sea la resolucion ya filtrada por
+        `ResolveResponse`. Cuando el campo se llamaba `_propuesta_del_modelo` no
+        estaba declarado ahi y se perdia en la serializacion: por n8n el juez
+        calificaba la correccion del codigo en vez de la propuesta del modelo, y
+        dos de sus cinco criterios no podian bajar de 10. El panel daba una nota
+        y el orquestador otra, mas alta, para el mismo caso.
+        """
+        from api.app.domain.models import ResolveResponse
+
+        crudo = TestGuardrailsEnElPipelineCompleto()._resolver(self.PROPUESTA_ALUCINADA)
+        viajado = ResolveResponse(**crudo).model_dump()
+
+        assert viajado.get("propuesta_del_modelo"), "el serializador se comio la propuesta"
+        assert (
+            viajado["propuesta_del_modelo"]["recommended_action"] == ResolutionOutcome.APPROVE
+        ), "llego la decision del codigo, no la del modelo"
 
 
 class TestUnVeredictoIlegibleNoEsUnVeredictoFavorable:

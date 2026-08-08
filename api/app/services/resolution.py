@@ -151,7 +151,7 @@ class ResolutionService:
                 "GUARDRAIL: el modelo no devolvio una resolucion utilizable — el informe "
                 "sale con la decision deterministica y sin analisis"
             )
-        propuesta = self._propuesta_del_modelo(resolution)
+        propuesta = self._extraer_propuesta(resolution)
 
         # Override LLM decisions with deterministic values (always).
         resolution["policy_verdicts"] = policy_verdicts
@@ -180,7 +180,7 @@ class ResolutionService:
             # Juez califique al modelo y no a la correccion: sin esto,
             # policy_consistency y risk_assessment evaluaban lo que el codigo
             # ya garantizaba y no podian bajar de 10 por construccion.
-            "_propuesta_del_modelo": propuesta,
+            "propuesta_del_modelo": propuesta,
         }
         self._alertar(resultado, ctx.transaction.get("id", ""))
         return resultado
@@ -239,7 +239,7 @@ class ResolutionService:
         return verdicts, result
 
     @staticmethod
-    def _propuesta_del_modelo(resolution: dict) -> dict:
+    def _extraer_propuesta(resolution: dict) -> dict:
         """Los campos que el override esta por sobrescribir, tal como los propuso.
 
         Se toma antes de la correccion. Despues no existe: la resolucion
@@ -373,7 +373,7 @@ class ResolutionService:
         # Strip internal metadata — Judge evaluates the corrected resolution, not the audit trail.
         # guardrail_warnings and guardrail-set hitl_reason mention original pre-correction
         # values (e.g. "Auto-corregido: REJECT sin BLOCKER...") which confuse the Judge LLM.
-        _strip_keys = {"guardrail_warnings", "_usage", "trace_id", "_propuesta_del_modelo"}
+        _strip_keys = {"guardrail_warnings", "_usage", "trace_id", "propuesta_del_modelo"}
         judge_resolution = {k: v for k, v in resolution.items() if k not in _strip_keys}
         if str(judge_resolution.get("hitl_reason", "")).startswith(GUARDRAIL_AUTO_CORRECTED_PREFIX):
             judge_resolution["hitl_reason"] = GUARDRAIL_HITL_REASON_GENERIC
@@ -381,7 +381,7 @@ class ResolutionService:
         system, user = prompts.v1_judge.render(
             full_context=full_context,
             resolution=judge_resolution,
-            propuesta=resolution.get("_propuesta_del_modelo"),
+            propuesta=resolution.get("propuesta_del_modelo"),
         )
         llm_result = self._completar(PASO_JUEZ, system, user, trace_id)
         result = validate_llm_output(llm_result.text, JudgeEvaluationOutput, {})

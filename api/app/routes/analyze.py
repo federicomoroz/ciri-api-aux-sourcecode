@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 
 from ..config import Settings
 from ..data.db import Database
-from ..data.precomputados import analisis_demo, casos_demo, distancia_de_riesgo
+from ..data.precomputados import analisis_demo, caso_mas_cercano_en_riesgo
 from ..dependencies import get_db, get_modelos_service, get_resolution_service, get_settings
 from ..domain.models import JudgeRequest, JudgeResponse, ResolveRequest, ResolveResponse
 from ..services.modelos import ModelosService
@@ -19,19 +19,6 @@ from ..services.resolution import ResolutionService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
-
-
-def _caso_mas_cercano(carpeta: str, tx_data: dict | None) -> str | None:
-    """De los casos guardados, el mas cercano en riesgo al que se pidio."""
-    guardados = casos_demo(carpeta)
-    if not guardados:
-        return None
-    pedida = tx_data or {}
-    distancias = [
-        (distancia_de_riesgo(pedida, (analisis_demo(carpeta, t) or {}).get("caso", {})), t)
-        for t in guardados
-    ]
-    return min(distancias)[1]
 
 
 def _servicio_efectivo(
@@ -77,7 +64,7 @@ def _demo_de(
         )
         return {**guardado[parte], "demo": True}
 
-    ejemplo = _caso_mas_cercano(carpeta, tx_data)
+    ejemplo = caso_mas_cercano_en_riesgo(carpeta, tx_data or {})
     guardado = analisis_demo(carpeta, ejemplo) if ejemplo else None
     if not guardado or parte not in guardado:
         return None

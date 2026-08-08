@@ -8,6 +8,7 @@ POST /api/panel/analyze        — runs analysis via n8n (or direct pipeline fal
 
 import json
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from html import escape as html_escape
 
@@ -66,65 +67,58 @@ def _sumidero_de_alertas(base: PipelineService):
 
 
 @contextmanager
+def _pipeline_con(base: PipelineService, request: Request, clientes: dict) -> Iterator[PipelineService]:
+    """El pipeline de esta peticion, armado sobre los clientes que se le den.
+
+    De donde salen esos clientes es lo unico que distingue a los dos modos de
+    abajo, asi que el armado y el cierre viven aca una sola vez.
+
+    Los clientes se cierran al salir: cada uno abre su propio pool de
+    conexiones y sin esto cada peticion dejaba pools colgados hasta que pasara
+    el recolector. El cierre se le pide al manager y no se hace a mano, porque
+    el sabe cuales son suyos —compartidos, que reusa la proxima— y cuales son de
+    esta corrida; cerrarlos todos dejaba inservibles a los compartidos.
+    """
+    modelos = request.app.state.modelos_service
+    try:
+        yield PipelineService(
+            db=base.db, retriever=base.retriever, analyzer=base.analyzer,
+            resolution_svc=ResolutionService(
+                clientes[PASO_POLITICAS], request.app.state.tracer,
+                llm_resolution=clientes[PASO_RESOLUCION],
+                llm_judge=clientes[PASO_JUEZ],
+                alertas=_sumidero_de_alertas(base),
+            ),
+            report_gen=base.report_gen,
+        )
+    finally:
+        modelos.manager.cerrar_todos(clientes)
+
+
+@contextmanager
 def _pipeline_efimero(
     base: PipelineService, request: Request, api_key: str = "", override: dict | None = None,
-):
+) -> Iterator[PipelineService]:
     """Pipeline de una sola corrida, con la clave y/o los modelos de esta peticion.
 
     Dos cosas viajan por peticion y ninguna se guarda: la credencial del
     visitante y su eleccion de modelo. Asi quien evalua puede probar otro modelo
     —o su propia cuenta— sin cambiarle nada al resto.
-
-    Los clientes se cierran al salir: son de un solo uso y cada uno abre su
-    propio pool de conexiones. Sin esto, cada peticion dejaba pools colgados
-    hasta que pasara el recolector.
     """
-    tracer = request.app.state.tracer
     modelos = request.app.state.modelos_service
-    clientes = modelos.clientes_para(override, api_key=api_key)
-    try:
-        yield PipelineService(
-            db=base.db, retriever=base.retriever, analyzer=base.analyzer,
-            resolution_svc=ResolutionService(
-                clientes[PASO_POLITICAS], tracer,
-                llm_resolution=clientes[PASO_RESOLUCION],
-                llm_judge=clientes[PASO_JUEZ],
-                alertas=_sumidero_de_alertas(base),
-            ),
-            report_gen=base.report_gen,
-        )
-    finally:
-        # El manager sabe cuales son suyos y cuales de esta peticion: cerrar a
-        # mano cerraba tambien los compartidos y los dejaba inservibles.
-        modelos.manager.cerrar_todos(clientes)
+    with _pipeline_con(base, request, modelos.clientes_para(override, api_key=api_key)) as p:
+        yield p
 
 
 @contextmanager
-def _pipeline_demo(base: PipelineService, request: Request):
+def _pipeline_demo(base: PipelineService, request: Request) -> Iterator[PipelineService]:
     """Pipeline con el modelo del modo demo y la clave del servidor.
 
-    Es el que hace que evaluar el sistema no requiera cuenta propia. Al salir se
-    le pide al manager que cierre lo que sea de esta peticion; los compartidos
-    los conserva el, porque los reusa la proxima.
+    Es el que hace que evaluar el sistema no requiera cuenta propia.
     """
-    tracer = request.app.state.tracer
     modelos = request.app.state.modelos_service
-    clientes = modelos.clientes_demo() or {}
-    try:
-        yield PipelineService(
-            db=base.db, retriever=base.retriever, analyzer=base.analyzer,
-            resolution_svc=ResolutionService(
-                clientes[PASO_POLITICAS], tracer,
-                llm_resolution=clientes[PASO_RESOLUCION],
-                llm_judge=clientes[PASO_JUEZ],
-                alertas=_sumidero_de_alertas(base),
-            ),
-            report_gen=base.report_gen,
-        )
-    finally:
-        # El manager sabe cuales son suyos y cuales de esta peticion: cerrar a
-        # mano cerraba tambien los compartidos y los dejaba inservibles.
-        modelos.manager.cerrar_todos(clientes)
+    with _pipeline_con(base, request, modelos.clientes_demo() or {}) as p:
+        yield p
 
 
 def _es_falta_de_saldo(exc: Exception) -> bool:

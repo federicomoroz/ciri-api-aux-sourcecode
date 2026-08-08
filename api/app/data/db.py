@@ -15,6 +15,18 @@ from ..domain.constants import (
 
 logger = logging.getLogger(__name__)
 
+# Cual de los casos de una transaccion es «el» caso. Hay 10 transacciones con
+# mas de uno, y hasta que esto fue un solo fragmento cada consulta elegia
+# distinto: el desplegable del panel precargaba el motivo del caso mas nuevo y
+# el SLA medía el reloj del mas viejo. En TXN-00002 eso significaba analizar un
+# «Defecto de producto» de septiembre contra el plazo de un fraude de marzo — y
+# el motivo tambien maneja la busqueda de precedentes, asi que el analisis
+# entero salia de un caso y el plazo de otro.
+#
+# Gana el mas reciente: es el que se esta disputando.
+def _caso_en_disputa(alias: str = "") -> str:
+    return f"ORDER BY {alias}open_date DESC"
+
 
 def cache_key(transaction_id: str, cliente_vip: bool = False) -> str:
     """Build the idempotency cache key for a report."""
@@ -83,7 +95,7 @@ class Database:
             "SELECT t.id, t.merchant, t.amount_usd, t.country, t.payment_method, "
             "t.fraud_score, t.channel, t.status, "
             "(SELECT c.motivo FROM cases c WHERE c.transaction_id = t.id "
-            " ORDER BY c.open_date DESC LIMIT 1) AS motivo "
+            f" {_caso_en_disputa('c.')} LIMIT 1) AS motivo "
             "FROM transactions t ORDER BY t.id"
         )
 
@@ -140,7 +152,7 @@ class Database:
         compro, no cuando se abrio la disputa.
         """
         return self._uno(
-            "SELECT * FROM cases WHERE transaction_id = ? ORDER BY open_date LIMIT 1",
+            f"SELECT * FROM cases WHERE transaction_id = ? {_caso_en_disputa()} LIMIT 1",
             (txn_id,),
         )
 
