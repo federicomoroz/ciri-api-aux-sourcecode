@@ -127,8 +127,9 @@ class ResolutionService:
         outcome["precedent_summary"] = precedent_summary
         outcome.update(decision.compensacion_por_sla(ctx.sla, ctx.transaction))
 
+        resumen_de_logs = precedentes.resumir_logs(ctx.logs)
         resolution, synth_result = self._synthesize_resolution(
-            ctx, policy_verdicts, precedentes.resumir_logs(ctx.logs), trace_id, outcome,
+            ctx, policy_verdicts, resumen_de_logs, trace_id, outcome,
         )
 
         # Detectar la alucinacion ANTES de corregirla: una vez aplicado el
@@ -147,6 +148,12 @@ class ResolutionService:
         resolution["risk_level"] = outcome["risk_level"]
         resolution["requires_hitl"] = outcome["requires_hitl"]
         resolution["precedent_summary"] = precedent_summary
+        # El resumen de logs es un conteo de severidades mas los patrones que
+        # detecta `patrones.detect_error_patterns`: lo calcula el codigo y se lo
+        # pasa al modelo como contexto. Sin esta linea el modelo lo parafraseaba
+        # y su version era la que quedaba, asi que el informe podia mostrar un
+        # resumen que no coincidia con los logs de al lado.
+        resolution["log_summary"] = resumen_de_logs
         if outcome["hitl_reason"]:
             resolution["hitl_reason"] = outcome["hitl_reason"]
         if "compensation_applicable" in outcome:
