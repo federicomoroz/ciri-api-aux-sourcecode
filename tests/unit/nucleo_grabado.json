@@ -1,0 +1,1044 @@
+{
+ "build_precedent_summary": {
+  "mezcla|Cargo duplicado|Airbnb": "CB-0002: Fraude con tarjeta robada, Rechazado en 12d, merchant=Uber | CB-0003 [MISMO MERCHANT]: No reconoce la compra, Reembolsado parcial en 3d, merchant=Airbnb | Patron: de 2 precedentes, 0 aprobados, 1 rechazados — tendencia desfavorable al cliente",
+  "mezcla|Cargo duplicado|Otro": "CB-0002: Fraude con tarjeta robada, Rechazado en 12d, merchant=Uber | CB-0003: No reconoce la compra, Reembolsado parcial en 3d, merchant=Airbnb | Patron: de 2 precedentes, 0 aprobados, 1 rechazados — tendencia desfavorable al cliente",
+  "mezcla|No reconoce la compra|Airbnb": "CB-0002 [MOTIVO SIMILAR]: Fraude con tarjeta robada, Rechazado en 12d, merchant=Uber. Relevancia: mismo patron de fraude / no reconocido. Nota: precedente fue rechazado — patron desfavorable al cliente para este tipo de caso | CB-0003 [MOTIVO SIMILAR] [MISMO MERCHANT]: No reconoce la compra, Reembolsado parcial en 3d, merchant=Airbnb. Relevancia: mismo patron de fraude / no reconocido. Nota: precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso | Patron: de 2 precedentes, 0 aprobados, 1 rechazados — tendencia desfavorable al cliente. Motivo similar: 2/2, 0 aprobados",
+  "mezcla|No reconoce la compra|Otro": "CB-0002 [MOTIVO SIMILAR]: Fraude con tarjeta robada, Rechazado en 12d, merchant=Uber. Relevancia: mismo patron de fraude / no reconocido. Nota: precedente fue rechazado — patron desfavorable al cliente para este tipo de caso | CB-0003 [MOTIVO SIMILAR]: No reconoce la compra, Reembolsado parcial en 3d, merchant=Airbnb. Relevancia: mismo patron de fraude / no reconocido. Nota: precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso | Patron: de 2 precedentes, 0 aprobados, 1 rechazados — tendencia desfavorable al cliente. Motivo similar: 2/2, 0 aprobados",
+  "mezcla||Airbnb": "CB-0002: Fraude con tarjeta robada, Rechazado en 12d, merchant=Uber | CB-0003 [MISMO MERCHANT]: No reconoce la compra, Reembolsado parcial en 3d, merchant=Airbnb | Patron: de 2 precedentes, 0 aprobados, 1 rechazados — tendencia desfavorable al cliente",
+  "mezcla||Otro": "CB-0002: Fraude con tarjeta robada, Rechazado en 12d, merchant=Uber | CB-0003: No reconoce la compra, Reembolsado parcial en 3d, merchant=Airbnb | Patron: de 2 precedentes, 0 aprobados, 1 rechazados — tendencia desfavorable al cliente",
+  "mismo_merchant|Cargo duplicado|Airbnb": "CB-0001 [MISMO MERCHANT]: No reconoce la compra, Reembolsado en 6d, merchant=Airbnb | Patron: de 1 precedentes, 0 aprobados, 0 rechazados — sin tendencia clara",
+  "mismo_merchant|Cargo duplicado|Otro": "CB-0001: No reconoce la compra, Reembolsado en 6d, merchant=Airbnb | Patron: de 1 precedentes, 0 aprobados, 0 rechazados — sin tendencia clara",
+  "mismo_merchant|No reconoce la compra|Airbnb": "CB-0001 [MOTIVO SIMILAR] [MISMO MERCHANT]: No reconoce la compra, Reembolsado en 6d, merchant=Airbnb. Relevancia: mismo patron de fraude / no reconocido | Patron: de 1 precedentes, 0 aprobados, 0 rechazados — sin tendencia clara. Motivo similar: 1/1, 0 aprobados",
+  "mismo_merchant|No reconoce la compra|Otro": "CB-0001 [MOTIVO SIMILAR]: No reconoce la compra, Reembolsado en 6d, merchant=Airbnb. Relevancia: mismo patron de fraude / no reconocido | Patron: de 1 precedentes, 0 aprobados, 0 rechazados — sin tendencia clara. Motivo similar: 1/1, 0 aprobados",
+  "mismo_merchant||Airbnb": "CB-0001 [MISMO MERCHANT]: No reconoce la compra, Reembolsado en 6d, merchant=Airbnb | Patron: de 1 precedentes, 0 aprobados, 0 rechazados — sin tendencia clara",
+  "mismo_merchant||Otro": "CB-0001: No reconoce la compra, Reembolsado en 6d, merchant=Airbnb | Patron: de 1 precedentes, 0 aprobados, 0 rechazados — sin tendencia clara",
+  "ninguno|Cargo duplicado|Airbnb": "Sin precedentes relevantes.",
+  "ninguno|Cargo duplicado|Otro": "Sin precedentes relevantes.",
+  "ninguno|No reconoce la compra|Airbnb": "Sin precedentes relevantes.",
+  "ninguno|No reconoce la compra|Otro": "Sin precedentes relevantes.",
+  "ninguno||Airbnb": "Sin precedentes relevantes.",
+  "ninguno||Otro": "Sin precedentes relevantes."
+ },
+ "clasificar_resolucion": {
+  "(vacio)": [
+   null,
+   null
+  ],
+  "Cualquier cosa": [
+   null,
+   null
+  ],
+  "Escalado": [
+   null,
+   null
+  ],
+  "Rechazado": [
+   "rechazado",
+   "precedente fue rechazado — patron desfavorable al cliente para este tipo de caso"
+  ],
+  "Reembolsado": [
+   null,
+   null
+  ],
+  "Reembolsado parcial": [
+   "parcial",
+   "precedente resuelto con reembolso parcial — solucion intermedia para este tipo de caso"
+  ]
+ },
+ "codigos": {
+  "blocker_y_fail": [],
+  "dos_fails": [],
+  "ilegible": [],
+  "ilegible_entre_validos": [],
+  "no_aplica": [],
+  "pide_humano": [],
+  "sin_veredictos": [],
+  "todo_pass": [],
+  "un_blocker": [],
+  "un_fail": [],
+  "un_warning": []
+ },
+ "detect_divergence": {
+  "approve|blocker_y_fail|score_alto": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|blocker_y_fail|score_medio": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|blocker_y_fail|score_severo": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|blocker_y_fail|sin_score": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|dos_fails|score_alto": [],
+  "approve|dos_fails|score_medio": [],
+  "approve|dos_fails|score_severo": [],
+  "approve|dos_fails|sin_score": [],
+  "approve|ilegible_entre_validos|score_alto": [],
+  "approve|ilegible_entre_validos|score_medio": [],
+  "approve|ilegible_entre_validos|score_severo": [],
+  "approve|ilegible_entre_validos|sin_score": [],
+  "approve|ilegible|score_alto": [],
+  "approve|ilegible|score_medio": [],
+  "approve|ilegible|score_severo": [],
+  "approve|ilegible|sin_score": [],
+  "approve|no_aplica|score_alto": [],
+  "approve|no_aplica|score_medio": [],
+  "approve|no_aplica|score_severo": [],
+  "approve|no_aplica|sin_score": [],
+  "approve|pide_humano|score_alto": [],
+  "approve|pide_humano|score_medio": [],
+  "approve|pide_humano|score_severo": [],
+  "approve|pide_humano|sin_score": [],
+  "approve|sin_veredictos|score_alto": [],
+  "approve|sin_veredictos|score_medio": [],
+  "approve|sin_veredictos|score_severo": [],
+  "approve|sin_veredictos|sin_score": [],
+  "approve|todo_pass|score_alto": [],
+  "approve|todo_pass|score_medio": [],
+  "approve|todo_pass|score_severo": [],
+  "approve|todo_pass|sin_score": [],
+  "approve|un_blocker|score_alto": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|un_blocker|score_medio": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|un_blocker|score_severo": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|un_blocker|sin_score": [
+   "GUARDRAIL: el modelo propuso APPROVE con un veredicto BLOCKER activo — corregido a REJECT (posible alucinacion)"
+  ],
+  "approve|un_fail|score_alto": [],
+  "approve|un_fail|score_medio": [],
+  "approve|un_fail|score_severo": [],
+  "approve|un_fail|sin_score": [],
+  "approve|un_warning|score_alto": [],
+  "approve|un_warning|score_medio": [],
+  "approve|un_warning|score_severo": [],
+  "approve|un_warning|sin_score": [],
+  "hitl|blocker_y_fail|score_alto": [],
+  "hitl|blocker_y_fail|score_medio": [],
+  "hitl|blocker_y_fail|score_severo": [],
+  "hitl|blocker_y_fail|sin_score": [],
+  "hitl|dos_fails|score_alto": [],
+  "hitl|dos_fails|score_medio": [],
+  "hitl|dos_fails|score_severo": [],
+  "hitl|dos_fails|sin_score": [],
+  "hitl|ilegible_entre_validos|score_alto": [],
+  "hitl|ilegible_entre_validos|score_medio": [],
+  "hitl|ilegible_entre_validos|score_severo": [],
+  "hitl|ilegible_entre_validos|sin_score": [],
+  "hitl|ilegible|score_alto": [],
+  "hitl|ilegible|score_medio": [],
+  "hitl|ilegible|score_severo": [],
+  "hitl|ilegible|sin_score": [],
+  "hitl|no_aplica|score_alto": [],
+  "hitl|no_aplica|score_medio": [],
+  "hitl|no_aplica|score_severo": [],
+  "hitl|no_aplica|sin_score": [],
+  "hitl|pide_humano|score_alto": [],
+  "hitl|pide_humano|score_medio": [],
+  "hitl|pide_humano|score_severo": [],
+  "hitl|pide_humano|sin_score": [],
+  "hitl|sin_veredictos|score_alto": [],
+  "hitl|sin_veredictos|score_medio": [],
+  "hitl|sin_veredictos|score_severo": [],
+  "hitl|sin_veredictos|sin_score": [],
+  "hitl|todo_pass|score_alto": [],
+  "hitl|todo_pass|score_medio": [],
+  "hitl|todo_pass|score_severo": [],
+  "hitl|todo_pass|sin_score": [],
+  "hitl|un_blocker|score_alto": [],
+  "hitl|un_blocker|score_medio": [],
+  "hitl|un_blocker|score_severo": [],
+  "hitl|un_blocker|sin_score": [],
+  "hitl|un_fail|score_alto": [],
+  "hitl|un_fail|score_medio": [],
+  "hitl|un_fail|score_severo": [],
+  "hitl|un_fail|sin_score": [],
+  "hitl|un_warning|score_alto": [],
+  "hitl|un_warning|score_medio": [],
+  "hitl|un_warning|score_severo": [],
+  "hitl|un_warning|sin_score": [],
+  "reject|blocker_y_fail|score_alto": [],
+  "reject|blocker_y_fail|score_medio": [],
+  "reject|blocker_y_fail|score_severo": [],
+  "reject|blocker_y_fail|sin_score": [],
+  "reject|dos_fails|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|dos_fails|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|dos_fails|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|dos_fails|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible_entre_validos|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible_entre_validos|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible_entre_validos|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible_entre_validos|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|ilegible|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|no_aplica|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|no_aplica|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|no_aplica|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|no_aplica|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|pide_humano|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|pide_humano|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|pide_humano|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|pide_humano|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|sin_veredictos|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|sin_veredictos|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|sin_veredictos|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|sin_veredictos|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|todo_pass|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|todo_pass|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|todo_pass|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|todo_pass|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|un_blocker|score_alto": [],
+  "reject|un_blocker|score_medio": [],
+  "reject|un_blocker|score_severo": [],
+  "reject|un_blocker|sin_score": [],
+  "reject|un_fail|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a MEDIUM",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|un_fail|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a MEDIUM",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|un_fail|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|un_fail|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a MEDIUM",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+  ],
+  "reject|un_warning|score_alto": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|un_warning|score_medio": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|un_warning|score_severo": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ],
+  "reject|un_warning|sin_score": [
+   "GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a LOW",
+   "GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a APPROVE (requiere revision humana)"
+  ]
+ },
+ "determine_compensation": {
+  "en_plazo|score_alto": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "en_plazo|score_medio": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "en_plazo|score_severo": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "en_plazo|sin_score": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "sin_reclamo|score_alto": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "sin_reclamo|score_medio": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "sin_reclamo|score_severo": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "sin_reclamo|sin_score": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": false
+  },
+  "vacio|score_alto": {},
+  "vacio|score_medio": {},
+  "vacio|score_severo": {},
+  "vacio|sin_score": {},
+  "vencido|score_alto": {
+   "compensation_amount_usd": 12.5,
+   "compensation_applicable": true
+  },
+  "vencido|score_medio": {
+   "compensation_amount_usd": 15.0,
+   "compensation_applicable": true
+  },
+  "vencido|score_severo": {
+   "compensation_amount_usd": 15.0,
+   "compensation_applicable": true
+  },
+  "vencido|sin_score": {
+   "compensation_amount_usd": 0.0,
+   "compensation_applicable": true
+  }
+ },
+ "determine_outcome": {
+  "blocker_y_fail|score_alto": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "blocker_y_fail|score_medio": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "blocker_y_fail|score_severo": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "blocker_y_fail|sin_score": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "dos_fails|score_alto": {
+   "hitl_reason": "2 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: 2 violaciones de politica (POL-FRD-001, POL-CB-005), fraud_score=92 indica bajo riesgo de fraude — riesgo HIGH es por violaciones de politica, no por fraude"
+  },
+  "dos_fails|score_medio": {
+   "hitl_reason": "2 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: 2 violaciones de politica (POL-FRD-001, POL-CB-005), fraud_score=45 indica bajo riesgo de fraude — riesgo HIGH es por violaciones de politica, no por fraude"
+  },
+  "dos_fails|score_severo": {
+   "hitl_reason": "2 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: 2 violaciones de politica (POL-FRD-001, POL-CB-005), fraud_score=8 (umbral severo: 15)"
+  },
+  "dos_fails|sin_score": {
+   "hitl_reason": "2 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: 2 violaciones de politica (POL-FRD-001, POL-CB-005), fraud_score=50 indica bajo riesgo de fraude — riesgo HIGH es por violaciones de politica, no por fraude"
+  },
+  "ilegible_entre_validos|score_alto": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-FRD-001 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible_entre_validos|score_medio": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-FRD-001 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible_entre_validos|score_severo": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-FRD-001 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible_entre_validos|sin_score": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-FRD-001 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible|score_alto": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-EXC-003 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible|score_medio": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-EXC-003 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible|score_severo": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-EXC-003 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "ilegible|sin_score": {
+   "hitl_reason": "El modelo devolvio veredictos que no son BLOCKER/FAIL/NOT_APPLICABLE/PASS/WARNING en POL-EXC-003 — revisar la salida del modelo antes de decidir",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "1 veredicto(s) con un valor que no existe: la evidencia no se pudo leer"
+  },
+  "no_aplica|score_alto": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=92 (seguro)"
+  },
+  "no_aplica|score_medio": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=45 (seguro)"
+  },
+  "no_aplica|score_severo": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: fraud_score=8 (umbral severo: 15)"
+  },
+  "no_aplica|sin_score": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=50 (seguro)"
+  },
+  "pide_humano|score_alto": {
+   "hitl_reason": "Evaluacion de politicas requiere revision humana",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=92 (seguro)"
+  },
+  "pide_humano|score_medio": {
+   "hitl_reason": "Evaluacion de politicas requiere revision humana",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=45 (seguro)"
+  },
+  "pide_humano|score_severo": {
+   "hitl_reason": "Evaluacion de politicas requiere revision humana",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: fraud_score=8 (umbral severo: 15)"
+  },
+  "pide_humano|sin_score": {
+   "hitl_reason": "Evaluacion de politicas requiere revision humana",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=50 (seguro)"
+  },
+  "sin_veredictos|score_alto": {
+   "hitl_reason": "No se evaluo ninguna politica — revisar si el vector store respondio y si la evaluacion del modelo devolvio un JSON valido",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "No se pudo evaluar ninguna politica: sin evidencia no hay decision"
+  },
+  "sin_veredictos|score_medio": {
+   "hitl_reason": "No se evaluo ninguna politica — revisar si el vector store respondio y si la evaluacion del modelo devolvio un JSON valido",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "No se pudo evaluar ninguna politica: sin evidencia no hay decision"
+  },
+  "sin_veredictos|score_severo": {
+   "hitl_reason": "No se evaluo ninguna politica — revisar si el vector store respondio y si la evaluacion del modelo devolvio un JSON valido",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "No se pudo evaluar ninguna politica: sin evidencia no hay decision"
+  },
+  "sin_veredictos|sin_score": {
+   "hitl_reason": "No se evaluo ninguna politica — revisar si el vector store respondio y si la evaluacion del modelo devolvio un JSON valido",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "No se pudo evaluar ninguna politica: sin evidencia no hay decision"
+  },
+  "todo_pass|score_alto": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=92 (seguro)"
+  },
+  "todo_pass|score_medio": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=45 (seguro)"
+  },
+  "todo_pass|score_severo": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: fraud_score=8 (umbral severo: 15)"
+  },
+  "todo_pass|sin_score": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=50 (seguro)"
+  },
+  "un_blocker|score_alto": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "un_blocker|score_medio": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "un_blocker|score_severo": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "un_blocker|sin_score": {
+   "hitl_reason": null,
+   "recommended_action": "REJECT",
+   "requires_hitl": false,
+   "risk_level": "BLOCKER",
+   "risk_reason": "Veredicto BLOCKER en POL-EXC-003 (transaccion irreversible)"
+  },
+  "un_fail|score_alto": {
+   "hitl_reason": "1 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "MEDIUM",
+   "risk_reason": "MEDIUM por: 1 violacion(es) (POL-FRD-001), fraud_score=92 (fraud_score=92 seguro, riesgo es de politica)"
+  },
+  "un_fail|score_medio": {
+   "hitl_reason": "1 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "MEDIUM",
+   "risk_reason": "MEDIUM por: 1 violacion(es) (POL-FRD-001), fraud_score=45 (fraud_score=45 seguro, riesgo es de politica)"
+  },
+  "un_fail|score_severo": {
+   "hitl_reason": "1 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: fraud_score=8 (umbral severo: 15)"
+  },
+  "un_fail|sin_score": {
+   "hitl_reason": "1 violacion(es) de politica — requiere revision de analista",
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": true,
+   "risk_level": "MEDIUM",
+   "risk_reason": "MEDIUM por: 1 violacion(es) (POL-FRD-001), fraud_score=50 (fraud_score=50 seguro, riesgo es de politica)"
+  },
+  "un_warning|score_alto": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=92 (seguro)"
+  },
+  "un_warning|score_medio": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=45 (seguro)"
+  },
+  "un_warning|score_severo": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "HIGH",
+   "risk_reason": "HIGH por: fraud_score=8 (umbral severo: 15)"
+  },
+  "un_warning|sin_score": {
+   "hitl_reason": null,
+   "recommended_action": "APPROVE",
+   "requires_hitl": false,
+   "risk_level": "LOW",
+   "risk_reason": "LOW: sin violaciones, fraud_score=50 (seguro)"
+  }
+ },
+ "extraer_propuesta": {
+  "approve": {
+   "compensation_applicable": false,
+   "confidence": 0.95,
+   "recommended_action": "APPROVE",
+   "requires_hitl": null,
+   "risk_level": "LOW"
+  },
+  "hitl": {
+   "compensation_applicable": false,
+   "confidence": 0.5,
+   "recommended_action": "PENDING_HITL",
+   "requires_hitl": null,
+   "risk_level": "MEDIUM"
+  },
+  "reject": {
+   "compensation_applicable": true,
+   "confidence": 0.8,
+   "recommended_action": "REJECT",
+   "requires_hitl": null,
+   "risk_level": "BLOCKER"
+  }
+ },
+ "summarize_logs": {
+  "con_error": "Total: 2 eventos | ERROR: 1 | WARN: 1 | INFO: 0\n- [ERROR] PAYMENT_FAILED: gateway rechazo la operacion\n- [WARN] MERCHANT_NO_RESPONSE: sin respuesta del comercio\n",
+  "sin_logs": "Total: 0 eventos | ERROR: 0 | WARN: 0 | INFO: 0\n",
+  "solo_info": "Total: 1 eventos | ERROR: 0 | WARN: 0 | INFO: 1\n",
+  "timeout_sistematico": "Total: 3 eventos | ERROR: 1 | WARN: 2 | INFO: 0\nPatrones detectados: systematic_merchant_timeout\n- [WARN] MERCHANT_NO_RESPONSE: sin respuesta\n- [WARN] MERCHANT_NO_RESPONSE: sin respuesta\n- [ERROR] MERCHANT_NO_RESPONSE: sin respuesta\n"
+ },
+ "validate_resolution": {
+  "approve|blocker_y_fail|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|blocker_y_fail|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|blocker_y_fail|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|blocker_y_fail|sin_score": [],
+  "approve|dos_fails|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|dos_fails|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|dos_fails|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|dos_fails|sin_score": [],
+  "approve|ilegible_entre_validos|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|ilegible_entre_validos|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|ilegible_entre_validos|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|ilegible_entre_validos|sin_score": [],
+  "approve|ilegible|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|ilegible|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|ilegible|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|ilegible|sin_score": [],
+  "approve|no_aplica|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|no_aplica|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|no_aplica|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|no_aplica|sin_score": [],
+  "approve|pide_humano|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|pide_humano|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|pide_humano|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|pide_humano|sin_score": [],
+  "approve|sin_veredictos|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|sin_veredictos|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|sin_veredictos|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|sin_veredictos|sin_score": [],
+  "approve|todo_pass|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|todo_pass|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|todo_pass|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|todo_pass|sin_score": [],
+  "approve|un_blocker|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|un_blocker|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|un_blocker|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|un_blocker|sin_score": [],
+  "approve|un_fail|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|un_fail|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|un_fail|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|un_fail|sin_score": [],
+  "approve|un_warning|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "approve|un_warning|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "approve|un_warning|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "approve|un_warning|sin_score": [],
+  "hitl|blocker_y_fail|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|blocker_y_fail|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|blocker_y_fail|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|blocker_y_fail|sin_score": [],
+  "hitl|dos_fails|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|dos_fails|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|dos_fails|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|dos_fails|sin_score": [],
+  "hitl|ilegible_entre_validos|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|ilegible_entre_validos|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|ilegible_entre_validos|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|ilegible_entre_validos|sin_score": [],
+  "hitl|ilegible|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|ilegible|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|ilegible|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|ilegible|sin_score": [],
+  "hitl|no_aplica|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|no_aplica|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|no_aplica|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|no_aplica|sin_score": [],
+  "hitl|pide_humano|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|pide_humano|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|pide_humano|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|pide_humano|sin_score": [],
+  "hitl|sin_veredictos|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|sin_veredictos|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|sin_veredictos|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|sin_veredictos|sin_score": [],
+  "hitl|todo_pass|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|todo_pass|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|todo_pass|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|todo_pass|sin_score": [],
+  "hitl|un_blocker|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|un_blocker|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|un_blocker|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|un_blocker|sin_score": [],
+  "hitl|un_fail|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|un_fail|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|un_fail|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|un_fail|sin_score": [],
+  "hitl|un_warning|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "hitl|un_warning|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "hitl|un_warning|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "hitl|un_warning|sin_score": [],
+  "reject|blocker_y_fail|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|blocker_y_fail|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|blocker_y_fail|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|blocker_y_fail|sin_score": [],
+  "reject|dos_fails|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|dos_fails|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|dos_fails|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|dos_fails|sin_score": [],
+  "reject|ilegible_entre_validos|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|ilegible_entre_validos|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|ilegible_entre_validos|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|ilegible_entre_validos|sin_score": [],
+  "reject|ilegible|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|ilegible|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|ilegible|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|ilegible|sin_score": [],
+  "reject|no_aplica|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|no_aplica|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|no_aplica|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|no_aplica|sin_score": [],
+  "reject|pide_humano|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|pide_humano|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|pide_humano|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|pide_humano|sin_score": [],
+  "reject|sin_veredictos|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|sin_veredictos|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|sin_veredictos|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|sin_veredictos|sin_score": [],
+  "reject|todo_pass|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|todo_pass|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|todo_pass|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|todo_pass|sin_score": [],
+  "reject|un_blocker|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|un_blocker|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|un_blocker|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|un_blocker|sin_score": [],
+  "reject|un_fail|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|un_fail|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|un_fail|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|un_fail|sin_score": [],
+  "reject|un_warning|score_alto": [
+   "GUARDRAIL: Compensacion USD 18.75 excede el monto original USD 12.50 en >10%"
+  ],
+  "reject|un_warning|score_medio": [
+   "GUARDRAIL: Compensacion USD 450.00 excede el monto original USD 300.00 en >10%"
+  ],
+  "reject|un_warning|score_severo": [
+   "GUARDRAIL: Compensacion USD 3143.85 excede el monto original USD 2095.90 en >10%"
+  ],
+  "reject|un_warning|sin_score": []
+ }
+}
