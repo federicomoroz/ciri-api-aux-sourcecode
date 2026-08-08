@@ -409,7 +409,7 @@ si es orquestacion.
 | Cambiar Anthropic por otro proveedor | Nada: se elige desde el panel o con `CB_LLM_PROVIDER` | Todo el codebase |
 | Agregar un proveedor nuevo | Una entrada en `llm/proveedores.py` | Todo lo demas |
 | Agregar un guardrail | Una funcion y una linea en una tupla (`services/guardrails.py`) | Todo lo demas |
-| Un modelo que necesite otro trato | Una entrada en `llm/adaptadores.py` | Todo lo demas |
+| Un modelo que necesite otro trato | Una entrada en `llm/perfiles.py` | Todo lo demas |
 | Cambiar Qdrant por Pinecone | `rag/indexer.py` + `rag/retriever.py` | Todo lo demas |
 | Agregar nuevo endpoint | Un archivo en `routes/` | Todas las rutas existentes |
 | Agregar nueva politica | `POST /api/policies/` (llamada API, sin codigo) | Todo el codebase |
@@ -422,7 +422,7 @@ si es orquestacion.
 
 **`LLMManager` es la unica puerta.** Nadie fuera de el toca un cliente: los servicios dicen que PASO necesitan —evaluar politicas, sintetizar, juzgar— y reciben un `LLMResult`. La razon no es estetica. Mientras el que llama pueda elegir el cliente, puede elegir el equivocado, y eso paso: el juez resolvia el servicio del modo demo y despues llamaba al de produccion, asi que la mitad del pipeline se iba por Anthropic sin credito mientras la otra mitad corria en Gemini.
 
-**`llm/adaptadores.py`: un adaptador por familia de modelo.** El sistema esta calibrado para Claude, y el resto necesita traduccion. Lo que cambia, medido y no supuesto:
+**`llm/perfiles.py`: un perfil por familia de modelo.** El sistema esta calibrado para Claude, y el resto necesita traduccion. Lo que cambia, medido y no supuesto:
 
 | | Claude | Modelos que razonan (Gemini, o-series, R1) |
 |---|---|---|
@@ -774,8 +774,8 @@ quest_ML/
       llm/
         client.py           # Protocol LLMClient + Anthropic y OpenAI-compatible
         manager.py          # LLMManager: la única puerta a los modelos
-        proveedores.py      # UN registro: URL base, adaptador y catálogo del panel
-        adaptadores.py      # Un adaptador por familia: tokens, reintentos, frecuencia
+        proveedores.py      # UN registro: URL base, perfil y catálogo del panel
+        perfiles.py         # Un perfil por familia: tokens, reintentos, frecuencia
         pricing.py          # Costo estimado por modelo
         parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/

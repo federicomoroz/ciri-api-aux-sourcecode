@@ -1,4 +1,4 @@
-"""Un adaptador por familia de modelo: lo que hay que hacer distinto con cada una.
+"""Un perfil por familia de modelo: lo que hay que hacer distinto con cada una.
 
 El sistema esta calibrado para Claude. Los prompts, el presupuesto de tokens y
 lo que se espera de una respuesta salieron de trabajar con Haiku y Sonnet. Eso
@@ -48,7 +48,7 @@ LLM_SIN_PISO: int = 0
 
 
 @dataclass(frozen=True, slots=True)
-class Adaptador:
+class Perfil:
     """Como hay que tratar a una familia de modelos."""
 
     nombre: str
@@ -71,7 +71,7 @@ class Adaptador:
 
 # Anthropic: la configuracion documentada. No razona sobre el presupuesto de
 # salida, asi que los 4096 alcanzan y subirlos seria reservar de mas.
-CLAUDE = Adaptador(
+CLAUDE = Perfil(
     nombre="claude",
     piso_de_tokens=LLM_SIN_PISO,
     razona=False,
@@ -80,7 +80,7 @@ CLAUDE = Adaptador(
 
 # Gemini razona y no lo reporta: medido, ~3.900 tokens de pensamiento en una
 # llamada cuyo `completion_tokens` decia 159.
-GEMINI = Adaptador(
+GEMINI = Perfil(
     nombre="gemini",
     piso_de_tokens=LLM_MAX_TOKENS_COMPATIBLE,
     razona=True,
@@ -89,7 +89,7 @@ GEMINI = Adaptador(
 )
 
 # Los reasoners de otras casas se comportan igual.
-RAZONADOR = Adaptador(
+RAZONADOR = Perfil(
     nombre="razonador",
     piso_de_tokens=LLM_MAX_TOKENS_COMPATIBLE,
     razona=True,
@@ -99,7 +99,7 @@ RAZONADOR = Adaptador(
 # Llama, Qwen y compania no razonan sobre el presupuesto, pero son mas verbosos
 # que Claude con estructuras largas: un piso moderado evita truncar los 17
 # veredictos sin reservar de mas.
-ABIERTO = Adaptador(
+ABIERTO = Perfil(
     nombre="abierto",
     piso_de_tokens=LLM_MAX_TOKENS_ABIERTO,
     razona=False,
@@ -110,7 +110,7 @@ ABIERTO = Adaptador(
 
 # Subcadenas del nombre del modelo que mandan sobre el proveedor: dentro de una
 # misma casa conviven modelos que razonan y modelos que no.
-POR_MODELO: tuple[tuple[str, Adaptador], ...] = (
+POR_MODELO: tuple[tuple[str, Perfil], ...] = (
     ("thinking", RAZONADOR),
     ("reasoner", RAZONADOR),   # deepseek-reasoner
     ("-r1", RAZONADOR),        # deepseek-r1 y derivados
@@ -122,8 +122,8 @@ POR_MODELO: tuple[tuple[str, Adaptador], ...] = (
 )
 
 
-def adaptador_de(proveedor: str, modelo: str = "") -> Adaptador:
-    """El adaptador de esa combinacion.
+def perfil_de(proveedor: str, modelo: str = "") -> Perfil:
+    """El perfil de esa combinacion.
 
     El modelo manda sobre el proveedor: `openrouter` sirve tanto Llama como
     Gemini, y no se les habla igual. Si no se reconoce ninguno se usa el de
@@ -131,12 +131,12 @@ def adaptador_de(proveedor: str, modelo: str = "") -> Adaptador:
     alto cuesta latencia; equivocarse hacia uno mas bajo corta la respuesta.
     """
     nombre = (modelo or "").lower()
-    for marca, adaptador in POR_MODELO:
+    for marca, perfil in POR_MODELO:
         if marca in nombre:
-            return adaptador
-    # Import perezoso: `proveedores` importa los adaptadores de este modulo,
+            return perfil
+    # Import perezoso: `proveedores` importa los perfiles de este modulo,
     # asi que pedirlo arriba seria un ciclo. La tabla vive alla porque agregar
     # un proveedor tiene que ser una sola edicion.
-    from .proveedores import ADAPTADOR_POR_PROVEEDOR
+    from .proveedores import PERFIL_POR_PROVEEDOR
 
-    return ADAPTADOR_POR_PROVEEDOR.get((proveedor or "").lower().strip(), ABIERTO)
+    return PERFIL_POR_PROVEEDOR.get((proveedor or "").lower().strip(), ABIERTO)

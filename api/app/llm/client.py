@@ -23,7 +23,7 @@ from ..domain.constants import (
     TRACE_LLM_CALL,
 )
 from ..observability.tracer import NoOpTracer, Tracer
-from .adaptadores import Adaptador, adaptador_de
+from .perfiles import Perfil, perfil_de
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ class OpenAICompatibleClient:
         base_url: str,
         tracer: Tracer | None = None,
         max_retries: int = LLM_DEFAULT_MAX_RETRIES,
-        adaptador: Adaptador | None = None,
+        perfil: Perfil | None = None,
         proveedor: str = "",
     ):
         if not base_url:
@@ -160,8 +160,8 @@ class OpenAICompatibleClient:
         self.tracer = tracer or NoOpTracer()
         self.max_retries = max_retries
         # Lo que hay que hacer distinto con esta familia de modelos. El sistema
-        # esta calibrado para Claude; el adaptador traduce.
-        self.adaptador = adaptador or adaptador_de(proveedor, model)
+        # esta calibrado para Claude; el perfil traduce.
+        self.perfil = perfil or perfil_de(proveedor, model)
         self.client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -178,11 +178,11 @@ class OpenAICompatibleClient:
         trace_id: str | None = None,
     ) -> LLMResult:
         start = time.time()
-        # El piso lo pone el adaptador: un modelo que razona descuenta lo que
+        # El piso lo pone el perfil: un modelo que razona descuenta lo que
         # piensa de este mismo presupuesto y con el techo de Claude corta la
         # respuesta a medias. Solo se aplica si el llamador no pidio uno propio.
         if max_tokens == LLM_DEFAULT_MAX_TOKENS:
-            max_tokens = max(max_tokens, self.adaptador.piso_de_tokens)
+            max_tokens = max(max_tokens, self.perfil.piso_de_tokens)
         cuerpo = self._pedir({
             "model": self.model,
             "max_tokens": max_tokens,
@@ -245,10 +245,10 @@ class OpenAICompatibleClient:
                 logger.error(
                     "Error del proveedor (%s): %s", codigo, e.response.text[:300],
                 )
-                if codigo not in self.adaptador.reintenta or intento == self.max_retries:
+                if codigo not in self.perfil.reintenta or intento == self.max_retries:
                     raise
                 ultimo = e
-                espera = self._espera(e.response, intento, self.adaptador)
+                espera = self._espera(e.response, intento, self.perfil)
                 logger.warning(
                     "%s devolvio %s: reintento %d/%d en %.1fs",
                     self.model, codigo, intento + 1, self.max_retries, espera,
@@ -260,9 +260,9 @@ class OpenAICompatibleClient:
         raise ultimo   # pragma: no cover — el bucle sale por return o raise
 
     @staticmethod
-    def _espera(respuesta: httpx.Response, intento: int, adaptador: Adaptador | None = None) -> float:
+    def _espera(respuesta: httpx.Response, intento: int, perfil: Perfil | None = None) -> float:
         """Lo que pide el proveedor, o espera creciente si no dice nada."""
-        a = adaptador or adaptador_de("")
+        a = perfil or perfil_de("")
         cabecera = respuesta.headers.get("Retry-After", "")
         if cabecera.isdigit():
             return min(float(cabecera), a.espera_maxima_s)

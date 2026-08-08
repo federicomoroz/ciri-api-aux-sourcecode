@@ -33,8 +33,8 @@ from ..domain.constants import (
     LLM_RPM_VENTANA_S,
 )
 from ..observability.tracer import Tracer
-from .adaptadores import adaptador_de
 from .client import AnthropicClient, LLMClient, OpenAICompatibleClient
+from .perfiles import perfil_de
 from .proveedores import PROVEEDOR_ANTHROPIC, base_url_de, existe
 
 logger = logging.getLogger(__name__)
@@ -144,14 +144,14 @@ class LLMManager:
     def rpm_de(self, proveedor: str, modelo: str) -> int:
         """Pedidos por minuto que se le permiten a esa combinacion.
 
-        El adaptador pone el piso conocido de la familia; `CB_LLM_RPM` lo pisa,
+        El perfil pone el piso conocido de la familia; `CB_LLM_RPM` lo pisa,
         porque la cuota es de la cuenta y no del modelo: quien pague un plan no
         tiene por que arrastrar el techo del free tier.
         """
         override = (getattr(self.settings, "llm_rpm", None) or {}).get(proveedor)
         if override is not None:
             return int(override)
-        return adaptador_de(proveedor, modelo).pedidos_por_minuto
+        return perfil_de(proveedor, modelo).pedidos_por_minuto
 
     def _espaciar(self, proveedor: str, modelo: str) -> None:
         """Espera lo justo para no pasarse de los pedidos por minuto.

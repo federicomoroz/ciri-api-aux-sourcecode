@@ -326,9 +326,8 @@
 
   <h2>Qué patrones usa, y cuáles no</h2>
   <p class="sub">
-    Lo que sigue no es un catálogo: es qué se aplicó, <b>dónde duele si no está</b>, y una
-    corrección de nombre — el archivo que se llama <code>adaptadores.py</code> no implementa el
-    patrón Adapter.
+    Lo que sigue no es un catálogo: es qué se aplicó, <b>dónde duele si no está</b>, y qué se
+    decidió deliberadamente no usar.
   </p>
 
   <figure class="ilustra">
@@ -451,7 +450,7 @@
         <p>
           Un modelo que razona necesita más presupuesto de tokens que uno que no; un free tier
           aguanta cinco pedidos por minuto y otro treinta. Eso podría ser una escalera de
-          condicionales; es una tabla de <code>Adaptador</code> congelados, con el <b>hecho medido
+          condicionales; es una tabla de <code>Perfil</code> congelados, con el <b>hecho medido
           que justifica cada número</b> escrito al lado: uno de los campos existe porque una llamada
           gastó ~3.900 tokens de razonamiento y reportó 159 de respuesta.
         </p>
@@ -469,19 +468,21 @@
 
     <details class="letra">
       <summary>
-        <span class="inicial" style="background:var(--sql-suave); color:var(--sql)">⚠</span>
-        <span><span class="titulo-letra">El archivo <code>adaptadores.py</code> no es el patrón Adapter</span>
-        <span class="nota-letra">Está mal nombrado, y conviene decirlo antes de que alguien lo lea buscando otra cosa.</span></span>
+        <span class="inicial" style="background:var(--llm-suave); color:var(--llm)">⇄</span>
+        <span><span class="titulo-letra">Adaptador</span>
+        <span class="nota-letra">Uno solo, y es el que traduce un protocolo ajeno al propio.</span></span>
       </summary>
       <div class="cuerpo">
         <p>
-          Adapter traduce una interfaz a otra. <code>adaptadores.py</code> no traduce nada:
-          parametriza comportamiento por familia de modelo. Es <b>Strategy-como-dato más
-          Registry</b>.
+          <code>OpenAICompatibleClient</code> adapta el protocolo de OpenAI al Protocol
+          <code>LLMClient</code>. Es lo que permite que diez proveedores distintos entren por la
+          misma puerta sin que ningún llamador se entere.
         </p>
         <p>
-          El Adapter real del proyecto es <code>OpenAICompatibleClient</code>, que adapta el
-          protocolo de OpenAI al Protocol <code>LLMClient</code>. Ese sí, y está bien hecho.
+          El archivo que guarda las diferencias entre familias de modelo <b>no</b> es un adaptador
+          y por eso no se llama así: se llama <code>perfiles.py</code>, porque lo que guarda es el
+          perfil con el que se le habla a cada familia. Se llamaba <code>adaptadores.py</code>, y
+          era un nombre que había que explicar — que es la definición de un nombre mal puesto.
         </p>
       </div>
     </details>

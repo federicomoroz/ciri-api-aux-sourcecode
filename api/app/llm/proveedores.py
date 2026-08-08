@@ -1,7 +1,7 @@
 """Un solo lugar donde vive «que proveedores de modelo conoce el sistema».
 
 Estaba en tres tablas paralelas con la misma clave: la URL base en `client.py`,
-el adaptador en `adaptadores.py` y los metadatos del panel en `constants.py`.
+el perfil de la familia en `perfiles.py` y los metadatos del panel en `constants.py`.
 Agregar un proveedor eran tres ediciones sincronizadas, y **el modo de falla de
 olvidarse una era silencioso**: sin URL base, `LLMManager._construir` caia al
 cliente de Anthropic y mandaba el modelo de Groq con la credencial de Groq a la
@@ -11,8 +11,8 @@ proveedor faltante.
 Ahora es una entrada y el resto se deriva. Lo que cada campo decide:
 
 - `base_url` — a donde se habla. Vacio significa SDK propio: solo Anthropic.
-- `adaptador` — como se le habla (piso de tokens, reintentos, pedidos por
-  minuto). El modelo puede afinarlo mas; ver `adaptadores.adaptador_de`.
+- `perfil` — como se le habla (piso de tokens, reintentos, pedidos por
+  minuto). El modelo puede afinarlo mas; ver `perfiles.perfil_de`.
 - `nombre`, `gratis`, `modelos`, `consola`, `formato_clave` — lo que el panel
   muestra para que quien evalua no tenga que escribir de memoria.
 
@@ -20,7 +20,7 @@ La lista no restringe: `CB_LLM_BASE_URL` acepta cualquier endpoint que hable el
 protocolo de OpenAI, y el campo de modelo acepta cualquier identificador.
 """
 
-from .adaptadores import ABIERTO, CLAUDE, GEMINI, Adaptador
+from .perfiles import ABIERTO, CLAUDE, GEMINI, Perfil
 
 # El unico que no habla el protocolo de OpenAI: tiene SDK propio. Estaba como
 # literal "anthropic" en cinco lugares de cuatro archivos, comparado con `==`
@@ -34,7 +34,7 @@ PROVEEDORES: dict[str, dict] = {
     "anthropic": {
         # "" = SDK propio, no compatible con el protocolo de OpenAI.
         "base_url": "",
-        "adaptador": CLAUDE,
+        "perfil": CLAUDE,
         "nombre": "Anthropic",
         "gratis": False,
         "modelos": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"],
@@ -43,7 +43,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "Groq",
         "gratis": True,
         "modelos": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b"],
@@ -52,7 +52,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-        "adaptador": GEMINI,
+        "perfil": GEMINI,
         "nombre": "Google Gemini",
         "gratis": True,
         # Los alias `-latest` y no una version fija: Google deja de habilitar
@@ -72,7 +72,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "OpenRouter",
         "gratis": True,
         # Solo los slugs terminados en `:free` no se cobran, y el catalogo rota:
@@ -89,7 +89,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "cerebras": {
         "base_url": "https://api.cerebras.ai/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "Cerebras",
         "gratis": True,
         "modelos": ["llama-3.3-70b"],
@@ -98,7 +98,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "github": {
         "base_url": "https://models.inference.ai.azure.com",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "GitHub Models",
         "gratis": True,
         "modelos": ["gpt-4o-mini"],
@@ -107,7 +107,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "openai": {
         "base_url": "https://api.openai.com/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "OpenAI",
         "gratis": False,
         "modelos": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
@@ -119,7 +119,7 @@ PROVEEDORES: dict[str, dict] = {
     # seguro haria que el modo demo gaste plata ajena creyendo que no gasta.
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "DeepSeek",
         "gratis": False,
         "modelos": ["deepseek-chat", "deepseek-reasoner"],
@@ -128,7 +128,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "alibaba": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "Qwen (Alibaba)",
         "gratis": False,
         "modelos": ["qwen-plus", "qwen-turbo", "qwen2.5-72b-instruct"],
@@ -137,7 +137,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "zhipu": {
         "base_url": "https://open.bigmodel.cn/api/paas/v4",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "Zhipu GLM",
         "gratis": False,
         "modelos": ["glm-4-flash", "glm-4-plus"],
@@ -146,7 +146,7 @@ PROVEEDORES: dict[str, dict] = {
     },
     "moonshot": {
         "base_url": "https://api.moonshot.cn/v1",
-        "adaptador": ABIERTO,
+        "perfil": ABIERTO,
         "nombre": "Moonshot (Kimi)",
         "gratis": False,
         "modelos": ["moonshot-v1-8k", "moonshot-v1-32k"],
@@ -162,8 +162,8 @@ BASES_OPENAI: dict[str, str] = {
     pid: p["base_url"] for pid, p in PROVEEDORES.items() if p["base_url"]
 }
 
-ADAPTADOR_POR_PROVEEDOR: dict[str, Adaptador] = {
-    pid: p["adaptador"] for pid, p in PROVEEDORES.items()
+PERFIL_POR_PROVEEDOR: dict[str, Perfil] = {
+    pid: p["perfil"] for pid, p in PROVEEDORES.items()
 }
 
 
@@ -181,7 +181,7 @@ def base_url_de(proveedor: str, explicita: str = "") -> str:
 def catalogo() -> list[dict]:
     """Lo que el panel muestra para elegir proveedor y modelo.
 
-    Sin `adaptador`: es una decision interna de como se le habla al proveedor, no
+    Sin `perfil`: es una decision interna de como se le habla al proveedor, no
     algo que quien evalua tenga que ver ni pueda cambiar.
     """
     return [

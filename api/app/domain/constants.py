@@ -222,7 +222,7 @@ PASOS_DESCRIPCION: dict[str, dict[str, str]] = {
 }
 
 # El catalogo de proveedores se mudo a `llm/proveedores.py`, que es donde ya
-# vivian su URL base y su adaptador. Tres tablas con la misma clave en tres
+# vivian su URL base y su perfil. Tres tablas con la misma clave en tres
 # archivos: agregar un proveedor eran tres ediciones sincronizadas y olvidarse
 # una fallaba en silencio.
 

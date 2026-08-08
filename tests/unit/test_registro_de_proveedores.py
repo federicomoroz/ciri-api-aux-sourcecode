@@ -1,7 +1,7 @@
 """Agregar un proveedor tiene que ser una sola edicion, y fallar fuerte si no.
 
 Estaba en tres tablas paralelas con la misma clave: la URL base en `client.py`,
-el adaptador en `adaptadores.py`, los metadatos del panel en `constants.py`. Las
+el perfil de la familia en `perfiles.py`, los metadatos del panel en `constants.py`. Las
 tres estaban sincronizadas —lo verifique antes de unirlas—, pero nada lo
 garantizaba, y **el modo de falla de olvidarse una era silencioso**: sin URL base,
 `_construir` caia al cliente de Anthropic y mandaba el modelo de Groq con la
@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.app.llm.adaptadores import ABIERTO, adaptador_de
 from api.app.llm.manager import LLMManager
+from api.app.llm.perfiles import ABIERTO, perfil_de
 from api.app.llm.proveedores import (
-    ADAPTADOR_POR_PROVEEDOR,
     BASES_OPENAI,
+    PERFIL_POR_PROVEEDOR,
     PROVEEDOR_ANTHROPIC,
     PROVEEDORES,
     base_url_de,
@@ -25,7 +25,7 @@ from api.app.llm.proveedores import (
 )
 from api.app.observability.tracer import NoOpTracer
 
-CAMPOS = ("base_url", "adaptador", "nombre", "gratis", "modelos", "consola", "formato_clave")
+CAMPOS = ("base_url", "perfil", "nombre", "gratis", "modelos", "consola", "formato_clave")
 
 
 @pytest.fixture
@@ -70,12 +70,12 @@ class TestLasVistasDerivanDelRegistro:
     def test_las_bases_openai_son_todos_menos_el_del_sdk_propio(self):
         assert set(BASES_OPENAI) == set(PROVEEDORES) - {PROVEEDOR_ANTHROPIC}
 
-    def test_cada_proveedor_tiene_su_adaptador(self):
-        assert set(ADAPTADOR_POR_PROVEEDOR) == set(PROVEEDORES)
+    def test_cada_proveedor_tiene_su_perfil(self):
+        assert set(PERFIL_POR_PROVEEDOR) == set(PROVEEDORES)
 
-    def test_el_catalogo_del_panel_no_expone_el_adaptador(self):
+    def test_el_catalogo_del_panel_no_expone_el_perfil(self):
         """Es una decision interna de como se le habla, no algo que se elija."""
-        assert all("adaptador" not in e for e in catalogo())
+        assert all("perfil" not in e for e in catalogo())
 
     def test_el_catalogo_los_lista_a_todos(self):
         assert {e["id"] for e in catalogo()} == set(PROVEEDORES)
@@ -106,18 +106,18 @@ class TestUnProveedorDesconocidoNoSeDisimula:
         assert type(manager._construir("groq", "llama-x", "")).__name__ == "OpenAICompatibleClient"
 
 
-class TestElAdaptadorSaleDelRegistro:
+class TestElPerfilSaleDelRegistro:
 
     def test_uno_conocido_usa_el_suyo(self):
-        assert adaptador_de("gemini") is ADAPTADOR_POR_PROVEEDOR["gemini"]
+        assert perfil_de("gemini") is PERFIL_POR_PROVEEDOR["gemini"]
 
     def test_uno_desconocido_cae_al_mas_tolerante(self):
         """Equivocarse hacia un techo alto cuesta latencia; hacia uno bajo corta."""
-        assert adaptador_de("no-existe") is ABIERTO
+        assert perfil_de("no-existe") is ABIERTO
 
     def test_el_modelo_le_gana_al_proveedor(self):
         """OpenRouter sirve Llama y Gemini, y no se les habla igual."""
-        assert adaptador_de("openrouter", "google/gemini-flash") is not adaptador_de("openrouter", "llama-3")
+        assert perfil_de("openrouter", "google/gemini-flash") is not perfil_de("openrouter", "llama-3")
 
 
 def test_la_url_explicita_le_gana_a_la_del_registro():
