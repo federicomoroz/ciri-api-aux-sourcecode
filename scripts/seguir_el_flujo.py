@@ -256,9 +256,17 @@ def main() -> int:
         # El chequeo de contrato solo tiene sentido sobre un recorrido completo:
         # abortado en el paso 1, informaria los otros doce nodos como «el canvas
         # los tiene y este recorrido no los llama», que es ruido y no un desfase.
-        print(f"\n  Se cortó en «{fallaron[0].nodo}»:")
+        # «Falló» y no «se cortó»: el recorrido NO se detiene en el primer error.
+        # Solo abandona si no hay transacción o no hay resolución, porque sin eso
+        # los pasos siguientes no tienen con qué correr. Un paso de contexto que
+        # falla —el RAG cortado por frecuencia, por ejemplo— deja su hueco y el
+        # análisis sigue con menos evidencia, que es lo que hace el canvas.
+        # Decir «se cortó» mandaba a buscar una interrupción que no hubo.
+        completado = pasos[-1].bien
+        print(f"\n  Falló en {len(fallaron)} de {len(pasos)} pasos"
+              f"{'; el recorrido siguió igual' if completado else ''}:")
         for f in fallaron:
-            print(f"    {f.estado} · {str(f.cuerpo)[:160]}")
+            print(f"    {f.nodo}: {f.estado} · {str(f.cuerpo)[:160]}")
         return 1
 
     desfasado = contrato(wf, pasos, salteados)
