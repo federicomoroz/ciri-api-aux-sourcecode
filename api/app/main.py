@@ -81,8 +81,20 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Paths exempt from API key auth (public-facing)
+# Rutas que no piden la clave, ni siquiera con `CB_ADMIN_API_KEY` cargada.
 _PUBLIC_PATHS = frozenset({"/", "/health", "/panel"})
+
+# El panel entero queda afuera, y eso incluye `/api/panel/analyze` y
+# `/analyze-stream`, que son los dos endpoints que GASTAN TOKENS. Es
+# deliberado: el panel existe para que alguien pueda evaluar el sistema sin
+# credenciales, y pedirle una clave para usarlo lo volveria inutil.
+#
+# Lo que acota el gasto no es esta lista, es el modo demo: por defecto el
+# servidor resuelve con un modelo de free tier (`CB_DEMO_MODE=true`), asi que
+# una rafaga contra este endpoint cuesta cuota gratuita y no dinero. Con
+# `CB_DEMO_MODE=false` eso deja de ser cierto y esta exencion pasa a ser una
+# cuenta de LLM abierta a internet: ahi hay que sacar el prefijo de aca, o
+# poner un limite por origen delante. Esta escrito en `docs/decisions.md`.
 _PUBLIC_PREFIXES = ("/api/panel/",)
 
 
