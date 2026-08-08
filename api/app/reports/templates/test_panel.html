@@ -2816,11 +2816,12 @@ function onModoPipeline() {
 }
 
 function refrescarBotonPorN8n() {
-  const falta = usaN8n() && !getN8nUrl();
+  const falta = usaN8n() && !n8nAlcanzable;
   const btn = $('btn-submit');
   if (falta) {
     btn.disabled = true;
-    $('btn-label').textContent = 'Falta la URL de n8n';
+    $('btn-label').textContent = getN8nUrl() ? 'La API no llega a ese n8n'
+                                             : 'Falta la URL de n8n';
   } else if (isCustom) {
     refreshSubmitBtn();
   } else if (selectedIdx !== null) {
@@ -2828,7 +2829,15 @@ function refrescarBotonPorN8n() {
   }
 }
 
+// Si la API llega a un n8n. Es lo que decide si el pipeline con orquestacion se
+// puede usar — y NO es lo mismo que «el campo tiene texto»: cuando la API corre
+// en docker-compose ya trae `CB_N8N_BASE_URL` apuntando al servicio vecino, asi
+// que llega sin que nadie escriba nada. Mientras el boton miraba el campo, el
+// badge decia «responde» y el boton decia «falta la URL» en la misma pantalla.
+let n8nAlcanzable = false;
+
 function habilitarModosN8n(puede, motivo) {
+  n8nAlcanzable = puede;
   const mode = $('pipeline-mode');
   ['test', 'production'].forEach(v => {
     const op = [...mode.options].find(o => o.value === v);
@@ -2968,9 +2977,12 @@ async function submitAnalysis() {
   const payload = buildPayload();
   if (!payload) return;
 
-  if (usaN8n() && !getN8nUrl()) {
-    showToast('amber', 'Falta la URL de n8n',
-      'El modo n8n ejecuta en tu instancia. Pega su URL base, o elegi Directo.');
+  if (usaN8n() && !n8nAlcanzable) {
+    showToast('amber',
+      getN8nUrl() ? 'La API no llega a ese n8n' : 'Falta la URL de n8n',
+      getN8nUrl()
+        ? 'Al webhook lo llama la API, no tu navegador. Revisa que la URL sea alcanzable desde donde corre la API.'
+        : 'El modo n8n ejecuta en tu instancia. Pega su URL base, o elegi Directo.');
     $('inp-n8n-url').focus();
     return;
   }
