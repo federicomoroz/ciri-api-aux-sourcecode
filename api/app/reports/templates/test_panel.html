@@ -3393,11 +3393,31 @@ function pararSondaHitl() {
   if (sondaHitl) { clearInterval(sondaHitl); sondaHitl = null; }
 }
 
+async function informeCacheado(payload) {
+  const q = new URLSearchParams({
+    transaction_id: payload.transaction_id,
+    cliente_vip: String(!!payload.cliente_vip),
+  });
+  try {
+    const r = await fetch(API_BASE + '/api/cache/lookup?' + q.toString());
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.cached && d.html ? d.html : null;
+  } catch { return null; }
+}
+
 async function esperarDesenlaceHitl(payload) {
   // Se pregunta por el informe cacheado cada pocos segundos. El intervalo es
   // largo a proposito: del otro lado hay una persona leyendo un caso, no un
   // proceso — sondear rapido solo agrega ruido.
   pararSondaHitl();
+
+  // Lo que YA habia antes de que este caso derivara. Sin esto, un informe de una
+  // corrida anterior del mismo caso hace que el panel anuncie «resuelta por
+  // analista» en el primer sondeo, sin que nadie haya decidido nada. Lo que se
+  // espera no es que exista un informe: es que aparezca uno DISTINTO.
+  const previo = await informeCacheado(payload);
+
   const desde = Date.now();
   const LIMITE_MS = 30 * 60 * 1000;   // el Wait de n8n aguanta 24h; el panel, no
 
@@ -3409,14 +3429,8 @@ async function esperarDesenlaceHitl(payload) {
       return;
     }
     try {
-      const q = new URLSearchParams({
-        transaction_id: payload.transaction_id,
-        cliente_vip: String(!!payload.cliente_vip),
-      });
-      const r = await fetch(API_BASE + '/api/cache/lookup?' + q.toString());
-      if (!r.ok) return;
-      const d = await r.json();
-      if (!d.cached || !d.html) return;
+      const ahora = await informeCacheado(payload);
+      if (!ahora || ahora === previo) return;
 
       pararSondaHitl();
       const pill = $('verdict-pill');
@@ -3429,7 +3443,7 @@ async function esperarDesenlaceHitl(payload) {
       const frame = $('report-frame');
       frame.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms');
       frame.removeAttribute('src');
-      frame.srcdoc = d.html;
+      frame.srcdoc = ahora;
     } catch { /* la proxima vuelta reintenta */ }
   }, 4000);
 }
