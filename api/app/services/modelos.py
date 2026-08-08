@@ -26,10 +26,11 @@ from ..domain.constants import (
     PASO_RESOLUCION,
     PASOS_DEL_PIPELINE,
     PASOS_DESCRIPCION,
-    PROVEEDORES_SUGERIDOS,
 )
-from ..llm.client import LLMClient, base_url_de
+from ..llm.client import LLMClient
 from ..llm.manager import LLMManager
+from ..llm.proveedores import PROVEEDOR_ANTHROPIC
+from ..llm.proveedores import catalogo as catalogo_de_proveedores
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class ModelosService:
 
     def por_defecto(self) -> dict[str, dict[str, str]]:
         """Lo que dice `constants.py` y el `.env`, sin nada guardado encima."""
-        proveedor = self.settings.llm_provider or "anthropic"
+        proveedor = self.settings.llm_provider or PROVEEDOR_ANTHROPIC
         sintesis = self.settings.llm_model_resolution or self.settings.llm_model
         return {
             PASO_POLITICAS: {"proveedor": proveedor, "modelo": self.settings.llm_model},
@@ -180,20 +181,12 @@ class ModelosService:
 
     def catalogo(self) -> list[dict]:
         """Proveedores conocidos, cuales son gratis y cual tiene clave cargada."""
+        # Lo que el panel muestra sale del registro; lo unico que agrega esta
+        # clase es si hay credencial cargada, que es lo unico que depende del
+        # estado del servidor.
         return [
-            {
-                "id": pid,
-                "nombre": info["nombre"],
-                "gratis": info["gratis"],
-                "modelos": info["modelos"],
-                "base_url": base_url_de(pid),
-                "tiene_clave": self._hay_clave(pid),
-                # De donde se saca la clave y con que forma: sin esto, elegir un
-                # proveedor deja al que lo eligio buscando en Google.
-                "consola": info["consola"],
-                "formato_clave": info["formato_clave"],
-            }
-            for pid, info in PROVEEDORES_SUGERIDOS.items()
+            {**entrada, "tiene_clave": self._hay_clave(entrada["id"])}
+            for entrada in catalogo_de_proveedores()
         ]
 
     def modelo_demo(self) -> dict | None:

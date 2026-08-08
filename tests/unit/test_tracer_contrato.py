@@ -90,12 +90,7 @@ class TestLaClausulaQueLangfuseIncumple:
             "dice que observa pero no devolvio un id de traza usable"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="incumplimiento conocido: enabled queda en True aunque trace() falle "
-               "— se cierra en la fase 3 del refactor SOLID",
-    )
-    def test_langfuse_caido_deberia_declararse_apagado(self):
+    def test_langfuse_caido_se_declara_apagado(self):
         """El estado real: construyo bien y despues las llamadas fallan.
 
         Sin `langfuse` instalado, el constructor cae por ImportError y deja
@@ -117,10 +112,12 @@ class TestLaClausulaQueLangfuseIncumple:
         tracer._enabled = True
         tracer.langfuse = ClienteQueFalla()
 
-        assert not (tracer.enabled and not tracer.trace("analisis", {}, {})), (
+        assert tracer.enabled, "el montaje del test es incorrecto: ya arrancaba apagado"
+        assert tracer.trace("analisis", {}, {}) == "", "la llamada tenia que fallar"
+        assert not tracer.enabled, (
             "sigue diciendo que observa despues de que la anotacion fallara: "
-            "LangfuseStatsService no va a caer al registro local, y el panel "
-            "va a mostrar la fuente vacia en vez de la que tiene datos"
+            "LangfuseStatsService no va a caer al registro local, y el panel va a "
+            "mostrar la fuente remota vacia en vez de la local, que si tiene datos"
         )
 
 

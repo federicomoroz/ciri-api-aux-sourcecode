@@ -24,6 +24,7 @@ from ..domain.constants import (
     TRACE_RESOLVE,
 )
 from ..domain.context import CaseContext
+from ..domain.contratos import Completador, SumideroDeAlertas
 from ..domain.enums import RiskLevel, Severity, VerdictType
 from ..domain.models import JudgeEvaluationOutput, PolicyVerdictOutput, ResolutionOutput
 from ..llm import prompts
@@ -50,10 +51,10 @@ class ResolutionService:
         tracer: Tracer | None = None,
         llm_resolution: LLMClient | None = None,
         llm_judge: LLMClient | None = None,
-        modelos=None,
+        modelos: Completador | None = None,
         demo: bool = False,
         api_key: str = "",
-        alertas=None,
+        alertas: SumideroDeAlertas | None = None,
     ):
         """Este servicio no conoce clientes de modelo. Pide por paso.
 

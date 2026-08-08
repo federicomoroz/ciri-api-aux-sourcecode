@@ -117,21 +117,6 @@ class AnthropicClient:
             logger.debug("No se pudo cerrar el cliente Anthropic", exc_info=True)
 
 
-# Bases compatibles con OpenAI que hoy tienen free tier real. La lista es
-# comodidad, no restriccion: `CB_LLM_BASE_URL` acepta cualquier endpoint que
-# hable el mismo protocolo.
-PROVEEDORES: dict[str, str] = {
-    "groq": "https://api.groq.com/openai/v1",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "github": "https://models.inference.ai.azure.com",
-    "cerebras": "https://api.cerebras.ai/v1",
-    "openai": "https://api.openai.com/v1",
-    "deepseek": "https://api.deepseek.com/v1",
-    "alibaba": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "zhipu": "https://open.bigmodel.cn/api/paas/v4",
-    "moonshot": "https://api.moonshot.cn/v1",
-}
 
 
 class OpenAICompatibleClient:
@@ -288,10 +273,3 @@ class OpenAICompatibleClient:
             self.client.close()
         except Exception:
             logger.debug("No se pudo cerrar el cliente HTTP", exc_info=True)
-
-
-def base_url_de(proveedor: str, explicita: str = "") -> str:
-    """La URL del proveedor, o la que le pasen. Vacio si es Anthropic."""
-    if explicita:
-        return explicita
-    return PROVEEDORES.get((proveedor or "").lower().strip(), "")

@@ -32,7 +32,6 @@ __all__ = [
     "PASO_JUEZ",
     "PASOS_DEL_PIPELINE",
     "PASOS_DESCRIPCION",
-    "PROVEEDORES_SUGERIDOS",
     # Guardrails
     "GUARDRAIL_MAX_COMPENSATION_RATIO",
     "GUARDRAIL_MAX_CONFIDENCE",
@@ -222,110 +221,10 @@ PASOS_DESCRIPCION: dict[str, dict[str, str]] = {
     },
 }
 
-# Proveedores conocidos y algunos modelos suyos, para que el panel sugiera en vez
-# de exigir que se escriba de memoria. La lista no restringe: el campo acepta
-# cualquier identificador que el proveedor entienda.
-PROVEEDORES_SUGERIDOS: dict[str, dict] = {
-    "anthropic": {
-        "nombre": "Anthropic",
-        "gratis": False,
-        "modelos": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"],
-        "consola": "https://console.anthropic.com/settings/keys",
-        "formato_clave": "sk-ant-api03-...",
-    },
-    "groq": {
-        "nombre": "Groq",
-        "gratis": True,
-        "modelos": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b"],
-        "consola": "https://console.groq.com/keys",
-        "formato_clave": "gsk_...",
-    },
-    "gemini": {
-        "nombre": "Google Gemini",
-        "gratis": True,
-        # Los alias `-latest` y no una version fija: Google deja de habilitar
-        # modelos a cuentas nuevas sin previo aviso. `gemini-2.5-flash` estaba
-        # aca y ya devuelve «no longer available to new users» — el alias sigue
-        # al modelo vigente y no se muere solo.
-        #
-        # `flash-lite` va primero, y no por calidad: por cuota. En el free tier,
-        # el flash grande da 20 pedidos por dia y el lite 500. Como cada analisis
-        # son tres llamadas, eso es la diferencia entre 6 casos diarios y 166 —
-        # o sea, entre un panel que se agota en cinco minutos y uno que aguanta
-        # una evaluacion. Para prompts con estructura explicita como los de aca,
-        # el modelo mas chico rinde parecido.
-        "modelos": ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-3-flash-preview"],
-        "consola": "https://aistudio.google.com/apikey",
-        "formato_clave": "AIza...",
-    },
-    "openrouter": {
-        "nombre": "OpenRouter",
-        "gratis": True,
-        # Solo los slugs terminados en `:free` no se cobran, y el catalogo rota:
-        # un modelo que hoy es gratis puede dejar de serlo. La lista vigente esta
-        # en `GET https://openrouter.ai/api/v1/models` filtrando por `:free`.
-        # Estos se verificaron contra la API.
-        "modelos": [
-            "openai/gpt-oss-20b:free",
-            "google/gemma-4-31b-it:free",
-            "nvidia/nemotron-3-super-120b-a12b:free",
-        ],
-        "consola": "https://openrouter.ai/keys",
-        "formato_clave": "sk-or-v1-...",
-    },
-    "cerebras": {
-        "nombre": "Cerebras",
-        "gratis": True,
-        "modelos": ["llama-3.3-70b"],
-        "consola": "https://cloud.cerebras.ai/platform",
-        "formato_clave": "csk-...",
-    },
-    "github": {
-        "nombre": "GitHub Models",
-        "gratis": True,
-        "modelos": ["gpt-4o-mini"],
-        "consola": "https://github.com/settings/tokens",
-        "formato_clave": "github_pat_... o ghp_...",
-    },
-    "openai": {
-        "nombre": "OpenAI",
-        "gratis": False,
-        "modelos": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
-        "consola": "https://platform.openai.com/api-keys",
-        "formato_clave": "sk-proj-...",
-    },
-    # Compatibles con OpenAI y competitivos en precio. Se marcan como de pago a
-    # proposito: varios tienen cuota gratuita, pero anunciar «gratis» sin estar
-    # seguro haria que el modo demo gaste plata ajena creyendo que no gasta.
-    "deepseek": {
-        "nombre": "DeepSeek",
-        "gratis": False,
-        "modelos": ["deepseek-chat", "deepseek-reasoner"],
-        "consola": "https://platform.deepseek.com/api_keys",
-        "formato_clave": "sk-...",
-    },
-    "alibaba": {
-        "nombre": "Qwen (Alibaba)",
-        "gratis": False,
-        "modelos": ["qwen-plus", "qwen-turbo", "qwen2.5-72b-instruct"],
-        "consola": "https://bailian.console.alibabacloud.com/",
-        "formato_clave": "sk-...",
-    },
-    "zhipu": {
-        "nombre": "Zhipu GLM",
-        "gratis": False,
-        "modelos": ["glm-4-flash", "glm-4-plus"],
-        "consola": "https://open.bigmodel.cn/usercenter/apikeys",
-        "formato_clave": "...",
-    },
-    "moonshot": {
-        "nombre": "Moonshot (Kimi)",
-        "gratis": False,
-        "modelos": ["moonshot-v1-8k", "moonshot-v1-32k"],
-        "consola": "https://platform.moonshot.cn/console/api-keys",
-        "formato_clave": "sk-...",
-    },
-}
+# El catalogo de proveedores se mudo a `llm/proveedores.py`, que es donde ya
+# vivian su URL base y su adaptador. Tres tablas con la misma clave en tres
+# archivos: agregar un proveedor eran tres ediciones sincronizadas y olvidarse
+# una fallaba en silencio.
 
 # ── Guardrails ──────────────────────────────────────────────────────────────
 GUARDRAIL_MAX_COMPENSATION_RATIO: float = 1.1   # comp > amount × N → warning

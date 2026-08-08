@@ -22,7 +22,7 @@ from ..domain.constants import (
 )
 from ..llm.pricing import estimar_costo_usd
 from ..observability.resumen import resumir_trazas
-from ..observability.tracer import Tracer
+from ..observability.tracer import FuenteDeMetricas, Tracer
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +53,20 @@ class LangfuseStatsService:
 
     @property
     def enabled(self) -> bool:
-        """Hay estadisticas si el tracer esta activo y expone un cliente que consultar.
+        """Si hay un Langfuse vivo al que preguntarle.
 
-        Se pregunta por capacidades, no por la clase concreta: asi cualquier otro
-        tracer que sepa responder sirve, y este modulo no necesita importar la
-        implementacion de Langfuse.
+        `enabled` del tracer significa «observa de verdad», no «se configuro»:
+        `LangfuseTracer` se apaga solo en cuanto una llamada falla. Sin eso, esta
+        propiedad seguia dando True con Langfuse caido y el panel mostraba la
+        fuente remota vacia en vez del registro local, que si tenia datos.
+
+        El `hasattr(tracer, "langfuse")` sigue siendo la unica forma honesta de
+        preguntar «¿este tracer habla con el servicio remoto?»: la capacidad no
+        es parte de `Tracer` —escribir— ni de `FuenteDeMetricas` —leer el
+        historico propio—, porque el historico de Langfuse se consulta con la API
+        de Langfuse y de eso se encarga esta clase.
         """
-        return bool(getattr(self._tracer, "enabled", False)) and hasattr(self._tracer, "langfuse")
+        return bool(self._tracer.enabled) and hasattr(self._tracer, "langfuse")
 
     def get_stats(self) -> dict:
         if not self.enabled:
@@ -162,9 +169,10 @@ class LangfuseStatsService:
         `fuente` va en la respuesta para que el panel diga de donde salen: no es
         lo mismo «medido en este proceso» que «lo que registro Langfuse».
         """
-        resumen, recientes = getattr(self._tracer, "resumen", lambda _limite: ({}, []))(
-            LANGFUSE_STATS_FETCH_LIMIT
-        )
+        if not isinstance(self._tracer, FuenteDeMetricas):
+            # No todo el que escribe puede leer: `NoOpTracer` no guarda nada.
+            return {"enabled": False, "fuente": "local", "summary": None, "recent_traces": []}
+        resumen, recientes = self._tracer.resumen(LANGFUSE_STATS_FETCH_LIMIT)
         if not resumen:
             return {"enabled": False, "fuente": "local", "summary": None, "recent_traces": []}
         return {

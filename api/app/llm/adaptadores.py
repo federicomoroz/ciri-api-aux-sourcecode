@@ -107,20 +107,6 @@ ABIERTO = Adaptador(
     nota="No razona, pero es mas verboso que Claude en respuestas estructuradas.",
 )
 
-# Por proveedor. El modelo puede afinar mas (ver `adaptador_de`).
-POR_PROVEEDOR: dict[str, Adaptador] = {
-    "anthropic": CLAUDE,
-    "gemini": GEMINI,
-    "groq": ABIERTO,
-    "cerebras": ABIERTO,
-    "openrouter": ABIERTO,
-    "github": ABIERTO,
-    "openai": ABIERTO,
-    "deepseek": ABIERTO,
-    "alibaba": ABIERTO,
-    "zhipu": ABIERTO,
-    "moonshot": ABIERTO,
-}
 
 # Subcadenas del nombre del modelo que mandan sobre el proveedor: dentro de una
 # misma casa conviven modelos que razonan y modelos que no.
@@ -148,4 +134,9 @@ def adaptador_de(proveedor: str, modelo: str = "") -> Adaptador:
     for marca, adaptador in POR_MODELO:
         if marca in nombre:
             return adaptador
-    return POR_PROVEEDOR.get((proveedor or "").lower().strip(), ABIERTO)
+    # Import perezoso: `proveedores` importa los adaptadores de este modulo,
+    # asi que pedirlo arriba seria un ciclo. La tabla vive alla porque agregar
+    # un proveedor tiene que ser una sola edicion.
+    from .proveedores import ADAPTADOR_POR_PROVEEDOR
+
+    return ADAPTADOR_POR_PROVEEDOR.get((proveedor or "").lower().strip(), ABIERTO)

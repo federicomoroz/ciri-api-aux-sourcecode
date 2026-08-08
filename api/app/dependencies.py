@@ -18,6 +18,7 @@ from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
 from .llm.manager import LLMManager
+from .llm.proveedores import PROVEEDOR_ANTHROPIC
 from .observability.contacto_n8n import ContactoN8n
 from .observability.tracer import LangfuseTracer
 from .observability.trazador_local import TrazadorLocal
@@ -71,7 +72,7 @@ def _conectar_servicios(settings: Settings) -> dict:
         else TrazadorLocal(settings.sqlite_path)
     )
     manager = LLMManager(settings, tracer)
-    llm = manager.cliente(settings.llm_provider or "anthropic", settings.llm_model)
+    llm = manager.cliente(settings.llm_provider or PROVEEDOR_ANTHROPIC, settings.llm_model)
     return {
         "qdrant": QdrantClient(
             url=settings.qdrant_url,
@@ -83,7 +84,7 @@ def _conectar_servicios(settings: Settings) -> dict:
         "llm": llm,
         "manager": manager,
         "llm_resolution": (
-            manager.cliente(settings.llm_provider or "anthropic", settings.llm_model_resolution)
+            manager.cliente(settings.llm_provider or PROVEEDOR_ANTHROPIC, settings.llm_model_resolution)
             if settings.llm_model_resolution else llm
         ),
     }

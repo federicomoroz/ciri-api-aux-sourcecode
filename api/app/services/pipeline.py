@@ -10,9 +10,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..analysis.analyzer import Analyzer
 from ..analysis.sla import CalculadoraDeSLA
-from ..data.db import Database, cache_key
+from ..data.db import cache_key
 from ..domain.constants import PIPELINE_MAX_WORKERS, PIPELINE_THREAD_TIMEOUT_S
 from ..domain.context import CaseContext
+from ..domain.contratos import FuenteDeCasos
 from ..domain.enums import VerdictType
 from ..domain.models import AnalyzeRequest
 from ..llm.pricing import estimar_costo_usd
@@ -31,7 +32,7 @@ class PipelineService:
 
     def __init__(
         self,
-        db: Database,
+        db: FuenteDeCasos,
         retriever: QdrantRetriever,
         analyzer: Analyzer,
         resolution_svc: ResolutionService,

@@ -46,6 +46,7 @@ from ..domain.constants import (
     PASO_RESOLUCION,
     SSE_LATIDO_S,
 )
+from ..domain.contratos import SumideroDeAlertas
 from ..domain.models import AnalyzeRequest
 from ..reports.generator import ReportGenerator
 from ..services.pipeline import PipelineService
@@ -58,12 +59,17 @@ LATIDO = ": latido {:.0f}s" + chr(10) * 2   # comentario SSE: el panel lo ignora
 router = APIRouter(tags=["panel"])
 
 
-def _sumidero_de_alertas(base: PipelineService):
+def _sumidero_de_alertas(base: PipelineService) -> SumideroDeAlertas | None:
     """Donde anota las alertas un pipeline efimero: la misma base del proceso.
 
     Los eventos operativos —un rechazo automatico, un caso que necesita una
     persona— tienen que quedar registrados venga el caso por donde venga. Sin
-    base no hay donde anotarlos, y eso es legitimo: pasa en los tests.
+    donde anotarlos se devuelve None, y eso es legitimo: pasa en los tests.
+
+    Sigue siendo `getattr` porque `FuenteDeCasos` —lo que el pipeline declara
+    necesitar de la base— no incluye anotar alertas, y no deberia: son dos
+    capacidades distintas del mismo objeto. Lo que cambio es que ahora el tipo
+    de retorno dice que se espera del otro lado.
     """
     return getattr(base.db, "save_alert", None)
 

@@ -34,7 +34,8 @@ from ..domain.constants import (
 )
 from ..observability.tracer import Tracer
 from .adaptadores import adaptador_de
-from .client import AnthropicClient, LLMClient, OpenAICompatibleClient, base_url_de
+from .client import AnthropicClient, LLMClient, OpenAICompatibleClient
+from .proveedores import PROVEEDOR_ANTHROPIC, base_url_de, existe
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class LLMManager:
         por_proveedor = (getattr(self.settings, "llm_api_keys", None) or {}).get(proveedor, "")
         if por_proveedor:
             return por_proveedor
-        if proveedor == "anthropic":
+        if proveedor == PROVEEDOR_ANTHROPIC:
             return self.settings.anthropic_api_key
         return self.settings.llm_api_key
 
@@ -89,10 +90,24 @@ class LLMManager:
 
     def _construir(self, proveedor: str, modelo: str, api_key: str) -> LLMClient:
         clave = api_key or self.clave_de(proveedor)
-        base = base_url_de(proveedor, self.settings.llm_base_url if proveedor == "anthropic" else "")
-        if proveedor != "anthropic" and not base:
+        base = base_url_de(
+            proveedor,
+            self.settings.llm_base_url if proveedor == PROVEEDOR_ANTHROPIC else "",
+        )
+        if proveedor != PROVEEDOR_ANTHROPIC and not base:
             base = base_url_de(proveedor) or self.settings.llm_base_url
         if not base:
+            # Sin URL solo puede ser Anthropic, que tiene SDK propio. Cualquier
+            # otro proveedor sin URL es uno que no esta en el registro, y caer
+            # aca en silencio mandaba su modelo y su credencial a la API de
+            # Anthropic: el error hablaba de autenticacion y no del proveedor
+            # que faltaba. Se dice cual es.
+            if proveedor and proveedor != PROVEEDOR_ANTHROPIC and not existe(proveedor):
+                raise ValueError(
+                    f"proveedor desconocido: {proveedor!r}. Los que el sistema "
+                    f"sabe construir estan en `llm/proveedores.py`; para uno "
+                    f"nuevo, agregarlo ahi o pasar CB_LLM_BASE_URL."
+                )
             return AnthropicClient(
                 api_key=clave, model=modelo,
                 tracer=self.tracer, max_retries=self.settings.llm_max_retries,

@@ -17,9 +17,29 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class Tracer(Protocol):
+    """Escribir observaciones. Lo que usa el pipeline mientras corre.
+
+    Es la mitad del contrato. La otra —leer lo observado para el panel— esta en
+    `FuenteDeMetricas`, y estan separadas porque no todo el que escribe puede
+    leer: `NoOpTracer` no guarda nada y `LangfuseTracer` guarda en un servicio
+    remoto que se consulta distinto que la SQLite local.
+
+    Mientras fue un solo Protocol, `LangfuseStatsService` tenia que sortearlo con
+    `hasattr(tracer, "langfuse")` y `getattr(tracer, "resumen", ...)` para
+    averiguar con cual estaba hablando. Un Protocol que el consumidor tiene que
+    esquivar dejo de ser el contrato.
+    """
+
     @property
     def enabled(self) -> bool:
-        """Si esta apagado, los demas metodos son no-ops."""
+        """Si observa de verdad.
+
+        **No es «se configuro», es «funciona».** De esto depende
+        `LangfuseStatsService` para decidir si consulta el servicio remoto o cae
+        al registro local: un tracer que dice `True` mientras sus llamadas
+        fallan deja al panel mostrando la fuente vacia en vez de la que tiene
+        datos. Una implementacion que empieza a fallar tiene que pasar a `False`.
+        """
         ...
 
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
@@ -42,6 +62,22 @@ class Tracer(Protocol):
 
     def score(self, trace_id: str, name: str, value: float) -> None:
         """Attach a score to a trace (e.g., judge_score)."""
+        ...
+
+
+@runtime_checkable
+class FuenteDeMetricas(Protocol):
+    """Leer lo observado, para mostrarlo en el panel.
+
+    La declara quien puede responder por su propio historico. `TrazadorLocal` la
+    implementa porque guarda en SQLite y la puede consultar; `NoOpTracer` no,
+    porque no guarda nada; `LangfuseTracer` tampoco, porque su historico vive en
+    un servicio remoto con su propia API — de eso se encarga
+    `LangfuseStatsService`.
+    """
+
+    def resumen(self, limite: int) -> tuple[dict, list[dict]]:
+        """(resumen agregado, ultimas trazas). Vacio si no hay nada anotado."""
         ...
 
 
@@ -68,6 +104,27 @@ class LangfuseTracer:
     def enabled(self) -> bool:
         return self._enabled
 
+    def _rendirse(self, operacion: str, e: Exception) -> None:
+        """Deja de decir que observa.
+
+        Antes se anotaba el fallo y `_enabled` seguia en `True`. El objeto quedaba
+        afirmando que observaba mientras no anotaba nada, y como
+        `LangfuseStatsService` pregunta justamente eso para decidir si cae al
+        registro local, **encender Langfuse dejaba al panel con menos metricas que
+        apagarlo**.
+
+        Se apaga a la primera y no se reintenta: los tres modos de falla reales
+        —host equivocado, credenciales invalidas, una version del SDK que no tiene
+        estos metodos— no se arreglan solos, y reintentar en cada llamada le suma
+        latencia a cada paso del pipeline para volver a fallar.
+        """
+        if self._enabled:
+            logger.warning(
+                "Langfuse fallo en %s (%s): se desactiva la observabilidad remota y "
+                "las metricas pasan a salir del registro local", operacion, e,
+            )
+        self._enabled = False
+
     def trace(self, name: str, input: dict, output: dict, metadata: dict | None = None) -> str:
         if not self._enabled:
             return ""
@@ -75,7 +132,7 @@ class LangfuseTracer:
             t = self.langfuse.trace(name=name, input=input, output=output, metadata=metadata or {})
             return t.id
         except Exception as e:
-            logger.warning("Langfuse trace failed: %s", e)
+            self._rendirse("trace", e)
             return ""
 
     def generation(
@@ -105,7 +162,7 @@ class LangfuseTracer:
                 trace_id=trace_id,
             )
         except Exception as e:
-            logger.warning("Langfuse generation failed: %s", e)
+            self._rendirse("generation", e)
 
     def score(self, trace_id: str, name: str, value: float) -> None:
         if not self._enabled or not trace_id:
@@ -113,7 +170,7 @@ class LangfuseTracer:
         try:
             self.langfuse.score(trace_id=trace_id, name=name, value=value)
         except Exception as e:
-            logger.warning("Langfuse score failed: %s", e)
+            self._rendirse("score", e)
 
 
 class NoOpTracer:
