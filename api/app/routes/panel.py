@@ -777,6 +777,11 @@ async def panel_analyze(
             )
         html, formulario = await _try_n8n(
             req, settings, report_gen, n8n_test, timeout_s, n8n_base_url,
+            # La base de ESTA peticion: el orquestador tiene que contestarle a la
+            # misma API con la que el panel esta hablando.
+            api_propia=(
+                settings.api_url_para_n8n or str(request.base_url)
+            ).rstrip("/"),
         )
         if html is None:
             return HTMLResponse(
@@ -916,6 +921,7 @@ async def _try_n8n(
     n8n_test: bool,
     timeout_s: float = N8N_TIMEOUT_S,
     n8n_base_url_override: str | None = None,
+    api_propia: str = "",
 ) -> tuple[str | None, str]:
     """(html, url del formulario HITL). El html es None si n8n no sirvio.
 
@@ -942,6 +948,13 @@ async def _try_n8n(
                     "transaction_id": req.transaction_id,
                     "motivo": req.motivo,
                     "cliente_vip": req.cliente_vip,
+                    # A que API tiene que contestarle el orquestador. Sin esto el
+                    # workflow usa su default, que puede ser OTRA instalacion: el
+                    # panel local disparaba n8n y las alertas, el feedback y el
+                    # informe cacheado terminaban en el deploy publico, asi que el
+                    # panel los buscaba donde no estaban. El caso quedaba partido
+                    # en dos APIs.
+                    "api_base_url": api_propia,
                 },
             )
         # Un caso que necesita una persona no es un fallo de n8n: el workflow

@@ -27,7 +27,7 @@ def cliente(in_memory_db_path):
 
     app.state.db = Database(in_memory_db_path)
     app.state.settings = SimpleNamespace(
-        admin_api_key="", n8n_base_url="", n8n_form_path="", demo_mode=False,
+        admin_api_key="", n8n_base_url="", api_url_para_n8n="", n8n_form_path="", demo_mode=False,
         llm_model="haiku", llm_model_resolution="", anthropic_api_key="clave",
         demo_reports_path="", report_cache_enabled=False,
     )
@@ -230,7 +230,7 @@ class TestElBotonAnalizarFuncionaEnLaConfiguracionPublicada:
 
         app.state.db = Database(in_memory_db_path)
         app.state.settings = SimpleNamespace(
-            admin_api_key="", n8n_base_url="", n8n_form_path="", demo_mode=True,
+            admin_api_key="", n8n_base_url="", api_url_para_n8n="", n8n_form_path="", demo_mode=True,
             llm_model="haiku", llm_model_resolution="", anthropic_api_key=clave_servidor,
             demo_reports_path="", report_cache_enabled=False,
         )

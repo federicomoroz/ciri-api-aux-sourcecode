@@ -3062,6 +3062,7 @@ function cancelN8nTest() {
 
 // ─── ANALYSIS PIPELINE (SSE streaming — real-time progress) ──
 async function startAnalysis(payload) {
+  pararSondaHitl();
   showPanel('loading');
   $('btn-submit').disabled = true;
   $('btn-submit').classList.add('loading');
@@ -3386,6 +3387,53 @@ function showPanel(which) {
   $('error-state').className       = 'error-state'      + (which === 'error'   ? ' visible' : '');
 }
 
+let sondaHitl = null;
+
+function pararSondaHitl() {
+  if (sondaHitl) { clearInterval(sondaHitl); sondaHitl = null; }
+}
+
+async function esperarDesenlaceHitl(payload) {
+  // Se pregunta por el informe cacheado cada pocos segundos. El intervalo es
+  // largo a proposito: del otro lado hay una persona leyendo un caso, no un
+  // proceso — sondear rapido solo agrega ruido.
+  pararSondaHitl();
+  const desde = Date.now();
+  const LIMITE_MS = 30 * 60 * 1000;   // el Wait de n8n aguanta 24h; el panel, no
+
+  sondaHitl = setInterval(async () => {
+    if (Date.now() - desde > LIMITE_MS) {
+      pararSondaHitl();
+      $('result-meta-text').textContent =
+        payload.transaction_id + ' · sigue esperando; el link del formulario sigue valido';
+      return;
+    }
+    try {
+      const q = new URLSearchParams({
+        transaction_id: payload.transaction_id,
+        cliente_vip: String(!!payload.cliente_vip),
+      });
+      const r = await fetch(API_BASE + '/api/cache/lookup?' + q.toString());
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d.cached || !d.html) return;
+
+      pararSondaHitl();
+      const pill = $('verdict-pill');
+      pill.className   = 'verdict-pill verdict-ok';
+      pill.textContent = 'RESUELTA POR ANALISTA';
+      $('result-meta-text').textContent =
+        payload.transaction_id + ' · decision registrada · informe final';
+      $('hitl-banner').style.display = 'none';
+
+      const frame = $('report-frame');
+      frame.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms');
+      frame.removeAttribute('src');
+      frame.srcdoc = d.html;
+    } catch { /* la proxima vuelta reintenta */ }
+  }, 4000);
+}
+
 function mostrarFormularioHitl(url, payload) {
   // El caso quedo esperando a una persona. El panel deja de mostrar progreso y
   // pasa a mostrar el formulario, en el mismo lugar: quien lo responde ve el
@@ -3413,6 +3461,13 @@ function mostrarFormularioHitl(url, payload) {
   const aviso = $('hitl-link');
   aviso.href = url;
   aviso.parentElement.style.display = '';
+
+  // Y se queda esperando el desenlace. El panel hizo un HTTP que ya respondio,
+  // asi que nadie le va a avisar que el analista decidio — pero el informe final
+  // queda en el cache de la API (`POST /api/reports/html` lo guarda por
+  // transaccion), asi que se puede preguntar. Sin esto el panel decia «esperando
+  // la decision de un analista» para siempre, incluso con el caso ya resuelto.
+  esperarDesenlaceHitl(payload);
 
   const frame = $('report-frame');
   frame.onload = null;          // el informe normal engancha uno; aca no aplica
@@ -3504,6 +3559,7 @@ function showError(msg, isNetwork) {
 // ─── RESET ────────────────────────────────────────────────
 function resetPanel() {
   if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
+  pararSondaHitl();
   clearStepTimers();
   stopTimer();
 

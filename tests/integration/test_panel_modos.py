@@ -53,7 +53,7 @@ def panel(in_memory_db_path, guardados):
     from api.app.data.db import Database
 
     ajustes = SimpleNamespace(
-        admin_api_key="", n8n_base_url="", n8n_form_path="", demo_mode=True,
+        admin_api_key="", n8n_base_url="", api_url_para_n8n="", n8n_form_path="", demo_mode=True,
         llm_model="haiku", llm_model_resolution="", anthropic_api_key="",
         demo_reports_path=guardados, report_cache_enabled=False,
     )
@@ -506,3 +506,56 @@ class TestLoQueElPanelPreguntaAlArrancar:
         cuerpo = cliente.get("/api/panel/n8n-status").json()
         assert cuerpo["form_url"] == "http://n8n.local/form/abc"
         assert cuerpo["form_test_url"] == "http://n8n.local/form-test/abc"
+
+
+class TestElOrquestadorLeContestaALaApiQueLoLlamo:
+    """Un caso no puede quedar partido entre dos APIs.
+
+    El workflow trae una URL por defecto —el deploy publico— y le manda ahi las
+    alertas, el feedback y el informe cacheado. Si el panel que lo disparo es
+    OTRA instalacion, busca esas cosas donde no estan: el formulario HITL sale por
+    una API y el panel espera el desenlace en la otra, para siempre.
+
+    Por eso la peticion al webhook lleva `api_base_url`: el orquestador le
+    contesta a la misma API con la que el panel esta hablando.
+    """
+
+    @staticmethod
+    def _cuerpo_enviado(cliente, ajustes, monkeypatch, base_configurada=""):
+        ajustes.n8n_base_url = "http://n8n.local"
+        ajustes.api_url_para_n8n = base_configurada
+        enviado = {}
+
+        class ClienteFalso:
+            def __init__(self, *a, **k): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *a): return False
+            async def post(self, url, json=None, **k):
+                enviado.update(json or {})
+                raise RuntimeError("corta aca: ya se capturo el cuerpo")
+
+        monkeypatch.setattr("api.app.routes.panel.httpx.AsyncClient", ClienteFalso)
+        cliente.post("/api/panel/analyze", json=_cuerpo())
+        return enviado
+
+    def test_manda_la_base_de_la_peticion(self, panel, monkeypatch):
+        """Es lo correcto cuando la API es publica: n8n la alcanza por el mismo
+        nombre que el navegador. Es el caso del deploy que abre quien evalua."""
+        cliente, ajustes, _ = panel
+        enviado = self._cuerpo_enviado(cliente, ajustes, monkeypatch)
+        assert enviado.get("api_base_url"), "el orquestador no sabe a quien contestarle"
+        assert enviado["api_base_url"].startswith("http")
+        assert not enviado["api_base_url"].endswith("/")
+
+    def test_la_configuracion_le_gana(self, panel, monkeypatch):
+        """Con docker-compose no coinciden: el panel se abre en `localhost:8000` y
+        desde el contenedor de n8n esa direccion es n8n mismo."""
+        cliente, ajustes, _ = panel
+        enviado = self._cuerpo_enviado(cliente, ajustes, monkeypatch, "http://api:8000")
+        assert enviado["api_base_url"] == "http://api:8000"
+
+    def test_el_caso_viaja_completo(self, panel, monkeypatch):
+        cliente, ajustes, _ = panel
+        enviado = self._cuerpo_enviado(cliente, ajustes, monkeypatch)
+        assert enviado["transaction_id"] == TXN
+        assert "motivo" in enviado and "cliente_vip" in enviado

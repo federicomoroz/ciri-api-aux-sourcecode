@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     # Vacio = no hay instancia asociada. El panel pide una en vez de
     # apuntar a un host que solo existe dentro de docker-compose.
     n8n_base_url: str = ""
+    # Con que URL alcanza n8n a ESTA API. No es lo mismo que la del navegador:
+    # con docker-compose, el panel se abre en `http://localhost:8000` pero desde
+    # el contenedor de n8n esa direccion es n8n mismo — la API es `http://api:8000`.
+    # Vacia: se usa la base de la peticion, que es lo correcto cuando la API es
+    # publica y n8n la alcanza por el mismo nombre que el navegador.
+    api_url_para_n8n: str = ""
     n8n_form_path: str = ""
 
     # Security

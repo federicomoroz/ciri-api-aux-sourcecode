@@ -31,6 +31,9 @@ services:
       - CB_SQLITE_PATH=/app/data/chargeback.db
       - CB_DATA_FILE_PATH=/app/data/Similación_dataset_contracargos_.xlsx
       - CB_N8N_BASE_URL=http://n8n:5678
+      # Con que URL alcanza n8n a la API. Dentro de la red de compose es el
+      # nombre del servicio; `localhost` desde el contenedor de n8n seria n8n.
+      - CB_API_URL_PARA_N8N=http://api:8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
