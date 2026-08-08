@@ -251,6 +251,16 @@ def main() -> int:
         print(f"  {i:2}. {marca:5} {p.nodo:<{ancho}}  {p.estado or '—':>3}  "
               f"{p.ms:6.0f}ms  {p.detalle}")
 
+    fallaron = [p for p in pasos if not p.bien]
+    if fallaron:
+        # El chequeo de contrato solo tiene sentido sobre un recorrido completo:
+        # abortado en el paso 1, informaria los otros doce nodos como «el canvas
+        # los tiene y este recorrido no los llama», que es ruido y no un desfase.
+        print(f"\n  Se cortó en «{fallaron[0].nodo}»:")
+        for f in fallaron:
+            print(f"    {f.estado} · {str(f.cuerpo)[:160]}")
+        return 1
+
     desfasado = contrato(wf, pasos, salteados)
     if desfasado:
         print("\n  Este recorrido ya no espeja al canvas:")
@@ -258,13 +268,9 @@ def main() -> int:
             print(f"    {q}")
         return 1
 
-    fallaron = [p for p in pasos if not p.bien]
-    print(f"\n  {len(pasos) - len(fallaron)}/{len(pasos)} pasos en verde")
-    if fallaron:
-        print("  Se rompió en:")
-        for p in fallaron:
-            print(f"    {p.nodo}: {p.estado} · {str(p.cuerpo)[:120]}")
-        return 1
+    print(f"\n  {len(pasos)}/{len(pasos)} pasos en verde")
+    for nodo, motivo in salteados.items():
+        print(f"     (no corresponde: {nodo} — {motivo})")
 
     r = ctx.get("resolucion", {})
     print(f"\n  Resultado: {r.get('recommended_action')} · riesgo {r.get('risk_level')}"
