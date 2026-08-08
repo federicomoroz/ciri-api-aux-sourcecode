@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-1039%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1043%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -274,7 +274,7 @@ sólo el código que la API necesita para funcionar.
 pytest tests/unit tests/integration -q --cov=api/app --cov-fail-under=85
 ```
 
-**1039 tests** en 38 archivos y **92% de cobertura** sobre `api/app` — el número que
+**1043 tests** en 40 archivos y **92% de cobertura** sobre `api/app` — el número que
 reporta el CI sobre un checkout limpio, que es el reproducible: medido con un `.env` cargado
 sube unas décimas, porque se ejecutan ramas que sin configuración no corren. Los de `unit/` e `integration/` corren sin n8n ni Qdrant levantados; los 33 de
 `e2e/` llaman a la API publicada y al modelo, así que quedan fuera del CI a propósito —un test

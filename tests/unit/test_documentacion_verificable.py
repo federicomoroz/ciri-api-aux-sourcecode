@@ -264,7 +264,7 @@ class TestLasVersionesDePromptQueLaDocAfirma:
     modulo — la misma fuente que el informe declara en su audit trail.
     """
 
-    DOCS = ("docs/architecture.md", "docs/ejes.md")
+    DOCS = ("docs/architecture.md", "docs/ejes.md", "docs/prompts.md")
 
     @pytest.fixture(scope="class")
     def vigentes(self) -> dict:
@@ -284,6 +284,27 @@ class TestLasVersionesDePromptQueLaDocAfirma:
             viejas = nombradas - {version}
             assert not viejas, (
                 f"{doc} dice {viejas} para {modulo}, que va por {version}"
+            )
+
+    def test_prompts_md_encabeza_cada_prompt_con_su_version_vigente(self, vigentes):
+        """El entregable que existe para declarar versiones, contra las reales.
+
+        El patron de arriba pide `modulo.py` y `prompts.md` no escribe asi: pone
+        `## Prompt 2: v1_resolution (v3.1)` y una fila por version en el
+        changelog. Quedaba fuera del control justamente el documento cuya razon
+        de ser es esta, y se desfaso en dos de tres.
+        """
+        texto = (RAIZ / "docs/prompts.md").read_text(encoding="utf-8")
+        for modulo, version in vigentes.items():
+            encabezado = re.search(rf"^##\s*Prompt \d+:\s*{modulo}\s*\((v[\d.]+)\)",
+                                   texto, re.MULTILINE)
+            assert encabezado, f"docs/prompts.md no tiene seccion para {modulo}"
+            assert encabezado.group(1) == version, (
+                f"docs/prompts.md encabeza {modulo} como {encabezado.group(1)}, "
+                f"y el codigo va por {version}"
+            )
+            assert re.search(rf"\|\s*{modulo}\s*\|\s*{re.escape(version)}\s*\|", texto), (
+                f"{version} de {modulo} no figura en el changelog de docs/prompts.md"
             )
 
 

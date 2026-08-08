@@ -48,9 +48,9 @@ El pipeline utiliza dos modelos Claude para optimizar costo vs. calidad:
 
 | Llamada | Modelo | Razon |
 |---|---|---|
-| Call 1: Evaluacion de politicas (v1.2) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
+| Call 1: Evaluacion de politicas (v1.3) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
 | Call 2: Sintesis de resolucion (v3.1) | **Sonnet** | Tarea analitica: razonar sobre precedentes, conectar evidencias, justificar. |
-| Call 3: Juez de calidad (v2.1) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
+| Call 3: Juez de calidad (v2.2) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
 
 Configuracion en `.env`:
 ```
@@ -84,17 +84,19 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 |---|---|---|---|
 | v1_policy_eval | v1.0 | 2025-01 | Version inicial — 5 veredictos, reglas Cripto=BLOCKER y FRD-001 |
 | v1_policy_eval | v1.2 | 2025-07 | Logica matematica de umbrales (>, >=, <), determinacion LATAM, contexto de comercio/cliente, documentacion, ventanas temporales |
+| v1_policy_eval | v1.3 | 2026-08 | La lista de paises LATAM se interpola desde `domain.enums`, no esta escrita en el texto |
 | v1_resolution | v1.0 | 2025-01 | Version inicial — 8 reglas estrictas, vocabulario de 4 acciones |
 | v1_resolution | v2.0 | 2025-07 | Extraccion mecanica para Haiku — campos deterministas calculados externamente |
 | v1_resolution | v3.0 | 2025-07 | Razonamiento analitico para Sonnet — "el codigo decide, el LLM explica" |
 | v1_resolution | v3.1 | 2025-08 | El SLA entra al contexto y la compensacion pasa a ser determinista (POL-SLA-004) |
 | v1_judge | v1.0 | 2025-01 | Version inicial — 5 criterios, APPROVE+BLOCKER = 1.0 automatico |
-| v1_judge | v2.1 | 2025-08 | `policy_consistency` y `risk_assessment` evaluan la propuesta del modelo, no la version ya corregida por el override |
 | v1_judge | v2.0 | 2025-07 | Rubrica granular por criterio (niveles 10.0, 9.0, 7.0-8.9, etc.), semantica de fraud_score, proteccion contra penalizacion incorrecta de PENDING_HITL |
+| v1_judge | v2.1 | 2025-08 | `policy_consistency` y `risk_assessment` evaluan la propuesta del modelo, no la version ya corregida por el override |
+| v1_judge | v2.2 | 2026-08 | El umbral de aprobacion se interpola desde `domain.constants`, no esta escrito en el texto |
 
 ---
 
-## Prompt 1: v1_policy_eval (v1.2)
+## Prompt 1: v1_policy_eval (v1.3)
 
 **Archivo:** `api/app/llm/prompts/v1_policy_eval.py`
 **Modelo:** Haiku (Call 1)
@@ -387,7 +389,7 @@ El prompt exige una estructura de justificacion en 6 partes (maximo 200 palabras
 
 ---
 
-## Prompt 3: v1_judge (v2.1)
+## Prompt 3: v1_judge (v2.2)
 
 **Archivo:** `api/app/llm/prompts/v1_judge.py`
 **Modelo:** Sonnet (Call 3)
