@@ -804,7 +804,8 @@ class ResolutionService:
         tx_amount = transaction.get("amount_usd", 0)
         if comp > tx_amount * GUARDRAIL_MAX_COMPENSATION_RATIO and tx_amount > 0:
             warnings.append(
-                f"GUARDRAIL: Compensacion USD {comp:.2f} excede el monto original USD {tx_amount:.2f} en >10%"
+                f"GUARDRAIL: Compensacion USD {comp:.2f} excede el monto original USD "
+                f"{tx_amount:.2f} en >{(GUARDRAIL_MAX_COMPENSATION_RATIO - 1) * 100:.0f}%"
             )
 
         fail_count = sum(

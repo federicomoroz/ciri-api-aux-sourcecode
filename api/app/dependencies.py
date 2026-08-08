@@ -192,7 +192,7 @@ async def lifespan(app: FastAPI):
     resolution_service = ResolutionService(
         tracer=tracer, modelos=modelos, alertas=db.save_alert,
     )
-    report_generator = ReportGenerator()
+    report_generator = ReportGenerator(settings)
 
     app.state.settings = settings
     app.state.db = db

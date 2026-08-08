@@ -20,6 +20,9 @@ __all__ = [
     # Merchant risk
     "POLICY_SEED_BLOQUEANTES",
     "POLICY_SEED_SLA_DIAS",
+    "POL_SLA_ESTANDAR",
+    "POL_SLA_EXTENDIDO",
+    "POL_SLA_VIP",
     "MERCHANT_SUSPENDED_VS_BASELINE",
     "MERCHANT_HIGH_VS_BASELINE",
     "MERCHANT_STRATEGIC_VOLUME",
@@ -35,6 +38,7 @@ __all__ = [
     "GUARDRAIL_MAX_CONFIDENCE",
     "GUARDRAIL_MIN_FAILS_FOR_WARNING",
     # RAG
+    "SCORE_DECIMALES",
     "SIMILAR_CASES_SCORE_THRESHOLD",
     "SIMILAR_CASES_TOP_K",
     "SIMILAR_CASES_CANDIDATOS",
@@ -126,7 +130,10 @@ __all__ = [
     "LANGFUSE_STATS_CACHE_TTL_S",
     "LANGFUSE_STATS_TRACE_LIMIT",
     "LANGFUSE_STATS_DISPLAY_LIMIT",
+    "COSTO_DECIMALES",
+    "EMBEDDING_TIMEOUT_S",
     "LANGFUSE_STATS_FETCH_LIMIT",
+    "LATENCIA_DECIMALES",
     "LANGFUSE_OBSERVATION_TYPE",
     # SQLite
     "SQLITE_TIMEOUT_S",
@@ -341,10 +348,18 @@ RISK_HIGH_MIN_FAILS: int = 2   # fail_count >= N → risk HIGH
 # la unica que arranca pudiendo bloquear; cualquier otro BLOCKER que emita el
 # modelo se degrada a FAIL + requires_human_review.
 POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})
+# Las tres politicas que fijan un plazo. El codigo es el identificador con el que
+# `check_sla` las busca en SQLite: escrito como literal en los dos lados, cambiar
+# uno dejaba a `_dias_de` sin encontrar la fila y cayendo al valor por defecto en
+# silencio — el SLA seguia dando un numero plausible con la politica equivocada.
+POL_SLA_VIP: str = "POL-EXC-002"
+POL_SLA_ESTANDAR: str = "POL-SLA-002"
+POL_SLA_EXTENDIDO: str = "POL-EXC-004"
+
 POLICY_SEED_SLA_DIAS: dict[str, int] = {
-    "POL-EXC-002": SLA_VIP_DAYS,        # clientes VIP
-    "POL-SLA-002": SLA_STANDARD_DAYS,   # resolucion estandar LATAM
-    "POL-EXC-004": SLA_EXTENDED_DAYS,   # comercios internacionales
+    POL_SLA_VIP: SLA_VIP_DAYS,             # clientes VIP
+    POL_SLA_ESTANDAR: SLA_STANDARD_DAYS,   # resolucion estandar LATAM
+    POL_SLA_EXTENDIDO: SLA_EXTENDED_DAYS,  # comercios internacionales
 }
 
 # ── RAG ─────────────────────────────────────────────────────────────────────
@@ -476,6 +491,9 @@ N8N_HEALTHZ_PATH: str = "/healthz"
 # "tu n8n llego hasta aca"; no lleva la URL de nadie.
 N8N_ORIGIN_HEADER: str = "X-Origen-n8n"
 LLM_TIMEOUT_S: float = 300.0                  # timeout de una llamada al modelo
+# Una llamada de embeddings colgada cuelga el indexado del arranque, y sin
+# /health respondiendo el deploy queda caido sin diagnostico.
+EMBEDDING_TIMEOUT_S: float = 60.0
 # Cada cuanto el stream del panel manda senal de vida mientras un paso corre.
 # Los tres pasos son llamadas al modelo y entre evento y evento el stream
 # quedaba mudo minutos: el navegador cortaba por su cuenta y el usuario veia un
@@ -541,6 +559,15 @@ LANGFUSE_STATS_TRACE_LIMIT: int = 20
 LANGFUSE_STATS_DISPLAY_LIMIT: int = 10
 LANGFUSE_STATS_FETCH_LIMIT: int = 100
 LANGFUSE_OBSERVATION_TYPE: str = "GENERATION"
+
+# Con cuantos decimales se muestra cada numero del panel. Estaban escritos en
+# las dos implementaciones del resumen y ya habian divergido: el costo se
+# redondeaba a 4 en una y a 6 en la otra, asi que prender Langfuse cambiaba el
+# numero. Seis porque una corrida con modelo gratuito o barato cuesta menos que
+# 0.0001 USD, y a cuatro decimales se muestra como cero.
+COSTO_DECIMALES: int = 6
+LATENCIA_DECIMALES: int = 2
+SCORE_DECIMALES: int = 2
 
 # ── SQLite ────────────────────────────────────────────────────────────────────
 SQLITE_TIMEOUT_S: int = 30

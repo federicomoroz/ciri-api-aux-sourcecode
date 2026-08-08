@@ -16,6 +16,9 @@ from ..domain.constants import (
     MERCHANT_STRATEGIC_VOLUME,
     MERCHANT_SUSPENDED_VS_BASELINE,
     MERCHANT_TIMEOUT_PATTERN_MIN_COUNT,
+    POL_SLA_ESTANDAR,
+    POL_SLA_EXTENDIDO,
+    POL_SLA_VIP,
     SLA_TYPE_DIAS_POR_DEFECTO,
     SLA_TYPE_EXTENDED,
     SLA_TYPE_STANDARD,
@@ -267,11 +270,13 @@ class Analyzer:
         # los dos, y queda registrado que el pais no se conocia.
         pais_desconocido = not (country or "").strip()
         if cliente_vip:
-            codigo, sla_type, quien = "POL-EXC-002", SLA_TYPE_VIP, "clientes VIP"
+            codigo, sla_type, quien = POL_SLA_VIP, SLA_TYPE_VIP, "clientes VIP"
         elif not pais_desconocido and country not in LATAM_COUNTRIES:
-            codigo, sla_type, quien = "POL-EXC-004", SLA_TYPE_EXTENDED, "comercios internacionales"
+            codigo, sla_type, quien = (
+                POL_SLA_EXTENDIDO, SLA_TYPE_EXTENDED, "comercios internacionales"
+            )
         else:
-            codigo, sla_type, quien = "POL-SLA-002", SLA_TYPE_STANDARD, "resolucion estandar"
+            codigo, sla_type, quien = POL_SLA_ESTANDAR, SLA_TYPE_STANDARD, "resolucion estandar"
 
         sla_limit = self._dias_de(codigo, SLA_TYPE_DIAS_POR_DEFECTO[sla_type])
         policy_reference = f"{codigo} ({quien}: {sla_limit} dias habiles)"

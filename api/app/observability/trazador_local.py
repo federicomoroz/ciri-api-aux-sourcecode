@@ -27,8 +27,11 @@ import logging
 import sqlite3
 import threading
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from ..domain.constants import SQLITE_TIMEOUT_S
+from .resumen import resumir_trazas
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +85,21 @@ class TrazadorLocal:
         except Exception:
             logger.warning("No se pudo preparar el registro local de trazas", exc_info=True)
 
-    def _conexion(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.sqlite_path, timeout=SQLITE_TIMEOUT_S)
+    @contextmanager
+    def _conexion(self) -> Iterator[sqlite3.Connection]:
+        """Una conexion que se cierra al salir.
+
+        `with sqlite3.connect(...)` cierra la TRANSACCION, no la conexion: el
+        tracer abria una por cada anotacion y no cerraba ninguna. Observar el
+        sistema no puede ser una forma nueva de romperlo, y quedarse con los
+        descriptores abiertos lo es.
+        """
+        conexion = sqlite3.connect(self.sqlite_path, timeout=SQLITE_TIMEOUT_S)
+        try:
+            with conexion:
+                yield conexion
+        finally:
+            conexion.close()
 
     def _escribir(self, sql: str, params: tuple) -> None:
         """Anotar nunca puede tumbar un analisis: se registra el fallo y sigue.
@@ -177,18 +193,16 @@ class TrazadorLocal:
             }
             for f in filas
         ]
-        puntajes = [f["score"] for f in filas if f["score"] is not None]
-        resumen = {
-            "total_traces": len(filas),
-            "total_tokens": sum(r["tokens"] for r in recientes),
-            "cost_usd": round(
-                sum(estimar_costo_usd(f["modelo"] or "", f["tokens_in"], f["tokens_out"])
-                    for f in filas),
-                6,
-            ),
-            "avg_judge_score": round(sum(puntajes) / len(puntajes), 2) if puntajes else None,
-            "avg_latency_s": round(
-                sum(r["latency_s"] for r in recientes) / len(recientes), 2
-            ),
-        }
-        return resumen, recientes
+        # La forma que espera `resumir_trazas`. El costo no se guarda: se
+        # estima al leer, con la tarifa vigente del modelo que corrio.
+        normalizadas = [
+            {
+                "tokens_in": f["tokens_in"],
+                "tokens_out": f["tokens_out"],
+                "cost_usd": estimar_costo_usd(f["modelo"] or "", f["tokens_in"], f["tokens_out"]),
+                "latency_s": f["latency_ms"] / 1000,
+                "score": f["score"],
+            }
+            for f in filas
+        ]
+        return resumir_trazas(normalizadas), recientes

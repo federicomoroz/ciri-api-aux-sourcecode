@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from jinja2 import Environment, FileSystemLoader
 
+from ..config import Settings
 from ..data.precomputados import CARTEL, cartel_modelo_gratis
 from ..domain.constants import (
     CLIENT_RECIDIVIST_THRESHOLD,
@@ -18,6 +19,7 @@ from ..domain.constants import (
     JUDGE_APPROVAL_THRESHOLD,
     JUDGE_NEEDS_REVIEW_THRESHOLD,
     REPORT_TEMPLATE_NAME,
+    SIMILAR_CASES_SCORE_THRESHOLD,
 )
 from ..domain.enums import MerchantFlag, ResolutionOutcome, RiskLevel, Severity
 from ..llm import prompts
@@ -41,7 +43,11 @@ def _json_para_html(data: dict) -> str:
 
 
 class ReportGenerator:
-    def __init__(self):
+    def __init__(self, settings: Settings | None = None):
+        # El informe declara con que modelo se vectorizo el corpus, y eso es
+        # configurable. Opcional para no obligar a los tests a construir
+        # `Settings`; en la app lo inyecta el lifespan.
+        self.settings = settings or Settings()
         templates_dir = os.path.join(os.path.dirname(__file__), "templates")
         self.env = Environment(
             loader=FileSystemLoader(templates_dir),
@@ -77,6 +83,11 @@ class ReportGenerator:
             umbral_juez_aprueba=JUDGE_APPROVAL_THRESHOLD,
             umbral_juez_revisa=JUDGE_NEEDS_REVIEW_THRESHOLD,
             umbral_cliente_reincidente=CLIENT_RECIDIVIST_THRESHOLD,
+            umbral_similitud=SIMILAR_CASES_SCORE_THRESHOLD,
+            # De que modelo salieron los vectores. Estaba escrito en la
+            # plantilla, asi que con CB_EMBEDDING_MODEL puesto el audit trail
+            # nombraba un modelo que no se uso.
+            modelo_de_embeddings=self.settings.embedding_model,
             # Las versiones salen del changelog de cada prompt. Estaban
             # escritas a mano en la plantilla como «v1_...» —el nombre del
             # modulo, no la version—, asi que el audit trail declaraba v1

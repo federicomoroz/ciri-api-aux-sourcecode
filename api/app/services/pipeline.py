@@ -152,7 +152,16 @@ class PipelineService:
         with ThreadPoolExecutor(max_workers=PIPELINE_MAX_WORKERS) as executor:
             futures = self._submit_context_futures(executor, tx, req)
             for future in as_completed(futures, timeout=PIPELINE_THREAD_TIMEOUT_S):
-                futures_results[futures[future]] = future.result()
+                paso = futures[future]
+                try:
+                    futures_results[paso] = future.result()
+                except Exception:
+                    # Sin el nombre del paso, que falle el RAG y que falle el SLA
+                    # llegan al log con el mismo mensaje. Se anota y se propaga:
+                    # el contexto quedo incompleto y analizar sin el es peor que
+                    # no analizar.
+                    logger.exception("Fallo el paso «%s» al recopilar el contexto", paso)
+                    raise
 
         policies, similar_cases = futures_results["rag"]
         ctx = CaseContext(

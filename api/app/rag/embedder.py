@@ -13,6 +13,7 @@ Dos cosas que no son obvias y que el free tier vuelve importantes:
    pueda responder 429 con una explicacion en vez de un 500 mudo.
 """
 
+import inspect
 import logging
 import os
 import threading
@@ -24,9 +25,30 @@ from ..domain.constants import (
     EMBEDDING_CACHE_MAX,
     EMBEDDING_RATE_LIMIT_RETRIES,
     EMBEDDING_RATE_LIMIT_WAIT_S,
+    EMBEDDING_TIMEOUT_S,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _opciones_del_cliente(voyageai, key: str) -> dict:
+    """Los argumentos del cliente de Voyage, con timeout si esta version lo acepta.
+
+    Sin timeout, una llamada colgada cuelga el indexado del arranque y la API
+    nunca llega a responder /health: en Render eso es un deploy fallido sin
+    diagnostico. El pin es `voyageai>=0.2.3` y el nombre del parametro no es el
+    mismo en toda esa franja, asi que se pregunta antes de pasarlo — mandar un
+    kwarg que no existe seria cambiar un cuelgue por un TypeError al arrancar.
+    """
+    opciones = {"api_key": key}
+    if "timeout" in inspect.signature(voyageai.Client).parameters:
+        opciones["timeout"] = EMBEDDING_TIMEOUT_S
+    else:
+        logger.warning(
+            "El cliente de Voyage instalado no acepta timeout: una llamada colgada "
+            "no se corta sola"
+        )
+    return opciones
 
 
 class EmbeddingRateLimit(RuntimeError):
@@ -54,7 +76,7 @@ class FastEmbedder:
                             "CB_VOYAGE_API_KEY is required. "
                             "Get a free key at https://dash.voyageai.com/"
                         )
-                    self._client = voyageai.Client(api_key=key)
+                    self._client = voyageai.Client(**_opciones_del_cliente(voyageai, key))
                     logger.info("Voyage AI client initialized with model=%s", self._model_name)
         return self._client
 

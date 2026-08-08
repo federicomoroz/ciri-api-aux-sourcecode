@@ -21,6 +21,7 @@ from ..domain.constants import (
     LANGFUSE_STATS_TRACE_LIMIT,
 )
 from ..llm.pricing import estimar_costo_usd
+from ..observability.resumen import resumir_trazas
 from ..observability.tracer import Tracer
 
 logger = logging.getLogger(__name__)
@@ -147,17 +148,7 @@ class LangfuseStatsService:
         }
 
     def _resumen(self, filas: list[dict]) -> dict:
-        entrada = sum(f["tokens_in"] for f in filas)
-        salida = sum(f["tokens_out"] for f in filas)
-        puntajes = [f["score"] for f in filas if f["score"] is not None]
-        latencias = [f["latency_s"] for f in filas if f["latency_s"] > 0]
-        return {
-            "total_traces": len(filas),
-            "total_tokens": entrada + salida,
-            "cost_usd": round(sum(f["cost_usd"] for f in filas), 4),
-            "avg_judge_score": round(sum(puntajes) / len(puntajes), 2) if puntajes else None,
-            "avg_latency_s": round(sum(latencias) / len(latencias), 2) if latencias else None,
-        }
+        return resumir_trazas(filas)
 
     def _stats_locales(self) -> dict:
         """Lo que se pudo medir sin Langfuse. No es lo mismo, y se declara.

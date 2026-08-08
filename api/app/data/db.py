@@ -6,12 +6,14 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from ..domain.constants import (
+    ALERTS_DEFAULT_LIMIT,
     DASHBOARD_TOP_N,
     JUDGE_AUTO_INDEX_THRESHOLD,
     POLICY_SEED_BLOQUEANTES,
     POLICY_SEED_SLA_DIAS,
     SQLITE_TIMEOUT_S,
 )
+from ..domain.enums import Severity
 
 logger = logging.getLogger(__name__)
 
@@ -389,15 +391,19 @@ class Database:
         self._escribir("DELETE FROM configuracion_modelos")
 
     def ensure_alerts_table(self) -> None:
+        # f-string para que la severidad por defecto salga del enum. El `{{}}` de
+        # metadata_json es un objeto JSON vacio y va escapado a proposito: sin las
+        # llaves dobles, el f-string lo interpola como cadena vacia y la columna
+        # queda con un default que no es JSON valido.
         self._escribir(
-            """CREATE TABLE IF NOT EXISTS alerts (
+            f"""CREATE TABLE IF NOT EXISTS alerts (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_type      TEXT NOT NULL,
-                severity        TEXT NOT NULL DEFAULT 'ERROR',
+                severity        TEXT NOT NULL DEFAULT '{Severity.ERROR}',
                 message         TEXT NOT NULL,
                 source          TEXT NOT NULL DEFAULT '',
                 transaction_id  TEXT,
-                metadata_json   TEXT NOT NULL DEFAULT '{}',
+                metadata_json   TEXT NOT NULL DEFAULT '{{}}',
                 created_at      TEXT NOT NULL
             )"""
         )
@@ -409,7 +415,7 @@ class Database:
                 metadata_json, created_at)
                VALUES (?,?,?,?,?,?,?)""",
             (
-                alert["event_type"], alert.get("severity", "ERROR"),
+                alert["event_type"], alert.get("severity", Severity.ERROR),
                 alert["message"], alert.get("source", ""),
                 alert.get("transaction_id"),
                 json.dumps(alert.get("metadata", {}), ensure_ascii=False),
@@ -417,7 +423,7 @@ class Database:
             ),
         ).lastrowid
 
-    def get_recent_alerts(self, limit: int = 50) -> list[dict]:
+    def get_recent_alerts(self, limit: int = ALERTS_DEFAULT_LIMIT) -> list[dict]:
         return self._consultar(
             """SELECT id, event_type, severity, message, source,
                       transaction_id, created_at

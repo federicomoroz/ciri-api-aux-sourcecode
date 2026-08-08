@@ -202,7 +202,7 @@
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-gray-400 italic">No se encontraron precedentes similares (similitud < 0.40).</p>
+        <p class="text-gray-400 italic">No se encontraron precedentes similares (similitud < {{ umbral_similitud }}).</p>
         {% endif %}
     </section>
 
@@ -482,7 +482,7 @@
     <!-- Footer -->
     <footer class="bg-gray-100 rounded-xl p-4 text-center text-xs text-gray-400">
         <p>Generado: <strong>{{ generated_at }}</strong> | Agente: CIRI Chargeback Agent v1.0</p>
-        <p class="mt-1">Prompts: {% for nombre, version in versiones_de_prompt.items() %}{{ nombre }} {{ version }}{% if not loop.last %} · {% endif %}{% endfor %} | Embeddings: voyage-multilingual-2 (Voyage AI)</p>
+        <p class="mt-1">Prompts: {% for nombre, version in versiones_de_prompt.items() %}{{ nombre }} {{ version }}{% if not loop.last %} · {% endif %}{% endfor %} | Embeddings: {{ modelo_de_embeddings }}</p>
         {% if judge_evaluation %}
         <p class="mt-1">Judge score: <strong>{{ "%.1f"|format(judge_evaluation.overall_score) }}/10</strong> | Cache hit: <strong>{{ "Sí" if cache_hit else "No" }}</strong></p>
         {% endif %}

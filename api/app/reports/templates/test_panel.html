@@ -1286,7 +1286,7 @@
       margin-top: 2px;
     }
     .alert-sev-ERROR   { background: rgba(220,38,38,0.15); color: var(--red); }
-    .alert-sev-WARNING { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .alert-sev-WARN    { background: rgba(245,158,11,0.15); color: var(--amber); }
     .alert-sev-INFO    { background: rgba(59,130,246,0.15); color: var(--blue); }
     .alert-body { flex: 1; min-width: 0; }
     .alert-msg  { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1762,9 +1762,9 @@
             </select>
             <select id="filter-score" onchange="applyFilters()">
               <option value="">Score: Todos</option>
-              <option value="high">Riesgo alto (score &lt; {{ score_severo }})</option>
-              <option value="medium">Riesgo medio ({{ score_severo }}–{{ score_riesgoso - 1 }})</option>
-              <option value="low">Riesgo bajo ({{ score_riesgoso }}+)</option>
+              <option value="high">Riesgo alto (score &lt; {{ umbral_score_alto }})</option>
+              <option value="medium">Riesgo medio ({{ umbral_score_alto }}–{{ umbral_score_moderado - 1 }})</option>
+              <option value="low">Riesgo bajo ({{ umbral_score_moderado }}+)</option>
             </select>
           </div>
           <div class="filter-chips" id="filter-chips"></div>
@@ -2171,8 +2171,17 @@ const STEP_INDEX = {
 
 // Umbrales del score antifraude, inyectados desde domain/constants.py.
 // Escritos a mano acá ya se habían desincronizado del backend.
-const SCORE_SEVERO   = {{ score_severo }};    // por debajo: riesgo alto
-const SCORE_RIESGOSO = {{ score_riesgoso }};  // por debajo: riesgo medio
+// La misma banda con la que el informe pinta el score. El panel usaba antes
+// RISK_FRAUD_SEVERE (15), que es un umbral de DECISION y no de presentacion:
+// un score 20 salia «riesgo medio» aca y rojo «riesgo alto» en el informe del
+// mismo caso.
+// Los mismos umbrales con los que el informe pinta la nota del juez. Escritos
+// a mano aca eran 8 y 5, y el informe usa 7 y 5: un 7.5 salia verde en un lado
+// y amarillo en el otro para la misma corrida.
+const JUEZ_APRUEBA   = {{ umbral_juez_aprueba }};
+const JUEZ_REVISA    = {{ umbral_juez_revisa }};
+const SCORE_ALTO     = {{ umbral_score_alto }};      // por debajo: riesgo alto
+const SCORE_MODERADO = {{ umbral_score_moderado }};  // por debajo: riesgo medio
 
 // ─── STATE ────────────────────────────────────────────────
 let selectedIdx    = null;
@@ -2207,7 +2216,7 @@ function renderTransactionDropdown(txns) {
   txns.forEach(tx => {
     const score  = tx.fraud_score;
     // Score bajo = riesgo alto. Es 0-100 y mide confianza, no peligro.
-    const flag   = score < SCORE_SEVERO ? '[!]' : score < SCORE_RIESGOSO ? '[?]' : '[ok]';
+    const flag   = score < SCORE_ALTO ? '[!]' : score < SCORE_MODERADO ? '[?]' : '[ok]';
     const opt    = document.createElement('option');
     opt.value    = tx.id;
     opt.textContent = `${tx.id} | ${tx.merchant} | $${Number(tx.amount_usd).toFixed(0)} | ${tx.country} | Score ${score} ${flag}`;
@@ -2252,9 +2261,9 @@ function applyFilters() {
   if (score) {
     filtered = filtered.filter(t => {
       const s = t.fraud_score;
-      if (score === 'high')   return s < SCORE_SEVERO;
-      if (score === 'medium') return s >= SCORE_SEVERO && s < SCORE_RIESGOSO;
-      if (score === 'low')    return s >= SCORE_RIESGOSO;
+      if (score === 'high')   return s < SCORE_ALTO;
+      if (score === 'medium') return s >= SCORE_ALTO && s < SCORE_MODERADO;
+      if (score === 'low')    return s >= SCORE_MODERADO;
       return true;
     });
   }
@@ -2280,9 +2289,9 @@ function renderFilterChips() {
     const val = $(f.id).value;
     if (!val) return;
     const display = f.id === 'filter-score'
-      ? (val === 'high' ? `Riesgo alto (< ${SCORE_SEVERO})`
-         : val === 'medium' ? `Riesgo medio (${SCORE_SEVERO}–${SCORE_RIESGOSO - 1})`
-         : `Riesgo bajo (${SCORE_RIESGOSO}+)`)
+      ? (val === 'high' ? `Riesgo alto (< ${SCORE_ALTO})`
+         : val === 'medium' ? `Riesgo medio (${SCORE_ALTO}–${SCORE_MODERADO - 1})`
+         : `Riesgo bajo (${SCORE_MODERADO}+)`)
       : val;
     const chip = document.createElement('span');
     chip.className = 'filter-chip';
@@ -2347,7 +2356,7 @@ function onTxnSelect() {
     const scoreEl = $('pv-score');
     scoreEl.textContent = score + '/100';
     scoreEl.className   = 'txn-preview-val ' + (
-      score < SCORE_SEVERO ? 'score-high' : score < SCORE_RIESGOSO ? 'score-medium' : 'score-low');
+      score < SCORE_ALTO ? 'score-high' : score < SCORE_MODERADO ? 'score-medium' : 'score-low');
     $('pv-method').textContent = tx.payment_method;
     $('pv-status').textContent = tx.status;
     $('txn-preview').style.display = 'grid';
@@ -3809,7 +3818,8 @@ async function loadLangfuseStats() {
     (data.recent_traces || []).forEach(t => {
       const tr = document.createElement('tr');
       const scoreVal = t.score != null ? t.score.toFixed(1) : '—';
-      const scoreCls = t.score >= 8 ? 'lf-score-good' : t.score >= 5 ? 'lf-score-mid' : t.score != null ? 'lf-score-low' : '';
+      const scoreCls = t.score >= JUEZ_APRUEBA ? 'lf-score-good'
+        : t.score >= JUEZ_REVISA ? 'lf-score-mid' : t.score != null ? 'lf-score-low' : '';
       const name = (t.name || t.trace_id || '').slice(0, 20);
       tr.innerHTML =
         '<td title="' + (t.trace_id || '') + '">' + name + '</td>' +

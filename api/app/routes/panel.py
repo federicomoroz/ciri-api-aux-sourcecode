@@ -30,6 +30,9 @@ from ..dependencies import (
 )
 from ..domain.constants import (
     FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+    FRAUD_SCORE_MODERADO,
+    JUDGE_APPROVAL_THRESHOLD,
+    JUDGE_NEEDS_REVIEW_THRESHOLD,
     LLM_BAD_KEY_MARKER,
     LLM_CREDIT_EXHAUSTED_MARKER,
     LLM_TIMEOUT_S,
@@ -41,7 +44,6 @@ from ..domain.constants import (
     PASO_JUEZ,
     PASO_POLITICAS,
     PASO_RESOLUCION,
-    RISK_FRAUD_SEVERE,
     SSE_LATIDO_S,
 )
 from ..domain.models import AnalyzeRequest
@@ -450,6 +452,11 @@ def _con_latido(eventos, cada_s: float = SSE_LATIDO_S):
                     # Nadie del otro lado: no se empieza el paso siguiente.
                     break
         except Exception as exc:            # noqa: BLE001 — se reenvia al cliente
+            # Se anota aca ademas de reenviarlo: esto corre en un hilo aparte y
+            # lo que el cliente recibe es un mensaje para leer en pantalla. Sin
+            # esta linea, un fallo del analisis por streaming no dejaba rastro
+            # en el servidor y solo existia en el navegador de quien lo pidio.
+            logger.exception("Fallo el analisis por streaming")
             cola.put(("error", exc))
         finally:
             cola.put(("fin", CORTE))
@@ -561,12 +568,18 @@ def serve_panel(
     escritos a mano en el JavaScript ya se habian desincronizado —el panel los
     trataba como una escala 0-10 donde alto es malo, cuando el score es 0-100 y
     alto significa seguro—, y pintaba de rojo las transacciones mas confiables.
+
+    Son los mismos que usa el informe. El panel filtraba con RISK_FRAUD_SEVERE,
+    que decide el nivel de riesgo y no como se pinta: el mismo score caia en una
+    banda aca y en otra en el informe.
     """
     tmpl = report_gen.env.get_template("test_panel.html")
     return HTMLResponse(
         content=tmpl.render(
-            score_severo=RISK_FRAUD_SEVERE,
-            score_riesgoso=FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+            umbral_juez_aprueba=JUDGE_APPROVAL_THRESHOLD,
+            umbral_juez_revisa=JUDGE_NEEDS_REVIEW_THRESHOLD,
+            umbral_score_alto=FRAUD_SCORE_HIGH_RISK_THRESHOLD,
+            umbral_score_moderado=FRAUD_SCORE_MODERADO,
         ),
         status_code=200,
     )
