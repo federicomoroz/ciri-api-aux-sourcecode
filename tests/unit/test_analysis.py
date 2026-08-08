@@ -9,7 +9,7 @@ import pytest
 
 from api.app.analysis.analyzer import Analyzer
 from api.app.data.db import Database
-from api.app.domain import decision
+from api.app.domain import decision, precedentes
 from api.app.domain.enums import MerchantFlag, Severity
 
 
@@ -249,24 +249,21 @@ class TestPatronesEnElResumenDeLogs:
     ]
 
     def test_el_resumen_incluye_los_patrones(self):
-        from api.app.services.resolution import ResolutionService
 
-        resumen = ResolutionService._summarize_logs(self.LOGS)
+        resumen = precedentes.resumir_logs(self.LOGS)
         assert "Patrones detectados" in resumen
         assert "systematic_merchant_timeout" in resumen
         assert "duplicate_charge" in resumen
 
     def test_sin_patrones_no_agrega_la_linea(self):
-        from api.app.services.resolution import ResolutionService
 
         limpios = [{"severity": Severity.INFO, "event": "PAYMENT_INITIATED", "detail": "ok",
                     "timestamp": "2024-01-01", "code": "200"}]
-        assert "Patrones detectados" not in ResolutionService._summarize_logs(limpios)
+        assert "Patrones detectados" not in precedentes.resumir_logs(limpios)
 
     def test_sin_logs_no_rompe(self):
-        from api.app.services.resolution import ResolutionService
 
-        assert "Total: 0 eventos" in ResolutionService._summarize_logs([])
+        assert "Total: 0 eventos" in precedentes.resumir_logs([])
 
 
 class TestLineaBaseDelCorpus:

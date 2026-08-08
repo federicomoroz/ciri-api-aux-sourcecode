@@ -1,8 +1,9 @@
 """Unit tests for ResolutionService guardrails and deterministic outcome."""
 
-from api.app.domain import decision
+from api.app.domain import decision, precedentes
 from api.app.domain.context import CaseContext
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel, VerdictType
+from api.app.services import guardrails
 from api.app.services.resolution import ResolutionService
 
 
@@ -24,7 +25,7 @@ class TestDetectDivergence:
     def test_approve_con_blocker_queda_registrado(self):
         propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.MEDIUM}
         outcome = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
-        warnings = ResolutionService._detect_divergence(
+        warnings = guardrails.antes_del_override(
             propuesta, outcome, self.BLOCKER_VERDICTS,
         )
         assert len(warnings) == 1
@@ -35,7 +36,7 @@ class TestDetectDivergence:
     def test_reject_con_blocker_es_coherente(self):
         propuesta = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
         outcome = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
-        warnings = ResolutionService._detect_divergence(
+        warnings = guardrails.antes_del_override(
             propuesta, outcome, self.BLOCKER_VERDICTS,
         )
         assert warnings == []
@@ -44,12 +45,12 @@ class TestDetectDivergence:
         propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
         outcome = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
         verdicts = [{"policy_code": "POL-SLA-002", "verdict": VerdictType.PASS, "reasoning": "ok"}]
-        assert ResolutionService._detect_divergence(propuesta, outcome, verdicts) == []
+        assert guardrails.antes_del_override(propuesta, outcome, verdicts) == []
 
     def test_riesgo_blocker_inventado_queda_registrado(self):
         propuesta = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
         outcome = {"recommended_action": ResolutionOutcome.PENDING_HITL, "risk_level": RiskLevel.HIGH}
-        warnings = ResolutionService._detect_divergence(
+        warnings = guardrails.antes_del_override(
             propuesta, outcome, self.FAIL_VERDICTS,
         )
         assert any("risk_level=BLOCKER sin veredictos BLOCKER" in w for w in warnings)
@@ -58,7 +59,7 @@ class TestDetectDivergence:
     def test_reject_sin_blocker_queda_registrado(self):
         propuesta = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.HIGH}
         outcome = {"recommended_action": ResolutionOutcome.PENDING_HITL, "risk_level": RiskLevel.HIGH}
-        warnings = ResolutionService._detect_divergence(
+        warnings = guardrails.antes_del_override(
             propuesta, outcome, self.FAIL_VERDICTS,
         )
         assert any("REJECT sin veredictos BLOCKER" in w for w in warnings)
@@ -67,13 +68,13 @@ class TestDetectDivergence:
     def test_sin_veredictos_no_inventa_advertencias(self):
         propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
         outcome = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.LOW}
-        assert ResolutionService._detect_divergence(propuesta, outcome, []) == []
+        assert guardrails.antes_del_override(propuesta, outcome, []) == []
 
     def test_no_muta_la_propuesta(self):
         """Detectar no es corregir: de eso se encarga el override."""
         propuesta = {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.MEDIUM}
         outcome = {"recommended_action": ResolutionOutcome.REJECT, "risk_level": RiskLevel.BLOCKER}
-        ResolutionService._detect_divergence(propuesta, outcome, self.BLOCKER_VERDICTS)
+        guardrails.antes_del_override(propuesta, outcome, self.BLOCKER_VERDICTS)
         assert propuesta == {"recommended_action": ResolutionOutcome.APPROVE, "risk_level": RiskLevel.MEDIUM}
 
 
@@ -87,7 +88,7 @@ class TestGuardrailCompensation:
             "policy_verdicts": [],
         }
         tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+        warnings = guardrails.despues_del_override(resolution, tx)
         assert any("Compensacion" in w for w in warnings)
 
     def test_normal_compensation_no_warning(self):
@@ -97,7 +98,7 @@ class TestGuardrailCompensation:
             "policy_verdicts": [],
         }
         tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+        warnings = guardrails.despues_del_override(resolution, tx)
         assert not any("Compensacion" in w for w in warnings)
 
 
@@ -114,7 +115,7 @@ class TestGuardrailExcessiveConfidence:
             ],
         }
         tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+        warnings = guardrails.despues_del_override(resolution, tx)
         assert any("Confianza excesiva" in w for w in warnings)
 
     def test_normal_confidence_no_warning(self):
@@ -127,7 +128,7 @@ class TestGuardrailExcessiveConfidence:
             ],
         }
         tx = {"amount_usd": 100.0}
-        warnings = ResolutionService._validate_resolution(resolution, tx)
+        warnings = guardrails.despues_del_override(resolution, tx)
         assert not any("Confianza excesiva" in w for w in warnings)
 
 
@@ -330,7 +331,7 @@ class TestBuildPrecedentSummary:
     """Deterministic precedent summary generation."""
 
     def test_empty_cases_returns_placeholder(self):
-        result = ResolutionService._build_precedent_summary([], "Cargo duplicado")
+        result = precedentes.resumir_precedentes([], "Cargo duplicado")
         assert result == "Sin precedentes relevantes."
 
     def test_matching_motivo_tagged_and_first(self):
@@ -341,7 +342,7 @@ class TestBuildPrecedentSummary:
              "resolution_days": 3, "merchant": "Rappi",
              "observations": "Timeout en gateway"},
         ]
-        result = ResolutionService._build_precedent_summary(cases, "Cargo duplicado")
+        result = precedentes.resumir_precedentes(cases, "Cargo duplicado")
         assert "[MOTIVO SIMILAR]" in result
         # CB-002 should come first (match)
         assert result.index("CB-002") < result.index("CB-001")
@@ -357,7 +358,7 @@ class TestBuildPrecedentSummary:
              "resolution_days": 24, "merchant": "Rappi",
              "observations": "Error en sistema de pagos — cargo doble por timeout"},
         ]
-        result = ResolutionService._build_precedent_summary(cases, "Cargo duplicado")
+        result = precedentes.resumir_precedentes(cases, "Cargo duplicado")
         assert "[MOTIVO SIMILAR]" in result
         assert "cargo doble por timeout" in result
         assert "Relevancia: mismo patron de cargo duplicado" in result
@@ -367,7 +368,7 @@ class TestBuildPrecedentSummary:
             {"case_id": "CB-001", "motivo": "Fraude", "resolution": "Rechazado",
              "resolution_days": 2, "merchant": "eBay"},
         ]
-        result = ResolutionService._build_precedent_summary(cases, None)
+        result = precedentes.resumir_precedentes(cases, None)
         assert "[MOTIVO SIMILAR]" not in result
         assert "CB-001" in result
 
@@ -376,7 +377,7 @@ class TestBuildPrecedentSummary:
             {"case_id": "CB-001", "motivo": "Fraude", "resolution": "Aprobado",
              "resolution_days": 3, "merchant": "MercadoLibre"},
         ]
-        result = ResolutionService._build_precedent_summary(cases, "Fraude")
+        result = precedentes.resumir_precedentes(cases, "Fraude")
         assert "merchant=MercadoLibre" in result
 
 

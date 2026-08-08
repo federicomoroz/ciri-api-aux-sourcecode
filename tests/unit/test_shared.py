@@ -8,6 +8,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from api.app.domain import precedentes
 from api.app.domain.context import CaseContext
 from api.app.domain.models import ResolveRequest
 from api.app.llm.pricing import estimar_costo_usd, tarifa_de
@@ -126,9 +127,8 @@ class TestClasificarResolucion:
 
     @staticmethod
     def _clasificar(texto):
-        from api.app.services.resolution import ResolutionService
 
-        return ResolutionService._clasificar_resolucion(texto)
+        return precedentes.clasificar_resolucion(texto)
 
     def test_reconoce_las_cinco_clases(self):
         casos = {

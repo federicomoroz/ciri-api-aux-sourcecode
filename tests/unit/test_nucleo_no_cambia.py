@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from api.app.domain import decision
+from api.app.domain import decision, precedentes
 from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
-from api.app.services.resolution import ResolutionService
+from api.app.services import guardrails
 
 GRABADO = Path(__file__).parent / "nucleo_grabado.json"
 
@@ -130,7 +130,7 @@ def _matriz() -> dict:
     }
 
     salida["detect_divergence"] = {
-        f"{np_}|{nv}|{nt}": ResolutionService._detect_divergence(
+        f"{np_}|{nv}|{nt}": guardrails.antes_del_override(
             p, decision.decidir(v, t), v,
         )
         for np_, p in PROPUESTAS.items()
@@ -139,7 +139,7 @@ def _matriz() -> dict:
     }
 
     salida["validate_resolution"] = {
-        f"{np_}|{nv}|{nt}": ResolutionService._validate_resolution(
+        f"{np_}|{nv}|{nt}": guardrails.despues_del_override(
             {**p, "policy_verdicts": v,
              "compensation_amount_usd": t.get("amount_usd", 0) * 1.5},
             t,
@@ -150,11 +150,11 @@ def _matriz() -> dict:
     }
 
     salida["summarize_logs"] = {
-        nl: ResolutionService._summarize_logs(lg) for nl, lg in LOGS.items()
+        nl: precedentes.resumir_logs(lg) for nl, lg in LOGS.items()
     }
 
     salida["build_precedent_summary"] = {
-        f"{nc}|{motivo}|{merchant}": ResolutionService._build_precedent_summary(c, motivo, merchant)
+        f"{nc}|{motivo}|{merchant}": precedentes.resumir_precedentes(c, motivo, merchant)
         for nc, c in CASOS_SIMILARES.items()
         for motivo in ("No reconoce la compra", "Cargo duplicado", "")
         for merchant in ("Airbnb", "Otro")
@@ -163,11 +163,11 @@ def _matriz() -> dict:
     salida["codigos"] = {nv: decision.codigos_con_veredicto(v) for nv, v in VEREDICTOS.items()}
 
     salida["extraer_propuesta"] = {
-        np_: ResolutionService._extraer_propuesta(dict(p)) for np_, p in PROPUESTAS.items()
+        np_: guardrails.propuesta_del_modelo(dict(p)) for np_, p in PROPUESTAS.items()
     }
 
     salida["clasificar_resolucion"] = {
-        r or "(vacio)": list(ResolutionService._clasificar_resolucion(r))
+        r or "(vacio)": list(precedentes.clasificar_resolucion(r))
         for r in ("Reembolsado", "Rechazado", "Reembolsado parcial", "Escalado", "", "Cualquier cosa")
     }
 

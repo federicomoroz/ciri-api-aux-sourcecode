@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, create_autospec
 import pytest
 
 from api.app.data.db import Database
+from api.app.domain import precedentes
 from api.app.domain.constants import (
     FALLBACK_TX_ID,
     FEEDBACK_CASE_ID_PREFIX,
@@ -167,19 +168,19 @@ class TestResolutionServiceJudge:
         assert result["approved"] is False  # 6.5 < 7.0
 
 
-# ---- ResolutionService._summarize_logs() ----
+# ---- precedentes.resumir_logs() ----
 
 class TestSummarizeLogs:
 
     def test_empty_logs_summary(self):
         """Empty logs should produce a summary with zero counts."""
-        text = ResolutionService._summarize_logs([])
+        text = precedentes.resumir_logs([])
         assert "Total: 0 eventos" in text
         assert "ERROR: 0" in text
 
     def test_logs_with_errors_included(self, sample_logs):
         """Critical logs (ERROR/WARN) should appear in summary."""
-        text = ResolutionService._summarize_logs(sample_logs)
+        text = precedentes.resumir_logs(sample_logs)
         assert "MERCHANT_NO_RESPONSE" in text
         assert "FRAUD_ALERT" in text
 
