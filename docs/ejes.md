@@ -83,9 +83,9 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 
 | Prompt | Versión | Modelo |
 |---|---|---|
-| `v1_policy_eval.py` | v1.2 | Haiku 4.5 |
+| `v1_policy_eval.py` | v1.3 | Haiku 4.5 |
 | `v1_resolution.py` | v3.1 | Sonnet |
-| `v1_judge.py` | v2.1 | Sonnet |
+| `v1_judge.py` | v2.2 | Sonnet |
 
 **El modelo de cada paso se elige por separado**, desde el panel, y se guarda en SQLite: `constants.py` tiene el default y cambiarlo no es un deploy. Son tres tareas distintas —comparar contra reglas, redactar, aplicar una rúbrica— y no hay motivo para que compartan modelo por defecto de implementación. Además de Anthropic hay cinco proveedores con free tier soportados vía `OpenAICompatibleClient`, que es la segunda implementación del `Protocol` y la prueba de que cambiar de proveedor no toca ningún llamador. Ver `decisions.md#21`.
 
@@ -205,7 +205,7 @@ pytest tests/integration/test_arranque_sin_qdrant.py -v   # levanta contra un Qd
 | Bonus pedido | Estado |
 |---|---|
 | Human-in-the-Loop | Nodo `Wait` con formulario propio para casos HIGH (espera 24 h, **falla cerrado**) + formulario embebido en el reporte. Los dos alimentan `POST /api/feedback` |
-| LLM-as-a-Judge | `POST /api/analyze/judge`, 5 criterios con rúbricas, prompt v2.1. Dos de los criterios evalúan **la propuesta del modelo**, no la versión ya corregida por el override: sobre la entregada no podían bajar de 10 por construcción |
+| LLM-as-a-Judge | `POST /api/analyze/judge`, 5 criterios con rúbricas, prompt v2.2. Dos de los criterios evalúan **la propuesta del modelo**, no la versión ya corregida por el override: sobre la entregada no podían bajar de 10 por construcción |
 | Observabilidad | Langfuse (traces, tokens, costo, scores) |
 | Caché semántico | **No implementado, y es deliberado.** Hay caché de idempotencia exact-match; cachear por similitud arriesga devolver la resolución de otro caso. Ver `decisions.md#9` |
 | SLA y compensación | `analyzer.py::check_sla` mide el plazo del **reclamo**, no de la compra: un caso cerrado se mide hasta su cierre, y **sin reclamo registrado no se mide** —`within_sla` queda en `None`—. Entre la compra y el reclamo pueden pasar meses: contarlos daba 489 días de incumplimiento y compensación automática en 53 de las 100 transacciones |

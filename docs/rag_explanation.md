@@ -240,7 +240,7 @@ if fraud_score < 30:
     base += " transaccion de alto riesgo fraude score bajo"
 
 # Regla 3: Pais fuera de LATAM → palabras clave de SLA extendido
-if country not in {"ARG", "BRA", "CHL", "COL", "MEX", "PER", "URY"}:
+if country not in LATAM_COUNTRIES:   # domain/enums.py — 20 países
     base += " internacional fuera LATAM plazo extendido"
 
 # Regla 4: Canal IVR → palabras clave de limite de monto

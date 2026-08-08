@@ -17,6 +17,20 @@ Cuando arrancamos, el promedio del Judge era **8.2/10**. Funcionaba, pero habia 
 | v3.0 — Ajustes dirigidos | **9.1** | Prompt v3.0 de resolucion desbloqueado para razonamiento analitico de Sonnet. Overrides deterministicos para 6/11 campos. Precedent summary deterministico con analisis de patron. |
 | v3.1 — SLA determinista | *sin medir* | El resultado de `/api/sla/check` entra al prompt y `compensation_applicable` / `compensation_amount_usd` pasan a calcularse por codigo. Overrides deterministicos para 8/11 campos. Ver «Lo que no esta medido». |
 | v2.1 — El Juez califica al modelo | *sin medir* | `policy_consistency` y `risk_assessment` pasan a evaluar la propuesta original en vez de la version ya corregida. **Se espera que baje**: hasta v2.0 esos dos criterios no podian fallar por construccion. Ver `decisions.md` 20. |
+| v2.2 — El umbral sale del dominio | *sin medir* | `approved = overall_score >= 7.0` estaba escrito en el prompt **y** en `constants.py`. El codigo solo aplica la constante cuando el modelo omite el campo, asi que gobernaba la copia del prompt: mover la constante cambiaba el color del informe pero no el flag. Ahora se inyecta. |
+
+> **v2.1 no llegaba por n8n, y esto invalida una afirmacion anterior de este documento.**
+> El cambio de v2.1 depende de un campo —la propuesta del modelo antes del override— que
+> `resolve` producia bajo una clave que el modelo de respuesta no declaraba: FastAPI la
+> descartaba al serializar. El nodo `Juez de Calidad` reenvia a `/api/analyze/judge` **lo que
+> devolvio `resolve`**, asi que por el orquestador el Juez seguia calificando la resolucion ya
+> corregida y sus dos criterios seguian sin poder bajar de 10. El pipeline directo del panel no
+> pasa por el serializador y si lo recibia: **el mismo caso sacaba distinta nota segun el
+> camino, y la del orquestador era la mas alta**. Corregido; hay un test que serializa la
+> respuesta y comprueba que la propuesta sobreviva.
+>
+> Consecuencia sobre los numeros de mas abajo: los informes guardados que salieron por n8n
+> tienen notas de Juez v2.0 aunque el prompt dijera v2.1.
 
 ### Como se midio el 9.1
 

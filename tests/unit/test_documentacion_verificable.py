@@ -244,3 +244,37 @@ class TestLosInformesQueViajanSeAbrenSolos:
     def test_trae_sus_estilos_adentro(self, informe):
         t = informe.read_text(encoding="utf-8")
         assert ".rounded-2xl" in t and ".shadow-lg" in t
+
+
+class TestLasVersionesDePromptQueLaDocAfirma:
+    """La doc nombra la version de cada prompt en varias tablas.
+
+    Se desfasaron: el codigo iba por v1.3 y v2.2 mientras `architecture.md` y
+    `ejes.md` seguian diciendo v1.2 y v2.1. Nada las ataba, asi que la unica
+    forma de notarlo era leer las dos cosas al lado.
+
+    Se compara contra `prompts.versiones()`, que lee el changelog del propio
+    modulo — la misma fuente que el informe declara en su audit trail.
+    """
+
+    DOCS = ("docs/architecture.md", "docs/ejes.md")
+
+    @pytest.fixture(scope="class")
+    def vigentes(self) -> dict:
+        from api.app.llm.prompts import versiones
+
+        return versiones()
+
+    @pytest.mark.parametrize("doc", DOCS)
+    def test_ningun_documento_nombra_una_version_vieja(self, doc, vigentes):
+        texto = (RAIZ / doc).read_text(encoding="utf-8")
+        for modulo, version in vigentes.items():
+            # Las menciones al archivo del prompt seguidas de una version. Los
+            # separadores varian: `| v2.2 |` en una tabla, `# v2.2 —` en el
+            # arbol de archivos. Sin el `#` el patron no matcheaba nada y el
+            # test pasaba en verde por no mirar.
+            nombradas = set(re.findall(rf"{modulo}\.py`?[\s|#]*(v\d+\.\d+)", texto))
+            viejas = nombradas - {version}
+            assert not viejas, (
+                f"{doc} dice {viejas} para {modulo}, que va por {version}"
+            )

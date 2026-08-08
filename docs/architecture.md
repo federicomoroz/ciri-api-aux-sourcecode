@@ -756,9 +756,9 @@ quest_ML/
         client.py           # Protocol LLMClient + AnthropicClient
         parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/
-          v1_policy_eval.py # v1.2 — evaluación de políticas
+          v1_policy_eval.py # v1.3 — evaluación de políticas
           v1_resolution.py  # v3.1 — síntesis de resolución (Sonnet)
-          v1_judge.py       # v2.1 — LLM-as-Judge con rubrics
+          v1_judge.py       # v2.2 — LLM-as-Judge con rubrics
         client.py           # Protocol LLMClient + Anthropic y OpenAI-compatible
         manager.py          # LLMManager: la única puerta a los modelos
         adaptadores.py      # Un adaptador por familia: tokens, reintentos, frecuencia

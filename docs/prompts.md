@@ -158,7 +158,7 @@ Array JSON de objetos `PolicyVerdict`:
 6. Usar TODOS los datos disponibles: transaccion, perfil de riesgo del comercio e historial del cliente
 7. `NOT_APPLICABLE` solo cuando la politica genuinamente no aplica; comercios suspendidos siguen siendo relevantes para politicas de plazos
 8. Responder UNICAMENTE con un array JSON valido, sin texto adicional
-9. **Determinacion LATAM:** Distinguir entre pais de la transaccion (campo `country`) y pais del comercio. Lista de paises LATAM explicita (MEX, COL, ARG, BRA, CHL, PER, etc.)
+9. **Determinacion LATAM:** Distinguir entre pais de la transaccion (campo `country`) y pais del comercio. La lista de paises LATAM se inyecta desde `domain/enums.py`, no se escribe en el prompt: cuando estaba escrita, decia 20 paises y el enum tenia 7, asi que para un ECU el codigo aplicaba plazo extendido de no-LATAM y el LLM leia que ECU si era LATAM
 10. **Documentacion:** Si una politica requiere documentacion y se marca WARNING, especificar que documentos faltan y si bloquean la decision
 
 ### Ejemplo de prompt de usuario renderizado (abreviado)
