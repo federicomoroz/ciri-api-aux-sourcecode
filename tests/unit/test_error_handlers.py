@@ -3,6 +3,10 @@
 Quien prueba el sistema no tiene acceso a los logs del servidor. Si el saldo de
 Anthropic se agota o Voyage corta por limite de rate, la respuesta tiene que
 decir que paso y, cuando exista, cual es la salida.
+
+Lo que se prueba es el comportamiento del borde HTTP. La clasificacion en si
+—que un mensaje sea «sin saldo» y no otra cosa— se prueba aparte, en
+`test_fallos.py`, porque la usan tres caminos y no solo este.
 """
 
 import anthropic
@@ -11,7 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.app.main import anthropic_error_handler, embedding_rate_limit_handler
+from api.app.main import manejar_error
 from api.app.rag.embedder import EmbeddingRateLimit
 
 SIN_SALDO = (
@@ -26,8 +30,9 @@ RUTA = "/estalla"
 def _cliente(excepcion: Exception) -> TestClient:
     """Una app minima cuya unica ruta lanza esa excepcion."""
     app = FastAPI()
-    app.add_exception_handler(anthropic.APIError, anthropic_error_handler)
-    app.add_exception_handler(EmbeddingRateLimit, embedding_rate_limit_handler)
+    # Un solo manejador para todo: clasifica con `domain/fallos.py` y traduce.
+    # Antes eran dos handlers con su propia clasificacion y su propia redaccion.
+    app.add_exception_handler(Exception, manejar_error)
 
     @app.get(RUTA)
     def estallar():
@@ -88,8 +93,12 @@ class TestLimiteDeEmbeddings:
         assert respuesta.status_code == 429
 
     def test_explica_que_quedo_sin_servicio(self, respuesta):
+        """Nombra las dos capacidades que dependen de los embeddings.
+
+        Sin eso, «límite de frecuencia» no le dice a nadie qué dejó de andar.
+        """
         detalle = respuesta.json()["detail"]
-        assert "politicas" in detalle and "casos similares" in detalle
+        assert "políticas" in detalle and "casos similares" in detalle
 
     def test_dice_que_se_puede_reintentar(self, respuesta):
         assert "Reintentar" in respuesta.json()["detail"]

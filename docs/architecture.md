@@ -337,7 +337,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 972 tests (938 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1006 tests (938 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -806,7 +806,7 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 972 tests (unit + integration + E2E)
+  tests/                      # 1006 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 22 decisiones técnicas con razonamiento
@@ -851,7 +851,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-972 tests en 38 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
+1006 tests en 38 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
 Es el numero que reporta el CI sobre un checkout limpio, que es el reproducible: medido con un
 `.env` cargado sube unas decimas, porque se ejecutan ramas que sin configuracion no corren.
 El CI falla por debajo del 85%: el piso no esta para presumir un numero sino para que una

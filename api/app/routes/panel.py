@@ -33,8 +33,6 @@ from ..domain.constants import (
     FRAUD_SCORE_MODERADO,
     JUDGE_APPROVAL_THRESHOLD,
     JUDGE_NEEDS_REVIEW_THRESHOLD,
-    LLM_BAD_KEY_MARKER,
-    LLM_CREDIT_EXHAUSTED_MARKER,
     LLM_TIMEOUT_S,
     N8N_HEALTHZ_PATH,
     N8N_PING_TIMEOUT_S,
@@ -47,6 +45,7 @@ from ..domain.constants import (
     SSE_LATIDO_S,
 )
 from ..domain.contratos import SumideroDeAlertas
+from ..domain.fallos import RESPUESTAS, Fallo, clasificar
 from ..domain.models import AnalyzeRequest
 from ..reports.generator import ReportGenerator
 from ..services.pipeline import PipelineService
@@ -130,12 +129,12 @@ def _pipeline_demo(base: PipelineService, request: Request) -> Iterator[Pipeline
 
 
 def _es_falta_de_saldo(exc: Exception) -> bool:
-    return LLM_CREDIT_EXHAUSTED_MARKER in str(exc).lower()
+    return clasificar(exc) is Fallo.SIN_SALDO
 
 
 def _es_clave_invalida(exc: Exception) -> bool:
     """Pegar mal la clave es el error mas probable de quien trae la suya."""
-    return LLM_BAD_KEY_MARKER in str(exc).lower()
+    return clasificar(exc) is Fallo.CLAVE_INVALIDA
 
 
 def _en_modo_demo(req: AnalyzeRequest, settings: Settings) -> bool:
@@ -521,12 +520,13 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, 
             yield _sse(step, data)
     except Exception as exc:
         logger.error("Pipeline SSE fallo para %s: %s", req.transaction_id, exc, exc_info=True)
+        # El texto sale de `domain/fallos.py`, no se escribe aca: el mismo fallo
+        # tiene que decir lo mismo por HTTP y por el streaming. Los handlers de
+        # `main.py` no llegan a este camino —cuando el SSE ya emitio, la respuesta
+        # salio con 200— asi que la clasificacion se comparte aunque el transporte
+        # no pueda.
         if _es_clave_invalida(exc):
-            yield _sse("error", {"message": (
-                "Anthropic rechazo esa API key. Revisá que este completa y que empiece "
-                "con 'sk-ant-'. Con el modo demo encendido, los casos de ejemplo se ven "
-                "igual sin necesidad de clave."
-            )})
+            yield _sse("error", {"message": RESPUESTAS[Fallo.CLAVE_INVALIDA].para_leer})
             return
         if _es_falta_de_saldo(exc):
             html = _html_demo(req.transaction_id, settings, getattr(pipeline, "db", None))
@@ -537,9 +537,12 @@ def _emitir(pipeline: PipelineService, req: AnalyzeRequest, settings: Settings, 
                 )
                 yield _sse("done", {"html": html, "usage": USO_DEMO})
                 return
+            # La causa sale del lugar comun; lo que se agrega es lo que solo
+            # este camino sabe: que tampoco habia informe guardado al que caer.
             yield _sse("error", {"message": (
-                "La API key usada se quedo sin saldo, y este caso no tiene informe "
-                "prearmado. Con una clave con credito se investiga normalmente."
+                RESPUESTAS[Fallo.SIN_SALDO].para_leer
+                + " Este caso ademas no tiene informe prearmado, asi que no hay "
+                "nada guardado que mostrar en su lugar."
             )})
             return
         yield _sse("error", {"message": "El analisis se interrumpio. Revisar los logs del servidor."})

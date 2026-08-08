@@ -11,10 +11,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from .dependencies import lifespan
 from .domain.constants import (
     FALLBACK_REQUEST_ID,
-    LLM_CREDIT_EXHAUSTED_MARKER,
     N8N_ORIGIN_HEADER,
 )
-from .rag.embedder import EmbeddingRateLimit
+from .domain.fallos import RESPUESTAS, clasificar
 from .routes import (
     alerts,
     analytics,
@@ -130,69 +129,50 @@ app.add_middleware(
     expose_headers=["X-Request-ID", "X-Usage-JSON"],
 )
 
-@app.exception_handler(anthropic.APIError)
-async def anthropic_error_handler(request: Request, exc: anthropic.APIError):
-    """Surface Anthropic API errors (credit exhaustion, rate limits) with actionable detail.
+def _sin_clasificar(request: Request, exc: Exception) -> JSONResponse:
+    """Lo que no tiene nombre: un 500 honesto con su request_id.
 
-    El saldo agotado se distingue del resto: es el unico caso que quien esta
-    probando el sistema puede resolver por su cuenta, trayendo su propia clave.
+    No se inventa una causa. Si el proveedor del modelo fallo de una forma que el
+    sistema no sabe nombrar, se dice eso y se conserva su codigo: un 429 suyo no
+    es un error de este servicio.
     """
     request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
-    logger.error("Anthropic API error [request_id=%s]: %s %s", request_id, type(exc).__name__, exc)
-    status = exc.status_code if hasattr(exc, "status_code") else 502
-
-    if LLM_CREDIT_EXHAUSTED_MARKER in str(exc).lower():
+    logger.error("Unhandled error [request_id=%s]: %s", request_id, exc, exc_info=True)
+    if isinstance(exc, anthropic.APIError):
         return JSONResponse(
-            status_code=status,
+            status_code=getattr(exc, "status_code", 502) or 502,
             content={
-                "error": "LLM provider: sin saldo",
-                "detail": (
-                    "La clave de Anthropic del servidor se quedo sin credito, asi que el "
-                    "analisis no puede correr. Se puede seguir probando con una clave propia: "
-                    "en el panel, campo 'API key', o mandando api_key en el body de la peticion. "
-                    "El resto del sistema — consultas, RAG, informes — no depende de esto."
-                ),
+                "error": f"El proveedor del modelo fallo: {type(exc).__name__}",
+                "detail": "Revisar los logs del servidor por el detalle completo.",
                 "request_id": request_id,
             },
         )
-
     return JSONResponse(
-        status_code=status,
-        content={
-            "error": f"LLM provider error: {type(exc).__name__}",
-            "detail": "LLM service error — check server logs",
-            "request_id": request_id,
-        },
-    )
-
-
-@app.exception_handler(EmbeddingRateLimit)
-async def embedding_rate_limit_handler(request: Request, exc: EmbeddingRateLimit):
-    """El proveedor de embeddings corto la peticion: 429 explicado, no un 500 mudo."""
-    request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
-    logger.warning("Embedding rate limit [request_id=%s]", request_id)
-    return JSONResponse(
-        status_code=429,
-        content={
-            "error": "Embedding provider rate limit",
-            "detail": (
-                "El proveedor de embeddings (Voyage AI) rechazo la consulta por limite "
-                "de peticiones. Las busquedas semanticas — politicas y casos similares — "
-                "quedan sin servicio hasta que se libere la cuota. Reintentar en un minuto."
-            ),
-            "request_id": request_id,
-        },
+        status_code=500,
+        content={"error": "Internal server error", "request_id": request_id},
     )
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    """Return structured JSON error with request_id instead of raw stack trace."""
+async def manejar_error(request: Request, exc: Exception) -> JSONResponse:
+    """Traduce lo que fallo a algo que quien lee entienda.
+
+    La clasificacion y los textos viven en `domain/fallos.py`, no aca: el mismo
+    fallo tiene que decir lo mismo por esta ruta, por el streaming del panel y en
+    la pagina HTML de error. Antes cada camino clasificaba por su cuenta —los
+    tres con `MARKER in str(exc)`— y escribia su propia redaccion.
+    """
+    fallo = clasificar(exc)
+    if fallo is None:
+        return _sin_clasificar(request, exc)
+
     request_id = getattr(request.state, "request_id", FALLBACK_REQUEST_ID)
-    logger.error("Unhandled error [request_id=%s]: %s", request_id, exc, exc_info=True)
+    r = RESPUESTAS[fallo]
+    registrar = logger.error if r.alerta else logger.warning
+    registrar("%s [request_id=%s]: %s", fallo, request_id, exc)
     return JSONResponse(
-        status_code=500,
-        content={"error": "Internal server error", "request_id": request_id},
+        status_code=r.status,
+        content={"error": r.titulo, "detail": r.detalle, "request_id": request_id},
     )
 
 
