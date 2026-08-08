@@ -118,7 +118,7 @@ ETAPA 3 -- ANALISIS CON IA (9 nodos)
    [Propagar -> Error Handler -- Analisis] <- Stop and Error si falla el LLM
 
 ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (11 nodos)
-   [Switch -- Derivacion]              <- enruta por requires_hitl, no por risk_level
+   [Switch -- Derivacion]              <- pregunta por requires_hitl ANTES que por risk_level
       BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]  (200, HTML)
                                             \-> [Responder -- Falla del Informe] (502)
       REVISION HUMANA
