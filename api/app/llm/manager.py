@@ -22,17 +22,14 @@ fabrica, esa clase de divergencia no tiene donde aparecer.
 from __future__ import annotations
 
 import logging
-import threading
-import time
-from collections import deque
 
 from ..config import Settings
 from ..domain.constants import (
     LLM_RPM_PAUSA_MINIMA_S,
-    LLM_RPM_SIN_LIMITE,
     LLM_RPM_VENTANA_S,
 )
 from ..observability.tracer import Tracer
+from ..rate_limiter import RateLimiter
 from .client import AnthropicClient, LLMClient, OpenAICompatibleClient
 from .perfiles import perfil_de
 from .proveedores import PROVEEDOR_ANTHROPIC, base_url_de, existe
@@ -43,15 +40,16 @@ logger = logging.getLogger(__name__)
 class LLMManager:
     """Fabrica y ciclo de vida de los clientes de modelo."""
 
-    def __init__(self, settings: Settings, tracer: Tracer):
+    def __init__(self, settings: Settings, tracer: Tracer, limitador: RateLimiter | None = None):
         self.settings = settings
         self.tracer = tracer
         self._cache: dict[tuple[str, str], LLMClient] = {}
-        # Cuando se llamo a cada proveedor, para no pasarse de su frecuencia.
-        # Las rutas sincronicas de FastAPI corren en un pool de hilos, asi que
-        # dos investigaciones simultaneas comparten esto y hay que sincronizar.
-        self._llamadas: dict[str, deque[float]] = {}
-        self._candado = threading.Lock()
+        # El reparto de turnos vive en `rate_limiter.py`: lo necesita tambien el
+        # camino de embeddings, y mientras fue un metodo privado de aca no lo
+        # tenia. Se puede compartir una instancia entre ambos.
+        self.limitador = limitador or RateLimiter(
+            ventana_s=LLM_RPM_VENTANA_S, pausa_minima_s=LLM_RPM_PAUSA_MINIMA_S,
+        )
 
     # ── Credenciales ────────────────────────────────────────────────────
 
@@ -136,7 +134,7 @@ class LLMManager:
         que razona, que errores vale la pena reintentar— se resuelven adentro,
         que es donde se sabe con quien se esta hablando.
         """
-        self._espaciar(proveedor, modelo)
+        self.limitador.esperar_turno(proveedor, self.rpm_de(proveedor, modelo))
         return self.cliente(proveedor, modelo, api_key).complete(
             system, user, trace_id=trace_id, **extra,
         )
@@ -153,36 +151,6 @@ class LLMManager:
             return int(override)
         return perfil_de(proveedor, modelo).pedidos_por_minuto
 
-    def _espaciar(self, proveedor: str, modelo: str) -> None:
-        """Espera lo justo para no pasarse de los pedidos por minuto.
-
-        Reintentar un 429 es reaccionar tarde: la llamada ya se gasto y el
-        proveedor ya la rechazo. Si el limite se conoce, conviene no llegar.
-
-        Ventana deslizante y no un intervalo fijo: mientras se este por debajo
-        del techo no se espera nada, y recien cuando la ventana esta llena se
-        duerme hasta que la llamada mas vieja cumpla el minuto. Un intervalo
-        fijo le agregaria latencia a la primera investigacion, que es justo la
-        que alguien va a estar mirando.
-        """
-        limite = self.rpm_de(proveedor, modelo)
-        if limite <= LLM_RPM_SIN_LIMITE:
-            return
-        while True:
-            with self._candado:
-                ahora = time.monotonic()
-                ventana = self._llamadas.setdefault(proveedor, deque())
-                while ventana and ahora - ventana[0] >= LLM_RPM_VENTANA_S:
-                    ventana.popleft()
-                if len(ventana) < limite:
-                    ventana.append(ahora)
-                    return
-                espera = LLM_RPM_VENTANA_S - (ahora - ventana[0])
-            logger.info(
-                "%s esta en su limite de %d/min: se espera %.1fs antes de llamar",
-                proveedor, limite, espera,
-            )
-            time.sleep(max(espera, LLM_RPM_PAUSA_MINIMA_S))
 
     def invalidar(self) -> None:
         """Suelta los clientes cacheados para que el proximo se arme de nuevo."""

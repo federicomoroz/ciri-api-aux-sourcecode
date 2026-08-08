@@ -275,61 +275,77 @@ class TestFrecuenciaDeLlamadas:
 
     @staticmethod
     def _manager(monkeypatch, **ajustes):
-        """Un manager con reloj falso: el test controla el tiempo."""
+        """Un manager con reloj falso: el test controla el tiempo.
+
+        El reloj se INYECTA en el `RateLimiter` en vez de parchear `time` global.
+        Es la razon por la que el limitador los recibe como parametros: un test
+        que tarda un minuto en verificar un limite de un minuto no se corre nunca,
+        y parchear el modulo `time` entero afecta a cualquier otra cosa que corra
+        en el mismo proceso.
+        """
         from types import SimpleNamespace
 
+        from api.app.domain.constants import LLM_RPM_PAUSA_MINIMA_S, LLM_RPM_VENTANA_S
         from api.app.llm.manager import LLMManager
         from api.app.observability.tracer import NoOpTracer
+        from api.app.rate_limiter import RateLimiter
 
         reloj = {"t": 1000.0, "dormido": 0.0}
-        monkeypatch.setattr("time.monotonic", lambda: reloj["t"])
 
         def dormir(s):
             reloj["dormido"] += s
             reloj["t"] += s      # el reloj avanza, si no el bucle no termina
 
-        monkeypatch.setattr("time.sleep", dormir)
+        limitador = RateLimiter(
+            ventana_s=LLM_RPM_VENTANA_S, pausa_minima_s=LLM_RPM_PAUSA_MINIMA_S,
+            reloj=lambda: reloj["t"], dormir=dormir,
+        )
         settings = SimpleNamespace(llm_rpm={}, **ajustes)
-        m = LLMManager(settings, NoOpTracer())
+        m = LLMManager(settings, NoOpTracer(), limitador=limitador)
         m.reloj = reloj
         return m
+
+    @staticmethod
+    def _turno(m, proveedor, modelo):
+        """Lo que hace `completar` antes de llamar: pedir turno."""
+        m.limitador.esperar_turno(proveedor, m.rpm_de(proveedor, modelo))
 
     def test_por_debajo_del_limite_no_espera(self, monkeypatch):
         """La primera investigacion es la que alguien esta mirando."""
         m = self._manager(monkeypatch)
         for _ in range(5):
-            m._espaciar("gemini", "gemini-flash-latest")
+            self._turno(m, "gemini", "gemini-flash-latest")
         assert m.reloj["dormido"] == 0.0
 
     def test_al_llegar_al_limite_espera_a_que_se_libere(self, monkeypatch):
         m = self._manager(monkeypatch)
         for _ in range(5):                       # llena la ventana en t=1000
-            m._espaciar("gemini", "gemini-flash-latest")
-        m._espaciar("gemini", "gemini-flash-latest")   # la sexta tiene que esperar
+            self._turno(m, "gemini", "gemini-flash-latest")
+        self._turno(m, "gemini", "gemini-flash-latest")   # la sexta tiene que esperar
         assert m.reloj["dormido"] == pytest.approx(60.0, abs=0.1)
 
     def test_una_llamada_vieja_ya_no_cuenta(self, monkeypatch):
         """La ventana es deslizante: no se acumula deuda para siempre."""
         m = self._manager(monkeypatch)
         for _ in range(5):
-            m._espaciar("gemini", "gemini-flash-latest")
+            self._turno(m, "gemini", "gemini-flash-latest")
         m.reloj["t"] += 61.0                     # paso el minuto
-        m._espaciar("gemini", "gemini-flash-latest")
+        self._turno(m, "gemini", "gemini-flash-latest")
         assert m.reloj["dormido"] == 0.0
 
     def test_anthropic_no_se_espacia(self, monkeypatch):
         """Es un plan pago con su propio limite: frenarlo seria inventar uno."""
         m = self._manager(monkeypatch)
         for _ in range(50):
-            m._espaciar("anthropic", "claude-haiku-4-5-20251001")
+            self._turno(m, "anthropic", "claude-haiku-4-5-20251001")
         assert m.reloj["dormido"] == 0.0
 
     def test_cada_proveedor_lleva_su_propia_cuenta(self, monkeypatch):
         """Gastar la de Gemini no tiene por que frenar a Groq."""
         m = self._manager(monkeypatch)
         for _ in range(5):
-            m._espaciar("gemini", "gemini-flash-latest")
-        m._espaciar("groq", "llama-3.3-70b-versatile")
+            self._turno(m, "gemini", "gemini-flash-latest")
+        self._turno(m, "groq", "llama-3.3-70b-versatile")
         assert m.reloj["dormido"] == 0.0
 
     def test_la_configuracion_pisa_al_adaptador(self, monkeypatch):
@@ -338,7 +354,7 @@ class TestFrecuenciaDeLlamadas:
         m.settings.llm_rpm = {"gemini": 15}
         assert m.rpm_de("gemini", "gemini-flash-lite-latest") == 15
         for _ in range(15):
-            m._espaciar("gemini", "gemini-flash-lite-latest")
+            self._turno(m, "gemini", "gemini-flash-lite-latest")
         assert m.reloj["dormido"] == 0.0
 
     def test_se_puede_apagar_el_espaciado(self, monkeypatch):
@@ -348,14 +364,21 @@ class TestFrecuenciaDeLlamadas:
         m = self._manager(monkeypatch)
         m.settings.llm_rpm = {"gemini": LLM_RPM_SIN_LIMITE}
         for _ in range(30):
-            m._espaciar("gemini", "gemini-flash-latest")
+            self._turno(m, "gemini", "gemini-flash-latest")
         assert m.reloj["dormido"] == 0.0
 
-    def test_completar_espacia_antes_de_llamar(self, monkeypatch):
-        """El espaciado esta en el camino real, no solo disponible."""
+    def test_completar_pide_turno_antes_de_llamar(self, monkeypatch):
+        """El limitador esta en el camino real, no solo disponible.
+
+        Sin este test, `esperar_turno` podria existir y no llamarse nunca: el
+        resto de la clase probaria un componente que nadie usa.
+        """
         m = self._manager(monkeypatch)
         pasos = []
-        monkeypatch.setattr(m, "_espaciar", lambda p, mo: pasos.append(("espacio", p)))
+        monkeypatch.setattr(
+            m.limitador, "esperar_turno",
+            lambda clave, limite: pasos.append(("espacio", clave)) or 0.0,
+        )
         monkeypatch.setattr(
             m, "cliente",
             lambda p, mo, k="": SimpleNamespaceCliente(pasos),

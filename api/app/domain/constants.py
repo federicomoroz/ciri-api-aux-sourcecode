@@ -118,6 +118,9 @@ __all__ = [
     "EMBEDDING_CACHE_MAX",
     "EMBEDDING_RATE_LIMIT_RETRIES",
     "EMBEDDING_RATE_LIMIT_WAIT_S",
+    "EMBEDDING_RPM",
+    "EMBEDDING_VENTANA_S",
+    "PROVEEDOR_EMBEDDINGS",
     "RERANK_MAX_SCORE",
     # Dashboard
     "DASHBOARD_TOP_N",
@@ -437,6 +440,11 @@ HEALTH_DEGRADED: str = "degraded"
 EMBEDDING_CACHE_MAX: int = 512             # textos cacheados en proceso
 EMBEDDING_RATE_LIMIT_RETRIES: int = 1      # reintentos al topar el limite del proveedor
 EMBEDDING_RATE_LIMIT_WAIT_S: int = 21      # espera entre reintentos (free tier: 3 RPM)
+# El limite mas ajustado del sistema. Se respeta pidiendo turno antes de
+# llamar; el reintento queda como red por si otra instancia gasto la cuota.
+PROVEEDOR_EMBEDDINGS: str = "voyage"
+EMBEDDING_RPM: int = 3
+EMBEDDING_VENTANA_S: float = 60.0
 
 # ── Reranking ────────────────────────────────────────────────────────────
 RERANK_PAYMENT_METHOD_BOOST: float = 0.05  # score boost for matching payment method

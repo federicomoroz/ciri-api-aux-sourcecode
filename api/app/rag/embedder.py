@@ -25,8 +25,12 @@ from ..domain.constants import (
     EMBEDDING_CACHE_MAX,
     EMBEDDING_RATE_LIMIT_RETRIES,
     EMBEDDING_RATE_LIMIT_WAIT_S,
+    EMBEDDING_RPM,
     EMBEDDING_TIMEOUT_S,
+    EMBEDDING_VENTANA_S,
+    PROVEEDOR_EMBEDDINGS,
 )
+from ..rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +62,19 @@ class EmbeddingRateLimit(RuntimeError):
 class FastEmbedder:
     """Voyage AI embedder con cache en proceso."""
 
-    def __init__(self, model_name: str, api_key: str = "") -> None:
+    def __init__(
+        self, model_name: str, api_key: str = "", limitador: RateLimiter | None = None,
+    ) -> None:
         self._model_name = model_name
         self._api_key = api_key
         self._client = None
         self._lock = threading.Lock()
         self._cache: dict[str, np.ndarray] = {}
+        # El free tier de Voyage es el limite mas ajustado del sistema: 3 por
+        # minuto. Hasta que esto existio, el reparto de turnos solo lo tenia el
+        # camino del modelo, y una tanda de analisis seguidos comia un 429 —
+        # medido contra el deploy.
+        self._limitador = limitador or RateLimiter(ventana_s=EMBEDDING_VENTANA_S)
 
     def _ensure_loaded(self):
         if self._client is None:
@@ -94,12 +105,16 @@ class FastEmbedder:
         return np.array([self._cache[t] for t in texts], dtype=np.float32)
 
     def _pedir(self, textos: list[str]) -> list[list[float]]:
-        """Una peticion al proveedor, con un reintento si topa el limite de rate.
+        """Una peticion al proveedor, esperando turno para no toparse el limite.
 
-        El free tier permite 3 peticiones por minuto. Esperar y reintentar
-        convierte en exito lo que si no seria un caso sin investigar.
+        El free tier permite 3 peticiones por minuto. Primero se pide turno —que
+        es no llegar al limite— y recien despues se reintenta, que es reaccionar
+        cuando ya se llego. El reintento sigue estando porque el turno se reparte
+        por proceso y el limite lo cuenta el proveedor: dos instancias del mismo
+        deploy no se ven entre si.
         """
         client = self._ensure_loaded()
+        self._limitador.esperar_turno(PROVEEDOR_EMBEDDINGS, EMBEDDING_RPM)
         for intento in range(EMBEDDING_RATE_LIMIT_RETRIES + 1):
             try:
                 return client.embed(textos, model=self._model_name).embeddings

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from api.app.rag.embedder import EmbeddingRateLimit, FastEmbedder
+from api.app.rate_limiter import RateLimiter
 
 MODULO = "api.app.rag.embedder"
 TOPE_DE_CACHE = f"{MODULO}.EMBEDDING_CACHE_MAX"
@@ -67,8 +68,24 @@ class ClienteQueSeLibera(ClienteFalso):
         return super().embed(texts, model)
 
 
+def _limitador_sin_reloj() -> RateLimiter:
+    """Reparte turnos con un reloj de mentira: cuenta igual, pero no duerme.
+
+    El limite real de Voyage son 3 por minuto, y varios tests hacen mas de tres
+    llamadas a proposito —el del cache acotado hace decenas—. Con el reloj de
+    verdad, ese test solo tardaba sesenta segundos esperando una cuota que en un
+    test no existe.
+    """
+    ahora = {"t": 0.0}
+
+    def dormir(s: float) -> None:
+        ahora["t"] += s      # pasa el tiempo sin que pase el tiempo
+
+    return RateLimiter(reloj=lambda: ahora["t"], dormir=dormir)
+
+
 def _embedder(cliente) -> FastEmbedder:
-    e = FastEmbedder(model_name=MODELO, api_key="test")
+    e = FastEmbedder(model_name=MODELO, api_key="test", limitador=_limitador_sin_reloj())
     e._client = cliente
     return e
 
