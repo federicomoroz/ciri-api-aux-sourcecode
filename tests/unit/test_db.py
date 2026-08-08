@@ -14,6 +14,7 @@ Covers:
 
 import pytest
 
+from api.app.data import esquema
 from api.app.data.db import Database
 from api.app.domain.enums import ResolutionOutcome
 
@@ -246,21 +247,21 @@ class TestReportCache:
 
     def test_ensure_table_idempotent(self, db):
         """Calling ensure_report_cache_table twice should not error."""
-        db.ensure_report_cache_table()
-        db.ensure_report_cache_table()
+        esquema.tabla_de_informes(db)
+        esquema.tabla_de_informes(db)
 
     def test_store_and_retrieve(self, db):
-        db.ensure_report_cache_table()
+        esquema.tabla_de_informes(db)
         db.store_cached_report("TXN-00051|False", "<html>Test</html>")
         html = db.get_cached_report("TXN-00051|False")
         assert html == "<html>Test</html>"
 
     def test_cache_miss(self, db):
-        db.ensure_report_cache_table()
+        esquema.tabla_de_informes(db)
         assert db.get_cached_report("NONEXISTENT") is None
 
     def test_store_overwrites_existing(self, db):
-        db.ensure_report_cache_table()
+        esquema.tabla_de_informes(db)
         db.store_cached_report("key1", "<html>V1</html>")
         db.store_cached_report("key1", "<html>V2</html>")
         assert db.get_cached_report("key1") == "<html>V2</html>"

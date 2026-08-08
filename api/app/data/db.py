@@ -9,13 +9,15 @@ from ..domain.constants import (
     ALERTS_DEFAULT_LIMIT,
     DASHBOARD_TOP_N,
     JUDGE_AUTO_INDEX_THRESHOLD,
-    POLICY_SEED_BLOQUEANTES,
-    POLICY_SEED_SLA_DIAS,
     SQLITE_TIMEOUT_S,
 )
 from ..domain.enums import Severity
 
 logger = logging.getLogger(__name__)
+
+# Crear tablas, migrar columnas y sembrar valores iniciales viven en
+# `data/esquema.py`. Esta clase lee y escribe filas; poner la puesta a punto
+# del almacen aca le daba a cada consumidor la capacidad de recrear el esquema.
 
 # Cual de los casos de una transaccion es «el» caso. Hay 10 transacciones con
 # mas de uno, y hasta que esto fue un solo fragmento cada consulta elegia
@@ -229,33 +231,6 @@ class Database:
             ),
         )
 
-    def ensure_policies_semantics(self) -> None:
-        """Agrega las columnas de semantica a una base que ya existia.
-
-        SQLite en el free tier de Render se recrea del Excel cuando falta, pero
-        una base local con datos previos no tiene estas columnas y la app no
-        puede exigir que se borre para actualizarse.
-        """
-        existentes = {c["name"] for c in self._consultar("PRAGMA table_info(policies)")}
-        for columna, ddl in (
-            ("puede_bloquear", "INTEGER NOT NULL DEFAULT 0"),
-            ("sla_dias", "INTEGER"),
-        ):
-            if columna not in existentes:
-                self._escribir(f"ALTER TABLE policies ADD COLUMN {columna} {ddl}")
-                logger.info("policies: columna %s agregada", columna)
-
-        if "puede_bloquear" not in existentes:
-            marcadores = ",".join("?" * len(POLICY_SEED_BLOQUEANTES))
-            self._escribir(
-                f"UPDATE policies SET puede_bloquear = 1 WHERE code IN ({marcadores})",
-                tuple(sorted(POLICY_SEED_BLOQUEANTES)),
-            )
-        if "sla_dias" not in existentes:
-            for codigo, dias in POLICY_SEED_SLA_DIAS.items():
-                self._escribir(
-                    "UPDATE policies SET sla_dias = ? WHERE code = ?", (dias, codigo),
-                )
 
     def delete_policy(self, code: str) -> bool:
         return self._escribir("DELETE FROM policies WHERE code = ?", (code,)).rowcount > 0
@@ -312,14 +287,6 @@ class Database:
 
     # --- Report Cache (idempotency) ---
 
-    def ensure_report_cache_table(self) -> None:
-        self._escribir(
-            """CREATE TABLE IF NOT EXISTS report_cache (
-                cache_key  TEXT PRIMARY KEY,
-                html       TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )"""
-        )
 
     def get_cached_report(self, cache_key: str) -> str | None:
         fila = self._uno("SELECT html FROM report_cache WHERE cache_key = ?", (cache_key,))
@@ -357,16 +324,6 @@ class Database:
 
     # --- Alerts (operational event log) ---
 
-    def ensure_modelos_table(self) -> None:
-        """La eleccion de modelo por paso del pipeline, editable sin deploy."""
-        self._escribir(
-            """CREATE TABLE IF NOT EXISTS configuracion_modelos (
-                   paso TEXT PRIMARY KEY,
-                   proveedor TEXT NOT NULL,
-                   modelo TEXT NOT NULL,
-                   actualizado TEXT NOT NULL
-               )"""
-        )
 
     def get_modelos(self) -> dict[str, dict]:
         """Lo elegido para cada paso. Vacio si nadie lo cambio nunca."""
@@ -390,23 +347,6 @@ class Database:
         """Vuelve a los valores por defecto de `constants.py`."""
         self._escribir("DELETE FROM configuracion_modelos")
 
-    def ensure_alerts_table(self) -> None:
-        # f-string para que la severidad por defecto salga del enum. El `{{}}` de
-        # metadata_json es un objeto JSON vacio y va escapado a proposito: sin las
-        # llaves dobles, el f-string lo interpola como cadena vacia y la columna
-        # queda con un default que no es JSON valido.
-        self._escribir(
-            f"""CREATE TABLE IF NOT EXISTS alerts (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type      TEXT NOT NULL,
-                severity        TEXT NOT NULL DEFAULT '{Severity.ERROR}',
-                message         TEXT NOT NULL,
-                source          TEXT NOT NULL DEFAULT '',
-                transaction_id  TEXT,
-                metadata_json   TEXT NOT NULL DEFAULT '{{}}',
-                created_at      TEXT NOT NULL
-            )"""
-        )
 
     def save_alert(self, alert: dict) -> int:
         return self._escribir(

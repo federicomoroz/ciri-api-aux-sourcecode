@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, create_autospec
 import pytest
 from fastapi.testclient import TestClient
 
+from api.app.data import esquema
 from api.app.data.db import Database
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel
 from api.app.llm.client import LLMResult
@@ -104,13 +105,13 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.settings.llm_base_url = ""
     app.state.settings.llm_api_key = ""
     app.state.settings.anthropic_api_key = "test"
-    db.ensure_modelos_table()
+    esquema.tabla_de_modelos(db)
     app.state.modelos_service = ModelosService(
         db, app.state.settings, LLMManager(app.state.settings, mock_tracer),
     )
 
     # Ensure report cache table exists
-    db.ensure_report_cache_table()
+    esquema.tabla_de_informes(db)
 
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client, db, mock_updater

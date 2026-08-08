@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from api.app.analysis.analyzer import Analyzer
 from api.app.analysis.sla import CalculadoraDeSLA
+from api.app.data import esquema
 from api.app.data.db import Database
 from api.app.main import app
 from api.app.rag.embedder import FastEmbedder
@@ -164,7 +165,7 @@ class TestTocarUnaPoliticaInvalidaLosInformes:
         from api.app.data.db import Database
 
         db = Database(str(tmp_path / "c.db"))
-        db.ensure_report_cache_table()
+        esquema.tabla_de_informes(db)
         return db
 
     def test_el_cache_se_puede_vaciar(self, tmp_path):

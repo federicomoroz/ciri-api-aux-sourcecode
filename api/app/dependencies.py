@@ -15,6 +15,7 @@ from qdrant_client import QdrantClient
 from .analysis.analyzer import Analyzer
 from .analysis.sla import CalculadoraDeSLA
 from .config import Settings
+from .data import esquema
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
 from .llm.manager import LLMManager
@@ -50,10 +51,8 @@ def _preparar_sqlite(settings: Settings) -> Database:
             raise
 
     db = Database(db_path)
-    db.ensure_report_cache_table()
-    db.ensure_alerts_table()
-    db.ensure_policies_semantics()
-    db.ensure_modelos_table()
+    # El esquema se pone a punto una vez, aca. `Database` solo lee y escribe filas.
+    esquema.preparar(db)
     return db
 
 
