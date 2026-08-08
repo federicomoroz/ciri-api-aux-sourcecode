@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from api.app.domain import decision
 from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
 from api.app.services.resolution import ResolutionService
 
@@ -117,20 +118,20 @@ def _matriz() -> dict:
     salida: dict[str, dict] = {}
 
     salida["determine_outcome"] = {
-        f"{nv}|{nt}": ResolutionService._determine_outcome(v, t)
+        f"{nv}|{nt}": decision.decidir(v, t)
         for nv, v in VEREDICTOS.items()
         for nt, t in TRANSACCIONES.items()
     }
 
     salida["determine_compensation"] = {
-        f"{ns}|{nt}": ResolutionService._determine_compensation(s, t)
+        f"{ns}|{nt}": decision.compensacion_por_sla(s, t)
         for ns, s in SLAS.items()
         for nt, t in TRANSACCIONES.items()
     }
 
     salida["detect_divergence"] = {
         f"{np_}|{nv}|{nt}": ResolutionService._detect_divergence(
-            p, ResolutionService._determine_outcome(v, t), v,
+            p, decision.decidir(v, t), v,
         )
         for np_, p in PROPUESTAS.items()
         for nv, v in VEREDICTOS.items()
@@ -159,7 +160,7 @@ def _matriz() -> dict:
         for merchant in ("Airbnb", "Otro")
     }
 
-    salida["codigos"] = {nv: ResolutionService._codigos(v) for nv, v in VEREDICTOS.items()}
+    salida["codigos"] = {nv: decision.codigos_con_veredicto(v) for nv, v in VEREDICTOS.items()}
 
     salida["extraer_propuesta"] = {
         np_: ResolutionService._extraer_propuesta(dict(p)) for np_, p in PROPUESTAS.items()

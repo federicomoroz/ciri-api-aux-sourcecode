@@ -147,7 +147,7 @@ class TestElContratoSeMantiene:
 class TestCuandoNoHayNadaQueRescatar:
     """Reparar envoltorio es legitimo; inventar contenido no.
 
-    Con el fallback vacio, `_determine_outcome` deriva a revision humana en vez de
+    Con el fallback vacio, `decision.decidir` deriva a revision humana en vez de
     aprobar: es el fail-closed de `decisions.md` y la red que hace que un modelo
     que no cumple el contrato sea un caso pendiente y no uno aprobado solo.
     """

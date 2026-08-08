@@ -9,6 +9,7 @@ import pytest
 
 from api.app.analysis.analyzer import Analyzer
 from api.app.data.db import Database
+from api.app.domain import decision
 from api.app.domain.enums import MerchantFlag, Severity
 
 
@@ -456,9 +457,7 @@ class TestLaCompensacionNoSaleDeUnPlazoQueNoSeMidio:
 
     @staticmethod
     def _comp(sla):
-        from api.app.services.resolution import ResolutionService
-
-        return ResolutionService._determine_compensation(
+        return decision.compensacion_por_sla(
             sla, TestLaCompensacionNoSaleDeUnPlazoQueNoSeMidio.TX)
 
     def test_un_plazo_sin_medir_no_compensa(self):
