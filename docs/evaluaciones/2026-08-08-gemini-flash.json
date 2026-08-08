@@ -1,0 +1,165 @@
+{
+  "resumen": {
+    "generado": "2026-08-08T19:47:11+00:00",
+    "casos_evaluados": 3,
+    "casos_con_error": 17,
+    "promedio": 8.4,
+    "mediana": 8.1,
+    "desvio": 1.28,
+    "minimo": 7.3,
+    "maximo": 9.8,
+    "aprobados": 3,
+    "promedio_por_criterio": {
+      "policy_consistency": 10.0,
+      "justification_quality": 5.93,
+      "precedent_usage": 7.4,
+      "risk_assessment": 9.5,
+      "actionability": 9.17
+    },
+    "costo_usd": 0.0,
+    "configuracion": {
+      "modelos_por_paso": {
+        "policy_eval": {
+          "proveedor": "gemini",
+          "modelo": "gemini-flash-latest"
+        },
+        "resolution": {
+          "proveedor": "gemini",
+          "modelo": "gemini-flash-latest"
+        },
+        "judge": {
+          "proveedor": "gemini",
+          "modelo": "gemini-flash-latest"
+        }
+      },
+      "temperatura": 0.3,
+      "prompts": {
+        "judge": "v2.2",
+        "policy_eval": "v1.4",
+        "resolution": "v3.2"
+      },
+      "muestreo": "20 casos, semilla 20260807"
+    }
+  },
+  "casos": [
+    {
+      "transaction_id": "TXN-00024",
+      "overall_score": 7.3,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 4.0,
+        "precedent_usage": 3.5,
+        "risk_assessment": 9.5,
+        "actionability": 9.5
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 76.2
+    },
+    {
+      "transaction_id": "TXN-00042",
+      "overall_score": 9.8,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 9.8,
+        "precedent_usage": 9.5,
+        "risk_assessment": 10.0,
+        "actionability": 9.7
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 69.5
+    },
+    {
+      "transaction_id": "TXN-00064",
+      "error": "ReadTimeout: The read operation timed out"
+    },
+    {
+      "transaction_id": "TXN-00033",
+      "overall_score": 8.1,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 4.0,
+        "precedent_usage": 9.2,
+        "risk_assessment": 9.0,
+        "actionability": 8.3
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "MEDIUM",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 90.5
+    },
+    {
+      "transaction_id": "TXN-00026",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00095",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00049",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00031",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00039",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00059",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00004",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00079",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00062",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00034",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00029",
+      "error": "EmbeddingRateLimit: You have not yet added your payment method in the billing page and will have reduced rate limits of 3 RPM and 10K TPM. To unlock our standard rate limits, please add a payment method in the billing page for the appropriate organization in the user dashboard (https://dashboard.voyageai.com/). Even with payment methods entered, the free tokens (200M tokens for Voyage series 3) will still apply. After adding a payment method, you should see your rate limits increase after several minutes. See our pricing docs (https://docs.voyageai.com/docs/pricing) for the free tokens for your model."
+    },
+    {
+      "transaction_id": "TXN-00046",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00040",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00091",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00090",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "transaction_id": "TXN-00073",
+      "error": "HTTPStatusError: Client error '429 Too Many Requests' for url 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    }
+  ]
+}

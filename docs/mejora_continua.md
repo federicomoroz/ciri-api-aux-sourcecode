@@ -87,9 +87,20 @@ la misma muestra y el resultado se puede volver a obtener. El script aborta ante
 falta la clave, corta si se pasa del tope, e imprime el costo acumulado mientras corre — unos
 USD 0.037 por caso segun la estimacion de mas abajo.
 
-**No se corrio.** Hacerlo requiere saldo de API que hoy no hay, asi que el badge sigue mostrando el
-9.1 de las corridas manuales y esta seccion explica de donde sale. La proxima medicion sale de
-`docs/evaluaciones/` y ahi si es auditable: el archivo se cita junto al numero.
+**Se corrio, y dejo su archivo.** [`docs/evaluaciones/2026-08-08-gemini-flash.json`](evaluaciones/2026-08-08-gemini-flash.json):
+20 casos pedidos, **3 medidos**, promedio 8.4 (mediana 8.1, σ 1.28, rango 7.3–9.8), costo USD 0.00.
+Los otros 17 murieron contra los topes del free tier — 15 por la cuota **diaria** de Gemini, 1 por
+los 3 pedidos/minuto de Voyage, 1 por timeout — y el archivo registra el motivo de cada uno.
+
+**El badge sigue en 9.1 y eso es deliberado.** Con n=3 no hay muestra para mover un numero, y ese
+8.4 no es el score del sistema entregado: se midio con `gemini-flash-latest` en los tres pasos,
+mientras la configuracion documentada es Haiku para politicas y Sonnet para sintesis y juez. Un
+modelo mas chico se penaliza dos veces, porque el juez corre en el mismo modelo que resolvio.
+Lo que cambio no es el numero sino su condicion: antes no habia **ningun** archivo; ahora hay uno,
+con su muestra, su semilla, sus versiones de prompt y sus fracasos anotados. El contexto completo
+esta en [`docs/evaluaciones/README.md`](evaluaciones/README.md).
+
+Correrlo en la configuracion documentada cuesta unos USD 0.75 para 20 casos y sigue pendiente.
 
 ---
 

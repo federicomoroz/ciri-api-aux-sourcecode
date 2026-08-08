@@ -16,6 +16,15 @@ sistema. El resultado se midió en producción: una tanda de análisis seguidos 
 un 429 de Voyage que este componente habría evitado. Una capacidad que existe una
 vez y hace falta dos es un componente.
 
+**Espacia pedidos por minuto, y nada más.** Los free tier suelen tener tres topes
+—por minuto, por día y por tokens— y este componente solo modela el primero. Medido:
+una corrida de 20 casos contra el free tier de Gemini no tuvo un solo 429 por ráfaga
+y aun así perdió 15 casos, porque se acabó la cuota **diaria**. Espaciar no ayuda
+contra un tope por día: lo único que lo respeta es hacer menos llamadas. Y el tope
+diario se cuenta por cuenta, no por proceso, así que el deploy y una corrida local
+que compartan clave se lo comen entre los dos. Está anotado en
+`docs/evaluaciones/README.md`, con la corrida que lo mostró.
+
 Lo que **no** es: un planificador. No ejecuta acciones diferidas ni agenda nada.
 De orquestar se encarga n8n, y de esperar a una persona su nodo `Wait`. Meter
 ejecución diferida acá duplicaría el trabajo que esta arquitectura deja afuera a
