@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>La API · Agente de Contracargos</title>
+<style>
+  :root{
+    --paper:#fcfcfa; --surface:#fff; --ink:#17171b; --muted:#68686f; --faint:#95959d;
+    --rule:#e5e4df; --rule-mid:#d3d2cb;
+    --sql:#b45309; --rag:#0d9488; --llm:#2563eb; --plano:#9a9aa2;
+    --sql-suave:rgba(180,83,9,.10); --rag-suave:rgba(13,148,136,.10); --llm-suave:rgba(37,99,235,.10);
+    --barra:#e8e7e1; --placa:#f5f4f0;
+    --shadow:0 1px 2px rgba(20,20,25,.06);
+    --shadow-alto:0 6px 24px rgba(20,20,25,.10);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#131316; --surface:#1b1b1f; --ink:#f0efec; --muted:#a3a3ac; --faint:#7a7a84;
+      --rule:#2b2b31; --rule-mid:#3a3a42;
+      --sql:#e0a04a; --rag:#4fd1c5; --llm:#7ea6ff; --plano:#7a7a84;
+      --sql-suave:rgba(224,160,74,.13); --rag-suave:rgba(79,209,197,.13); --llm-suave:rgba(126,166,255,.13);
+      --barra:#2b2b31; --placa:#17171b;
+      --shadow:0 1px 2px rgba(0,0,0,.4);
+      --shadow-alto:0 6px 24px rgba(0,0,0,.5);
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .hoja{max-width:980px; margin:0 auto; padding:56px 24px 96px}
+  code,.mono{font:13px/1.5 ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
+
+  .eyebrow{
+    font-size:11.5px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--faint); font-weight:600; margin:0 0 10px;
+  }
+  h1{font-size:35px; line-height:1.13; margin:0 0 14px; font-weight:680; letter-spacing:-.02em}
+  .bajada{font-size:17px; line-height:1.55; color:var(--muted); margin:0 0 34px; max-width:64ch}
+  .bajada b{color:var(--ink); font-weight:620}
+  h2{
+    font-size:12px; letter-spacing:.13em; text-transform:uppercase; color:var(--faint);
+    font-weight:600; margin:62px 0 6px; padding-top:22px; border-top:1px solid var(--rule);
+  }
+  h2:first-of-type{margin-top:44px}
+  .sub{color:var(--muted); margin:0 0 24px; max-width:66ch}
+  .sub b{color:var(--ink); font-weight:600}
+
+  /* ── Controles del circuito ───────────────────────────────────── */
+  .mandos{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 18px}
+  button{
+    font:inherit; font-size:13px; color:var(--ink); background:var(--surface);
+    border:1px solid var(--rule-mid); border-radius:20px; padding:7px 15px; cursor:pointer;
+    box-shadow:var(--shadow); transition:background .15s, border-color .15s, color .15s;
+  }
+  button:hover{border-color:var(--faint)}
+  button:focus-visible{outline:2px solid var(--llm); outline-offset:2px}
+  button[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+  button.play{font-weight:600}
+  .mandos .sep{flex:1}
+  .filtro{display:inline-flex; align-items:center; gap:7px}
+  .punto{width:9px; height:9px; border-radius:50%; flex:none}
+  .p-sql{background:var(--sql)} .p-rag{background:var(--rag)}
+  .p-llm{background:var(--llm)} .p-plano{background:var(--plano)}
+
+  /* ── La placa ─────────────────────────────────────────────────── */
+  .placa{
+    position:relative; background:var(--placa); border:1px solid var(--rule);
+    border-radius:10px; padding:8px; box-shadow:var(--shadow); overflow-x:auto;
+  }
+  svg.board{display:block; width:100%; min-width:660px; height:auto}
+  .pin{cursor:pointer}
+  .pin rect.caja{
+    fill:var(--surface); stroke:var(--rule-mid); stroke-width:1; rx:5;
+    transition:stroke .15s, fill .15s;
+  }
+  .pin:hover rect.caja, .pin.activo rect.caja{stroke:var(--ink); stroke-width:1.5}
+  .pin.apagado{opacity:.22}
+  .pin text.verbo{font:9.5px ui-monospace,monospace; font-weight:700; letter-spacing:.04em}
+  .pin text.ruta{font:11px ui-monospace,monospace; fill:var(--ink)}
+  .pin text.orden{font:9.5px ui-monospace,monospace; fill:var(--faint)}
+  .traza{fill:none; stroke-width:1.5; opacity:.45; transition:opacity .2s, stroke-width .2s}
+  .traza.viva{opacity:1; stroke-width:2.5}
+  .traza.apagada{opacity:.08}
+  .chip rect{rx:7; stroke-width:1.25}
+  .chip text.nombre{font:12px system-ui; font-weight:640; fill:var(--ink)}
+  .chip text.que{font:10px system-ui; fill:var(--muted)}
+  .bus{stroke:var(--rule-mid); stroke-width:1; stroke-dasharray:2 3; fill:none}
+  .rotulo{font:9.5px ui-monospace,monospace; fill:var(--faint); letter-spacing:.1em}
+  .pulso{fill:none; stroke-width:3; stroke-linecap:round; opacity:0}
+  .pin.corriendo rect.caja{stroke:var(--llm); stroke-width:2.5}
+  @media (prefers-reduced-motion: reduce){
+    .traza,.pin rect.caja{transition:none}
+  }
+
+  /* ── Ficha del endpoint ───────────────────────────────────────── */
+  .ficha{
+    margin-top:14px; background:var(--surface); border:1px solid var(--rule);
+    border-radius:8px; padding:16px 18px; box-shadow:var(--shadow); min-height:104px;
+  }
+  .ficha .cab{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px}
+  .ficha .verbo-txt{
+    font:10.5px ui-monospace,monospace; font-weight:700; letter-spacing:.06em;
+    padding:4px 7px; border-radius:3px; background:var(--barra); color:var(--muted);
+  }
+  .ficha .camino{font:14px ui-monospace,monospace; font-weight:600}
+  .ficha .fuente{
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:600;
+    padding:3px 9px; border-radius:20px;
+  }
+  .f-sql{background:var(--sql-suave); color:var(--sql)}
+  .f-rag{background:var(--rag-suave); color:var(--rag)}
+  .f-llm{background:var(--llm-suave); color:var(--llm)}
+  .f-plano{background:var(--barra); color:var(--muted)}
+  .ficha p{margin:0 0 8px; color:var(--muted); max-width:70ch}
+  .ficha p:last-child{margin-bottom:0}
+  .ficha .dato{font:12px ui-monospace,monospace; color:var(--faint)}
+  .ficha .vacia{color:var(--faint); font-style:italic}
+
+  /* ── Ilustraciones ────────────────────────────────────────────── */
+  .ilustra{
+    background:var(--surface); border:1px solid var(--rule); border-radius:9px;
+    padding:18px; box-shadow:var(--shadow); margin:0 0 22px; overflow-x:auto;
+  }
+  .ilustra svg{display:block; width:100%; min-width:560px; height:auto}
+  .ilustra figcaption{margin:12px 2px 0; color:var(--muted); font-size:13.5px; max-width:70ch}
+  .ilustra figcaption b{color:var(--ink); font-weight:620}
+
+  /* ── SOLID ────────────────────────────────────────────────────── */
+  .solid{display:flex; flex-direction:column; gap:9px}
+  details.letra{
+    background:var(--surface); border:1px solid var(--rule); border-radius:8px;
+    box-shadow:var(--shadow); overflow:hidden;
+  }
+  details.letra summary{
+    cursor:pointer; padding:13px 17px; display:flex; align-items:center; gap:14px;
+    list-style:none; font-size:14.5px;
+  }
+  details.letra summary::-webkit-details-marker{display:none}
+  details.letra summary::after{
+    content:"+"; margin-left:auto; color:var(--faint); font:15px ui-monospace,monospace;
+  }
+  details.letra[open] summary::after{content:"–"}
+  details.letra summary:focus-visible{outline:2px solid var(--llm); outline-offset:-2px}
+  .inicial{
+    width:30px; height:30px; border-radius:6px; flex:none; display:grid; place-items:center;
+    font:15px/1 system-ui; font-weight:700; background:var(--barra); color:var(--ink);
+  }
+  .titulo-letra{font-weight:600}
+  .nota-letra{color:var(--muted); font-size:13px; display:block; margin-top:2px}
+  .cuerpo{padding:2px 17px 17px 61px; border-top:1px solid var(--rule)}
+  .cuerpo p{margin:12px 0 0; color:var(--muted); max-width:68ch}
+  .cuerpo p b{color:var(--ink); font-weight:620}
+  .cuerpo .antes-despues{
+    display:flex; gap:10px; flex-wrap:wrap; margin-top:13px;
+    font:12px ui-monospace,monospace;
+  }
+  .cuerpo .antes-despues span{
+    padding:6px 11px; border-radius:5px; background:var(--paper); border:1px solid var(--rule);
+  }
+  .cuerpo .antes-despues .flecha{border:0; background:0; color:var(--faint); padding:6px 0}
+  .cuerpo .bien{color:var(--rag); border-color:var(--rag)}
+
+  .cierre{
+    margin-top:56px; padding:20px 22px; border-radius:8px;
+    background:var(--surface); border:1px solid var(--rule); box-shadow:var(--shadow);
+  }
+  .cierre p{margin:0 0 11px; color:var(--muted); max-width:68ch}
+  .cierre p:last-child{margin-bottom:0}
+  .cierre b{color:var(--ink); font-weight:620}
+  .pie{margin-top:38px; color:var(--faint); font-size:12.5px; line-height:1.75}
+
+  @media (max-width:640px){
+    .hoja{padding:40px 16px 72px}
+    h1{font-size:27px}
+    .cuerpo{padding-left:17px}
+  }
+</style>
+</head>
+<body>
+<div class="hoja">
+
+  <p class="eyebrow">Agente Inteligente de Contracargos · CIRI</p>
+  <h1>La API es la caja de herramientas, no el agente</h1>
+  <p class="bajada">
+    Son <b>31 endpoints</b> y ninguno decide en qué orden se llama a los otros. Eso lo hace n8n, en
+    un canvas donde cada paso es un nodo con nombre. Acá no hay un nodo «AI&nbsp;Agent» eligiendo
+    herramientas por su cuenta: <b>13 de estos endpoints son el recorrido completo de un caso</b>,
+    en este orden, siempre.
+  </p>
+
+  <h2>El circuito</h2>
+  <p class="sub">
+    Cada endpoint es una entrada de la placa. Tocá una para ver qué contesta y contra qué almacén
+    va — <b>ahí se ve el patrón que pide la consigna</b>: el dato exacto sale de SQLite, lo
+    semejante de Qdrant, y el modelo recibe las dos cosas ya masticadas.
+  </p>
+
+  <div class="mandos">
+    <button class="play" id="reproducir" type="button">▶&nbsp; Reproducir el recorrido</button>
+    <span class="sep"></span>
+    <button type="button" class="filtro" data-fuente="sql" aria-pressed="false"><i class="punto p-sql"></i>SQLite</button>
+    <button type="button" class="filtro" data-fuente="rag" aria-pressed="false"><i class="punto p-rag"></i>Qdrant</button>
+    <button type="button" class="filtro" data-fuente="llm" aria-pressed="false"><i class="punto p-llm"></i>Modelo</button>
+  </div>
+
+  <div class="placa"><svg class="board" id="board" role="img"
+       aria-label="Circuito de la API: trece endpoints en orden conectados a SQLite, Qdrant y el modelo"></svg></div>
+
+  <div class="ficha" id="ficha" aria-live="polite">
+    <p class="vacia">Tocá una entrada del circuito, o reproducí el recorrido completo.</p>
+  </div>
+
+  <p class="pie">
+    Las latencias son las medidas contra el deploy de Render, no estimadas. Reproducible sin
+    levantar n8n: <code>python scripts/seguir_el_flujo.py TXN-00042</code>, que lee el workflow como
+    especificación y hace las mismas llamadas en el mismo orden.
+  </p>
+
+  <h2>Cómo funciona el RAG</h2>
+  <p class="sub">
+    Dos colecciones en Qdrant y una regla que las separa: <b>se indexa lo que se busca por
+    parecido, no lo que se busca por identidad</b>. Una transacción se pide por su id — buscarla
+    por similitud sería absurdo. Un precedente, en cambio, no se puede pedir por id: lo que se
+    quiere es «casos como este».
+  </p>
+
+  <figure class="ilustra">
+    <svg viewBox="0 0 720 300" role="img" aria-label="Diagrama del RAG: el código arma la consulta, se vectoriza, se busca en dos colecciones y el resultado se formatea para el prompt">
+      <defs>
+        <marker id="fl" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g fill="currentColor" color="var(--rule-mid)">
+        <line x1="152" y1="64" x2="186" y2="64" stroke="currentColor" stroke-width="1.5" marker-end="url(#fl)"/>
+        <line x1="300" y1="64" x2="334" y2="64" stroke="currentColor" stroke-width="1.5" marker-end="url(#fl)"/>
+        <line x1="452" y1="64" x2="486" y2="64" stroke="currentColor" stroke-width="1.5" marker-end="url(#fl)"/>
+        <line x1="452" y1="188" x2="486" y2="188" stroke="currentColor" stroke-width="1.5" marker-end="url(#fl)"/>
+        <path d="M394 96 L394 188 L486 188" stroke="currentColor" stroke-width="1.5" fill="none" marker-end="url(#fl)"/>
+        <path d="M600 96 L600 240 L152 240 L152 210" stroke="currentColor" stroke-width="1.5"
+              stroke-dasharray="3 4" fill="none" marker-end="url(#fl)"/>
+      </g>
+
+      <g>
+        <rect x="8" y="40" width="144" height="48" rx="6" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="80" y="60" text-anchor="middle" font="600 12px system-ui" fill="var(--ink)" style="font:600 12px system-ui">El código arma</text>
+        <text x="80" y="76" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">la consulta. Sin LLM.</text>
+      </g>
+
+      <g>
+        <rect x="186" y="40" width="114" height="48" rx="6" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="243" y="60" text-anchor="middle" fill="var(--ink)" style="font:600 12px system-ui">Voyage AI</text>
+        <text x="243" y="76" text-anchor="middle" fill="var(--muted)" style="font:10px ui-monospace,monospace">1024 dims</text>
+      </g>
+
+      <g>
+        <rect x="334" y="40" width="118" height="56" rx="6" fill="var(--rag-suave)" stroke="var(--rag)"/>
+        <text x="393" y="62" text-anchor="middle" fill="var(--ink)" style="font:600 12px system-ui">policies</text>
+        <text x="393" y="79" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">17 · editables por API</text>
+      </g>
+      <g>
+        <rect x="334" y="164" width="118" height="56" rx="6" fill="var(--rag-suave)" stroke="var(--rag)"/>
+        <text x="393" y="186" text-anchor="middle" fill="var(--ink)" style="font:600 12px system-ui">historical_cases</text>
+        <text x="393" y="203" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">60+ · crece solo</text>
+      </g>
+
+      <g>
+        <rect x="486" y="40" width="118" height="56" rx="6" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="545" y="62" text-anchor="middle" fill="var(--ink)" style="font:600 12px system-ui">veredictos</text>
+        <text x="545" y="79" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">uno por política</text>
+      </g>
+      <g>
+        <rect x="486" y="164" width="118" height="56" rx="6" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="545" y="186" text-anchor="middle" fill="var(--ink)" style="font:600 12px system-ui">precedentes</text>
+        <text x="545" y="203" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">top 5 · corte 0,40</text>
+      </g>
+
+      <g>
+        <rect x="8" y="164" width="144" height="46" rx="6" fill="var(--llm-suave)" stroke="var(--llm)"/>
+        <text x="80" y="184" text-anchor="middle" fill="var(--ink)" style="font:600 12px system-ui">El prompt</text>
+        <text x="80" y="200" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">contexto ya masticado</text>
+      </g>
+
+      <text x="640" y="70" fill="var(--muted)" style="font:10px system-ui">se resuelve bien</text>
+      <text x="640" y="84" fill="var(--muted)" style="font:10px system-ui">→ vuelve al corpus</text>
+
+      <text x="80" y="118" text-anchor="middle" class="rotulo" fill="var(--faint)" style="font:9.5px ui-monospace,monospace">DETERMINISTA</text>
+      <text x="393" y="130" text-anchor="middle" class="rotulo" fill="var(--faint)" style="font:9.5px ui-monospace,monospace">QDRANT</text>
+    </svg>
+    <figcaption>
+      <b>La consulta la arma el código, no el modelo.</b> Es una plantilla con los campos del caso:
+      <code>contracargo {motivo}, {canal}, {método}, score {n}/100, {país}</code>, más
+      enriquecimientos por regla — si el método es cripto se agrega «no reversible blocker», si el
+      país está fuera de LATAM se agrega «plazo extendido». Dos investigaciones del mismo caso
+      producen exactamente el mismo texto, y por eso la caché de embeddings sirve.
+    </figcaption>
+  </figure>
+
+  <figure class="ilustra">
+    <svg viewBox="0 0 720 150" role="img" aria-label="Qué se indexa y qué no: políticas y casos van a Qdrant; transacciones y logs no">
+      <g>
+        <rect x="8" y="20" width="330" height="110" rx="7" fill="var(--rag-suave)" stroke="var(--rag)" stroke-dasharray="0"/>
+        <text x="24" y="44" fill="var(--rag)" style="font:600 11px system-ui; letter-spacing:.08em">SÍ SE INDEXA</text>
+        <text x="24" y="70" fill="var(--ink)" style="font:13px system-ui">Políticas · Casos históricos</text>
+        <text x="24" y="92" fill="var(--muted)" style="font:11.5px system-ui">Se buscan por parecido: «¿qué reglas aplican</text>
+        <text x="24" y="108" fill="var(--muted)" style="font:11.5px system-ui">acá?», «¿qué se hizo en casos como este?»</text>
+      </g>
+      <g>
+        <rect x="358" y="20" width="354" height="110" rx="7" fill="var(--sql-suave)" stroke="var(--sql)"/>
+        <text x="374" y="44" fill="var(--sql)" style="font:600 11px system-ui; letter-spacing:.08em">NO SE INDEXA</text>
+        <text x="374" y="70" fill="var(--ink)" style="font:13px system-ui">Transacciones · Logs</text>
+        <text x="374" y="92" fill="var(--muted)" style="font:11.5px system-ui">Se piden por identidad. Una transacción se busca</text>
+        <text x="374" y="108" fill="var(--muted)" style="font:11.5px system-ui">por su id; sus logs, completos, por ese id.</text>
+      </g>
+    </svg>
+    <figcaption>
+      Meter todo en el vector store es la tentación fácil y el error caro: buscar
+      <code>TXN-00042</code> por similitud puede devolver <code>TXN-00043</code>, que es otra
+      transacción de otra persona. <b>Un id no admite «parecido».</b>
+    </figcaption>
+  </figure>
+
+  <h2>Qué patrones usa, y cuáles no</h2>
+  <p class="sub">
+    Lo que sigue no es un catálogo: es qué se aplicó, <b>dónde duele si no está</b>, y una
+    corrección de nombre — el archivo que se llama <code>adaptadores.py</code> no implementa el
+    patrón Adapter.
+  </p>
+
+  <figure class="ilustra">
+    <svg viewBox="0 0 720 300" role="img" aria-label="Puertos y adaptadores: el núcleo declara contratos y las implementaciones se enchufan">
+      <g>
+        <rect x="248" y="96" width="224" height="108" rx="9" fill="var(--paper)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="360" y="128" text-anchor="middle" fill="var(--ink)" style="font:600 13px system-ui">El núcleo</text>
+        <text x="360" y="148" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">domain/decision.py</text>
+        <text x="360" y="164" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">domain/precedentes.py</text>
+        <text x="360" y="184" text-anchor="middle" fill="var(--faint)" style="font:10.5px system-ui">cero dependencias · cero mocks para probarlo</text>
+      </g>
+
+      <g stroke="var(--rule-mid)" stroke-width="1.25" fill="none">
+        <line x1="248" y1="126" x2="176" y2="126"/>
+        <line x1="248" y1="174" x2="176" y2="174"/>
+        <line x1="472" y1="126" x2="544" y2="126"/>
+        <line x1="472" y1="174" x2="544" y2="174"/>
+        <line x1="360" y1="96" x2="360" y2="58"/>
+      </g>
+
+      <g>
+        <rect x="20" y="108" width="156" height="36" rx="5" fill="var(--surface)" stroke="var(--llm)"/>
+        <text x="98" y="131" text-anchor="middle" fill="var(--llm)" style="font:11px ui-monospace,monospace">LLMClient</text>
+        <rect x="20" y="156" width="156" height="36" rx="5" fill="var(--surface)" stroke="var(--rag)"/>
+        <text x="98" y="179" text-anchor="middle" fill="var(--rag)" style="font:11px ui-monospace,monospace">Tracer</text>
+        <text x="98" y="86" text-anchor="middle" class="rotulo" fill="var(--faint)" style="font:9.5px ui-monospace,monospace">PUERTOS</text>
+      </g>
+      <g>
+        <rect x="544" y="108" width="156" height="36" rx="5" fill="var(--surface)" stroke="var(--sql)"/>
+        <text x="622" y="131" text-anchor="middle" fill="var(--sql)" style="font:11px ui-monospace,monospace">FuenteDeCasos</text>
+        <rect x="544" y="156" width="156" height="36" rx="5" fill="var(--surface)" stroke="var(--sql)"/>
+        <text x="622" y="179" text-anchor="middle" fill="var(--sql)" style="font:11px ui-monospace,monospace">Completador</text>
+        <text x="622" y="86" text-anchor="middle" class="rotulo" fill="var(--faint)" style="font:9.5px ui-monospace,monospace">PUERTOS</text>
+      </g>
+
+      <g>
+        <rect x="270" y="26" width="180" height="32" rx="5" fill="var(--paper)" stroke="var(--rule-mid)" stroke-dasharray="3 3"/>
+        <text x="360" y="47" text-anchor="middle" fill="var(--muted)" style="font:11px system-ui">n8n · el orquestador</text>
+      </g>
+
+      <g stroke="var(--rule-mid)" stroke-width="1" stroke-dasharray="2 3" fill="none">
+        <path d="M98 192 L98 236"/><path d="M98 236 L246 236"/>
+        <path d="M622 192 L622 236"/><path d="M622 236 L474 236"/>
+      </g>
+      <g>
+        <rect x="246" y="220" width="228" height="56" rx="6" fill="var(--surface)" stroke="var(--rule-mid)"/>
+        <text x="360" y="241" text-anchor="middle" fill="var(--ink)" style="font:600 11.5px system-ui">Los adaptadores, intercambiables</text>
+        <text x="360" y="258" text-anchor="middle" fill="var(--muted)" style="font:10px ui-monospace,monospace">AnthropicClient · OpenAICompatibleClient</text>
+        <text x="360" y="271" text-anchor="middle" fill="var(--muted)" style="font:10px ui-monospace,monospace">LangfuseTracer · TrazadorLocal · NoOpTracer</text>
+      </g>
+    </svg>
+    <figcaption>
+      <b>Puertos y adaptadores.</b> El núcleo declara qué necesita y no sabe quién se lo da. No es
+      una afirmación de folleto: <code>LLMClient</code> tiene <b>dos implementaciones que no
+      comparten una línea</b> —una usa el SDK de Anthropic, la otra habla HTTP crudo con cualquier
+      endpoint compatible con OpenAI— y cambiar de una a otra no toca un solo llamador. Es lo que
+      hace que el modo demo pueda correr en un modelo gratuito de verdad, en vez de servir una
+      grabación.
+    </figcaption>
+  </figure>
+
+  <figure class="ilustra">
+    <svg viewBox="0 0 720 210" role="img" aria-label="Fachada: todos los llamadores pasan por una sola puerta hacia los proveedores">
+      <g>
+        <rect x="14" y="24" width="150" height="30" rx="5" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="89" y="44" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">evaluar políticas</text>
+        <rect x="14" y="66" width="150" height="30" rx="5" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="89" y="86" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">sintetizar</text>
+        <rect x="14" y="108" width="150" height="30" rx="5" fill="var(--paper)" stroke="var(--rule-mid)"/>
+        <text x="89" y="128" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">juzgar</text>
+        <text x="89" y="164" text-anchor="middle" fill="var(--faint)" style="font:10.5px system-ui">dicen QUÉ PASO son,</text>
+        <text x="89" y="178" text-anchor="middle" fill="var(--faint)" style="font:10.5px system-ui">nunca qué cliente usar</text>
+      </g>
+
+      <g stroke="var(--llm)" stroke-width="1.5" fill="none" opacity=".55">
+        <path d="M164 39 C210 39 226 81 268 81"/>
+        <path d="M164 81 L268 81"/>
+        <path d="M164 123 C210 123 226 81 268 81"/>
+      </g>
+
+      <g>
+        <rect x="268" y="52" width="164" height="58" rx="7" fill="var(--llm-suave)" stroke="var(--llm)" stroke-width="1.5"/>
+        <text x="350" y="76" text-anchor="middle" fill="var(--ink)" style="font:600 12.5px system-ui">LLMManager</text>
+        <text x="350" y="94" text-anchor="middle" fill="var(--muted)" style="font:10px system-ui">la única puerta</text>
+      </g>
+
+      <g stroke="var(--rule-mid)" stroke-width="1.25" fill="none">
+        <path d="M432 81 C486 81 494 40 548 40"/>
+        <path d="M432 81 L548 81"/>
+        <path d="M432 81 C486 81 494 122 548 122"/>
+      </g>
+      <g>
+        <rect x="548" y="24" width="158" height="32" rx="5" fill="var(--surface)" stroke="var(--rule-mid)"/>
+        <text x="627" y="44" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">anthropic</text>
+        <rect x="548" y="65" width="158" height="32" rx="5" fill="var(--surface)" stroke="var(--rule-mid)"/>
+        <text x="627" y="85" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">gemini · groq</text>
+        <rect x="548" y="106" width="158" height="32" rx="5" fill="var(--surface)" stroke="var(--rule-mid)"/>
+        <text x="627" y="126" text-anchor="middle" fill="var(--muted)" style="font:11px ui-monospace,monospace">+ 8 más</text>
+        <text x="627" y="164" text-anchor="middle" fill="var(--faint)" style="font:10.5px system-ui">un registro, no tres tablas</text>
+      </g>
+    </svg>
+    <figcaption>
+      <b>Fachada, y por qué no es estética.</b> Nadie fuera del <code>LLMManager</code> toca un
+      cliente: los llamadores dicen <i>qué paso</i> son y reciben la respuesta. Mientras el que
+      llamaba podía elegir el cliente, podía elegir el equivocado — <b>y pasó</b>: el juez resolvía
+      el servicio del modo demo y después invocaba al de producción, así que la mitad del pipeline
+      se iba por Anthropic sin crédito mientras la otra mitad corría en Gemini.
+    </figcaption>
+  </figure>
+
+  <div class="solid">
+
+    <details class="letra">
+      <summary>
+        <span class="inicial" style="background:var(--rag-suave); color:var(--rag)">✳</span>
+        <span><span class="titulo-letra">Estrategia como dato, y registro</span>
+        <span class="nota-letra">Las diferencias entre modelos son una tabla, no una cadena de <code>if</code>.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          Un modelo que razona necesita más presupuesto de tokens que uno que no; un free tier
+          aguanta cinco pedidos por minuto y otro treinta. Eso podría ser una escalera de
+          condicionales; es una tabla de <code>Adaptador</code> congelados, con el <b>hecho medido
+          que justifica cada número</b> escrito al lado: uno de los campos existe porque una llamada
+          gastó ~3.900 tokens de razonamiento y reportó 159 de respuesta.
+        </p>
+        <p>
+          El modelo le gana al proveedor cuando se contradicen, y con razón: OpenRouter sirve tanto
+          Llama como Gemini, y no se les habla igual.
+        </p>
+        <div class="antes-despues">
+          <span>agregar un proveedor: 3 ediciones</span>
+          <span class="flecha">→</span>
+          <span class="bien">1 entrada en <code>proveedores.py</code></span>
+        </div>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial" style="background:var(--sql-suave); color:var(--sql)">⚠</span>
+        <span><span class="titulo-letra">El archivo <code>adaptadores.py</code> no es el patrón Adapter</span>
+        <span class="nota-letra">Está mal nombrado, y conviene decirlo antes de que alguien lo lea buscando otra cosa.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          Adapter traduce una interfaz a otra. <code>adaptadores.py</code> no traduce nada:
+          parametriza comportamiento por familia de modelo. Es <b>Strategy-como-dato más
+          Registry</b>.
+        </p>
+        <p>
+          El Adapter real del proyecto es <code>OpenAICompatibleClient</code>, que adapta el
+          protocolo de OpenAI al Protocol <code>LLMClient</code>. Ese sí, y está bien hecho.
+        </p>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial" style="background:var(--barra)">∅</span>
+        <span><span class="titulo-letra">Objeto nulo</span>
+        <span class="nota-letra">Sin observabilidad configurada, nadie pregunta si hay observabilidad.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          <code>NoOpTracer</code> implementa el mismo contrato y no hace nada. Ningún llamador
+          escribe <code>if tracer is not None</code>, que es exactamente el punto: <b>el caso
+          «apagado» deja de ser una rama</b> y pasa a ser una implementación más.
+        </p>
+        <p>
+          Es barato porque la interfaz es chica — tres métodos. Un Protocol de diez habría hecho del
+          objeto nulo una carga en vez de una solución.
+        </p>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial" style="background:var(--llm-suave); color:var(--llm)">▣</span>
+        <span><span class="titulo-letra">Objeto de parámetros</span>
+        <span class="nota-letra">Un tipo, en vez de nueve argumentos sueltos que se pasan mal.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          <code>CaseContext</code> reemplazó tres modelados del mismo concepto, cada uno con sus
+          propios nombres para los mismos campos. Es <code>frozen</code>: el contexto de un caso no
+          se muta mientras se lo analiza.
+        </p>
+        <p>
+          <code>Revision</code> hace lo mismo con los guardrails, y ahí gana algo concreto:
+          <b>agregar una regla que necesite un dato nuevo no cambia la firma de las otras cinco</b>
+          ni la del recorredor.
+        </p>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial" style="background:var(--barra)">⌥</span>
+        <span><span class="titulo-letra">Lo que se decidió NO usar</span>
+        <span class="nota-letra">Un patrón que no se necesita es una capa que hay que leer.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          <b>Repository sobre <code>db.py</code>:</b> no. Lo que hay es un <i>Table Data Gateway</i>
+          honesto —devuelve <code>dict</code>, no entidades— y con un solo backend y sin ORM, un
+          repositorio por agregado sería ceremonia. Lo que sí molesta es el DDL adentro, y eso está
+          anotado como deuda.
+        </p>
+        <p>
+          <b>Event bus para las alertas:</b> no. Hay un suscriptor. Un observador con N suscriptores
+          para uno solo es ruido; el callable inyectado dice más.
+        </p>
+        <p>
+          <b>Contenedor de inyección de dependencias:</b> no. El <i>composition root</i> del
+          lifespan de FastAPI es el lugar correcto, y ya soporta el caso que importaba: los tests
+          arman el grafo sin pelearse con el arranque.
+        </p>
+        <p>
+          <b>Máquina de estados para el pipeline:</b> no. Los pasos son lineales y se leen de arriba
+          abajo.
+        </p>
+      </div>
+    </details>
+
+  </div>
+
+  <h2>Cómo cumple SOLID</h2>
+  <p class="sub">
+    No como declaración: cada letra abajo dice <b>qué se movió y qué se puede hacer ahora que antes
+    no se podía</b>. Los números salen de una auditoría que se corrió sobre el código y de la que
+    sobrevive el registro en <code>docs/decisions.md</code>.
+  </p>
+
+  <div class="solid">
+
+    <details class="letra">
+      <summary>
+        <span class="inicial">S</span>
+        <span><span class="titulo-letra">Una razón para cambiar, y una sola</span>
+        <span class="nota-letra">El servicio central hacía seis cosas. Ahora hace una.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          <code>ResolutionService</code> tenía <b>15 de sus 22 métodos declarados estáticos</b>:
+          quince funciones puras viviendo dentro de una clase cuyo estado usaban siete métodos.
+          Cuando dos tercios de una clase no necesita la clase, el límite está mal trazado — y el
+          propio código lo estaba señalando.
+        </p>
+        <p>
+          Se partió en cuatro: la orquestación quedó donde estaba, la decisión determinista se fue a
+          <code>domain/decision.py</code>, el resumen de precedentes a
+          <code>domain/precedentes.py</code> y los guardrails a <code>services/guardrails.py</code>.
+          Lo mismo con <code>Analyzer</code>, que mezclaba el riesgo de un comercio con el reloj de
+          un SLA — y el SLA decide compensación, o sea plata.
+        </p>
+        <div class="antes-despues">
+          <span>resolution.py · 819 líneas</span>
+          <span class="flecha">→</span>
+          <span class="bien">324 líneas + 3 módulos</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial">O</span>
+        <span><span class="titulo-letra">Abierto a extensión sin editar lo que ya anda</span>
+        <span class="nota-letra">Agregar un guardrail era editar una función. Ahora es escribirla.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          El proyecto presenta «seis guardrails» como uno de sus diferenciadores, y ese número
+          estaba <b>congelado</b>: el séptimo obligaba a meter otro <code>if</code> dentro de una
+          función que construía una lista a mano. Ahora un guardrail es una función que mira una
+          resolución y devuelve un aviso o <code>None</code>, y la lista es una tupla.
+        </p>
+        <p>
+          Los dos momentos siguen separados, y eso es sustantivo: las reglas de divergencia
+          <b>solo pueden correr antes del override determinista</b>, que es la única ventana en la
+          que la propuesta del modelo todavía existe. Después, la resolución entregada tiene la
+          decisión del código, y compararla consigo misma no dice nada.
+        </p>
+        <div class="antes-despues">
+          <span>editar <code>_validate_resolution</code></span>
+          <span class="flecha">→</span>
+          <span class="bien">una función y una línea en una tupla</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial">L</span>
+        <span><span class="titulo-letra">Un sustituto no puede mentir</span>
+        <span class="nota-letra">El tracer decía que observaba mientras no anotaba nada.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          <code>LangfuseTracer</code> tragaba el fallo y dejaba <code>enabled</code> en
+          <code>True</code>. Como de esa propiedad depende la caída al registro local, el efecto era
+          medible y absurdo: <b>encender la observabilidad dejaba al panel con menos métricas que
+          apagarla</b>. Ahora se apaga a la primera y no reintenta — un host equivocado o una
+          credencial inválida no se arreglan solos.
+        </p>
+        <p>
+          El Protocol también se partió en dos. Escribir observaciones y leer lo observado son
+          capacidades distintas: hay quien escribe y no puede leer. Mientras fueron una sola, el
+          consumidor tenía que esquivar el contrato con <code>getattr</code> para averiguar con cuál
+          estaba hablando — y <b>un Protocol que el consumidor tiene que sortear dejó de ser el
+          contrato</b>.
+        </p>
+        <div class="antes-despues">
+          <span>1 Protocol + 2 <code>getattr</code></span>
+          <span class="flecha">→</span>
+          <span class="bien">Tracer + FuenteDeMetricas</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial">I</span>
+        <span><span class="titulo-letra">Pedir poco, y decir qué se pide</span>
+        <span class="nota-letra">El pipeline recibía 29 operaciones y usaba 5.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          Los contratos existían de hecho —se cumplían— pero no estaban escritos, así que se
+          descubrían leyendo el código. <code>PipelineService</code> recibía la base entera y usa
+          cinco métodos; <code>ResolutionService</code> recibía su costura más importante como un
+          parámetro <b>sin anotación de tipo</b>.
+        </p>
+        <p>
+          El criterio para escribir un Protocol fue que el consumidor use bastante menos de lo que
+          recibe. Donde usa casi todo, quedó la clase concreta — y eso también está argumentado:
+          hay un solo backend, no hay ORM, y cinco Protocols con una implementación cada uno es
+          ceremonia, no inversión.
+        </p>
+        <div class="antes-despues">
+          <span><code>db: Database</code> (29 métodos)</span>
+          <span class="flecha">→</span>
+          <span class="bien"><code>db: FuenteDeCasos</code> (5)</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial">D</span>
+        <span><span class="titulo-letra">Depender del contrato, no de la implementación</span>
+        <span class="nota-letra">El núcleo de decisión ya no depende de nada.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          <code>domain/decision.py</code> y <code>domain/precedentes.py</code> son funciones puras
+          sobre <code>dict</code>: no conocen el cliente del modelo, ni el tracer, ni la base.
+          <b>Se prueban sin un solo mock.</b> Mientras vivieron dentro del servicio, esa lógica
+          arrastraba <code>Tracer</code>, <code>LLMClient</code> y <code>ModelosService</code> en su
+          grafo de dependencias por el solo hecho de compartir archivo.
+        </p>
+        <p>
+          El registro de proveedores era el otro caso: estaba en tres tablas paralelas con la misma
+          clave, y olvidarse una fallaba en silencio — sin URL base, el modelo de Groq salía con la
+          credencial de Groq hacia la API de Anthropic, y el error hablaba de autenticación. Ahora
+          es una entrada y lanza diciendo cuál falta.
+        </p>
+        <div class="antes-despues">
+          <span>3 tablas sincronizadas a mano</span>
+          <span class="flecha">→</span>
+          <span class="bien">1 registro · el resto deriva</span>
+        </div>
+      </div>
+    </details>
+
+  </div>
+
+  <div class="cierre">
+    <p>
+      <b>Por qué esto no es un CRUD con un LLM encima.</b> Los nueve pasos de contexto son
+      deterministas y baratos; los dos que llaman al modelo reciben todo ya masticado. La
+      recomendación no sale de que el modelo «piense»: sale de los veredictos de política, y el
+      modelo escribe la justificación.
+    </p>
+    <p>
+      <b>Por eso el orden importa y está a la vista.</b> Un agente que elige sus herramientas
+      resuelve el mismo caso distinto dos veces. Estas trece llamadas son las mismas siempre, y
+      cuando el resultado no convence se puede señalar cuál de ellas contestó mal.
+    </p>
+  </div>
+
+  <p class="pie">
+    31 endpoints · 13 en el recorrido de un caso · 18 para operar el sistema<br>
+    Contrato completo y ejecutable en <code>/docs</code> (OpenAPI). Panel en <code>/panel</code>.
+  </p>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // Los trece del recorrido, con la latencia real medida contra Render (TXN-00042).
+  var PASOS = [
+    {v:"GET", r:"/health", f:"plano", ms:961,
+     t:"Despierta el contenedor",
+     d:"El free tier de Render duerme el servicio a los 15 minutos. La primera llamada paga ese costo; las doce siguientes no."},
+    {v:"GET", r:"/api/cache/lookup", f:"sql", ms:260,
+     t:"¿Este caso ya se investigó?",
+     d:"Idempotencia por coincidencia exacta, no por parecido. Si el mismo caso ya tiene informe, el recorrido termina acá y no se gasta una llamada al modelo."},
+    {v:"GET", r:"/api/transactions/{txn_id}", f:"sql", ms:231,
+     t:"Airbnb · USD 2.055,76 · score 4",
+     d:"Un id no se busca por similitud: se busca por id. Por eso las transacciones no están en el vector store."},
+    {v:"GET", r:"/api/logs/{tx_id}", f:"sql", ms:299,
+     t:"Todos los eventos de esa transacción",
+     d:"Completos, no los parecidos. Los patrones —timeout sistemático del comercio, doble cobro— los detecta el código contando eventos, sin LLM."},
+    {v:"GET", r:"/api/policies/search", f:"rag", ms:952,
+     t:"17 políticas recuperadas",
+     d:"Acá empieza el RAG. La consulta la arma el código con una plantilla determinista; el modelo no elige qué buscar."},
+    {v:"GET", r:"/api/cases/similar", f:"rag", ms:731,
+     t:"5 precedentes, corte en 0,40",
+     d:"Qué se resolvió antes en casos parecidos. El resumen que ve el modelo lo arma el código, con la tendencia contada: cuántos se aprobaron y cuántos se rechazaron."},
+    {v:"GET", r:"/api/merchants/{name}/risk", f:"sql", ms:231,
+     t:"cb_ratio 0,75 contra una base de 0,47",
+     d:"El ratio solo se lee bien al lado de su referencia, y la referencia se consulta en vez de fijarse: si mañana se cargan más transacciones, la línea base se mueve sola."},
+    {v:"GET", r:"/api/clients/{client_id}/history", f:"sql", ms:289,
+     t:"1 contracargo previo · geo_anomaly",
+     d:"El historial del cliente, con sus flags. El conteo es previo: no incluye el caso que se está investigando."},
+    {v:"POST", r:"/api/sla/check", f:"sql", ms:215,
+     t:"Sin reclamo registrado: no se mide",
+     d:"Son 53 de las 100 transacciones del dataset. Sin fecha de apertura no se cae a la fecha de la compra —entre las dos puede haber meses— y no se afirma un incumplimiento que nadie puede sostener."},
+    {v:"POST", r:"/api/analyze/resolve", f:"llm", ms:7320,
+     t:"PENDING_HITL · riesgo HIGH · 17 veredictos",
+     d:"El modelo evalúa las políticas y redacta. La acción, el riesgo y la compensación las fija el código a partir de esos veredictos: 8 de 11 campos son deterministas."},
+    {v:"POST", r:"/api/analyze/judge", f:"llm", ms:26284,
+     t:"Score 9,2 sobre cinco criterios",
+     d:"Califica la propuesta del modelo, no la corrección del código. Cuando calificaba la versión ya corregida, dos de los cinco criterios no podían bajar de 10 por construcción."},
+    {v:"POST", r:"/api/alerts/", f:"sql", ms:283,
+     t:"El caso necesita una persona",
+     d:"Solo corre en esta rama. En un BLOCKER —cripto, por ejemplo— la decisión es automática y este paso no aparece: el recorrido son 12 llamadas en vez de 13."},
+    {v:"POST", r:"/api/reports/html", f:"plano", ms:277,
+     t:"70 KB de HTML",
+     d:"Con los estilos adentro: el informe se abre sin internet, que es la única forma de que siga sirviendo dentro de un año."}
+  ];
+
+  var COLOR = {sql:"var(--sql)", rag:"var(--rag)", llm:"var(--llm)", plano:"var(--plano)"};
+  var ETIQUETA = {sql:"SQLite", rag:"Qdrant", llm:"El modelo", plano:"sin almacén"};
+
+  var ALTO_PIN = 34, SEP = 8, X_PIN = 14, ANCHO_PIN = 292;
+  var X_BUS = 366, X_CHIP = 470, ANCHO_CHIP = 232;
+  var ARRIBA = 26;
+  var alto = ARRIBA + PASOS.length * (ALTO_PIN + SEP) + 26;
+
+  var svg = document.getElementById("board");
+  var ns = "http://www.w3.org/2000/svg";
+  svg.setAttribute("viewBox", "0 0 720 " + alto);
+
+  function el(nombre, attrs, texto){
+    var n = document.createElementNS(ns, nombre);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (texto != null) n.textContent = texto;
+    return n;
+  }
+
+  // ── Los tres almacenes, a la derecha ──────────────────────────────
+  var CHIPS = [
+    {f:"sql", nombre:"SQLite", que:"el dato exacto"},
+    {f:"rag", nombre:"Qdrant", que:"lo semejante"},
+    {f:"llm", nombre:"El modelo", que:"la síntesis"}
+  ];
+  var yChip = {};
+  CHIPS.forEach(function(c, i){
+    var y = ARRIBA + 40 + i * ((alto - ARRIBA - 120) / 2);
+    yChip[c.f] = y + 26;
+    var g = el("g", {"class":"chip"});
+    g.appendChild(el("rect", {
+      x:X_CHIP, y:y, width:ANCHO_CHIP, height:52,
+      fill:"var(--surface)", stroke:COLOR[c.f]
+    }));
+    g.appendChild(el("text", {x:X_CHIP+16, y:y+23, "class":"nombre"}, c.nombre));
+    g.appendChild(el("text", {x:X_CHIP+16, y:y+39, "class":"que"}, c.que));
+    svg.appendChild(g);
+  });
+
+  // ── El bus vertical que une el recorrido ──────────────────────────
+  svg.appendChild(el("path", {
+    "class":"bus",
+    d:"M" + X_BUS + " " + ARRIBA + " L" + X_BUS + " " + (alto - 30)
+  }));
+  svg.appendChild(el("text", {
+    x:X_BUS, y:14, "class":"rotulo", "text-anchor":"middle"
+  }, "EN ORDEN"));
+
+  // ── Las entradas ──────────────────────────────────────────────────
+  var pins = [];
+  PASOS.forEach(function(p, i){
+    var y = ARRIBA + i * (ALTO_PIN + SEP);
+    var medio = y + ALTO_PIN / 2;
+
+    // Traza del pin al almacén que consulta.
+    var destino = yChip[p.f];
+    var traza = el("path", {
+      "class":"traza",
+      stroke: COLOR[p.f],
+      d: destino == null
+        ? "M" + (X_PIN+ANCHO_PIN) + " " + medio + " H" + X_BUS
+        : "M" + (X_PIN+ANCHO_PIN) + " " + medio + " H" + (X_BUS+30) +
+          " C" + (X_BUS+70) + " " + medio + " " + (X_CHIP-50) + " " + destino +
+          " " + X_CHIP + " " + destino
+    });
+    svg.appendChild(traza);
+
+    var g = el("g", {"class":"pin", tabindex:"0", role:"button",
+                     "aria-label": p.v + " " + p.r + " — " + p.t});
+    g.appendChild(el("rect", {"class":"caja", x:X_PIN, y:y, width:ANCHO_PIN, height:ALTO_PIN}));
+    g.appendChild(el("text", {"class":"orden", x:X_PIN+11, y:medio+4},
+                     (i+1 < 10 ? "0" : "") + (i+1)));
+    g.appendChild(el("text", {"class":"verbo", x:X_PIN+34, y:medio+4,
+                              fill:COLOR[p.f]}, p.v));
+    g.appendChild(el("text", {"class":"ruta", x:X_PIN+76, y:medio+4}, p.r));
+    svg.appendChild(g);
+
+    pins.push({g:g, traza:traza, datos:p});
+
+    function elegir(){ mostrar(i); }
+    g.addEventListener("click", elegir);
+    g.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); elegir(); }
+    });
+  });
+
+  // ── La ficha ──────────────────────────────────────────────────────
+  var ficha = document.getElementById("ficha");
+  function mostrar(i){
+    var p = PASOS[i];
+    pins.forEach(function(x, j){
+      x.g.classList.toggle("activo", j === i);
+      x.traza.classList.toggle("viva", j === i);
+      x.traza.classList.toggle("apagada", j !== i);
+    });
+    ficha.innerHTML =
+      '<div class="cab">' +
+        '<span class="verbo-txt">' + p.v + '</span>' +
+        '<span class="camino">' + p.r + '</span>' +
+        '<span class="fuente f-' + p.f + '">' + ETIQUETA[p.f] + '</span>' +
+      '</div>' +
+      '<p><b style="color:var(--ink)">' + p.t + '</b></p>' +
+      '<p>' + p.d + '</p>' +
+      '<p class="dato">paso ' + (i+1) + ' de 13 · ' +
+        p.ms.toLocaleString("es-AR") + ' ms medidos</p>';
+  }
+
+  // ── Filtros por almacén ───────────────────────────────────────────
+  var activos = {};
+  document.querySelectorAll(".filtro").forEach(function(b){
+    b.addEventListener("click", function(){
+      var f = b.dataset.fuente;
+      activos[f] = !activos[f];
+      b.setAttribute("aria-pressed", activos[f] ? "true" : "false");
+      var hayFiltro = Object.keys(activos).some(function(k){ return activos[k]; });
+      pins.forEach(function(x){
+        var visible = !hayFiltro || activos[x.datos.f];
+        x.g.classList.toggle("apagado", !visible);
+        x.traza.classList.toggle("apagada", !visible);
+      });
+    });
+  });
+
+  // ── Reproducir el recorrido ───────────────────────────────────────
+  var boton = document.getElementById("reproducir");
+  var corriendo = false, timers = [];
+  var lento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function limpiar(){
+    timers.forEach(clearTimeout); timers = [];
+    pins.forEach(function(x){ x.g.classList.remove("corriendo"); });
+    corriendo = false;
+    boton.textContent = "▶  Reproducir el recorrido";
+  }
+
+  boton.addEventListener("click", function(){
+    if (corriendo) { limpiar(); return; }
+    corriendo = true;
+    boton.textContent = "■  Detener";
+    var t = 0;
+    PASOS.forEach(function(p, i){
+      // Proporcional a la latencia real, comprimida para que se pueda mirar.
+      var dura = lento ? 260 : Math.max(240, Math.min(1500, p.ms / 6));
+      timers.push(setTimeout(function(){
+        pins.forEach(function(x, j){ x.g.classList.toggle("corriendo", j === i); });
+        mostrar(i);
+      }, t));
+      t += dura;
+    });
+    timers.push(setTimeout(limpiar, t));
+  });
+})();
+</script>
+</body>
+</html>
