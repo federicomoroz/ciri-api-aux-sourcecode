@@ -107,7 +107,7 @@ Indexar 100 transacciones en Qdrant seria un desperdicio: "TXN-00051" no es sema
 
 ### Logs de eventos
 
-**No estan en Qdrant.** Los logs son registros estructurados con `{timestamp, severity, event, service, code, detail}`. Se recuperan via `GET /api/logs/{tx_id}` (match exacto por transaction_id). El analisis de logs es **deterministico** — `Analyzer.detect_error_patterns()` extrae patrones nombrados (SYSTEMATIC_MERCHANT_TIMEOUT, CONNECTIVITY_ISSUE, etc.) y `Analyzer.count_severities()` produce conteos de severidad. Un resumen de los logs criticos se pasa al prompt `v1_resolution` como contexto. No hay necesidad de pre-indexar logs para busqueda por similitud.
+**No estan en Qdrant.** Los logs son registros estructurados con `{timestamp, severity, event, service, code, detail}`. Se recuperan via `GET /api/logs/{tx_id}` (match exacto por transaction_id). El analisis de logs es **deterministico** — `patrones.detect_error_patterns()` extrae patrones nombrados (SYSTEMATIC_MERCHANT_TIMEOUT, CONNECTIVITY_ISSUE, etc.) y `patrones.count_severities()` produce conteos de severidad. Un resumen de los logs criticos se pasa al prompt `v1_resolution` como contexto. No hay necesidad de pre-indexar logs para busqueda por similitud.
 
 Indexar logs en Qdrant complicaria el pipeline sin beneficio: siempre se recuperan logs para una transaccion especifica, nunca se pregunta "encontrar logs similares a este log".
 

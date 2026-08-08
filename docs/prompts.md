@@ -8,29 +8,32 @@ Todas las llamadas LLM — incluyendo el Juez — pasan por FastAPI para observa
 
 ## Principio central: "El codigo decide, el LLM explica"
 
-De los 11 campos del JSON de resolucion, **8 son deterministas** — calculados por Python sin intervencion del LLM (`_determine_outcome()` y `_determine_compensation()`):
+De los 13 campos de `ResolutionOutput`, **9 los fija el codigo** y 4 los escribe el modelo. El reparto no es una descripcion: `services/resolution.py` sobrescribe esos nueve despues de la llamada, siempre, y `tests/unit/test_campos_deterministas.py` lo verifica contra el codigo.
 
-| Campo | Origen | Metodo |
+| Campo | Quien lo fija | Como |
 |---|---|---|
-| `recommended_action` | Determinista | `_determine_outcome()` — logica de verdicts |
-| `risk_level` | Determinista | `_determine_outcome()` — BLOCKER/FAIL counts + fraud_score |
-| `risk_reason` | Determinista | `_determine_outcome()` — texto explicativo generado por codigo |
-| `requires_hitl` | Determinista | `_determine_outcome()` — derivado de action |
-| `precedent_summary` | Determinista | `_build_precedent_summary()` — patron matching + tendencias |
-| `policy_verdicts` | LLM (Call 1) | Evaluados por v1_policy_eval, sanitizados por `_sanitize_verdicts()` |
-| `justification` | LLM (Call 2) | Generado por v1_resolution (Sonnet) |
-| `confidence` | LLM (Call 2) | Estimado por v1_resolution |
-| `next_steps` | LLM (Call 2) | Generado por v1_resolution |
-| `log_summary` | Determinista | `_summarize_logs()` — conteo de severidades + patrones |
-| `compensation_applicable` | Determinista | `_determine_compensation()` — lee el SLA ya calculado (POL-SLA-004) |
-| `compensation_amount_usd` | Determinista | `_determine_compensation()` — tope de la politica, acotado al monto del cargo |
+| `recommended_action` | Codigo | `decision.decidir()` — a partir de los veredictos |
+| `risk_level` | Codigo | `decision.nivel_de_riesgo()` — conteo BLOCKER/FAIL + fraud_score |
+| `requires_hitl` | Codigo | `decision.decidir()` — derivado de la accion |
+| `hitl_reason` | Codigo | `decision.decidir()` — por que necesita una persona |
+| `precedent_summary` | Codigo | `precedentes.resumir_precedentes()` — patrones + tendencias |
+| `log_summary` | Codigo | `precedentes.resumir_logs()` — severidades + `patrones.detect_error_patterns()` |
+| `policy_verdicts` | Codigo (sobre la salida del Call 1) | `decision.degradar_blockers_no_habilitados()` sanitiza lo que evaluo v1_policy_eval |
+| `compensation_applicable` | Codigo | `decision.compensacion_por_sla()` — lee el SLA ya calculado |
+| `compensation_amount_usd` | Codigo | `decision.compensacion_por_sla()` — tope de la politica, acotado al monto |
+| `justification` | Modelo (Call 2) | v1_resolution |
+| `confidence` | Modelo (Call 2) | v1_resolution |
+| `next_steps` | Modelo (Call 2) | v1_resolution |
+| `transaction_id` | Modelo (Call 2) | Lo devuelve tal como lo recibio |
+
+`precedent_summary` y `log_summary` ademas **entran al prompt** como contexto: el modelo los recibe calculados para poder razonar sobre ellos, y su copia se descarta. Hasta v3.1 el prompt se los pedia y la version del modelo era la que quedaba, asi que el informe podia mostrar un resumen de logs que no coincidia con los logs impresos al lado.
 
 El LLM recibe la decision ya tomada en la seccion `DECISION DETERMINADA` del prompt y su tarea es justificarla con evidencia, no tomarla. Esto elimina la categoria entera de errores donde el LLM elige una accion incorrecta (por ejemplo, APPROVE con BLOCKER activo).
 
 ### Logica determinista en detalle
 
 ```python
-# Archivo: api/app/services/resolution.py — _determine_outcome()
+# Archivo: api/app/services/resolution.py — decision.decidir()
 
 BLOCKER en verdicts         → REJECT + risk BLOCKER
 FAIL sin BLOCKER            → PENDING_HITL + risk HIGH o MEDIUM
@@ -38,7 +41,7 @@ requires_human_review=true  → PENDING_HITL (red de seguridad)
 Solo PASS/WARNING           → APPROVE + risk LOW o MEDIUM
 ```
 
-Ademas, `_sanitize_verdicts()` degrada cualquier BLOCKER emitido por el LLM para politicas fuera de `BLOCKER_POLICY_CODES` (actualmente solo `POL-EXC-003`) a FAIL + `requires_human_review=true`. Esto previene la sobre-escalacion del LLM (por ejemplo, asignar BLOCKER a un comercio suspendido, que no es tecnicamente irreversible).
+Ademas, `decision.degradar_blockers_no_habilitados()` degrada cualquier BLOCKER emitido por el LLM para politicas fuera de `puede_bloquear` (actualmente solo `POL-EXC-003`) a FAIL + `requires_human_review=true`. Esto previene la sobre-escalacion del LLM (por ejemplo, asignar BLOCKER a un comercio suspendido, que no es tecnicamente irreversible).
 
 ---
 
@@ -48,8 +51,8 @@ El pipeline utiliza dos modelos Claude para optimizar costo vs. calidad:
 
 | Llamada | Modelo | Razon |
 |---|---|---|
-| Call 1: Evaluacion de politicas (v1.3) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
-| Call 2: Sintesis de resolucion (v3.1) | **Sonnet** | Tarea analitica: razonar sobre precedentes, conectar evidencias, justificar. |
+| Call 1: Evaluacion de politicas (v1.4) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
+| Call 2: Sintesis de resolucion (v3.2) | **Sonnet** | Tarea analitica: razonar sobre precedentes, conectar evidencias, justificar. |
 | Call 3: Juez de calidad (v2.2) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
 
 Configuracion en `.env`:
@@ -85,10 +88,12 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 | v1_policy_eval | v1.0 | 2025-01 | Version inicial — 5 veredictos, reglas Cripto=BLOCKER y FRD-001 |
 | v1_policy_eval | v1.2 | 2025-07 | Logica matematica de umbrales (>, >=, <), determinacion LATAM, contexto de comercio/cliente, documentacion, ventanas temporales |
 | v1_policy_eval | v1.3 | 2026-08 | La lista de paises LATAM se interpola desde `domain.enums`, no esta escrita en el texto |
+| v1_policy_eval | v1.4 | 2026-08 | Quien puede bloquear lo dice la marca `[PUEDE BLOQUEAR]` de cada politica, no su codigo escrito en las reglas |
 | v1_resolution | v1.0 | 2025-01 | Version inicial — 8 reglas estrictas, vocabulario de 4 acciones |
 | v1_resolution | v2.0 | 2025-07 | Extraccion mecanica para Haiku — campos deterministas calculados externamente |
 | v1_resolution | v3.0 | 2025-07 | Razonamiento analitico para Sonnet — "el codigo decide, el LLM explica" |
 | v1_resolution | v3.1 | 2025-08 | El SLA entra al contexto y la compensacion pasa a ser determinista (POL-SLA-004) |
+| v1_resolution | v3.2 | 2026-08 | `log_summary` y `precedent_summary` los fija el codigo; el prompt deja de pedirlos y el modelo deja de parafrasearlos |
 | v1_judge | v1.0 | 2025-01 | Version inicial — 5 criterios, APPROVE+BLOCKER = 1.0 automatico |
 | v1_judge | v2.0 | 2025-07 | Rubrica granular por criterio (niveles 10.0, 9.0, 7.0-8.9, etc.), semantica de fraud_score, proteccion contra penalizacion incorrecta de PENDING_HITL |
 | v1_judge | v2.1 | 2025-08 | `policy_consistency` y `risk_assessment` evaluan la propuesta del modelo, no la version ya corregida por el override |
@@ -96,7 +101,7 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 
 ---
 
-## Prompt 1: v1_policy_eval (v1.3)
+## Prompt 1: v1_policy_eval (v1.4)
 
 **Archivo:** `api/app/llm/prompts/v1_policy_eval.py`
 **Modelo:** Haiku (Call 1)
@@ -230,9 +235,9 @@ Evalua cada politica usando TODOS los datos disponibles y devuelve el array JSON
 ]
 ```
 
-### Guardrail post-LLM: `_sanitize_verdicts()`
+### Guardrail post-LLM: `decision.degradar_blockers_no_habilitados()`
 
-Despues de recibir los veredictos del LLM, el sistema aplica una sanitizacion determinista: cualquier veredicto `BLOCKER` para una politica fuera de `BLOCKER_POLICY_CODES` (actualmente solo `POL-EXC-003`) se degrada a `FAIL` con `requires_human_review=true`. Esto previene que Haiku sobre-escale situaciones que son graves pero no tecnicamente irreversibles.
+Despues de recibir los veredictos del LLM, el sistema aplica una sanitizacion determinista: cualquier veredicto `BLOCKER` para una politica fuera de `puede_bloquear` (actualmente solo `POL-EXC-003`) se degrada a `FAIL` con `requires_human_review=true`. Esto previene que Haiku sobre-escale situaciones que son graves pero no tecnicamente irreversibles.
 
 ### Registro de cambios
 
@@ -241,7 +246,7 @@ Despues de recibir los veredictos del LLM, el sistema aplica una sanitizacion de
 
 ---
 
-## Prompt 2: v1_resolution (v3.1)
+## Prompt 2: v1_resolution (v3.2)
 
 **Archivo:** `api/app/llm/prompts/v1_resolution.py`
 **Modelo:** Sonnet (Call 2)
@@ -250,7 +255,7 @@ Despues de recibir los veredictos del LLM, el sistema aplica una sanitizacion de
 
 Justificar y explicar una decision de contracargo que ya fue determinada por el sistema de guardrails. El LLM sintetiza la evidencia disponible — veredictos de politica, precedentes historicos, logs, perfil de riesgo del comercio e historial del cliente — en una justificacion coherente con pasos concretos. Es la segunda llamada LLM del pipeline `/api/analyze/resolve`.
 
-**Cambio critico respecto a versiones anteriores:** En v1.0 y v2.0, el LLM decidia la accion recomendada, el nivel de riesgo y si requeria HITL. En v3.0, estos campos los calcula el codigo (`_determine_outcome()`) y el LLM los recibe como `DECISION DETERMINADA`. La instruccion clave del system prompt es:
+**Cambio critico respecto a versiones anteriores:** En v1.0 y v2.0, el LLM decidia la accion recomendada, el nivel de riesgo y si requeria HITL. En v3.0, estos campos los calcula el codigo (`decision.decidir()`) y el LLM los recibe como `DECISION DETERMINADA`. La instruccion clave del system prompt es:
 
 > "La decision (recommended_action, risk_level, requires_hitl) ya fue determinada por el sistema de guardrails basado en los veredictos de politica. Tu tarea NO es decidir — es JUSTIFICAR y EXPLICAR la decision usando la evidencia disponible."
 
@@ -282,7 +287,7 @@ Analista senior de contracargos en una fintech latinoamericana.
 | `risk_level` | **Codigo** (override post-LLM) | Idem |
 | `requires_hitl` | **Codigo** (override post-LLM) | Idem |
 | `policy_verdicts` | **Codigo** (inyectado post-LLM) | Se insertan los veredictos de Call 1 directamente |
-| `precedent_summary` | **Codigo** (override post-LLM) | Generado por `_build_precedent_summary()` |
+| `precedent_summary` | **Codigo** (override post-LLM) | Generado por `precedentes.resumir_precedentes()` |
 | `justification` | **LLM** | Campo analitico principal — razonamiento sobre evidencias |
 | `confidence` | **LLM** | Estimacion de certeza (0.0–1.0) |
 | `next_steps` | **LLM** | Pasos concretos derivados de las politicas y precedentes |
@@ -385,7 +390,7 @@ El prompt exige una estructura de justificacion en 6 partes (maximo 200 palabras
 - **v1.0** (2025-01): Version inicial. 8 reglas estrictas, vocabulario de 4 acciones, tope de compensacion USD 15.
 - **v2.0** (2025-07): Extraccion mecanica para Haiku. Campos deterministas calculados externamente pero aun incluidos en las instrucciones del prompt. Instrucciones de precedentes mejoradas.
 - **v3.0** (2025-07): Transicion a razonamiento analitico para Sonnet. Seccion `DECISION DETERMINADA` en el template de usuario. El LLM ya no decide — justifica. Justificacion estructurada en 6 partes. Instrucciones de next_steps con formato "[verbo] + [dato] + [responsable] + [plazo]". Coherencia obligatoria (compensation_applicable=false → no mencionar compensacion). Conexion de precedentes por merchant.
-- **v3.1** (2025-08): El resultado de `POST /api/sla/check` entra al prompt como seccion `CUMPLIMIENTO DE SLA`, y `compensation_applicable` / `compensation_amount_usd` pasan a `DECISION DETERMINADA`. Hasta v3.0 la regla decia "compensation_applicable es true SOLO si se incumplio el SLA" mientras el modelo no recibia ningun dato de SLA: se le pedia una decision a ciegas sobre un calculo que el codigo ya hacia bien, en dias habiles. Ahora la decide `_determine_compensation` y el modelo la explica.
+- **v3.1** (2025-08): El resultado de `POST /api/sla/check` entra al prompt como seccion `CUMPLIMIENTO DE SLA`, y `compensation_applicable` / `compensation_amount_usd` pasan a `DECISION DETERMINADA`. Hasta v3.0 la regla decia "compensation_applicable es true SOLO si se incumplio el SLA" mientras el modelo no recibia ningun dato de SLA: se le pedia una decision a ciegas sobre un calculo que el codigo ya hacia bien, en dias habiles. Ahora la decide `decision.compensacion_por_sla` y el modelo la explica.
 
 ---
 
@@ -516,8 +521,8 @@ El cambio principal de v1.0 a v2.0 es la introduccion de rubricas granulares con
 
 ## Analisis de logs (determinista — sin prompt LLM)
 
-**Implementacion:** `api/app/analysis/analyzer.py` → `Analyzer.count_severities()` + `Analyzer.detect_error_patterns()`
-**Integracion:** `ResolutionService._summarize_logs()` en `api/app/services/resolution.py`
+**Implementacion:** `api/app/analysis/analyzer.py` → `patrones.count_severities()` + `patrones.detect_error_patterns()`
+**Integracion:** `ResolutionService.precedentes.resumir_logs()` en `api/app/services/resolution.py`
 
 ### Proposito
 
@@ -527,7 +532,7 @@ Analizar los eventos de log de procesamiento de pagos para contar severidades y 
 
 1. `Analyzer.count_severities(logs)` produce `{"ERROR": N, "WARN": N, "INFO": N}`
 2. `Analyzer.detect_error_patterns(logs)` escanea 9 patrones de anomalia conocidos por nombre de evento
-3. `ResolutionService._summarize_logs()` combina ambas salidas en un resumen de texto que se pasa al prompt v1_resolution como parametro `log_summary`
+3. `ResolutionService.precedentes.resumir_logs()` combina ambas salidas en un resumen de texto que se pasa al prompt v1_resolution como parametro `log_summary`
 
 El LLM (v1_resolution) recibe el resumen pre-computado y lo interpreta junto con la demas evidencia — nunca procesa logs crudos directamente.
 
@@ -580,12 +585,12 @@ Independientemente de lo que el LLM devuelva, el codigo fija los campos criticos
 
 | Condicion detectada | Donde | Que hace |
 |---|---|---|
-| El modelo propuso APPROVE con un BLOCKER activo | `_detect_divergence` | Registra la contradiccion; el override ya fijo REJECT |
-| El modelo propuso risk_level=BLOCKER sin veredictos BLOCKER | `_detect_divergence` | Registra; el override ya fijo el riesgo real |
-| El modelo propuso REJECT sin veredictos BLOCKER | `_detect_divergence` | Registra; el override ya derivo a revision humana |
-| El modelo contradijo al SLA sobre la compensacion | `_detect_divergence` | Registra; el override ya fijo lo que dice POL-SLA-004 |
-| Compensacion excede el monto original en >10% | `_validate_resolution` | Warning sobre un campo que el modelo si controla |
-| Confianza > 0.95 con 2+ violaciones de politica | `_validate_resolution` | Warning sobre un campo que el modelo si controla |
+| El modelo propuso APPROVE con un BLOCKER activo | `guardrails.antes_del_override` | Registra la contradiccion; el override ya fijo REJECT |
+| El modelo propuso risk_level=BLOCKER sin veredictos BLOCKER | `guardrails.antes_del_override` | Registra; el override ya fijo el riesgo real |
+| El modelo propuso REJECT sin veredictos BLOCKER | `guardrails.antes_del_override` | Registra; el override ya derivo a revision humana |
+| El modelo contradijo al SLA sobre la compensacion | `guardrails.antes_del_override` | Registra; el override ya fijo lo que dice POL-SLA-004 |
+| Compensacion excede el monto original en >10% | `guardrails.despues_del_override` | Warning sobre un campo que el modelo si controla |
+| Confianza > 0.95 con 2+ violaciones de politica | `guardrails.despues_del_override` | Warning sobre un campo que el modelo si controla |
 
 Los cuatro primeros corren **antes** del override determinista. Es la unica ventana en la que la
 propuesta del modelo existe: despues, la contradiccion ya fue reemplazada por la decision del

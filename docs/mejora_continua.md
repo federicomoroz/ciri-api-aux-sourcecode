@@ -138,12 +138,12 @@ De los 11 campos principales de una resolucion, **6 son calculados por Python** 
 
 | Campo | Quien decide | Como |
 |-------|-------------|------|
-| `recommended_action` | Python (`_determine_outcome`) | BLOCKER -> REJECT, FAIL -> PENDING_HITL, todo PASS -> APPROVE |
-| `risk_level` | Python (`_determine_outcome`) | BLOCKER en verdicts -> BLOCKER, 2+ FAILs o fraud_score < 15 -> HIGH, 1 FAIL -> MEDIUM, 0 FAILs -> LOW |
-| `requires_hitl` | Python (`_determine_outcome`) | true si hay FAILs sin BLOCKER, o `requires_human_review=true` en algun veredicto |
-| `hitl_reason` | Python (`_determine_outcome`) | Razon explicita con conteo de violaciones |
-| `policy_verdicts` | LLM (Haiku) + whitelist | LLM evalua, pero BLOCKERs fuera de `BLOCKER_POLICY_CODES` se degradan a FAIL |
-| `precedent_summary` | Python (`_build_precedent_summary`) | Deterministico con tags, match de sinonimos y analisis de patron |
+| `recommended_action` | Python (`decision.decidir`) | BLOCKER -> REJECT, FAIL -> PENDING_HITL, todo PASS -> APPROVE |
+| `risk_level` | Python (`decision.decidir`) | BLOCKER en verdicts -> BLOCKER, 2+ FAILs o fraud_score < 15 -> HIGH, 1 FAIL -> MEDIUM, 0 FAILs -> LOW |
+| `requires_hitl` | Python (`decision.decidir`) | true si hay FAILs sin BLOCKER, o `requires_human_review=true` en algun veredicto |
+| `hitl_reason` | Python (`decision.decidir`) | Razon explicita con conteo de violaciones |
+| `policy_verdicts` | LLM (Haiku) + whitelist | LLM evalua, pero BLOCKERs fuera de `puede_bloquear` se degradan a FAIL |
+| `precedent_summary` | Python (`precedentes.resumir_precedentes`) | Deterministico con tags, match de sinonimos y analisis de patron |
 
 Los 5 campos restantes (`justification`, `confidence`, `log_summary`, `next_steps`, `compensation_*`) los genera el LLM y se validan con guardrails post-generacion.
 
@@ -153,7 +153,7 @@ La razon es simple: si las politicas son editables (y lo son — via `PUT /api/p
 
 ## Precedent summary deterministico
 
-El campo `precedent_summary` no lo genera el LLM — lo construye `_build_precedent_summary()` en Python. El proceso:
+El campo `precedent_summary` no lo genera el LLM — lo construye `precedentes.resumir_precedentes()` en Python. El proceso:
 
 1. **Match de sinonimos**: Cada motivo del caso actual se compara contra los motivos de los precedentes usando grupos de sinonimos definidos en `formatter.py`:
 
@@ -363,13 +363,13 @@ El criterio `policy_consistency` detecta la alucinacion mas peligrosa: recomenda
 Cinco guardrails corren dentro de `ResolutionService.resolve()`, y estan en dos lugares
 distintos a proposito.
 
-**Tres detectan que el modelo se contradijo con la evidencia** (`_detect_divergence`). Corren
+**Tres detectan que el modelo se contradijo con la evidencia** (`guardrails.antes_del_override`). Corren
 **antes** del override determinista, porque despues la propuesta del modelo ya fue reemplazada y
 la contradiccion deja de ser observable: el sistema seguiria estando protegido, pero la
 alucinacion se corregiria en silencio y no quedaria registrada en ningun lado. Al correr antes,
 el warning viaja en `guardrail_warnings` hasta el informe y hasta el audit trail.
 
-**Dos validan campos que el codigo no sobrescribe** (`_validate_resolution`): la compensacion y
+**Dos validan campos que el codigo no sobrescribe** (`guardrails.despues_del_override`): la compensacion y
 la confianza salen del modelo tal cual, asi que ahi si hay algo que comprobar sobre el valor
 final.
 
@@ -388,16 +388,16 @@ final.
 
 ### Guardrail 2: BLOCKER whitelist
 
-**Condicion:** Un veredicto tiene `verdict == "BLOCKER"` pero `policy_code` no esta en `BLOCKER_POLICY_CODES`
+**Condicion:** Un veredicto tiene `verdict == "BLOCKER"` pero `policy_code` no esta en `puede_bloquear`
 
-**BLOCKER_POLICY_CODES** actualmente contiene solo `{"POL-EXC-003"}` (criptomonedas — transaccion tecnicamente irreversible).
+**POLICY_SEED_BLOQUEANTES** actualmente contiene solo `{"POL-EXC-003"}` (criptomonedas — transaccion tecnicamente irreversible).
 
 **Accion:** Degradar a `FAIL` + marcar `requires_human_review = true`
 
 **Por que importa:** El LLM a veces sobre-escala situaciones como "comercio suspendido" a BLOCKER. Un comercio suspendido es una señal de riesgo, pero la transaccion sigue siendo tecnicamente reversible. Solo las transacciones genuinamente irreversibles (cripto) merecen BLOCKER. Esta whitelist evita que el LLM convierta FAILs en BLOCKERs falsos.
 
 ```python
-BLOCKER_POLICY_CODES: frozenset[str] = frozenset({"POL-EXC-003"})
+POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})  # solo la semilla
 ```
 
 ### Guardrail 3: BLOCKER sin veredictos reales

@@ -309,7 +309,7 @@ Nuestro enfoque: **el codigo Python determina 6 de los 11 campos de la resolucio
 | `requires_hitl` | `true` si hay algun FAIL o `requires_human_review` en verdicts |
 | `hitl_reason` | Texto generado desde conteo de violaciones y codigos de politica |
 | `policy_verdicts` | Lista de evaluaciones (el LLM las genera, pero pasan por sanitizacion) |
-| `precedent_summary` | Resumen de precedentes construido por `_build_precedent_summary()` |
+| `precedent_summary` | Resumen de precedentes construido por `precedentes.resumir_precedentes()` |
 
 ### Campos narrativos (el LLM los genera)
 
@@ -327,13 +327,13 @@ El LLM recibe como parte del prompt el `determined_outcome` (la decision que Pyt
 
 No todas las politicas deberian poder producir un veredicto BLOCKER. En la practica, descubri que el LLM a veces sobre-escala -- por ejemplo, marca una suspension de comerciante como BLOCKER cuando deberia ser FAIL. Eso producia rechazos automaticos injustificados.
 
-La solucion fue una whitelist (`BLOCKER_POLICY_CODES`): solo `POL-EXC-003` (criptomonedas -- pago irreversible, no se puede proceder) puede producir BLOCKERs legitimos. Cualquier otro veredicto BLOCKER se degrada automaticamente a FAIL con `requires_human_review = true`:
+La solucion fue una whitelist (`puede_bloquear`): solo `POL-EXC-003` (criptomonedas -- pago irreversible, no se puede proceder) puede producir BLOCKERs legitimos. Cualquier otro veredicto BLOCKER se degrada automaticamente a FAIL con `requires_human_review = true`:
 
 ```python
-BLOCKER_POLICY_CODES: frozenset[str] = frozenset({"POL-EXC-003"})
+POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})  # solo la semilla
 
 for v in verdicts:
-    if v["verdict"] == "BLOCKER" and v["policy_code"] not in BLOCKER_POLICY_CODES:
+    if v["verdict"] == "BLOCKER" and v["policy_code"] not in POLICY_SEED_BLOQUEANTES:
         v["verdict"] = "FAIL"
         v["requires_human_review"] = True
 ```
@@ -366,7 +366,7 @@ Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo.
   deploy--. Sin esto, el panel de una instalacion disparaba n8n y las alertas, el
   feedback y el informe terminaban en otra: el caso quedaba partido en dos.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1043 tests (1010 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1088 tests (1055 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -428,7 +428,7 @@ Vivian dentro de `ResolutionService` como quince metodos estaticos de veintidos.
 Cuando dos tercios de una clase no necesita el estado de la clase, el limite esta
 mal trazado; y mientras estuvieron ahi, esa logica arrastraba `Tracer`,
 `LLMClient` y `ModelosService` en su grafo de dependencias por el solo hecho de
-compartir archivo. `ResolutionService` paso de 819 a 324 lineas y quedo con lo que
+compartir archivo. `ResolutionService` paso de 819 a 328 lineas y quedo con lo que
 si es orquestacion.
 
 **Consecuencias practicas de esta estructura:**
@@ -872,8 +872,8 @@ quest_ML/
         pricing.py          # Costo estimado por modelo
         parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/
-          v1_policy_eval.py # v1.3 — evaluación de políticas
-          v1_resolution.py  # v3.1 — síntesis de resolución (Sonnet)
+          v1_policy_eval.py # v1.4 — evaluación de políticas
+          v1_resolution.py  # v3.2 — síntesis de resolución (Sonnet)
           v1_judge.py       # v2.2 — LLM-as-Judge con rubrics
       analysis/
         analyzer.py         # Riesgo de comercio y flags de cliente (consultan la base)
@@ -900,10 +900,10 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 1043 tests (unit + integration + E2E)
+  tests/                      # 1088 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
-    decisions.md              # 22 decisiones técnicas con razonamiento
+    decisions.md              # 23 decisiones técnicas con razonamiento
     prompts.md                # Prompts documentados con versionado
     rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
     mejora_continua.md        # Feedback loop, Judge, guardrails
@@ -945,7 +945,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-1043 tests en 40 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
+1088 tests en 44 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
 Es el numero que reporta el CI sobre un checkout limpio, que es el reproducible: medido con un
 `.env` cargado sube unas decimas, porque se ejecutan ramas que sin configuracion no corren.
 El CI falla por debajo del 85%: el piso no esta para presumir un numero sino para que una

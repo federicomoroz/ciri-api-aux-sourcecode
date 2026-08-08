@@ -83,8 +83,8 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 
 | Prompt | Versión | Modelo |
 |---|---|---|
-| `v1_policy_eval.py` | v1.3 | Haiku 4.5 |
-| `v1_resolution.py` | v3.1 | Sonnet |
+| `v1_policy_eval.py` | v1.4 | Haiku 4.5 |
+| `v1_resolution.py` | v3.2 | Sonnet |
 | `v1_judge.py` | v2.2 | Sonnet |
 
 **El modelo de cada paso se elige por separado**, desde el panel, y se guarda en SQLite: `constants.py` tiene el default y cambiarlo no es un deploy. Son tres tareas distintas —comparar contra reglas, redactar, aplicar una rúbrica— y no hay motivo para que compartan modelo por defecto de implementación. Además de Anthropic hay cinco proveedores con free tier soportados vía `OpenAICompatibleClient`, que es la segunda implementación del `Protocol` y la prueba de que cambiar de proveedor no toca ningún llamador. Ver `decisions.md#21`.
@@ -95,7 +95,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 
 | Sub-eje | Resolución |
 |---|---|
-| Clasificación | `risk_level` ∈ BLOCKER / HIGH / MEDIUM / LOW, calculado por código (`resolution.py::_determine_outcome`), no por el LLM |
+| Clasificación | `risk_level` ∈ BLOCKER / HIGH / MEDIUM / LOW, calculado por código (`domain/decision.py::decidir`), no por el LLM |
 | Derivación | `Switch — Derivación` en n8n enruta por **`requires_hitl`**, que es lo que decidió la API — no por el nivel de riesgo. Un caso MEDIUM que pide analista frenaba igual antes de llegar al Switch y salía cerrado; ahora frena en el `Wait`, que espera hasta 24 h. El nivel de riesgo dice cuán grave es; quién decide si hace falta una persona es `requires_hitl` |
 | Reportes | `POST /api/reports/html` — Jinja2, 9 secciones, formulario HITL condicional. Ejemplos en `docs/HTML_Output_Examples/` |
 | Alertas | Dos severidades con dos caminos. **Fallas** (`ERROR`): los tres workflows propagan a `workflow_ciri_errors.json` — el principal desde 3 nodos `Stop and Error`, el formulario desde 1 — que registra la alerta y avisa por mail. **Entradas rechazadas** (`WARN`): el formulario las registra directo, sin marcar la ejecución como fallida ni mandar mail, porque un tipeo no es una falla. `GET /api/alerts/` lista todo |
@@ -150,7 +150,7 @@ Documento completo: [`mejora_continua.md`](mejora_continua.md).
 | Sub-eje | Resolución |
 |---|---|
 | Captura de feedback | `POST /api/feedback` — el analista corrige la resolución. Dos disparadores: el nodo `Registrar Feedback HITL` en n8n y el formulario embebido en el informe. **Los dos mandan la resolución completa y el motivo**, que es lo que permite indexar el caso; sin eso el feedback se registraba pero el precedente nunca nacía |
-| Detección de alucinaciones | `resolution.py::_detect_divergence` compara lo que propuso el modelo contra la decisión determinística **antes** de sobrescribirla, que es la única ventana en que la contradicción es observable, y la deja registrada en `guardrail_warnings`. Más `_validate_resolution` sobre los campos que el modelo sí controla (compensación, confianza) |
+| Detección de alucinaciones | `services/guardrails.py::antes_del_override` compara lo que propuso el modelo contra la decisión determinística **antes** de sobrescribirla, que es la única ventana en que la contradicción es observable, y la deja registrada en `guardrail_warnings`. Más `guardrails.despues_del_override` sobre los campos que el modelo sí controla (compensación, confianza) |
 | Actualización del RAG | Dos caminos: Judge ≥ 8.0 reindexa el caso como precedente, y `PUT /api/policies/{code}` reindexa la política al instante, sin deploy |
 | Versionado de prompts | Cabecera de versión + changelog en cada archivo de `llm/prompts/`; la evolución 8.2 → 9.1 del Judge score está trazada en `prompts.md` |
 
@@ -208,7 +208,7 @@ pytest tests/integration/test_arranque_sin_qdrant.py -v   # levanta contra un Qd
 | LLM-as-a-Judge | `POST /api/analyze/judge`, 5 criterios con rúbricas, prompt v2.2. Dos de los criterios evalúan **la propuesta del modelo**, no la versión ya corregida por el override: sobre la entregada no podían bajar de 10 por construcción |
 | Observabilidad | Langfuse (traces, tokens, costo, scores) |
 | Caché semántico | **No implementado, y es deliberado.** Hay caché de idempotencia exact-match; cachear por similitud arriesga devolver la resolución de otro caso. Ver `decisions.md#9` |
-| SLA y compensación | `analyzer.py::check_sla` mide el plazo del **reclamo**, no de la compra: un caso cerrado se mide hasta su cierre, y **sin reclamo registrado no se mide** —`within_sla` queda en `None`—. Entre la compra y el reclamo pueden pasar meses: contarlos daba 489 días de incumplimiento y compensación automática en 53 de las 100 transacciones |
+| SLA y compensación | `analysis/sla.py::CalculadoraDeSLA.check_sla` mide el plazo del **reclamo**, no de la compra: un caso cerrado se mide hasta su cierre, y **sin reclamo registrado no se mide** —`within_sla` queda en `None`—. Entre la compra y el reclamo pueden pasar meses: contarlos daba 489 días de incumplimiento y compensación automática en 53 de las 100 transacciones |
 | Guardrails | 6: cuatro registran contradicciones del modelo con la evidencia —incluida la compensación contra el SLA calculado—, dos validan los campos que el modelo sí controla. Más el fail-closed, que cubre dos casos: **sin** veredictos de política —Qdrant caído, JSON irrecuperable— y **con** veredictos cuyo valor no existe. Los dos derivan a un analista en vez de aprobarse solos: un veredicto que dice `BLOCKED` en vez de `BLOCKER` no es evidencia favorable, es evidencia que no se pudo leer |
 | Trazabilidad completa | Cada paso es un nodo nombrado en el canvas + traza en Langfuse + audit trail en SQLite |
 | Multi-Agent | **No implementado como tal.** Hay 3 roles de LLM separados (evaluador de políticas, sintetizador, juez) con modelos y prompts distintos, pero orquestados explícitamente por n8n, no negociando entre sí |

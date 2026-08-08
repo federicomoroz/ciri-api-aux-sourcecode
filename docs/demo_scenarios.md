@@ -67,7 +67,7 @@ Los tres escenarios de esta página promedian **8.7/10** — son los tres casos 
 
 ### Qué demuestra
 
-La capacidad del sistema para aplicar exclusiones de política no negociables. Las transacciones con criptomonedas son irreversibles por definición (POL-EXC-003). Combinado con un fraud_score de 8/100 (POL-FRD-001, umbral mínimo 15), este caso produce un BLOCKER y tres FAIL. **Un solo BLOCKER alcanza**: `BLOCKER_POLICY_CODES` contiene únicamente a POL-EXC-003, así que cualquier otro veredicto bloqueante que emita el modelo se degrada a FAIL con revisión humana. La resolución debe ser `REJECT` sin importar cualquier otra evidencia. Este escenario también muestra el guardrail: si el LLM alucinara un `APPROVE`, el sistema lo corrige automáticamente.
+La capacidad del sistema para aplicar exclusiones de política no negociables. Las transacciones con criptomonedas son irreversibles por definición (POL-EXC-003). Combinado con un fraud_score de 8/100 (POL-FRD-001, umbral mínimo 15), este caso produce un BLOCKER y tres FAIL. **Un solo BLOCKER alcanza**: `puede_bloquear` contiene únicamente a POL-EXC-003, así que cualquier otro veredicto bloqueante que emita el modelo se degrada a FAIL con revisión humana. La resolución debe ser `REJECT` sin importar cualquier otra evidencia. Este escenario también muestra el guardrail: si el LLM alucinara un `APPROVE`, el sistema lo corrige automáticamente.
 
 ### Perfil de la transacción
 
@@ -183,7 +183,7 @@ completo —con los 17 veredictos y la evaluación del Juez— viaja en
 
 ### Observaciones clave
 
-1. **Un BLOCKER y tres FAIL:** POL-EXC-003 (cripto = irreversible) es el único que puede bloquear — es el único código en `BLOCKER_POLICY_CODES`. POL-FRD-001 (score 8 < 15), POL-CB-003 y POL-CB-004 quedan en FAIL. La acción `REJECT` se determina de forma determinística antes de que el LLM sintetice la justificación.
+1. **Un BLOCKER y tres FAIL:** POL-EXC-003 (cripto = irreversible) es el único que puede bloquear — es el único código en `puede_bloquear`. POL-FRD-001 (score 8 < 15), POL-CB-003 y POL-CB-004 quedan en FAIL. La acción `REJECT` se determina de forma determinística antes de que el LLM sintetice la justificación.
 2. **Guardrail no activado:** El LLM produce correctamente `REJECT` — el guardrail no tiene nada que corregir. Si hubiera dicho `APPROVE`, el sistema lo habría sobrescrito.
 3. **Sin HITL:** Los casos BLOCKER son determinísticos — la revisión del analista no agrega valor.
 4. **Sin compensación:** El SLA no fue incumplido (el caso se rechazó inmediatamente).

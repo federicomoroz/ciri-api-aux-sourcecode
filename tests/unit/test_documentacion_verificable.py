@@ -357,3 +357,58 @@ class TestLaDocDeLaApiNoSeQuedaAtras:
         del_circuito = {(v, r) for v, r in re.findall(r'\{v:"(\w+)", r:"([^"]+)"', html)}
         assert del_circuito, "el circuito perdio sus pasos"
         assert del_circuito <= reales, f"el circuito dibuja rutas que no existen: {sorted(del_circuito - reales)}"
+
+
+class TestLosTamanosQueLaDocDeclara:
+    """Un conteo de lineas escrito a mano envejece con el primer commit.
+
+    `decisions.md` justificaba dejar el panel sin partir con «tiene 3112
+    lineas». El archivo tenia 4031: la deuda era un 30% mayor que la declarada,
+    y el argumento se leia mas benigno de lo que era. Lo mismo con
+    `routes/panel.py`, declarado en 961 cuando iba por 1015.
+    """
+
+    # (archivo, patron que lo nombra junto a su tamano en la doc)
+    DECLARADOS = (
+        ("api/app/reports/templates/test_panel.html",
+         r"`api/app/reports/templates/test_panel\.html` tiene (\d+) lineas"),
+        ("api/app/routes/panel.py",
+         r"`routes/panel\.py`, (\d+) líneas"),
+    )
+
+    @pytest.mark.parametrize("archivo,patron", DECLARADOS, ids=lambda x: x.split("/")[-1])
+    def test_el_tamano_declarado_es_el_real(self, archivo, patron):
+        doc = (RAIZ / "docs/decisions.md").read_text(encoding="utf-8")
+        m = re.search(patron, doc)
+        assert m, f"docs/decisions.md dejo de declarar el tamano de {archivo}"
+        real = len((RAIZ / archivo).read_text(encoding="utf-8").splitlines())
+        declarado = int(m.group(1))
+        assert declarado == real, (
+            f"docs/decisions.md dice que {archivo} tiene {declarado} lineas y "
+            f"tiene {real}: la deuda declarada no es la que hay"
+        )
+
+    def test_el_archivo_mas_grande_es_el_que_la_doc_señala(self):
+        """Dos parrafos se declaraban «el archivo mas grande» al mismo tiempo."""
+        pythons = {
+            f: len(f.read_text(encoding="utf-8").splitlines())
+            for f in (RAIZ / "api/app").rglob("*.py")
+        }
+        mayor = max(pythons, key=pythons.get)
+        assert mayor.name == "panel.py", (
+            f"el archivo Python mas grande hoy es {mayor.name}, y decisions.md "
+            "sigue señalando a panel.py"
+        )
+
+
+def test_el_conteo_de_decisiones_es_el_real():
+    """`decisions.md` se cita por cantidad en dos lugares; se agregan de a una."""
+    doc = (DOCS / "decisions.md").read_text(encoding="utf-8")
+    reales = len(re.findall(r"^## \d+\.", doc, re.MULTILINE))
+    assert reales > 0, "decisions.md cambio de formato de encabezado"
+    for f in (LEEME, DOCS / "architecture.md"):
+        m = re.search(r"(\d+) decisiones", f.read_text(encoding="utf-8"))
+        if m:
+            assert int(m.group(1)) == reales, (
+                f"{f.name} dice {m.group(1)} decisiones y decisions.md tiene {reales}"
+            )

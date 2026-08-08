@@ -75,14 +75,14 @@ Las reglas de enriquecimiento codifican conocimiento de dominio (ej: "pagos crip
 
 **Decisión:** Separación en tres capas:
 - **Routes** (~20 líneas cada una) — solo HTTP: parsear request, llamar servicio, devolver response. Todos los módulos de ruta incluyen `logger = logging.getLogger(__name__)` para observabilidad consistente.
-- **Services** (`ResolutionService`, `FeedbackService`, `PipelineService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching). `PipelineService` usa métodos compartidos (`_submit_context_futures`, `_resolve`, `_judge`, `_build_report_data`) entre el modo síncrono y el streaming SSE, eliminando duplicación.
+- **Services** (`ResolutionService`, `FeedbackService`, `PipelineService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching). `PipelineService` usa métodos compartidos (`_submit_context_futures`, `_judge`, `_build_report_data`) entre el modo síncrono y el streaming SSE, eliminando duplicación.
 - **Analyzer** (`analysis/analyzer.py`) — lógica de negocio pura: reglas SLA, flags de riesgo, patrones de error
 
 El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, 73+ constants) tienen cero dependencias externas. Todos los magic numbers y strings del dominio están centralizados en `constants.py` — umbrales de pipeline, tipos de alertas, prefijos de guardrails, nombres de templates.
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 1043 tests (1010 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 1088 tests (1055 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -277,7 +277,7 @@ Hay tres razones más, todas prácticas:
 
 ## 12. Deuda tecnica asumida: el panel de testing
 
-**Contexto:** `api/app/reports/templates/test_panel.html` tiene 3112 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
+**Contexto:** `api/app/reports/templates/test_panel.html` tiene 4031 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
 
 **Decision:** Dejarlo asi para esta entrega, y anotarlo.
 
@@ -288,7 +288,7 @@ Los archivos que si son entregables — el workflow, la API, los informes — qu
 **Trade-offs:**
 - (+) Cero riesgo sobre la unica pieza que el evaluador va a tocar sin instalar nada
 - (+) El esfuerzo se concentro donde se evalua la arquitectura
-- (-) 3112 lineas que nadie va a querer tocar
+- (-) 4031 lineas que nadie va a querer tocar
 - (-) Sin cache de estaticos: el navegador se baja el CSS y el JS en cada carga
 
 **En produccion:** separar en `static/panel.css` y `static/panel.js`, servirlos con `StaticFiles` y versionarlos por hash para poder cachearlos. Es media jornada, pero recien vale la pena cuando el panel deje de ser una herramienta de demostracion.
@@ -297,7 +297,7 @@ Los archivos que si son entregables — el workflow, la API, los informes — qu
 
 ## 13. Un solo tipo para el contexto del caso
 
-**Contexto:** La misma informacion —transaccion, logs, politicas, precedentes, riesgo del comercio, historial del cliente— estaba modelada tres veces: `ResolveRequest` para lo que manda n8n, `_PipelineContext` para el pipeline directo y `ReportRequest` para el informe. Con tres nombres distintos para lo mismo: la transaccion era `tx_data`, `tx` o `transaction`; el historial del cliente, `client_history` o `client_profile`.
+**Contexto:** La misma informacion —transaccion, logs, politicas, precedentes, riesgo del comercio, historial del cliente— estaba modelada tres veces: `ResolveRequest` para lo que manda n8n, una tercera estructura interna para el pipeline directo, hoy reemplazada por `CaseContext`, y `ReportRequest` para el informe. Con tres nombres distintos para lo mismo: la transaccion era `tx_data`, `tx` o `transaction`; el historial del cliente, `client_history` o `client_profile`.
 
 **Decision:** Un `CaseContext` interno (`domain/context.py`). Los modelos de entrada y salida conservan sus nombres, porque son contratos que n8n ya consume, pero se traducen a el en la frontera.
 
@@ -376,7 +376,7 @@ Lo que hace que esto sea honesto y no un truco es que se declara por todos lados
 
 **Decisión:** `POST /api/sla/check` entra al contexto de la resolución, y
 `compensation_applicable` / `compensation_amount_usd` los calcula
-`ResolutionService._determine_compensation()`. El modelo los recibe ya resueltos en la sección
+`ResolutionService.decision.compensacion_por_sla()`. El modelo los recibe ya resueltos en la sección
 `DECISION DETERMINADA` y su trabajo es explicarlos.
 
 **Razonamiento:** El workflow ya llamaba a `/api/sla/check`, pero `ResolveRequest` no tenía campo
@@ -428,7 +428,7 @@ con el que se resuelve el siguiente.
 
 **El mismo principio, un nivel más abajo: un veredicto que no se puede leer tampoco aprueba.**
 El parseo no traduce los veredictos inválidos a propósito —adivinar el enum más parecido sería
-decidir por el modelo—, así que llegaban crudos a `_determine_outcome`, donde un veredicto que
+decidir por el modelo—, así que llegaban crudos a `decision.decidir`, donde un veredicto que
 decía `BLOCKED` en vez de `BLOCKER` valía exactamente lo mismo que uno que dice `PASS`. Un caso
 cripto con score 8 cuyos dos veredictos venían mal escritos salía **APPROVE, sin HITL y sin un
 solo warning**; con los enums bien escritos, el mismo caso daba REJECT + BLOCKER.
@@ -494,7 +494,7 @@ naturaleza.
 `Wait`; el resto, al informe.
 
 **Razonamiento:** Enrutaba por `risk_level == "HIGH"`. Pero el nivel de riesgo y la necesidad de
-un analista son dos preguntas distintas que `_determine_outcome` responde por separado: un caso
+un analista son dos preguntas distintas que `decision.decidir` responde por separado: un caso
 con un solo FAIL y sin fraude severo sale `MEDIUM` **y** `requires_hitl: true`. Ese caso caía en
 la rama MEDIUM, generaba el informe y el webhook respondía 200 — la API pidiendo una persona y la
 orquestación cerrando el caso.
@@ -524,7 +524,7 @@ con el que arranca el dataset.
 **Razonamiento:** «Las políticas son datos, no código» era cierto para el texto y falso para la
 semántica. Dos cosas que la política *hace* vivían en `constants.py`:
 
-- `BLOCKER_POLICY_CODES = {"POL-EXC-003"}` — se podía cargar una política nueva que dijera
+- `POLICY_SEED_BLOQUEANTES = {"POL-EXC-003"}` — se podía cargar una política nueva que dijera
   «rechazar automáticamente», indexarla, verla en el contexto del modelo… y nunca podía producir
   un rechazo. El veredicto se degradaba a FAIL en silencio.
 - `SLA_STANDARD_DAYS = 10` — se podía editar la descripción de POL-SLA-002 y el modelo la leía
@@ -559,9 +559,9 @@ la derivación los fija el código *siempre*: preguntarle a un modelo si esos ca
 con los veredictos es preguntarle si el override funcionó. **Dos de los cinco criterios no podían
 bajar de 10 por construcción**, y arrastraban el promedio hacia arriba sin medir nada.
 
-La propuesta original ya se capturaba —`_detect_divergence` la necesita para registrar las
+La propuesta original ya se capturaba —`guardrails.antes_del_override` la necesita para registrar las
 contradicciones— así que el dato estaba; sólo no llegaba al Juez. Ahora viaja en
-`_propuesta_del_modelo`, se le pasa al prompt en su propia sección, y se quita de la resolución
+`propuesta_del_modelo`, se le pasa al prompt en su propia sección, y se quita de la resolución
 que el Juez ve para que no aparezca dos veces.
 
 Que el override haya corregido un `APPROVE` sobre un BLOCKER no redime al modelo: el objetivo del
@@ -632,11 +632,11 @@ genuino: agregar una política bloqueante es un POST— y no lo aplicó donde no
 funciones puras dentro de una clase cuyo estado usaban siete métodos. Cuando dos tercios de una
 clase no necesita la clase, el límite está mal trazado. `domain/decision.py` y
 `domain/precedentes.py` no dependen de nada; antes esa lógica arrastraba `Tracer`, `LLMClient` y
-`ModelosService` por compartir archivo. 819 → 324 líneas.
+`ModelosService` por compartir archivo. 819 → 328 líneas.
 
 **Los seis guardrails pasaron a ser una tupla de reglas.** Es el punto de OCP que faltaba: el
 proyecto presenta «seis guardrails» como diferenciador y ese número estaba congelado — agregar el
-séptimo era editar el cuerpo de `_validate_resolution`. Ahora es escribir una función y sumarla a
+séptimo era editar el cuerpo de `guardrails.despues_del_override`. Ahora es escribir una función y sumarla a
 una tupla, verificado corriendo una nueva sin tocar el recorredor.
 
 **El SLA salió del `Analyzer`.** No es orden: **el SLA decide plata**. Si da incumplimiento,
@@ -679,8 +679,8 @@ son 5 de las 29 operaciones de `Database`. Donde el consumidor usa casi todo, un
 sola implementación —que nunca va a tener otra, porque hay un backend y no hay ORM— es ceremonia y
 no inversión: agrega una declaración que ningún llamador necesita y una capa más para leer.
 
-**El panel (`routes/panel.py`, 961 líneas) quedó sin partir.** Tiene ocho responsabilidades y es el
-archivo más grande del proyecto. Es también periférico —un panel de prueba— y el de menor cobertura
+**El panel (`routes/panel.py`, 1015 líneas) quedó sin partir.** Tiene ocho responsabilidades y es el
+archivo Python más grande del proyecto. Es también periférico —un panel de prueba— y el de menor cobertura
 (91% tras escribirle tests de caracterización, 77% antes). Es donde más se puede romper algo que
 ningún test vea, a cambio de nada visible. La red quedó puesta por si algún día se encara: los seis
 modos de `panel_analyze` están caracterizados, incluida la precedencia que importa (pedir n8n gana
@@ -700,3 +700,35 @@ sobre el modo demo).
 - (-) `git blame` deja de servir para las líneas movidas
 - (-) Es refactor sobre un entregable ya entregado: no cambia una sola salida de la API. Todo lo que
   podía pasar era neutro o malo, y por eso se hizo con un golden master de 434 casos delante
+
+---
+
+## 23. El panel queda fuera de la autenticación, y eso cuesta tokens
+
+**Contexto:** `CB_ADMIN_API_KEY` protege toda la API — el CRUD de políticas, el feedback, las
+alertas. Pero `_PUBLIC_PREFIXES` exime a `/api/panel/`, y ahí adentro están `analyze` y
+`analyze-stream`, que son **los dos endpoints que llaman al modelo**. Con la clave cargada, el
+endpoint más caro del sistema sigue siendo el único abierto.
+
+**Decisión:** dejarlo abierto, y decir por qué en vez de descubrirlo leyendo el middleware.
+
+El panel existe para que alguien pueda evaluar el sistema sin credenciales y sin montar nada.
+Pedirle una clave para apretar «Analizar» lo vuelve inútil: quien evalúa no tiene forma de
+obtenerla, y el resto de la entrega —los diagramas, los informes, el workflow— no alcanza para
+mostrar el sistema **corriendo**.
+
+**Lo que acota el gasto no es la lista de exenciones, es el modo demo.** Por defecto
+(`CB_DEMO_MODE=true`) el servidor resuelve con un modelo de free tier, así que una ráfaga contra
+`/api/panel/analyze` consume cuota gratuita, no dinero. La exención y el modo demo son una sola
+decisión: el endpoint está abierto **porque** lo que corre detrás es gratis.
+
+**Dónde deja de valer:** con `CB_DEMO_MODE=false` el mismo endpoint gasta de la cuenta de
+Anthropic del servidor. En ese caso hay que sacar `/api/panel/` de `_PUBLIC_PREFIXES`, o poner un
+límite por origen delante — el `RateLimiter` que ya existe es por proveedor y por ventana, no por
+llamador, así que no sirve para esto. Está anotado en `api/app/main.py`, junto a la lista.
+
+**Trade-offs:**
+- (+) El sistema se puede evaluar en treinta segundos, sin credenciales ni instalación
+- (+) El costo real está acotado por el modo demo, no por la confianza en que nadie abuse
+- (-) Con el modo demo apagado, es una cuenta de LLM expuesta a internet
+- (-) No hay límite por llamador: nada impide que un solo origen consuma toda la cuota gratuita
