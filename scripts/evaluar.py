@@ -59,7 +59,9 @@ RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 
 from api.app.analysis.analyzer import Analyzer  # noqa: E402
+from api.app.analysis.sla import CalculadoraDeSLA  # noqa: E402
 from api.app.config import Settings  # noqa: E402
+from api.app.data import esquema  # noqa: E402
 from api.app.data.db import Database  # noqa: E402
 from api.app.llm.pricing import estimar_costo_usd  # noqa: E402
 from api.app.observability.tracer import NoOpTracer  # noqa: E402
@@ -84,7 +86,12 @@ def _servicios(settings: Settings):
     from api.app.services.modelos import ModelosService
 
     db = Database(settings.sqlite_path)
-    db.ensure_modelos_table()
+    # El mismo preparado que corre la app al arrancar. Antes se llamaba a mano a
+    # `db.ensure_modelos_table()`, que dejo de existir cuando el DDL salio del
+    # gateway: el script quedo sin arrancar y nada lo noto, porque ningun test
+    # lo ejecutaba. Pedir el preparado completo evita volver a elegir a mano
+    # cual de las cinco tablas hace falta.
+    esquema.preparar(db)
     qdrant = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, timeout=30)
     retriever = QdrantRetriever(
         qdrant, FastEmbedder(settings.embedding_model, api_key=settings.voyage_api_key),
@@ -115,8 +122,12 @@ def _contexto(db: Database, retriever: QdrantRetriever, analyzer: Analyzer, tx: 
         policies=politicas, similar_cases=similares,
         merchant_risk=analyzer.merchant_risk_profile(tx.get("merchant", "")),
         client_history=analyzer.client_flags(tx.get("client_id", "")),
-        sla=analyzer.check_sla(
-            case_open_date=caso.get("open_date") or str(tx.get("date", "")),
+        # Sin fecha de apertura del reclamo NO se cae a la fecha de compra: entre
+        # las dos pueden pasar meses y contarlas como plazo inventa un
+        # incumplimiento. `check_sla` devuelve `within_sla=None` y el caso se
+        # mide igual, sin afirmar lo que nadie puede sostener.
+        sla=CalculadoraDeSLA(db).check_sla(
+            case_open_date=caso.get("open_date") or "",
             country=tx.get("country", ""),
             case_close_date=caso.get("close_date") or None,
         ),
@@ -273,7 +284,13 @@ def main() -> int:
     for criterio, valor in por_criterio.items():
         print(f"    {criterio:<22} {valor}")
     print(f"  Costo       USD {resumen['costo_usd']}")
-    print(f"\n  {salida.relative_to(RAIZ)}")
+    # `--salida` acepta cualquier ruta, tambien fuera del repo: pedir la
+    # relativa reventaba justo despues de haber gastado la corrida entera.
+    try:
+        destino = salida.relative_to(RAIZ)
+    except ValueError:
+        destino = salida
+    print(f"\n  {destino}")
     print("  Ese archivo es la evidencia: versionalo y citalo junto al badge.")
     return 0
 
