@@ -2038,7 +2038,10 @@
           class="report-iframe"
           id="report-frame"
           title="Reporte de contracargo"
-          sandbox="allow-same-origin allow-scripts"
+          <!-- allow-forms: el formulario de aprobacion HITL se completa y se envia
+               aca adentro. Sin eso el panel podia mostrarlo pero no dejaba
+               responderlo, que es peor que no mostrarlo. -->
+          sandbox="allow-same-origin allow-scripts allow-forms"
         ></iframe>
       </div>
 
@@ -3238,19 +3241,21 @@ async function _runClassic(payload, mode, timeoutSec, timeoutId) {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
   // El caso derivo a una persona: n8n publico el formulario de aprobacion y la
-  // API lo declara en esta cabecera. Se abre en una pestania y no adentro del
-  // <iframe> del panel — el formulario arma su URL de envio desde
-  // `window.location`, asi que necesita ser el documento de arriba.
+  // API lo declara en esta cabecera.
   //
-  // Si el navegador bloquea la pestania, `window.open` devuelve null: la pagina
-  // que igual se muestra en el panel tiene el link a la vista, asi que no se
-  // pierde el acceso. Nunca se insiste ni se abre mas de una.
+  // Se NAVEGA el iframe del panel, no se abre una pestania. Con una pestania el
+  // caso queda partido en dos ventanas: se responde en una y el informe vuelve
+  // ahi, mientras el panel se queda esperando para siempre. Navegando, el
+  // formulario aparece donde venia el progreso y el informe cae en el mismo
+  // lugar al enviarlo — un solo hilo, de punta a punta.
+  //
+  // `src` y no el `srcdoc` de siempre: el formulario arma su URL de envio desde
+  // `window.location`, asi que incrustar su HTML lo mandaria al lugar
+  // equivocado. Navegar sirve; copiar no.
   const formularioHitl = resp.headers.get('X-HITL-Form-Url');
   if (formularioHitl) {
-    const abierta = window.open(formularioHitl, '_blank', 'noopener');
-    if (!abierta) {
-      console.info('El navegador bloqueo la pestania del formulario; el link queda en el panel.');
-    }
+    mostrarFormularioHitl(formularioHitl, payload);
+    return;
   }
 
   let usageInfo = null;
@@ -3346,6 +3351,32 @@ function showPanel(which) {
   $('loading-state').className     = 'loading-state'    + (which === 'loading' ? ' visible' : '');
   $('result-state').className      = 'result-state'     + (which === 'result'  ? ' visible' : '');
   $('error-state').className       = 'error-state'      + (which === 'error'   ? ' visible' : '');
+}
+
+function mostrarFormularioHitl(url, payload) {
+  // El caso quedo esperando a una persona. El panel deja de mostrar progreso y
+  // pasa a mostrar el formulario, en el mismo lugar: quien lo responde ve el
+  // caso, decide, y el informe final aparece ahi mismo al enviar.
+  showPanel('result');
+  $('fallback-banner').style.display = 'none';
+
+  const pill = $('verdict-pill');
+  pill.className   = 'verdict-pill verdict-warning';
+  pill.textContent = 'REVISION HUMANA';
+  $('result-meta-text').textContent =
+    payload.transaction_id + (payload.cliente_vip ? ' · VIP' : '')
+    + ' · esperando la decision de un analista';
+
+  const costBadge = $('cost-badge');
+  costBadge.textContent = 'via n8n';
+  costBadge.title = 'El caso esta en el nodo Wait del workflow';
+  costBadge.classList.add('visible');
+  $('elapsed-badge').classList.remove('visible');
+
+  const frame = $('report-frame');
+  frame.onload = null;          // el informe normal engancha uno; aca no aplica
+  frame.removeAttribute('srcdoc');
+  frame.src = url;              // navegar, no incrustar: ver el comentario de arriba
 }
 
 function showResult(html, payload, elapsed, usageInfo, wasN8nFallback) {
