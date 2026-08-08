@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app.analysis.analyzer import Analyzer
+from api.app.analysis.sla import CalculadoraDeSLA
 from api.app.data.db import Database
 from api.app.main import app
 from api.app.rag.embedder import FastEmbedder
@@ -49,6 +50,7 @@ def test_client(in_memory_db_path):
     app.state.indexer = indexer
     app.state.updater = updater
     app.state.analyzer = analyzer
+    app.state.sla = CalculadoraDeSLA(db)
     app.state.tracer = mock_tracer
     app.state.report_generator = create_autospec(ReportGenerator, instance=True)
     app.state.settings = MagicMock()

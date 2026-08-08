@@ -9,6 +9,7 @@ from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..analysis.analyzer import Analyzer
+from ..analysis.sla import CalculadoraDeSLA
 from ..data.db import Database, cache_key
 from ..domain.constants import PIPELINE_MAX_WORKERS, PIPELINE_THREAD_TIMEOUT_S
 from ..domain.context import CaseContext
@@ -35,12 +36,16 @@ class PipelineService:
         analyzer: Analyzer,
         resolution_svc: ResolutionService,
         report_gen: ReportGenerator,
+        sla: CalculadoraDeSLA | None = None,
     ):
         self.db = db
         self.retriever = retriever
         self.analyzer = analyzer
         self.resolution_svc = resolution_svc
         self.report_gen = report_gen
+        # Opcional para no obligar a los tests a construirla: sin una explicita
+        # se arma sobre la misma base. El lifespan si inyecta la del proceso.
+        self.sla = sla or CalculadoraDeSLA(db)
 
     # ── Shared helpers ──────────────────────────────────────────────────
 
@@ -88,7 +93,7 @@ class PipelineService:
         incumplimiento y USD 15 de compensacion en un caso recien abierto.
         """
         caso = self.db.get_case_for_transaction(txn_id) or {}
-        return self.analyzer.check_sla(
+        return self.sla.check_sla(
             case_open_date=caso.get("open_date") or "",
             country=country,
             cliente_vip=cliente_vip,

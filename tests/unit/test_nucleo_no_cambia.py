@@ -17,10 +17,13 @@ a proposito — y entonces el commit tiene que decir cual:
 """
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
 
+from api.app.analysis import patrones
+from api.app.analysis.sla import CalculadoraDeSLA
 from api.app.domain import decision, precedentes
 from api.app.domain.enums import ResolutionOutcome, RiskLevel, VerdictType
 from api.app.services import guardrails
@@ -98,6 +101,30 @@ LOGS = {
     ],
 }
 
+# El SLA se mide contra un dia fijo: si dependiera de hoy, el golden master
+# cambiaria solo cada mañana y no serviria para comparar nada.
+HOY = date(2024, 2, 1)
+
+APERTURAS = {
+    "sin_reclamo": "",
+    "reciente": "2024-01-29",
+    "vencido": "2023-11-01",
+    "invalida": "no-es-una-fecha",
+}
+
+
+class _BaseFalsa:
+    """La base que `check_sla` consulta para saber cuantos dias concede la politica.
+
+    Devuelve None a proposito: es el camino en el que la politica no esta cargada
+    y el plazo cae al valor por defecto. Fijar ese camino importa mas que fijar el
+    otro, porque es el que ocurre cuando alguien borra una fila.
+    """
+
+    def get_policy(self, codigo: str) -> dict | None:
+        return None
+
+
 CASOS_SIMILARES = {
     "ninguno": [],
     "mismo_merchant": [
@@ -171,6 +198,23 @@ def _matriz() -> dict:
         for r in ("Reembolsado", "Rechazado", "Reembolsado parcial", "Escalado", "", "Cualquier cosa")
     }
 
+    salida["detect_error_patterns"] = {
+        nl: patrones.detect_error_patterns(lg) for nl, lg in LOGS.items()
+    }
+
+    calculadora = CalculadoraDeSLA(_BaseFalsa())
+    salida["check_sla"] = {
+        f"{na}|{pais}|{'vip' if vip else 'comun'}|{'cerrado' if cierre else 'abierto'}": (
+            calculadora.check_sla(
+                apertura, pais, cliente_vip=vip, today=HOY, case_close_date=cierre,
+            )
+        )
+        for na, apertura in APERTURAS.items()
+        for pais in ("ARG", "USA", "ECU", "")
+        for vip in (False, True)
+        for cierre in (None, "2024-01-20")
+    }
+
     return salida
 
 
@@ -179,9 +223,9 @@ def _matriz() -> dict:
 # propio codigo. `test_estan_todas_las_funciones` verifica que esta lista no se
 # quede corta.
 FUNCIONES = (
-    "build_precedent_summary", "clasificar_resolucion", "codigos",
-    "determine_compensation", "determine_outcome", "detect_divergence",
-    "extraer_propuesta", "summarize_logs", "validate_resolution",
+    "build_precedent_summary", "check_sla", "clasificar_resolucion", "codigos",
+    "detect_error_patterns", "determine_compensation", "determine_outcome",
+    "detect_divergence", "extraer_propuesta", "summarize_logs", "validate_resolution",
 )
 
 

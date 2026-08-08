@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
-from ..analysis.analyzer import Analyzer
+from ..analysis.sla import CalculadoraDeSLA
 from ..data.db import Database
-from ..dependencies import get_analyzer, get_db
+from ..dependencies import get_db, get_sla
 from ..domain.models import SLACheckRequest
 
 router = APIRouter(prefix="/api/sla", tags=["sla"])
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/sla", tags=["sla"])
 @router.post("/check", status_code=200)
 def check_sla(
     req: SLACheckRequest,
-    analyzer: Analyzer = Depends(get_analyzer),
+    sla: CalculadoraDeSLA = Depends(get_sla),
     db: Database = Depends(get_db),
 ) -> dict:
     """Check SLA compliance for a case.
@@ -38,7 +38,7 @@ def check_sla(
     else:
         apertura, cierre = req.case_open_date, None
 
-    return analyzer.check_sla(
+    return sla.check_sla(
         case_open_date=apertura,
         country=req.country,
         cliente_vip=req.cliente_vip,

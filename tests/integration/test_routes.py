@@ -40,6 +40,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     mock_embedder.encode.return_value = [[0.1] * 1024]
 
     from api.app.analysis.analyzer import Analyzer
+    from api.app.analysis.sla import CalculadoraDeSLA
     from api.app.reports.generator import ReportGenerator
     from api.app.services.feedback import FeedbackService
     from api.app.services.resolution import ResolutionService
@@ -65,6 +66,7 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.indexer = MagicMock()
     app.state.updater = mock_updater
     app.state.analyzer = analyzer
+    app.state.sla = CalculadoraDeSLA(db)
     app.state.tracer = mock_tracer
     app.state.report_generator = report_gen
     app.state.settings = MagicMock()

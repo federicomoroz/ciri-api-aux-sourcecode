@@ -54,7 +54,15 @@ class AnalyzerFalso:
     def client_flags(self, client_id):
         return {"client_id": client_id, "total_chargebacks": 0, "flags": []}
 
-    def check_sla(self, case_open_date, country, cliente_vip=False, case_close_date=None):
+
+class CalculadoraFalsa:
+    """El SLA dejo de ser un metodo del Analyzer: ahora es su propia costura.
+
+    Que el falso sea una clase aparte es la prueba de que la separacion sirve —
+    antes habia que fingir un analizador entero para probar el plazo.
+    """
+
+    def check_sla(self, case_open_date, country, cliente_vip=False, today=None, case_close_date=None):
         self.sla_pedido = {"open": case_open_date, "close": case_close_date}
         return {"within_sla": False, "days_elapsed": 12, "sla_limit_days": 10,
                 "sla_type": "standard", "policy_reference": "POL-SLA-002",
@@ -88,6 +96,7 @@ def pipeline():
     return PipelineService(
         db=DBFalsa(), retriever=RetrieverFalso(), analyzer=AnalyzerFalso(),
         resolution_svc=ResolucionFalsa(), report_gen=ReporteFalso(),
+        sla=CalculadoraFalsa(),
     )
 
 
@@ -110,7 +119,7 @@ class TestRun:
         corre mientras el reclamo está abierto.
         """
         pipeline.run(REQ)
-        pedido = pipeline.analyzer.sla_pedido
+        pedido = pipeline.sla.sla_pedido
         assert pedido["open"] == "2024-09-23", "usó la fecha de la compra, no la del reclamo"
         assert pedido["close"] == "2024-10-11", "no midió hasta el cierre del caso"
 

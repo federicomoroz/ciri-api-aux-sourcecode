@@ -13,6 +13,7 @@ from fastapi import FastAPI, Request
 from qdrant_client import QdrantClient
 
 from .analysis.analyzer import Analyzer
+from .analysis.sla import CalculadoraDeSLA
 from .config import Settings
 from .data.db import Database
 from .data.loader import init_sqlite, load_excel
@@ -183,6 +184,9 @@ async def lifespan(app: FastAPI):
         )
 
     analyzer = Analyzer(db)
+    # El SLA tiene su propia costura: decide compensacion, y quien lo llama no
+    # tiene por que pasar por el analisis de comercios y clientes para medirlo.
+    sla = CalculadoraDeSLA(db)
     # La eleccion de modelo por paso vive en SQLite y el panel la edita; este
     # servicio la traduce en clientes y los renueva cuando cambia.
     modelos = ModelosService(db, settings, externos["manager"])
@@ -203,12 +207,13 @@ async def lifespan(app: FastAPI):
     app.state.retriever = retriever
     app.state.updater = updater
     app.state.analyzer = analyzer
+    app.state.sla = sla
     app.state.tracer = tracer
     app.state.report_generator = report_generator
     app.state.resolution_service = resolution_service
     app.state.feedback_service = FeedbackService(db, updater, tracer)
     app.state.pipeline_service = PipelineService(
-        db, retriever, analyzer, resolution_service, report_generator,
+        db, retriever, analyzer, resolution_service, report_generator, sla,
     )
     app.state.modelos_service = modelos
     app.state.langfuse_stats_service = LangfuseStatsService(tracer, settings.llm_model)
@@ -243,6 +248,10 @@ def get_updater(request: Request) -> RAGUpdater:
 
 def get_analyzer(request: Request) -> Analyzer:
     return request.app.state.analyzer
+
+
+def get_sla(request: Request) -> CalculadoraDeSLA:
+    return request.app.state.sla
 
 
 def get_report_generator(request: Request) -> ReportGenerator:

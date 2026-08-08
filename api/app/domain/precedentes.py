@@ -11,7 +11,7 @@ cierra con la tendencia contada sobre todos: cuantos se aprobaron y cuantos se
 rechazaron. El modelo recibe hechos contados, no una narracion.
 
 Lo mismo con los logs: `resumir_logs` cuenta severidades y nombra los patrones
-que detecto `Analyzer.detect_error_patterns`, sin LLM. «Timeout sistematico del
+que detecto `patrones.detect_error_patterns`, sin LLM. «Timeout sistematico del
 comercio» dice bastante mas que seis lineas repetidas de MERCHANT_NO_RESPONSE.
 
 Son funciones puras: reciben listas de `dict` y devuelven texto.
@@ -19,7 +19,7 @@ Son funciones puras: reciben listas de `dict` y devuelven texto.
 
 import logging
 
-from ..analysis.analyzer import Analyzer
+from ..analysis import patrones
 from ..rag.formatter import annotate_by_motivo
 from .constants import LLM_MAX_CRITICAL_LOGS
 from .enums import Severity
@@ -153,12 +153,12 @@ def resumir_precedentes(
 def resumir_logs(logs: list[dict]) -> str:
     """Resume los logs para el prompt: conteos, patrones y eventos criticos.
 
-    Los patrones los detecta `Analyzer.detect_error_patterns`, sin LLM. Es lo
+    Los patrones los detecta `patrones.detect_error_patterns`, sin LLM. Es lo
     que convierte una lista de eventos sueltos en una senal aprovechable:
     "timeout sistematico del comercio" dice bastante mas que seis lineas
     repetidas de MERCHANT_NO_RESPONSE.
     """
-    analysis = Analyzer.detect_error_patterns(logs)
+    analysis = patrones.detect_error_patterns(logs)
     severity_counts = analysis["severity_counts"]
     text = (
         f"Total: {len(logs)} eventos | "

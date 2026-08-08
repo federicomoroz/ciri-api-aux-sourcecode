@@ -7,7 +7,9 @@ from datetime import date, timedelta
 
 import pytest
 
+from api.app.analysis import patrones
 from api.app.analysis.analyzer import Analyzer
+from api.app.analysis.sla import CalculadoraDeSLA
 from api.app.data.db import Database
 from api.app.domain import decision, precedentes
 from api.app.domain.enums import MerchantFlag, Severity
@@ -23,66 +25,71 @@ def analyzer(db):
     return Analyzer(db)
 
 
+@pytest.fixture
+def calculadora(db):
+    return CalculadoraDeSLA(db)
+
+
 class TestSLACheck:
 
-    def test_latam_standard_10_days(self, analyzer):
+    def test_latam_standard_10_days(self, calculadora):
         """Standard LATAM SLA: 10 business days."""
         recent_date = (date.today() - timedelta(days=5)).isoformat()
-        result = analyzer.check_sla(recent_date, "ARG", cliente_vip=False)
+        result = calculadora.check_sla(recent_date, "ARG", cliente_vip=False)
         assert result["sla_type"] == "standard"
         assert result["sla_limit_days"] == 10
         assert result["within_sla"] is True
         assert result["compensation_applicable"] is False
 
-    def test_non_latam_extended_15_days(self, analyzer):
+    def test_non_latam_extended_15_days(self, calculadora):
         """Non-LATAM extended SLA: 15 business days."""
         recent_date = (date.today() - timedelta(days=12)).isoformat()
-        result = analyzer.check_sla(recent_date, "USA", cliente_vip=False)
+        result = calculadora.check_sla(recent_date, "USA", cliente_vip=False)
         assert result["sla_type"] == "extended"
         assert result["sla_limit_days"] == 15
         assert result["within_sla"] is True  # 12 <= 15
 
-    def test_vip_5_days(self, analyzer):
+    def test_vip_5_days(self, calculadora):
         """VIP client SLA: 5 business days."""
         recent_date = (date.today() - timedelta(days=3)).isoformat()
-        result = analyzer.check_sla(recent_date, "MEX", cliente_vip=True)
+        result = calculadora.check_sla(recent_date, "MEX", cliente_vip=True)
         assert result["sla_type"] == "vip"
         assert result["sla_limit_days"] == 5
         assert result["within_sla"] is True
 
-    def test_sla_breach_triggers_compensation(self, analyzer):
+    def test_sla_breach_triggers_compensation(self, calculadora):
         """Exceeded SLA should flag compensation_applicable."""
         old_date = (date.today() - timedelta(days=20)).isoformat()
-        result = analyzer.check_sla(old_date, "BRA", cliente_vip=False)
+        result = calculadora.check_sla(old_date, "BRA", cliente_vip=False)
         assert result["within_sla"] is False
         assert result["compensation_applicable"] is True
 
-    def test_vip_breach_before_standard(self, analyzer):
+    def test_vip_breach_before_standard(self, calculadora):
         """El SLA VIP es mas estricto: 6 habiles incumplen VIP pero no el estandar."""
         apertura = date(2024, 1, 1)          # lunes
         hoy = date(2024, 1, 9)               # martes siguiente: 6 dias habiles
 
-        vip = analyzer.check_sla(apertura.isoformat(), "ARG", cliente_vip=True, today=hoy)
-        estandar = analyzer.check_sla(apertura.isoformat(), "ARG", cliente_vip=False, today=hoy)
+        vip = calculadora.check_sla(apertura.isoformat(), "ARG", cliente_vip=True, today=hoy)
+        estandar = calculadora.check_sla(apertura.isoformat(), "ARG", cliente_vip=False, today=hoy)
 
         assert vip["days_elapsed"] == 6
         assert vip["within_sla"] is False      # 6 > 5
         assert estandar["within_sla"] is True  # 6 <= 10
 
-    def test_cuenta_habiles_no_corridos(self, analyzer):
+    def test_cuenta_habiles_no_corridos(self, calculadora):
         """Los limites de las politicas son en dias habiles."""
         apertura = date(2024, 1, 1)   # lunes
         hoy = date(2024, 1, 15)       # lunes, dos semanas despues
 
-        r = analyzer.check_sla(apertura.isoformat(), "ARG", today=hoy)
+        r = calculadora.check_sla(apertura.isoformat(), "ARG", today=hoy)
         assert (hoy - apertura).days == 14   # corridos
         assert r["days_elapsed"] == 10       # habiles
         assert r["within_sla"] is True       # con corridos habria dado incumplimiento
 
-    def test_fin_de_semana_no_suma(self, analyzer):
+    def test_fin_de_semana_no_suma(self, calculadora):
         apertura = date(2024, 1, 5)   # viernes
         hoy = date(2024, 1, 8)        # lunes
-        r = analyzer.check_sla(apertura.isoformat(), "ARG", today=hoy)
+        r = calculadora.check_sla(apertura.isoformat(), "ARG", today=hoy)
         assert r["days_elapsed"] == 1
 
 
@@ -94,7 +101,7 @@ class TestErrorPatterns:
             {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout", "timestamp": "2024-01-01 10:00:00", "code": "408"},
             {"severity": Severity.ERROR, "event": "MERCHANT_NO_RESPONSE", "detail": "timeout again", "timestamp": "2024-01-01 10:01:00", "code": "408"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "systematic_merchant_timeout" in result["patterns"]
 
     def test_no_timeout_pattern_with_single_occurrence(self, analyzer):
@@ -102,7 +109,7 @@ class TestErrorPatterns:
         logs = [
             {"severity": Severity.WARN, "event": "MERCHANT_NO_RESPONSE", "detail": "once", "timestamp": "2024-01-01 10:00:00", "code": "408"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "systematic_merchant_timeout" not in result["patterns"]
 
     def test_fraud_block_pattern(self, analyzer):
@@ -111,7 +118,7 @@ class TestErrorPatterns:
             {"severity": Severity.WARN, "event": "FRAUD_ALERT", "detail": "score low", "timestamp": "2024-01-01", "code": "200"},
             {"severity": Severity.ERROR, "event": "AUTH_DECLINED", "detail": "blocked", "timestamp": "2024-01-01", "code": "402"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "blocked_for_fraud" in result["patterns"]
 
     def test_severity_counts(self, analyzer):
@@ -122,14 +129,14 @@ class TestErrorPatterns:
             {"severity": Severity.WARN, "event": "TIMEOUT_RETRY", "detail": "", "timestamp": "", "code": "408"},
             {"severity": Severity.INFO, "event": "AUTH_REQUEST", "detail": "", "timestamp": "", "code": "200"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert result["severity_counts"][Severity.ERROR] == 2
         assert result["severity_counts"][Severity.WARN] == 1
         assert result["severity_counts"][Severity.INFO] == 1
 
     def test_empty_logs(self, analyzer):
         """Empty logs should return empty result."""
-        result = analyzer.detect_error_patterns([])
+        result = patrones.detect_error_patterns([])
         assert result["patterns"] == []
         assert result["severity_counts"] == {Severity.ERROR: 0, Severity.WARN: 0, Severity.INFO: 0}
 
@@ -138,7 +145,7 @@ class TestErrorPatterns:
         logs = [
             {"severity": Severity.ERROR, "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "duplicate_charge" in result["patterns"]
 
     def test_sla_violation_pattern(self, analyzer):
@@ -146,7 +153,7 @@ class TestErrorPatterns:
         logs = [
             {"severity": Severity.WARN, "event": "SLA_BREACH", "detail": "SLA exceeded", "timestamp": "2024-01-01", "code": "200"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "sla_violation" in result["patterns"]
 
     def test_integration_failure_pattern(self, analyzer):
@@ -154,7 +161,7 @@ class TestErrorPatterns:
         logs = [
             {"severity": Severity.ERROR, "event": "WEBHOOK_FAILED", "detail": "500 error", "timestamp": "2024-01-01", "code": "500"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "integration_failure" in result["patterns"]
 
     def test_session_interrupted_payment_pattern(self, analyzer):
@@ -163,7 +170,7 @@ class TestErrorPatterns:
             {"severity": Severity.INFO, "event": "PAYMENT_INITIATED", "detail": "starting", "timestamp": "2024-01-01 10:00:00", "code": "200"},
             {"severity": Severity.WARN, "event": "SESSION_EXPIRED", "detail": "session timeout", "timestamp": "2024-01-01 10:05:00", "code": "401"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "session_interrupted_payment" in result["patterns"]
 
     def test_geographic_anomaly_pattern(self, analyzer):
@@ -171,7 +178,7 @@ class TestErrorPatterns:
         logs = [
             {"severity": Severity.WARN, "event": "GEO_ANOMALY", "detail": "unusual location", "timestamp": "2024-01-01", "code": "200"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "geographic_anomaly" in result["patterns"]
 
     def test_connectivity_issue_pattern(self, analyzer):
@@ -179,7 +186,7 @@ class TestErrorPatterns:
         logs = [
             {"severity": Severity.WARN, "event": "TIMEOUT_RETRY", "detail": "retrying", "timestamp": "2024-01-01", "code": "408"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "connectivity_issue" in result["patterns"]
 
     def test_multiple_patterns_detected(self, analyzer):
@@ -190,7 +197,7 @@ class TestErrorPatterns:
             {"severity": Severity.ERROR, "event": "DOUBLE_CHARGE_DETECT", "detail": "duplicate", "timestamp": "2024-01-01", "code": "409"},
             {"severity": Severity.WARN, "event": "GEO_ANOMALY", "detail": "location", "timestamp": "2024-01-01", "code": "200"},
         ]
-        result = analyzer.detect_error_patterns(logs)
+        result = patrones.detect_error_patterns(logs)
         assert "blocked_for_fraud" in result["patterns"]
         assert "duplicate_charge" in result["patterns"]
         assert "geographic_anomaly" in result["patterns"]
@@ -327,15 +334,15 @@ class TestSLASobreElReclamo:
     """
 
     @staticmethod
-    def _analyzer(sla_dias: int | None = None):
+    def _calculadora(sla_dias: int | None = None):
         from unittest.mock import MagicMock
 
         db = MagicMock()
         db.get_policy.return_value = {"sla_dias": sla_dias} if sla_dias else {}
-        return Analyzer(db)
+        return CalculadoraDeSLA(db)
 
     def test_un_caso_cerrado_a_tiempo_cumple_aunque_sea_viejo(self):
-        r = self._analyzer().check_sla(
+        r = self._calculadora().check_sla(
             "2024-09-23", "COL", case_close_date="2024-10-01", today=date(2026, 8, 7),
         )
         assert r["within_sla"] is True
@@ -343,32 +350,32 @@ class TestSLASobreElReclamo:
         assert r["caso_cerrado"] is True
 
     def test_un_caso_cerrado_tarde_no_cumple(self):
-        r = self._analyzer().check_sla(
+        r = self._calculadora().check_sla(
             "2024-09-23", "COL", case_close_date="2024-11-15", today=date(2026, 8, 7),
         )
         assert r["within_sla"] is False
         assert r["compensation_applicable"] is True
 
     def test_un_caso_abierto_se_mide_hasta_hoy(self):
-        r = self._analyzer().check_sla("2026-08-03", "COL", today=date(2026, 8, 7))
+        r = self._calculadora().check_sla("2026-08-03", "COL", today=date(2026, 8, 7))
         assert r["caso_cerrado"] is False
         assert r["medido_hasta"] == "2026-08-07"
         assert r["within_sla"] is True
 
     def test_el_plazo_sale_de_la_politica_no_de_una_constante(self):
         """Editar POL-SLA-002 por la API cambia el plazo sin deploy."""
-        r = self._analyzer(sla_dias=3).check_sla(
+        r = self._calculadora(sla_dias=3).check_sla(
             "2024-09-23", "COL", case_close_date="2024-10-01", today=date(2026, 8, 7),
         )
         assert r["sla_limit_days"] == 3
         assert r["within_sla"] is False, "6 dias habiles superan un plazo de 3"
 
     def test_sin_plazo_en_la_politica_usa_el_de_respaldo(self):
-        r = self._analyzer().check_sla("2024-09-23", "COL", case_close_date="2024-10-01")
+        r = self._calculadora().check_sla("2024-09-23", "COL", case_close_date="2024-10-01")
         assert r["sla_limit_days"] == 10
 
     def test_devuelve_contra_que_conto(self):
-        r = self._analyzer().check_sla(
+        r = self._calculadora().check_sla(
             "2024-09-23", "COL", case_close_date="2024-10-01", today=date(2026, 8, 7),
         )
         assert r["medido_desde"] == "2024-09-23"
@@ -392,10 +399,9 @@ class TestSinReclamoRegistradoNoSeMideElPlazo:
     """
 
     @staticmethod
-    def _analyzer(tmp_path):
+    def _calculadora(tmp_path):
         import sqlite3
 
-        from api.app.analysis.analyzer import Analyzer
         from api.app.data.db import Database
 
         ruta = str(tmp_path / "a.db")
@@ -407,30 +413,30 @@ class TestSinReclamoRegistradoNoSeMideElPlazo:
         )
         c.commit()
         c.close()
-        return Analyzer(Database(ruta))
+        return CalculadoraDeSLA(Database(ruta))
 
     def test_sin_apertura_no_afirma_incumplimiento(self, tmp_path):
-        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        r = self._calculadora(tmp_path).check_sla(case_open_date="", country="COL")
         assert r["within_sla"] is None, "afirmo un plazo que nadie midio"
         assert r["days_elapsed"] is None
 
     def test_sin_apertura_no_paga_compensacion(self, tmp_path):
         """Se paga cuando consta que se incumplio, no cuando no consta nada."""
-        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        r = self._calculadora(tmp_path).check_sla(case_open_date="", country="COL")
         assert r["compensation_applicable"] is False
 
     def test_lo_declara_para_que_el_informe_lo_pueda_decir(self, tmp_path):
-        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        r = self._calculadora(tmp_path).check_sla(case_open_date="", country="COL")
         assert r["sin_reclamo_registrado"] is True
 
     def test_el_plazo_que_concede_la_politica_se_informa_igual(self, tmp_path):
         """Es un dato del caso, no depende de que haya reclamo."""
-        r = self._analyzer(tmp_path).check_sla(case_open_date="", country="COL")
+        r = self._calculadora(tmp_path).check_sla(case_open_date="", country="COL")
         assert r["sla_limit_days"] > 0
         assert r["policy_reference"]
 
     def test_con_reclamo_abierto_si_se_mide(self, tmp_path):
-        r = self._analyzer(tmp_path).check_sla(case_open_date="2024-01-01", country="COL")
+        r = self._calculadora(tmp_path).check_sla(case_open_date="2024-01-01", country="COL")
         assert r["within_sla"] is False
         assert r["compensation_applicable"] is True
 
@@ -438,7 +444,7 @@ class TestSinReclamoRegistradoNoSeMideElPlazo:
         from datetime import UTC, datetime, timedelta
 
         ayer = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
-        r = self._analyzer(tmp_path).check_sla(case_open_date=ayer, country="COL")
+        r = self._calculadora(tmp_path).check_sla(case_open_date=ayer, country="COL")
         assert r["within_sla"] is True
         assert r["compensation_applicable"] is False
 
