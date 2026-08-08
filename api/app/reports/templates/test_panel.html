@@ -2151,6 +2151,30 @@ const SCENARIOS = [
 ];
 
 // ─── LOADING STEPS (real-time SSE, no fake delays) ───────
+// Que modelo corre en cada paso, segun la configuracion vigente — no segun lo
+// que estaba escrito cuando se armo el panel. Con el modo demo encendido los
+// tres pasos van por el modelo gratuito, asi que anunciar «Haiku + Sonnet» ahi
+// contradice al cartel de arriba, que dice el modelo de verdad. Dos carteles
+// sobre lo mismo en la misma pantalla, y uno de los dos miente.
+function modeloDelPaso(paso) {
+  if (demoMode && demoCorre && demoModelo) return demoModelo.modelo;
+  const cfg = produccion && produccion[paso];
+  return cfg ? cfg.modelo : null;
+}
+
+function detalleDeSintesis() {
+  const evalua = modeloDelPaso('policies');
+  const sintet = modeloDelPaso('resolution');
+  if (!evalua && !sintet) return 'evaluacion de politicas + sintesis';
+  if (evalua === sintet) return evalua + ' (evaluacion + sintesis)';
+  return `${evalua || '?'} (eval) + ${sintet || '?'} (sintesis)`;
+}
+
+function detalleDeJuicio() {
+  const juez = modeloDelPaso('judge');
+  return (juez ? juez + ' · ' : '') + '5 criterios · score 1-10...';
+}
+
 const STEPS = [
   { label: 'Verificando cache...',                       detail: 'SQLite exact-match lookup' },
   { label: 'Obteniendo transaccion...',                  detail: 'GET /api/transactions/{id}' },
@@ -2160,7 +2184,7 @@ const STEPS = [
   { label: 'Evaluando riesgo del comercio...',           detail: 'CB ratio + flags' },
   { label: 'Verificando historial del cliente...',       detail: 'Chargebacks + flags' },
   { label: 'Verificando cumplimiento de SLA...',         detail: 'Dias habiles vs limite de politica' },
-  { label: 'Sintetizando resolucion con LLM...',         detail: 'Haiku (eval) + Sonnet (sintesis)' },
+  { label: 'Sintetizando resolucion con LLM...',         detail: null },   // se arma al vuelo: ver detalleDeSintesis()
   { label: 'Ejecutando juez de calidad...',              detail: 'LLM-as-Judge · 5 criterios' },
   { label: 'Generando informe final...',                 detail: 'Jinja2 template render' },
 ];
@@ -3201,9 +3225,9 @@ function _buildStepDetail(step, ev) {
         return `Sin reclamo registrado: el plazo no se mide / ${ev.sla_limit_days}d (${ev.sla_type})`;
       }
       return `${ev.within_sla ? 'Dentro de SLA' : 'FUERA de SLA'}: ${ev.days_elapsed}d habiles / ${ev.sla_limit_days}d (${ev.sla_type})`;
-    case 'resolving':     return 'Haiku (eval) + Sonnet (sintesis) + guardrails...';
+    case 'resolving':     return detalleDeSintesis() + ' + guardrails...';
     case 'resolved':      return `${ev.action} · ${ev.risk_level} · ${ev.verdicts} veredictos · ${ev.blockers} blocker · ${ev.fails} fail` + (ev.warnings ? ` · ${ev.warnings} warning(s)` : '');
-    case 'judging':       return 'Sonnet · 5 criterios · score 1-10...';
+    case 'judging':       return detalleDeJuicio();
     case 'judged':        return `Score: ${ev.score}/10 · ${ev.approved ? 'Aprobado' : 'No aprobado'}`;
     default:              return '';
   }
@@ -3280,7 +3304,7 @@ function buildStepsDom() {
       <div class="step-icon"></div>
       <div class="step-content">
         <p class="step-label">${s.label}</p>
-        <p class="step-detail">${s.detail}</p>
+        <p class="step-detail">${s.detail ?? detalleDeSintesis()}</p>
       </div>
       <span class="step-time" id="step-time-${i}"></span>
     `;

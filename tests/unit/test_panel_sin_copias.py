@@ -87,3 +87,33 @@ class TestElPanelNoSeSirveCacheado:
     def test_pide_no_guardar(self):
         respuesta = serve_panel(ReportGenerator())
         assert respuesta.headers.get("cache-control") == "no-store"
+
+
+class TestElPanelNoAfirmaQueModeloCorre:
+    """El nombre del modelo sale de la configuracion, no del codigo del panel.
+
+    El paso «Sintetizando resolucion» anunciaba «Haiku (eval) + Sonnet
+    (sintesis)» escrito a mano. Con el modo demo encendido los tres pasos corren
+    por el modelo gratuito, asi que ese renglon contradecia al cartel de arriba
+    —que si dice el modelo real— en la misma pantalla. Y el modelo de cada paso
+    es configurable desde el propio panel, con lo cual el texto podia quedar mal
+    sin que nadie tocara codigo.
+    """
+
+    @pytest.mark.parametrize("modelo", ["Haiku", "Sonnet", "claude-haiku", "claude-sonnet"])
+    def test_ningun_nombre_de_modelo_escrito_a_mano_en_los_pasos(self, panel, modelo):
+        import re
+
+        pasos = re.search(r"const STEPS = \[(.*?)\];", panel, re.S)
+        assert pasos, "el panel perdio su lista de pasos"
+        assert modelo.lower() not in pasos.group(1).lower(), (
+            f"«{modelo}» esta escrito en la lista de pasos: con otro modelo configurado, miente"
+        )
+
+    def test_el_detalle_se_arma_con_el_modelo_vigente(self, panel):
+        assert "function modeloDelPaso(" in panel
+        assert "detalleDeSintesis()" in panel and "detalleDeJuicio()" in panel
+
+    def test_y_contempla_el_modo_demo(self, panel):
+        """Con free tier, los tres pasos van por el mismo modelo gratuito."""
+        assert "demoMode && demoCorre && demoModelo" in panel
