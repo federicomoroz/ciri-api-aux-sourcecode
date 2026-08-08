@@ -296,4 +296,4 @@ por uno, con el defecto concreto que cada uno fija.
 
 **Federico Palatnik Moroz**
 
-Desarrollado con **Claude Opus 5** (Anthropic) como asistente.
+Desarrollado con **Claude Opus 5** (Anthropic) como asistente de desarrollo.
