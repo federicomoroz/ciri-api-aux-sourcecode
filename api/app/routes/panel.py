@@ -584,6 +584,12 @@ def serve_panel(
     """
     tmpl = report_gen.env.get_template("test_panel.html")
     return HTMLResponse(
+        # Sin esto el navegador guarda el panel por heuristica y sigue corriendo
+        # el JavaScript viejo despues de un deploy: los sintomas son de servidor
+        # —«el formulario no aparece», «el boton pide algo que ya esta»— y la
+        # causa es una copia en cache. El panel es una pagina de herramienta, no
+        # un activo estatico: no hay nada que ganar cacheandola.
+        headers={"Cache-Control": "no-store"},
         content=tmpl.render(
             umbral_juez_aprueba=JUDGE_APPROVAL_THRESHOLD,
             umbral_juez_revisa=JUDGE_NEEDS_REVIEW_THRESHOLD,

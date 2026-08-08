@@ -70,3 +70,20 @@ class TestLosUmbralesSonLosMismosQueLosDelInforme:
 
     def test_no_quedaron_marcadores_de_jinja_sin_resolver(self, panel):
         assert "{{" not in panel, "la ruta no le esta pasando todo lo que la plantilla pide"
+
+
+class TestElPanelNoSeSirveCacheado:
+    """Una copia vieja del panel se diagnostica como un bug del servidor.
+
+    El panel es JavaScript que cambia con cada deploy. Sin cabecera, el navegador
+    lo guarda por heuristica y sigue corriendo el codigo anterior: los sintomas
+    aparecen del lado del servidor —«el formulario no se abre», «el boton pide una
+    URL que ya esta»— y la causa es el cache del que mira.
+
+    Es una pagina de herramienta, no un activo estatico: no hay nada que ganar
+    guardandola.
+    """
+
+    def test_pide_no_guardar(self):
+        respuesta = serve_panel(ReportGenerator())
+        assert respuesta.headers.get("cache-control") == "no-store"
