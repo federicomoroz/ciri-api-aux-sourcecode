@@ -529,3 +529,38 @@ class TestUnaDecisionQueNoSeEntiendeNoAprueba:
         codigo = self.codigo
         for o in opciones:
             assert f"{o['option']}:" in codigo, f"{o['option']} no esta mapeado"
+
+
+class TestElErrorDeLaApiNoSeConfundeConDatoFaltante:
+    """«No existe la transaccion» y «la API no contesto» no son lo mismo.
+
+    Medido contra el deploy: con Render dormido, el webhook devolvia «La
+    transaccion no existe en la base» para TXN-00051, que si existe. La condicion
+    era `.includes('404')` sobre un mensaje que trae **la respuesta entera** —y la
+    pagina de arranque de Render son 263 KB de HTML que contienen «404» en algun
+    lado, en el nombre de una fuente.
+
+    Importa mas de lo que parece: el arranque en frio es lo primero que le pasa a
+    quien evalua, y ese mensaje lo manda a buscar un problema de datos que no
+    existe.
+    """
+
+    @property
+    def cuerpo(self) -> str:
+        return nodo(cargar(ORQUESTADOR), "Responder — API No Disponible")[
+            "parameters"]["responseBody"]
+
+    def test_el_404_se_reconoce_por_el_codigo_y_no_por_substring(self):
+        assert ".includes('404')" not in self.cuerpo, (
+            "vuelve a mirar el mensaje entero: cualquier respuesta que contenga "
+            "«404» en cualquier lugar dispara la rama de dato faltante"
+        )
+        assert "404" in self.cuerpo and ".test(" in self.cuerpo
+
+    def test_el_patron_esta_anclado_al_principio(self):
+        """El formato del mensaje es «<codigo> - <cuerpo>»: el codigo va al frente."""
+        assert "/^" in self.cuerpo, "sin anclar, el patron vuelve a matchear en cualquier lado"
+
+    def test_lo_que_no_es_404_menciona_el_arranque_en_frio(self):
+        """Es la causa mas probable de que la API no conteste en este deploy."""
+        assert "arrancando" in self.cuerpo or "duerme" in self.cuerpo

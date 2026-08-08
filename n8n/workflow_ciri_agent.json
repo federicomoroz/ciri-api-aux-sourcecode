@@ -1130,7 +1130,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ error: (($json.error?.message || '').includes('404') ? 'La transaccion no existe en la base' : 'No se pudo leer la transaccion: la API no respondio'), transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "responseBody": "={{ JSON.stringify({ error: (/^\\s*404\b/.test($json.error?.message || '') ? 'La transaccion no existe en la base' : 'La API no respondio como se esperaba. Si es la primera llamada en un rato, puede estar arrancando: el free tier de Render duerme el servicio a los 15 minutos.'), transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
         "options": {
           "responseCode": "={{ ($json.error?.message || '').includes('404') ? 404 : 503 }}"
         }
