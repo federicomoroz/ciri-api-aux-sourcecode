@@ -2034,6 +2034,15 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           n8n no disponible — se ejecuto pipeline directo via FastAPI
         </div>
+        <!-- El caso espera a un analista. El link va afuera del iframe a
+             proposito: es lo unico que sigue sirviendo si el formulario no se
+             puede embeber —n8n en otra maquina que el navegador, por ejemplo—. -->
+        <div class="amber-banner" id="hitl-banner" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Este caso necesita la decision de un analista.
+          <a id="hitl-link" href="#" target="_blank" rel="noopener"
+             style="margin-left:6px;text-decoration:underline">Abrir el formulario de aprobacion</a>
+        </div>
         <iframe
           class="report-iframe"
           id="report-frame"
@@ -3397,9 +3406,22 @@ function mostrarFormularioHitl(url, payload) {
   costBadge.classList.add('visible');
   $('elapsed-badge').classList.remove('visible');
 
+  // El link, a la vista y afuera del iframe. Es lo unico que no depende de que
+  // el embebido funcione: si n8n corre en otra maquina que el navegador, o el
+  // navegador se niega a embeberlo, el caso se sigue pudiendo resolver desde
+  // aca sin ir a buscar la URL a las alertas.
+  const aviso = $('hitl-link');
+  aviso.href = url;
+  aviso.parentElement.style.display = '';
+
   const frame = $('report-frame');
   frame.onload = null;          // el informe normal engancha uno; aca no aplica
   frame.removeAttribute('srcdoc');
+  // El sandbox existe para contener el INFORME, que es HTML producido a partir
+  // de la salida de un modelo. El formulario de aprobacion es la instancia de
+  // n8n que configuro quien mira: no es contenido no confiable, y restringirlo
+  // le impide cargar. Se restaura al mostrar el proximo informe.
+  frame.removeAttribute('sandbox');
   frame.src = url;              // navegar, no incrustar: ver el comentario de arriba
 }
 
@@ -3444,6 +3466,11 @@ function showResult(html, payload, elapsed, usageInfo, wasN8nFallback) {
   elapsedBadge.classList.add('visible');
 
   const frame = $('report-frame');
+  // Vuelve el sandbox: el formulario HITL lo saca porque es la instancia propia,
+  // pero el informe sale de la salida de un modelo y va contenido.
+  frame.setAttribute('sandbox', 'allow-same-origin allow-scripts allow-forms');
+  $('hitl-link').parentElement.style.display = 'none';
+  frame.removeAttribute('src');
   frame.srcdoc = html;
 
   frame.onload = () => {
