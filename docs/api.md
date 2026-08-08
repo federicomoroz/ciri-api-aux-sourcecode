@@ -1,6 +1,6 @@
 # La API
 
-28 endpoints. Cada uno es una herramienta que el orquestador llama por su nombre.
+31 endpoints. Cada uno es una herramienta que el orquestador llama por su nombre.
 
 Base pública: `https://ciri-chargeback-agent.onrender.com` · Local: `http://localhost:8000`
 
@@ -27,6 +27,8 @@ El campo `demo_mode` del body elige el modo por petición; si no viene, decide e
 | `demo_mode: false` · clave inválida | `500` diciendo que la clave no sirve y cómo es una válida |
 
 `GET /api/panel/demo-status` dice en qué modo arranca el servidor y qué casos tienen informe.
+`GET /api/panel/server-key-status` dice si el servidor tiene clave propia — de eso depende que
+el panel pueda correr sin que el visitante traiga la suya.
 
 ### `GET /api/panel/n8n-status`
 
@@ -138,7 +140,7 @@ Cada línea es `data: {"step": "...", ...}`. Los pasos, en orden: `start`, `cach
 Lo que el orquestador consulta antes de pedirle una resolución al modelo. Cinco traen hechos
 exactos de SQLite; dos hacen búsqueda semántica sobre Qdrant.
 
-### `GET /api/transactions/{id}` — la transacción
+### `GET /api/transactions/{txn_id}` — la transacción
 
 ```bash
 curl https://ciri-chargeback-agent.onrender.com/api/transactions/TXN-00051
@@ -201,7 +203,7 @@ curl https://ciri-chargeback-agent.onrender.com/api/merchants/Airbnb/risk
  "total_volume_usd": 5521.08, "flags": ["suspended_merchant"], "is_strategic": false}
 ```
 
-### `GET /api/clients/{id}/history` — historial del cliente
+### `GET /api/clients/{client_id}/history` — historial del cliente
 
 Reincidencia, países usados y métodos de pago, con las señales ya calculadas. `404` si el
 cliente no existe.

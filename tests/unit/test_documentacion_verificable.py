@@ -285,3 +285,54 @@ class TestLasVersionesDePromptQueLaDocAfirma:
             assert not viejas, (
                 f"{doc} dice {viejas} para {modulo}, que va por {version}"
             )
+
+
+class TestLaDocDeLaApiNoSeQuedaAtras:
+    """`docs/api.md` y el diagrama del circuito describen la superficie real.
+
+    Una lista de endpoints escrita a mano envejece en el primer commit que agrega
+    uno, y envejece **en silencio**: nadie la mira hasta que alguien busca un
+    endpoint que no está, o llama a uno que se documentó con el nombre de
+    parámetro equivocado.
+
+    Se compara contra el OpenAPI que la propia app genera, que es la única
+    descripción de la API que no se puede desincronizar de la API.
+    """
+
+    @pytest.fixture(scope="class")
+    def reales(self) -> set:
+        import importlib
+
+        spec = importlib.import_module("api.app.main").app.openapi()
+        return {(m.upper(), ruta) for ruta, ms in spec["paths"].items() for m in ms}
+
+    @staticmethod
+    def _citadas(texto: str) -> set:
+        return {
+            (m.group(1), m.group(2).rstrip("`"))
+            for m in re.finditer(r"\b(GET|POST|PUT|DELETE|PATCH)\s+`?(/[\w/{}.-]+)`?", texto)
+        }
+
+    def test_api_md_los_documenta_a_todos(self, reales):
+        citadas = self._citadas((RAIZ / "docs" / "api.md").read_text(encoding="utf-8"))
+        faltan = reales - citadas
+        assert not faltan, f"sin documentar: {sorted(faltan)}"
+
+    def test_api_md_no_inventa_ninguno(self, reales):
+        """Un endpoint documentado que no existe manda a quien lo lea contra un 404."""
+        citadas = self._citadas((RAIZ / "docs" / "api.md").read_text(encoding="utf-8"))
+        sobran = citadas - reales
+        assert not sobran, f"documentados pero inexistentes: {sorted(sobran)}"
+
+    def test_el_conteo_que_anuncia_api_md_es_el_real(self, reales):
+        texto = (RAIZ / "docs" / "api.md").read_text(encoding="utf-8")
+        m = re.search(r"^(\d+) endpoints", texto, re.M)
+        assert m, "docs/api.md perdio su conteo de endpoints"
+        assert int(m.group(1)) == len(reales)
+
+    def test_el_recorrido_del_diagrama_existe_de_verdad(self, reales):
+        """Las trece llamadas que el circuito dibuja tienen que ser rutas reales."""
+        html = (RAIZ / "docs" / "diagrams" / "api.html").read_text(encoding="utf-8")
+        del_circuito = {(v, r) for v, r in re.findall(r'\{v:"(\w+)", r:"([^"]+)"', html)}
+        assert del_circuito, "el circuito perdio sus pasos"
+        assert del_circuito <= reales, f"el circuito dibuja rutas que no existen: {sorted(del_circuito - reales)}"

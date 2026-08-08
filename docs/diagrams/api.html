@@ -479,10 +479,10 @@
           misma puerta sin que ningún llamador se entere.
         </p>
         <p>
-          El archivo que guarda las diferencias entre familias de modelo <b>no</b> es un adaptador
-          y por eso no se llama así: se llama <code>perfiles.py</code>, porque lo que guarda es el
-          perfil con el que se le habla a cada familia. Se llamaba <code>adaptadores.py</code>, y
-          era un nombre que había que explicar — que es la definición de un nombre mal puesto.
+          Lo que guarda las diferencias entre familias de modelo <b>no</b> es un adaptador, y por eso
+          no se llama así: es <code>perfiles.py</code>, porque lo que guarda es el perfil con el que
+          se le habla a cada familia — piso de tokens, qué reintentar, cuántos pedidos por minuto.
+          Parametrizar comportamiento no es traducir una interfaz.
         </p>
       </div>
     </details>
@@ -598,8 +598,8 @@
         <p>
           <b>Repository sobre <code>db.py</code>:</b> no. Lo que hay es un <i>Table Data Gateway</i>
           honesto —devuelve <code>dict</code>, no entidades— y con un solo backend y sin ORM, un
-          repositorio por agregado sería ceremonia. Lo que sí molesta es el DDL adentro, y eso está
-          anotado como deuda.
+          repositorio por agregado sería ceremonia. Lo que sí salió de ahí es el DDL: crear tablas y
+          migrar columnas no es acceso a datos, y vive en <code>data/esquema.py</code>.
         </p>
         <p>
           <b>Event bus para las alertas:</b> no. Hay un suscriptor. Un observador con N suscriptores

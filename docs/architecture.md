@@ -72,7 +72,7 @@ QUE hace el circuito, despues COMO se hablan las dos piezas.
 **El flujo completo, navegable:** el diagrama **«el circuito completo»** es una pagina
 autocontenida con los 39 pasos en orden de ejecucion, cada conexion trazada, el endpoint que
 llama cada nodo y una ficha explicativa al tocarlos. Se genera desde el propio JSON del
-workflow (`tools/render_workflow_page.py`), asi que no puede quedar desfasado del flujo real.
+workflow, no a mano, asi que no puede quedar desfasado del flujo real.
 
 **Como se hablan n8n y la API:** el diagrama **«n8n y la API»** resume la conversacion — las
 catorce llamadas en orden, que toca cada una y las dos veces que va al reves.
@@ -337,7 +337,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1021 tests (938 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1025 tests (938 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -421,7 +421,7 @@ si es orquestacion.
 
 **Modularidad en n8n:** Agregar una nueva fuente de datos (por ejemplo, un API de fraud scoring externo) es un nodo HTTP Request mas en S2. El resto del workflow queda intacto. Agregar un nuevo nivel de riesgo es una rama mas en el Switch de S4.
 
-**Cliente LLM basado en Protocol:** `llm/client.py` define un `Protocol` llamado `LLMClient` con dos implementaciones: `AnthropicClient` (SDK) y `OpenAICompatibleClient` (HTTP crudo), que cubre a los once proveedores de `PROVEEDORES` porque casi todos hablan el mismo dialecto. Los tests usan `MockLLMClient`.
+**Cliente LLM basado en Protocol:** `llm/client.py` define un `Protocol` llamado `LLMClient` con dos implementaciones: `AnthropicClient` (SDK) y `OpenAICompatibleClient` (HTTP crudo), que cubre a los diez proveedores del registro que hablan el dialecto de OpenAI — el unico que queda afuera es Anthropic, que tiene SDK propio. Los tests usan `MockLLMClient`.
 
 **`LLMManager` es la unica puerta.** Nadie fuera de el toca un cliente: los servicios dicen que PASO necesitan —evaluar politicas, sintetizar, juzgar— y reciben un `LLMResult`. La razon no es estetica. Mientras el que llama pueda elegir el cliente, puede elegir el equivocado, y eso paso: el juez resolvia el servicio del modo demo y despues llamaba al de produccion, asi que la mitad del pipeline se iba por Anthropic sin credito mientras la otra mitad corria en Gemini.
 
@@ -871,7 +871,7 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 1021 tests (unit + integration + E2E)
+  tests/                      # 1025 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 22 decisiones técnicas con razonamiento
@@ -916,7 +916,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-1021 tests en 38 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
+1025 tests en 38 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
 Es el numero que reporta el CI sobre un checkout limpio, que es el reproducible: medido con un
 `.env` cargado sube unas decimas, porque se ejecutan ramas que sin configuracion no corren.
 El CI falla por debajo del 85%: el piso no esta para presumir un numero sino para que una
