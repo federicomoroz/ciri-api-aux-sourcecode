@@ -648,6 +648,24 @@ esquivarlo con `getattr` para saber con cuál hablaba. Y `LangfuseTracer` tragab
 `enabled` en `True`: como de eso depende la caída al registro local, **encender la observabilidad
 dejaba al panel con menos métricas que apagarla**.
 
+**El limitador de tasa dejó de ser privado del LLM.** Había tres mecanismos de espera y solo uno
+era preventivo: la ventana deslizante de `LLMManager._espaciar`. Pero era un método privado, así que
+el camino del modelo tenía control y el de embeddings no — **y Voyage tiene el techo más ajustado del
+sistema, 3 por minuto**. Se midió contra el deploy: una tanda de análisis seguidos se comió un 429
+que ese reparto habría evitado. `rate_limiter.py` ahora lo comparten los dos. El reintento del
+embedder queda igual y no es redundante: el turno se reparte por proceso y el límite lo cuenta el
+proveedor, así que dos instancias del mismo deploy no se ven entre sí.
+
+**Un fallo se explica una vez.** La misma causa decía tres cosas distintas según por dónde saliera, y
+las tres clasificaban con `MARKER in str(exc)`. Esa técnica ya había fallado en el workflow, donde un
+503 entraba por la rama del 404 porque el mensaje traía adentro una página de 263 KB con «404» en el
+nombre de una fuente. `domain/fallos.py` clasifica por tipo, después por código de estado, y solo al
+final por substring.
+
+**El DDL salió de `db.py`.** Crear tablas y migrar columnas no es acceso a datos: es la puesta a punto
+del almacén, ocurre una vez y la dispara el lifespan. Con las dos cosas en la misma clase, cada
+consumidor de `Database` recibía también la capacidad de recrear el esquema.
+
 **Un solo registro de proveedores.** Estaban en tres tablas paralelas con la misma clave. Las tres
 coincidían —se verificó antes de unirlas— pero nada lo garantizaba, y olvidarse una fallaba en
 silencio: sin URL base, el modelo de Groq salía con la credencial de Groq hacia la API de Anthropic
@@ -674,6 +692,9 @@ sobre el modo demo).
 - (+) Agregar un proveedor pasa de tres ediciones sincronizadas a una, y el modo de falla deja de
   ser silencioso
 - (+) Encender la observabilidad deja de empeorar el panel
+- (+) El límite de embeddings deja de tocarse: se pide turno antes de llamar, y la evidencia de
+  que hacía falta es un 429 medido contra el deploy
+- (+) La misma causa dice lo mismo por HTTP, por el streaming y en la página HTML
 - (-) Más archivos que abrir. Cuatro módulos de una responsabilidad son mejores para mantener, pero
   para quien lee el repo veinte minutos, un archivo grande y comentado puede leerse más rápido
 - (-) `git blame` deja de servir para las líneas movidas

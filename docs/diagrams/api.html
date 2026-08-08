@@ -489,6 +489,67 @@
 
     <details class="letra">
       <summary>
+        <span class="inicial" style="background:var(--sql-suave); color:var(--sql)">⏱</span>
+        <span><span class="titulo-letra">Limitador de tasa, del lado del cliente</span>
+        <span class="nota-letra">No llegar al techo, en vez de reaccionar al 429.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          Los free tier que hacen evaluable este sistema tienen techos ajustados, y el más ajustado
+          son los embeddings: <b>Voyage permite 3 peticiones por minuto</b>. Como cada investigación
+          hace dos búsquedas semánticas, dos análisis seguidos ya lo rozan.
+        </p>
+        <p>
+          <code>rate_limiter.py</code> reparte turnos <b>antes</b> de llamar, con ventana deslizante
+          por clave: mientras se esté por debajo del techo no se espera nada, y recién cuando la
+          ventana se llena se duerme hasta que la llamada más vieja cumpla el minuto. Un intervalo
+          fijo le agregaría latencia a la primera investigación, que es justo la que alguien está
+          mirando.
+        </p>
+        <p>
+          <b>Es un componente por una razón medida.</b> Vivía dentro de <code>LLMManager</code>, así
+          que el camino del modelo tenía control preventivo y el de embeddings no — y una tanda de
+          análisis contra el deploy se comió un 429 de Voyage que este reparto habría evitado. Una
+          capacidad que existe una vez y hace falta dos es un componente.
+        </p>
+        <div class="antes-despues">
+          <span>privado de <code>LLMManager</code></span>
+          <span class="flecha">→</span>
+          <span class="bien">lo usan el modelo y el RAG</span>
+        </div>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
+        <span class="inicial" style="background:var(--llm-suave); color:var(--llm)">☰</span>
+        <span><span class="titulo-letra">Una tabla traduce los fallos, y solo una</span>
+        <span class="nota-letra">La misma causa decía tres cosas distintas según por dónde saliera.</span></span>
+      </summary>
+      <div class="cuerpo">
+        <p>
+          Los handlers de <code>main.py</code> clasificaban y escribían su texto; el streaming del
+          panel volvía a clasificar y escribía otro; la página HTML, un tercero. Las tres con
+          <code>MARKER in str(exc)</code> — la misma técnica que en n8n hacía que un 503 entrara por
+          la rama del 404, porque el mensaje traía adentro una página de 263 KB con «404» en el
+          nombre de una fuente.
+        </p>
+        <p>
+          <code>domain/fallos.py</code> clasifica en orden de confianza: <b>tipo de excepción</b>,
+          después <b>código de estado</b>, y solo al final substring — y solo donde el SDK no da otra
+          cosa. Devolver «no sé» es una respuesta legítima: sale un 500 honesto con su
+          <code>request_id</code>, y eso vale más que una causa inventada.
+        </p>
+        <p>
+          El panel sigue clasificando por su cuenta, y está bien: cuando el SSE ya empezó a emitir,
+          la respuesta salió con 200 y ningún <code>@app.exception_handler</code> la puede cambiar.
+          <b>Comparte la clasificación aunque no pueda compartir el transporte.</b>
+        </p>
+      </div>
+    </details>
+
+    <details class="letra">
+      <summary>
         <span class="inicial" style="background:var(--barra)">∅</span>
         <span><span class="titulo-letra">Objeto nulo</span>
         <span class="nota-letra">Sin observabilidad configurada, nadie pregunta si hay observabilidad.</span></span>

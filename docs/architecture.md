@@ -410,6 +410,9 @@ si es orquestacion.
 | Agregar un proveedor nuevo | Una entrada en `llm/proveedores.py` | Todo lo demas |
 | Agregar un guardrail | Una funcion y una linea en una tupla (`services/guardrails.py`) | Todo lo demas |
 | Un modelo que necesite otro trato | Una entrada en `llm/perfiles.py` | Todo lo demas |
+| Respetar el limite de un proveedor nuevo | Pasarle su techo a `RateLimiter.esperar_turno` | Todo lo demas |
+| Explicar una forma de fallar que hoy sale como 500 | Una entrada en `domain/fallos.py` | Los tres caminos que la muestran |
+| Agregar una tabla | Una funcion en `data/esquema.py` | `data/db.py` y sus consumidores |
 | Cambiar Qdrant por Pinecone | `rag/indexer.py` + `rag/retriever.py` | Todo lo demas |
 | Agregar nuevo endpoint | Un archivo en `routes/` | Todas las rutas existentes |
 | Agregar nueva politica | `POST /api/policies/` (llamada API, sin codigo) | Todo el codebase |
@@ -473,6 +476,65 @@ Todos los prompts estan en archivos versionados (`v1_policy_eval.py`, `v1_resolu
 ### Observabilidad en cada dimension
 
 Langfuse traza cada llamada LLM con: modelo, conteo de tokens, latencia, version de prompt, score del juez. Esto permite identificar cuando una version de prompt esta rindiendo mal, que comerciantes generan los casos mas costosos, y cual es la latencia p99 por endpoint -- sin tocar codigo de aplicacion.
+
+### No llegar al limite en vez de reaccionar al 429
+
+Los free tier que hacen evaluable este sistema tienen techos ajustados, y el mas
+ajustado de todos son los embeddings: **Voyage permite 3 peticiones por minuto**.
+Como cada investigacion hace dos busquedas semanticas, dos analisis seguidos ya
+rozan el limite.
+
+Reintentar un 429 es reaccionar tarde: la llamada ya se gasto y el proveedor ya la
+rechazo. `rate_limiter.py` reparte turnos **antes** de llamar, con una ventana
+deslizante por clave — mientras se este por debajo del techo no se espera nada, y
+recien cuando la ventana esta llena se duerme hasta que la llamada mas vieja cumpla
+el minuto. Un intervalo fijo le agregaria latencia a la primera investigacion, que
+es justo la que alguien va a estar mirando.
+
+Es un componente y no un metodo privado por una razon medida: **vivia dentro de
+`LLMManager`, asi que el camino del modelo tenia control preventivo y el de
+embeddings no**. Una tanda de analisis contra el deploy se comio un 429 de Voyage
+que este reparto habria evitado. Ahora los dos caminos lo comparten:
+
+| Quien llama | Clave | Techo | De donde sale |
+|---|---|---|---|
+| `LLMManager.completar` | el proveedor | `perfiles.py`, o `CB_LLM_RPM` | Gemini free: 5/min |
+| `VoyageEmbedder._pedir` | `voyage` | `EMBEDDING_RPM` | free tier: 3/min |
+
+**El reintento del embedder sigue estando, y no es redundante.** El turno se
+reparte por proceso y el limite lo cuenta el proveedor: dos instancias del mismo
+deploy no se ven entre si. El reparto evita el 429 previsible; el reintento cubre
+el que no lo era.
+
+El reloj y la funcion de dormir se inyectan. No es purismo: con el reloj real, el
+test que verifica el cache acotado del embedder tardaba **sesenta segundos**
+esperando una cuota que en un test no existe.
+
+**Lo que no es:** un planificador. No ejecuta acciones diferidas ni agenda nada. De
+orquestar se encarga n8n, y de esperar a una persona su nodo `Wait`.
+
+### Un fallo se explica una vez, no una por cada salida
+
+La misma causa decia tres cosas distintas segun por donde saliera: los handlers de
+`main.py` clasificaban y escribian su texto, el streaming del panel volvia a
+clasificar con los mismos marcadores y escribia otro, y la pagina HTML un tercero.
+Las tres con `MARKER in str(exc).lower()`.
+
+Esa tecnica ya habia fallado en el workflow de n8n, donde un `.includes('404')`
+lo disparaba un 503: el mensaje traia adentro la pagina de arranque de Render —263
+KB de HTML con «404» en el nombre de una fuente— y TXN-00051, que existe, salia
+como «la transaccion no existe en la base».
+
+`domain/fallos.py` clasifica en orden de confianza: **tipo de excepcion**, despues
+**codigo de estado**, y solo al final **substring**, y solo donde el SDK no da otra
+cosa (Anthropic manda «sin saldo» con un 400, indistinguible por codigo). Devolver
+«no se» es una respuesta legitima: significa que es un error de verdad y sale un
+500 honesto con su `request_id`. Inventar una causa seria peor que no dar ninguna.
+
+Por que el panel sigue clasificando por su cuenta y eso esta bien: cuando el SSE ya
+empezo a emitir, la respuesta salio con 200 y ningun `@app.exception_handler` la
+puede cambiar. **Comparte la clasificacion aunque no pueda compartir el
+transporte.**
 
 ---
 
@@ -748,6 +810,7 @@ quest_ML/
   api/
     app/
       config.py             # pydantic-settings (prefijo CB_)
+      rate_limiter.py       # Turnos por ventana: lo usan el LLM y los embeddings
       main.py               # App FastAPI, CORS, registro de routers
       dependencies.py       # DI via lifespan, todos los servicios inicializados una vez
       domain/
@@ -755,6 +818,7 @@ quest_ML/
         enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
         constants.py        # 73+ umbrales y límites centralizados
         contratos.py        # Protocols: FuenteDeCasos, SumideroDeAlertas, Completador
+        fallos.py           # QUÉ SE DICE de cada forma de fallar, una sola vez
         context.py          # CaseContext: el contexto de un caso, en un tipo
         decision.py         # QUÉ DECIDE EL CÓDIGO: acción, riesgo, HITL, compensación
         precedentes.py      # Cómo se le cuenta al modelo lo que ya pasó
@@ -797,7 +861,8 @@ quest_ML/
         tracer.py           # LangfuseTracer + NoOpTracer (Protocol)
         trazador_local.py   # TrazadorLocal: mismo Protocol, anota en SQLite
       data/
-        db.py               # Acceso SQLite (datos puros, sin lógica de negocio)
+        db.py               # Acceso SQLite: lee y escribe filas, nada más
+        esquema.py          # Crear tablas y migrar columnas. Se corre al arrancar
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
     workflow_ciri_agent.json  # Workflow principal (45 nodos: 39 exec + 6 sticky)
