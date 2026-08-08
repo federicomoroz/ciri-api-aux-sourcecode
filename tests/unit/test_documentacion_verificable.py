@@ -13,6 +13,8 @@ procedencia se desmiente con un comando; uno con procedencia se discute.
 
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -123,24 +125,29 @@ def test_cada_escenario_documentado_tiene_su_informe():
 
 
 def test_el_conteo_de_tests_del_readme_es_el_real():
-    """Un badge de tests que nadie recalcula envejece en la primera semana."""
+    """Un badge de tests que nadie recalcula envejece en la primera semana.
+
+    Se cuentan los casos que pytest recolecta, no las funciones `def test_`. Antes
+    se comparaba contra las funciones con un margen de +/-40 para absorber lo que
+    `parametrize` multiplica; con el uso que tiene ahora, esa diferencia paso de
+    28 a 104 y el margen habria que ensancharlo hasta dejar de medir nada. Un
+    numero exacto cuesta tres segundos de recoleccion y no tiene fudge factor.
+    """
     readme = LEEME.read_text(encoding="utf-8")
     m = re.search(r"tests-(\d+)%20passed", readme)
     assert m, f"{LEEME.name} perdio el badge de tests"
     declarados = int(m.group(1))
 
-    archivos = [
-        *(RAIZ / "tests" / "unit").glob("test_*.py"),
-        *(RAIZ / "tests" / "integration").glob("test_*.py"),
-        *(RAIZ / "tests" / "e2e").glob("test_*.py"),
-    ]
-    reales = sum(
-        len(re.findall(r"^\s*def test_", f.read_text(encoding="utf-8"), re.MULTILINE))
-        for f in archivos
-    )
-    # Margen: `parametrize` multiplica casos sin agregar funciones.
-    assert abs(declarados - reales) <= 40, (
-        f"el badge dice {declarados} y hay {reales} funciones de test en {len(archivos)} archivos"
+    salida = subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        capture_output=True, text=True, cwd=RAIZ, timeout=300,
+    ).stdout
+    encontrado = re.search(r"(\d+) tests? collected", salida)
+    assert encontrado, f"no se pudo recolectar:\n{salida[-500:]}"
+    reales = int(encontrado.group(1))
+
+    assert declarados == reales, (
+        f"el badge dice {declarados} y pytest recolecta {reales}"
     )
 
 

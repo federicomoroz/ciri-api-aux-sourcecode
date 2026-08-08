@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-870%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-969%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -260,7 +260,7 @@ sólo el código que la API necesita para funcionar.
 |---|---|
 | `docs/ejes.md` | Los 7 ejes de la consigna, uno por uno, con evidencia y cómo verificarla |
 | `docs/architecture.md` | Cómo está armado: el flujo de n8n, las capas, la estructura del repo y la suite de tests |
-| `docs/decisions.md` | 21 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
+| `docs/decisions.md` | 22 decisiones técnicas, cada una con su razonamiento y sus trade-offs |
 | `docs/prompts.md` | Los prompts, versionados, y por qué cambiaron |
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
@@ -274,7 +274,7 @@ sólo el código que la API necesita para funcionar.
 pytest tests/unit tests/integration -q --cov=api/app --cov-fail-under=85
 ```
 
-**771 tests** en 32 archivos y **89,3% de cobertura** sobre `api/app` — el número que
+**969 tests** en 38 archivos y **92% de cobertura** sobre `api/app` — el número que
 reporta el CI sobre un checkout limpio, que es el reproducible: medido con un `.env` cargado
 sube unas décimas, porque se ejecutan ramas que sin configuración no corren. Los de `unit/` e `integration/` corren sin n8n ni Qdrant levantados; los 33 de
 `e2e/` llaman a la API publicada y al modelo, así que quedan fuera del CI a propósito —un test

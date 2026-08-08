@@ -337,7 +337,7 @@ La configuracion es via variables de entorno:
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 771 tests pasan (738 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 969 tests (936 unit/integration + 33 E2E contra la API real).
 
 ---
 
@@ -381,21 +381,34 @@ El sistema esta organizado en capas concentricas. Cada capa depende solo de las 
 ```
 routes/          <- Interfaz HTTP. ~20 lineas cada uno. Cero logica de negocio.
     |
-services/        <- Orquesta operaciones de dominio. Sin conocimiento HTTP.
+services/        <- Orquesta. Pide, aplica el override, alerta. Sin HTTP.
     |
 analysis/ . rag/ . llm/   <- Logica de dominio pura. Sin imports de FastAPI.
     |
 data/            <- Acceso a datos puro. Sin logica de negocio.
     |
-domain/          <- Modelos, enums, constantes. Sin dependencias externas.
+domain/          <- Modelos, enums, constantes, contratos, Y LA DECISION.
 ```
+
+**Por que la decision esta en `domain/` y no en `services/`.** `domain/decision.py`
+y `domain/precedentes.py` son funciones puras sobre `dict`: no conocen el cliente
+del modelo, ni el tracer, ni la base. Es donde vive la tesis del proyecto —el
+codigo decide, el LLM explica— y se prueba sin un solo mock.
+
+Vivian dentro de `ResolutionService` como quince metodos estaticos de veintidos.
+Cuando dos tercios de una clase no necesita el estado de la clase, el limite esta
+mal trazado; y mientras estuvieron ahi, esa logica arrastraba `Tracer`,
+`LLMClient` y `ModelosService` en su grafo de dependencias por el solo hecho de
+compartir archivo. `ResolutionService` paso de 819 a 324 lineas y quedo con lo que
+si es orquestacion.
 
 **Consecuencias practicas de esta estructura:**
 
 | Cambio necesario | Archivos tocados | Archivos intactos |
 |---|---|---|
 | Cambiar Anthropic por otro proveedor | Nada: se elige desde el panel o con `CB_LLM_PROVIDER` | Todo el codebase |
-| Agregar un proveedor nuevo | Una entrada en `llm/client.py` (`PROVEEDORES`) | Todo lo demas |
+| Agregar un proveedor nuevo | Una entrada en `llm/proveedores.py` | Todo lo demas |
+| Agregar un guardrail | Una funcion y una linea en una tupla (`services/guardrails.py`) | Todo lo demas |
 | Un modelo que necesite otro trato | Una entrada en `llm/adaptadores.py` | Todo lo demas |
 | Cambiar Qdrant por Pinecone | `rag/indexer.py` + `rag/retriever.py` | Todo lo demas |
 | Agregar nuevo endpoint | Un archivo en `routes/` | Todas las rutas existentes |
@@ -741,10 +754,16 @@ quest_ML/
         models.py           # Modelos Pydantic con Field validators
         enums.py            # StrEnums: VerdictType, Severity, ErrorPattern, etc.
         constants.py        # 73+ umbrales y límites centralizados
+        contratos.py        # Protocols: FuenteDeCasos, SumideroDeAlertas, Completador
+        context.py          # CaseContext: el contexto de un caso, en un tipo
+        decision.py         # QUÉ DECIDE EL CÓDIGO: acción, riesgo, HITL, compensación
+        precedentes.py      # Cómo se le cuenta al modelo lo que ya pasó
       services/
-        resolution.py       # ResolutionService: resolve + judge + guardrails
+        resolution.py       # ResolutionService: orquesta las tres llamadas al modelo
+        guardrails.py       # Los 6 guardrails, como tupla de reglas
         feedback.py         # FeedbackService: feedback + auto-indexación
         pipeline.py         # PipelineService: orquestación para panel directo + SSE streaming
+        modelos.py          # ModelosService: qué modelo corre en cada paso
         langfuse_stats.py   # Estadísticas de observabilidad
       rag/
         indexer.py          # QdrantIndexer (batch + single point, uuid5 IDs)
@@ -753,17 +772,20 @@ quest_ML/
         formatter.py        # Formatters compartidos + matching de motivos
         embedder.py         # Voyage AI embedder (lazy, thread-safe)
       llm/
-        client.py           # Protocol LLMClient + AnthropicClient
+        client.py           # Protocol LLMClient + Anthropic y OpenAI-compatible
+        manager.py          # LLMManager: la única puerta a los modelos
+        proveedores.py      # UN registro: URL base, adaptador y catálogo del panel
+        adaptadores.py      # Un adaptador por familia: tokens, reintentos, frecuencia
+        pricing.py          # Costo estimado por modelo
         parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/
           v1_policy_eval.py # v1.3 — evaluación de políticas
           v1_resolution.py  # v3.1 — síntesis de resolución (Sonnet)
           v1_judge.py       # v2.2 — LLM-as-Judge con rubrics
-        client.py           # Protocol LLMClient + Anthropic y OpenAI-compatible
-        manager.py          # LLMManager: la única puerta a los modelos
-        adaptadores.py      # Un adaptador por familia: tokens, reintentos, frecuencia
       analysis/
-        analyzer.py         # SLA, patrones de error, riesgo, flags de cliente
+        analyzer.py         # Riesgo de comercio y flags de cliente (consultan la base)
+        sla.py              # CalculadoraDeSLA: el reloj de un reclamo
+        patrones.py         # Los 8 patrones de log (no tocan la base)
       routes/               # Handlers thin (~20 líneas cada uno)
       reports/
         generator.py        # Jinja2 → HTML
@@ -784,10 +806,10 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 771 tests (unit + integration + E2E)
+  tests/                      # 969 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
-    decisions.md              # 21 decisiones técnicas con razonamiento
+    decisions.md              # 22 decisiones técnicas con razonamiento
     prompts.md                # Prompts documentados con versionado
     rag_explanation.md        # Estrategia RAG, colecciones, QueryBuilder
     mejora_continua.md        # Feedback loop, Judge, guardrails
@@ -829,7 +851,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-771 tests en 32 archivos (unit + integration + E2E) y **89,3% de cobertura** sobre `api/app`.
+969 tests en 38 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
 Es el numero que reporta el CI sobre un checkout limpio, que es el reproducible: medido con un
 `.env` cargado sube unas decimas, porque se ejecutan ramas que sin configuracion no corren.
 El CI falla por debajo del 85%: el piso no esta para presumir un numero sino para que una

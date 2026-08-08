@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 771 tests pasando (738 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 969 tests (936 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -617,3 +617,65 @@ incidente esperando.
 - (-) Tres proveedores distintos a la vez no funcionan con una sola clave BYOK. El panel lo avisa
   y ofrece «usar en los tres pasos»
 - (-) Una tabla más y un servicio más para algo que antes eran dos variables de entorno
+
+---
+
+## 22. Qué se invirtió y qué no
+
+**Contexto.** Una auditoría SOLID dio S:C · O:C · L:D · I:B · D:C. El diagnóstico no era «está mal
+escrito»: el proyecto aplicó SOLID donde declaró un eje —las políticas son datos, y eso es OCP
+genuino: agregar una política bloqueante es un POST— y no lo aplicó donde no lo declaró.
+
+**Lo que se hizo, y por qué cada cosa.**
+
+**El núcleo de decisión salió de `ResolutionService`.** Tenía 15 métodos estáticos de 22: quince
+funciones puras dentro de una clase cuyo estado usaban siete métodos. Cuando dos tercios de una
+clase no necesita la clase, el límite está mal trazado. `domain/decision.py` y
+`domain/precedentes.py` no dependen de nada; antes esa lógica arrastraba `Tracer`, `LLMClient` y
+`ModelosService` por compartir archivo. 819 → 324 líneas.
+
+**Los seis guardrails pasaron a ser una tupla de reglas.** Es el punto de OCP que faltaba: el
+proyecto presenta «seis guardrails» como diferenciador y ese número estaba congelado — agregar el
+séptimo era editar el cuerpo de `_validate_resolution`. Ahora es escribir una función y sumarla a
+una tupla, verificado corriendo una nueva sin tocar el recorredor.
+
+**El SLA salió del `Analyzer`.** No es orden: **el SLA decide plata**. Si da incumplimiento,
+POL-SLA-004 habilita compensación. Estaba mezclado con el análisis de comercios en la misma clase.
+
+**El Protocol de `Tracer` se partió en dos**, y `enabled` dejó de mentir. Escribir observaciones y
+leer lo observado son capacidades distintas; con un solo Protocol el consumidor tenía que
+esquivarlo con `getattr` para saber con cuál hablaba. Y `LangfuseTracer` tragaba el fallo dejando
+`enabled` en `True`: como de eso depende la caída al registro local, **encender la observabilidad
+dejaba al panel con menos métricas que apagarla**.
+
+**Un solo registro de proveedores.** Estaban en tres tablas paralelas con la misma clave. Las tres
+coincidían —se verificó antes de unirlas— pero nada lo garantizaba, y olvidarse una fallaba en
+silencio: sin URL base, el modelo de Groq salía con la credencial de Groq hacia la API de Anthropic
+y el error hablaba de autenticación.
+
+### Lo que NO se invirtió, a propósito
+
+**`FeedbackService`, `ModelosService` y `RAGUpdater` siguen recibiendo `Database` concreta.** Se
+escribieron Protocols solo donde el consumidor usa bastante menos de lo que recibe: `FuenteDeCasos`
+son 5 de las 29 operaciones de `Database`. Donde el consumidor usa casi todo, un Protocol con una
+sola implementación —que nunca va a tener otra, porque hay un backend y no hay ORM— es ceremonia y
+no inversión: agrega una declaración que ningún llamador necesita y una capa más para leer.
+
+**El panel (`routes/panel.py`, 961 líneas) quedó sin partir.** Tiene ocho responsabilidades y es el
+archivo más grande del proyecto. Es también periférico —un panel de prueba— y el de menor cobertura
+(91% tras escribirle tests de caracterización, 77% antes). Es donde más se puede romper algo que
+ningún test vea, a cambio de nada visible. La red quedó puesta por si algún día se encara: los seis
+modos de `panel_analyze` están caracterizados, incluida la precedencia que importa (pedir n8n gana
+sobre el modo demo).
+
+**Trade-offs:**
+- (+) El número «seis guardrails» deja de estar congelado
+- (+) El núcleo de decisión se prueba sin un solo mock
+- (+) Agregar un proveedor pasa de tres ediciones sincronizadas a una, y el modo de falla deja de
+  ser silencioso
+- (+) Encender la observabilidad deja de empeorar el panel
+- (-) Más archivos que abrir. Cuatro módulos de una responsabilidad son mejores para mantener, pero
+  para quien lee el repo veinte minutos, un archivo grande y comentado puede leerse más rápido
+- (-) `git blame` deja de servir para las líneas movidas
+- (-) Es refactor sobre un entregable ya entregado: no cambia una sola salida de la API. Todo lo que
+  podía pasar era neutro o malo, y por eso se hizo con un golden master de 434 casos delante
