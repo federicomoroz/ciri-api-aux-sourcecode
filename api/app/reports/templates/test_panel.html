@@ -3225,6 +3225,22 @@ async function _runClassic(payload, mode, timeoutSec, timeoutId) {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
+  // El caso derivo a una persona: n8n publico el formulario de aprobacion y la
+  // API lo declara en esta cabecera. Se abre en una pestania y no adentro del
+  // <iframe> del panel — el formulario arma su URL de envio desde
+  // `window.location`, asi que necesita ser el documento de arriba.
+  //
+  // Si el navegador bloquea la pestania, `window.open` devuelve null: la pagina
+  // que igual se muestra en el panel tiene el link a la vista, asi que no se
+  // pierde el acceso. Nunca se insiste ni se abre mas de una.
+  const formularioHitl = resp.headers.get('X-HITL-Form-Url');
+  if (formularioHitl) {
+    const abierta = window.open(formularioHitl, '_blank', 'noopener');
+    if (!abierta) {
+      console.info('El navegador bloqueo la pestania del formulario; el link queda en el panel.');
+    }
+  }
+
   let usageInfo = null;
   try {
     const h = resp.headers.get('X-Usage-JSON');

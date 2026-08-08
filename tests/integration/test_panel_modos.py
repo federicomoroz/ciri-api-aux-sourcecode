@@ -217,7 +217,7 @@ class TestPedirN8nGanaSobreElModoDemo:
         ajustes.n8n_base_url = "http://127.0.0.1:1"
         monkeypatch.setattr(
             "api.app.routes.panel._try_n8n",
-            _corutina_que_devuelve(None),
+            _corutina_que_devuelve((None, "")),
         )
         r = cliente.post("/api/panel/analyze", json=_cuerpo())
         assert r.status_code == 502
@@ -227,7 +227,7 @@ class TestPedirN8nGanaSobreElModoDemo:
         ajustes.n8n_base_url = "http://127.0.0.1:1"
         monkeypatch.setattr(
             "api.app.routes.panel._try_n8n",
-            _corutina_que_devuelve("<html>vino de n8n</html>"),
+            _corutina_que_devuelve(("<html>vino de n8n</html>", "")),
         )
         r = cliente.post("/api/panel/analyze", json=_cuerpo())
         assert r.status_code == 200
@@ -235,6 +235,9 @@ class TestPedirN8nGanaSobreElModoDemo:
 
 
 def _corutina_que_devuelve(valor):
+    """`_try_n8n` devuelve (html, url_del_formulario): la segunda solo cuando el
+    caso derivo a una persona."""
+
     async def _falsa(*_a, **_k):
         return valor
 

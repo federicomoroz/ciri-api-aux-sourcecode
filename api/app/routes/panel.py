@@ -769,7 +769,9 @@ async def panel_analyze(
             return HTMLResponse(
                 content=_pagina_sin_n8n(req.transaction_id), status_code=400
             )
-        html = await _try_n8n(req, settings, report_gen, n8n_test, timeout_s, n8n_base_url)
+        html, formulario = await _try_n8n(
+            req, settings, report_gen, n8n_test, timeout_s, n8n_base_url,
+        )
         if html is None:
             return HTMLResponse(
                 content=_pagina_n8n_no_respondio(
@@ -777,7 +779,13 @@ async def panel_analyze(
                 ),
                 status_code=502,
             )
-        return HTMLResponse(content=html, status_code=200)
+        respuesta = HTMLResponse(content=html, status_code=200)
+        if formulario:
+            # El panel lee esto y abre la pestania. Va en una cabecera y no en
+            # el cuerpo porque el cuerpo entra a un <iframe>, y desde adentro no
+            # se puede sacar una ventana nueva.
+            respuesta.headers["X-HITL-Form-Url"] = formulario
+        return respuesta
 
     # ── Modo produccion: el pipeline corre de verdad ──────────────────────
     # La clave que venga en la peticion reemplaza a la del servidor. Quien trae
@@ -902,16 +910,21 @@ async def _try_n8n(
     n8n_test: bool,
     timeout_s: float = N8N_TIMEOUT_S,
     n8n_base_url_override: str | None = None,
-) -> str | None:
-    """Try n8n webhook. Returns rendered HTML on success, None on failure.
+) -> tuple[str | None, str]:
+    """(html, url del formulario HITL). El html es None si n8n no sirvio.
 
-    n8n responds with raw JSON data (no HTML). The panel applies the
-    HTML template via ReportGenerator to produce the formatted report.
+    n8n responde con datos crudos en JSON y el panel les aplica la plantilla.
+
+    La segunda parte viene vacia salvo que el caso haya derivado a una persona:
+    ahi n8n responde 303 con la URL del formulario en `Location`, y quien llama
+    la necesita para abrirla en una pestania. Devolverla aparte y no solo
+    incrustada en el html es lo que permite que el panel la abra: un `<iframe>`
+    no puede sacar una ventana nueva desde adentro.
     """
     base = (n8n_base_url_override or settings.n8n_base_url).rstrip("/")
     if not base:
         logger.info("panel: sin instancia de n8n configurada, se usa el pipeline directo")
-        return None
+        return None, ""
     webhook_path = N8N_WEBHOOK_TEST_PATH if n8n_test else N8N_WEBHOOK_PATH
     n8n_url = base + webhook_path
     logger.info("panel: posting to n8n %s at %s for %s (timeout=%ss)", "TEST" if n8n_test else "PROD", n8n_url, req.transaction_id, timeout_s)
@@ -936,13 +949,13 @@ async def _try_n8n(
                     "panel: %s quedo esperando una decision humana; se lleva al formulario %s",
                     req.transaction_id, destino,
                 )
-                return _pagina_hacia_el_formulario(req.transaction_id, destino)
+                return _pagina_hacia_el_formulario(req.transaction_id, destino), destino
             logger.warning("panel: n8n redirigio sin Location — se usa el pipeline directo")
-            return None
+            return None, ""
 
         if r.status_code != 200:
             logger.warning("panel: n8n returned status=%s — falling back to direct", r.status_code)
-            return None
+            return None, ""
 
         content_type = r.headers.get("content-type", "")
 
@@ -952,17 +965,17 @@ async def _try_n8n(
             # Cache hit: n8n returns {cached: true, html: "..."} directly
             if data.get("cached") and data.get("html"):
                 logger.info("panel: n8n cache hit for %s", req.transaction_id)
-                return data["html"]
+                return data["html"], ""
             # Normal: render HTML from raw data
             logger.info("panel: n8n returned raw data for %s — rendering HTML", req.transaction_id)
-            return report_gen.render(data)
+            return report_gen.render(data), ""
 
         # Legacy: text/html response (backwards compatible)
         if "text/html" in content_type:
             logger.info("panel: n8n returned HTML for %s", req.transaction_id)
-            return r.text
+            return r.text, ""
 
         logger.warning("panel: n8n unexpected content-type=%s — falling back to direct", content_type)
     except Exception as exc:
         logger.warning("panel: n8n unreachable at %s (%s) — falling back to direct", n8n_url, exc)
-    return None
+    return None, ""

@@ -564,3 +564,42 @@ class TestElErrorDeLaApiNoSeConfundeConDatoFaltante:
     def test_lo_que_no_es_404_menciona_el_arranque_en_frio(self):
         """Es la causa mas probable de que la API no conteste en este deploy."""
         assert "arrancando" in self.cuerpo or "duerme" in self.cuerpo
+
+
+class TestElFormularioHitlLlegaPorTresVias:
+    """Un servidor no puede abrir una ventana en la maquina de otro.
+
+    Lo unico que puede hacer es entregar el link de las tres formas en que alguien
+    puede estar mirando, y que ninguna dependa de que se acuerde de copiarlo.
+    """
+
+    @property
+    def responde(self) -> dict:
+        return nodo(cargar(ORQUESTADOR), "Responder — Requiere Aprobación")["parameters"]
+
+    def test_redirige_para_quien_llega_con_un_navegador(self):
+        """303 + Location: el navegador navega solo, sin tocar nada."""
+        opciones = self.responde["options"]
+        assert opciones["responseCode"] == 303
+        cabeceras = {e["name"]: e["value"] for e in opciones["responseHeaders"]["entries"]}
+        assert "resumeFormUrl" in cabeceras.get("Location", "")
+
+    def test_el_cuerpo_navega_solo_al_abrirlo(self):
+        """Para quien uso curl y despues abre el archivo que guardo.
+
+        Un 303 que el cliente no sigue deja el cuerpo en disco. Sin esto, ese
+        archivo mostraba un boton y habia que hacer clic; con el meta refresh,
+        abrirlo alcanza.
+        """
+        assert 'http-equiv="refresh"' in self.responde["responseBody"]
+
+    def test_y_deja_el_link_a_la_vista_igual(self):
+        """Si el refresh no corre —un visor sin JS ni navegacion— queda el ancla."""
+        cuerpo = self.responde["responseBody"]
+        assert "<a class=" in cuerpo and "resumeFormUrl" in cuerpo
+
+    def test_la_alerta_lo_publica_para_quien_no_llamo_al_webhook(self):
+        """El analista real no es quien disparo el caso: se entera por la alerta."""
+        aviso = nodo(cargar(ORQUESTADOR), "Avisar — Formulario HITL")["parameters"]
+        assert "resumeFormUrl" in aviso["jsonBody"]
+        assert "/api/alerts/" in aviso["url"]
