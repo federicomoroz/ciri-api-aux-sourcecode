@@ -18,6 +18,14 @@ Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transac
 > para volver a medir sí viaja: `python scripts/evaluar.py --n 20` corre la muestra, escribe el
 > detalle caso por caso en `docs/evaluaciones/` y reporta el costo. El método completo está en
 > [`docs/mejora_continua.md`](docs/mejora_continua.md#como-se-midio-el-91).
+>
+> **Y ya corrió una vez**, con el free tier y costo cero:
+> [`docs/evaluaciones/`](docs/evaluaciones/) — 20 casos pedidos, 3 medidos (los otros 17 se
+> toparon con la cuota diaria del proveedor gratuito, y el archivo anota el motivo de cada uno),
+> promedio 8.4. **Ese número no mueve el badge y no debería:** se midió con un modelo gratuito
+> en los tres pasos, no con la configuración documentada, y con n=3 no hay muestra. Lo que
+> cambia es que ahora hay un archivo con su semilla, sus versiones de prompt y sus fracasos,
+> en vez de un número sin procedencia.
 
 ---
 
