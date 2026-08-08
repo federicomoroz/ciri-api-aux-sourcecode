@@ -3,7 +3,7 @@ Test panel routes.
 
 GET  /panel                    — serves the interactive test panel HTML page
 GET  /api/panel/n8n-status     — liveness check for n8n (used by panel UI badge)
-POST /api/panel/analyze        — runs analysis via n8n (or direct pipeline fallback)
+POST /api/panel/analyze        — corre el analisis por n8n, o por el pipeline directo si se pidio asi
 """
 
 import json
@@ -701,13 +701,20 @@ async def panel_analyze(
     report_gen: ReportGenerator = Depends(get_report_generator),
     settings: Settings        = Depends(get_settings),
 ) -> HTMLResponse:
-    """
-    Run the chargeback analysis pipeline and return an HTML report.
+    """Corre el analisis del contracargo y devuelve el informe en HTML.
 
-    Strategy:
-    1. If direct=false, try the n8n explicit workflow (POST /webhook/chargeback-agent).
-       n8n returns raw JSON data; the panel applies the HTML template locally.
-    2. If n8n is unavailable or direct=true, use the direct FastAPI pipeline.
+    Quien orquesta lo decide `direct`, y no hay cruce entre los dos caminos:
+
+    1. `direct=false` — el workflow explicito de n8n (`POST /webhook/chargeback-agent`).
+       n8n devuelve JSON y el panel le aplica la plantilla. Si n8n no esta o no
+       responde, la respuesta es 400 o 502: **nunca** el pipeline directo. Un
+       informe identico al real haciendose pasar por una ejecucion de la
+       orquestacion es peor que un error.
+    2. `direct=true` — el pipeline de FastAPI en este mismo proceso.
+
+    Sobre esos dos caminos, tres modos que solo cambian con que se corre: el
+    guardado del modo demo, el modelo gratuito, y el efimero de quien trae su
+    clave o elige su modelo. Ninguno de los tres puede adelantarsele a n8n.
     """
     # Modo demo con un modelo gratuito: se corre de verdad. Cuesta lo mismo que
     # no correrlo y devuelve un analisis de ahora en vez de una grabacion.
@@ -761,7 +768,15 @@ async def panel_analyze(
 
     # Efimero si el visitante trajo su clave o eligio otro modelo para esta
     # corrida: en los dos casos la configuracion es suya y no la del proceso.
-    if req.api_key or req.modelos:
+    #
+    # Lleva la misma guarda que el modo demo, y por el mismo motivo: el panel
+    # arma un solo payload para todos los modos, asi que la clave pegada y el
+    # modelo elegido viajan tambien cuando se pidio n8n. Sin `not pidieron_n8n`
+    # esta rama gana y devuelve un informe del pipeline directo a quien eligio
+    # «n8n Production» — exactamente lo que el bloque de abajo declara peor que
+    # un error. La configuracion propia aplica al pipeline directo; quien pide
+    # orquestacion recibe orquestacion.
+    if (req.api_key or req.modelos) and not pidieron_n8n:
         with _pipeline_efimero(pipeline, request, api_key=req.api_key or "", override=req.modelos) as propio:
             respuesta = _correr_directo(propio, req, settings, request)
             return _marcar_si_gratis(respuesta, request, corre_gratis)
@@ -973,7 +988,7 @@ async def _try_n8n(
             return None, ""
 
         if r.status_code != 200:
-            logger.warning("panel: n8n returned status=%s — falling back to direct", r.status_code)
+            logger.warning("panel: n8n respondio status=%s — se responde 502", r.status_code)
             return None, ""
 
         content_type = r.headers.get("content-type", "")
@@ -994,7 +1009,7 @@ async def _try_n8n(
             logger.info("panel: n8n returned HTML for %s", req.transaction_id)
             return r.text, ""
 
-        logger.warning("panel: n8n unexpected content-type=%s — falling back to direct", content_type)
+        logger.warning("panel: n8n devolvio content-type=%s, inesperado — se responde 502", content_type)
     except Exception as exc:
-        logger.warning("panel: n8n unreachable at %s (%s) — falling back to direct", n8n_url, exc)
+        logger.warning("panel: no se llega a n8n en %s (%s) — se responde 502", n8n_url, exc)
     return None, ""

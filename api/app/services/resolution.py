@@ -25,23 +25,16 @@ from ..domain.constants import (
 )
 from ..domain.context import CaseContext
 from ..domain.contratos import Completador, SumideroDeAlertas
-from ..domain.enums import RiskLevel, Severity, VerdictType
+from ..domain.enums import RiskLevel, Severity
 from ..domain.models import JudgeEvaluationOutput, PolicyVerdictOutput, ResolutionOutput
 from ..llm import prompts
 from ..llm.client import LLMClient, LLMResult
 from ..llm.parsing import validate_llm_output
-from ..observability.tracer import Tracer
+from ..observability.tracer import NoOpTracer, Tracer
 from ..rag.formatter import format_cases_for_prompt, format_policies_for_prompt
 from . import guardrails
 
 logger = logging.getLogger(__name__)
-
-# Los unicos veredictos que significan algo. Se deriva del enum para que agregar
-# uno nuevo no deje esta lista atras.
-_VERDICTOS_VALIDOS = frozenset(v.value for v in VerdictType)
-# Los mismos, para el mensaje que lee una persona. Enumerarlos a mano hacia
-# que agregar un veredicto dejara el mensaje mintiendo.
-_VEREDICTOS_LEGIBLES = "/".join(sorted(_VERDICTOS_VALIDOS))
 
 
 class ResolutionService:
@@ -87,7 +80,10 @@ class ResolutionService:
         self._llm = llm
         self._llm_resolution = llm_resolution or llm
         self._llm_judge = llm_judge or self._llm_resolution
-        self.tracer = tracer
+        # `None` significa «sin observabilidad», no «sin trazador»: el servicio
+        # llama a `tracer.trace()` sin preguntar, asi que guardarlo crudo hace
+        # que la opcionalidad que declara la firma reviente al usarla.
+        self.tracer = tracer or NoOpTracer()
         self._alertas = alertas
 
     def _completar(self, paso: str, system: str, user: str, trace_id: str | None = None):

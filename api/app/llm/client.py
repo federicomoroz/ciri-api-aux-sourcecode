@@ -59,7 +59,10 @@ class AnthropicClient:
             timeout=httpx.Timeout(LLM_TIMEOUT_S, connect=10.0),
         )
         self.model = model
-        self.tracer = tracer
+        # Igual que `OpenAICompatibleClient`: `complete()` llama a
+        # `tracer.generation()` sin preguntar, asi que el `None` que admite la
+        # firma tiene que convertirse en un trazador que no hace nada.
+        self.tracer = tracer or NoOpTracer()
 
     def complete(
         self,

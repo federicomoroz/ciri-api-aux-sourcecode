@@ -212,6 +212,38 @@ class TestPedirN8nGanaSobreElModoDemo:
         cliente, _, _ = panel
         assert "Falta la URL" in cliente.post("/api/panel/analyze", json=_cuerpo()).text
 
+    # El panel arma UN solo payload para todos los modos (`buildPayload`), asi
+    # que la clave pegada y el modelo elegido en la sesion viajan tambien cuando
+    # el modo es n8n. La rama efimera no puede quedarse con esos pedidos.
+    @pytest.mark.parametrize(
+        "extra",
+        [
+            pytest.param({"api_key": "sk-ant-de-quien-evalua"}, id="con-su-clave"),
+            pytest.param({"modelos": {"judge": GRATIS}}, id="con-su-modelo"),
+        ],
+    )
+    def test_traer_clave_o_modelo_propio_no_saltea_la_orquestacion(
+        self, panel, monkeypatch, extra,
+    ):
+        cliente, ajustes, _ = panel
+        ajustes.n8n_base_url = "http://127.0.0.1:1"
+        monkeypatch.setattr(
+            "api.app.routes.panel._try_n8n",
+            _corutina_que_devuelve(("<html>vino de n8n</html>", "")),
+        )
+
+        def no_deberia_correr(*a, **k):
+            raise AssertionError(
+                "corrio el pipeline directo: quien eligio n8n recibio un informe "
+                "que parece venir de la orquestacion sin haber pasado por ella"
+            )
+
+        monkeypatch.setattr("api.app.routes.panel._correr_directo", no_deberia_correr)
+
+        r = cliente.post("/api/panel/analyze", json=_cuerpo(**extra))
+        assert r.status_code == 200
+        assert "vino de n8n" in r.text
+
     def test_con_url_que_no_responde_es_502(self, panel, monkeypatch):
         cliente, ajustes, _ = panel
         ajustes.n8n_base_url = "http://127.0.0.1:1"
