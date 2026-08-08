@@ -95,13 +95,15 @@ Lo que no cuesta nada funciona igual en los dos modos: transacciones, logs, bús
 
 ### 1. Ver el circuito, sin ejecutar nada
 
-Los cuatro archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
+Los cinco archivos HTML numerados de esta carpeta. Se abren en cualquier navegador, sin conexión ni instalar nada. Se imprimen a PDF.
 
 Están en orden de lectura: primero **qué** hace el circuito, después **cómo** se hablan las dos piezas.
 
 **«el circuito completo»** — los 39 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue. Se genera del propio JSON del workflow, así que no puede quedar desfasado del flujo real.
 
 **«n8n y la API»** — quién le pide qué a quién. Las catorce llamadas en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
+
+**«La API por dentro»** — los 31 endpoints como un circuito, cada uno con su entrada. Además de qué hace cada pieza, explica por qué está separada así: qué principio SOLID sostiene cada corte, qué patrones de diseño usa y dónde. Es la más larga de las cinco y la única que habla de decisiones y no de flujo.
 
 **«el RAG»** — la cadena entera de recuperación, seguida con un caso real: qué se indexa y qué no, cómo el código arma la consulta, por qué las dos colecciones se buscan con criterios opuestos, cómo se formatea el contexto y por dónde el índice se escribe solo.
 
@@ -157,6 +159,13 @@ Tres pasos manuales al importar, inevitables porque n8n reasigna identificadores
 1. **Activar los workflows.** n8n los importa desactivados siempre.
 2. En el orquestador **y** en el del formulario: **Settings → Error Workflow → `workflow_ciri_errors`**. Sin eso, los fallos quedan sólo en la ejecución y no llegan al log de alertas.
 3. **En el formulario, poner el Form Path.** Al importar desde la interfaz, n8n reemplaza el path del archivo por un identificador propio. Abrí el nodo **Form Trigger**, escribí `chargeback-form` en el campo **Form Path** y guardá. Ahí el formulario queda en `/form/chargeback-form`; si preferís el que generó n8n, la URL también está a la vista en ese mismo nodo.
+
+> **Si tu n8n es Cloud y no el del `docker-compose`, hay un cuarto paso.** El nodo
+> **Disparar el Orquestador** llama al webhook por `http://localhost:5678`, que es
+> la dirección correcta dentro del contenedor del `docker-compose` —n8n escucha
+> ahí— pero no en Cloud. Abrí ese nodo y reemplazá el host de la URL por el de tu
+> instancia. Los otros dos nodos HTTP no necesitan nada: apuntan a la API pública.
+> Es la única pieza del entregable que no queda andando con sólo importar.
 
 Para apuntarlo a otra API, en orden de prioridad:
 
