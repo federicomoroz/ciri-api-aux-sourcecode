@@ -312,7 +312,7 @@
 
     <div class="canvas-hace">
       <span class="q">Responder — Requiere Aprobación</span>
-      <span>Un 303 al formulario del Wait, que se abre solo. Su URL se genera al correr y n8n sólo la expone <b>antes</b> de llegar al nodo: por eso el aviso y la respuesta van primero.</span>
+      <span>Un 303 al formulario del Wait. Su URL se genera al correr y n8n sólo la expone <b>antes</b> de llegar al nodo: por eso el aviso y la respuesta van primero. Ningún servidor puede abrir una ventana en otra máquina, así que el link sale por las cuatro vías en que alguien puede estar mirando: el 303 lo sigue un navegador, el cuerpo guardado lleva <code>meta refresh</code> para quien usó curl, el panel navega su iframe, y la alerta <code>hitl_form_ready</code> queda para el analista, que no es quien disparó el caso.</span>
     </div>
 
     <div class="fila f-api">

@@ -133,8 +133,29 @@ ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (11 nodos)
 
 La URL del formulario del Wait se genera al correr y n8n solo la expone ANTES de
 llegar al nodo (`$execution.resumeFormUrl`). Por eso los dos que la necesitan --la
-alerta y la respuesta al que llamo-- van antes. Sin eso el caso quedaba esperando
-una decision que nadie sabia donde tomar.
+alerta y la respuesta al que llamo-- van antes.
+
+**Ningun servidor puede abrir una ventana en la maquina de otro.** Lo unico que se
+puede hacer es entregar el link por todas las vias en que alguien puede estar
+mirando, y que ninguna dependa de que se acuerde de copiarlo:
+
+| Como llego | Que recibe |
+|---|---|
+| Con navegador | 303 con `Location` al formulario: navega solo |
+| Con `curl -o informe.html` | El cuerpo guardado lleva `meta refresh`: abrirlo alcanza |
+| Desde el panel | La API declara `X-HITL-Form-Url` y el panel navega su iframe |
+| Sin haber disparado el caso | La alerta `hitl_form_ready` en `GET /api/alerts/` |
+
+La cuarta es la del analista real, que no es quien disparo el caso: es lo que
+consumiria Slack o un mail.
+
+**Como se entera el panel de que el analista decidio.** No se entera por si solo:
+hizo un HTTP que ya respondio con el 303, y la respuesta al formulario vuelve a
+quien lo envio, no a el. Lo que hace es preguntar por el informe cacheado cada
+pocos segundos --`POST /api/reports/html` lo guarda por transaccion-- hasta que
+aparece uno DISTINTO del que hubiera al derivar. Esa distincion importa: un caso
+que ya se corrio antes deja su informe, y buscar «hay uno» daria por resuelto algo
+que nadie decidio.
 
 Ningun camino contesta 200 vacio. El webhook responde lo que diga un nodo Respond,
 y un `stopAndError` cortaba antes de llegar a uno: un transaction_id mal formado y
@@ -336,6 +357,14 @@ La configuracion es via variables de entorno:
 - `CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-20250514` -- modelo para sintesis y juez
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
+
+- `CB_API_URL_PARA_N8N` -- con que URL alcanza n8n a ESTA API, para que el
+  orquestador le conteste a la misma instalacion que lo llamo. **No es la del
+  navegador**: con docker-compose el panel se abre en `http://localhost:8000` y
+  desde el contenedor de n8n esa direccion es n8n, no la API. Vacia, se usa la
+  base de la peticion, que es lo correcto cuando la API es publica --el caso del
+  deploy--. Sin esto, el panel de una instalacion disparaba n8n y las alertas, el
+  feedback y el informe terminaban en otra: el caso quedaba partido en dos.
 
 Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1039 tests (938 unit/integration + 33 E2E contra la API real).
 

@@ -835,7 +835,7 @@
      d:"Califica la propuesta del modelo, no la corrección del código: sobre la versión ya corregida, dos de los cinco criterios no podrían bajar de 10 por construcción."},
     {v:"POST", r:"/api/alerts/", f:"sql", ms:283,
      t:"El caso necesita una persona",
-     d:"Solo corre en esta rama. En un BLOCKER —cripto, por ejemplo— la decisión es automática y este paso no aparece: el recorrido son 12 llamadas en vez de 13."},
+     d:"Publica la URL del formulario de aprobación, que es lo que consumiría Slack o un mail: el analista no es quien disparó el caso. Solo corre en esta rama — en un BLOCKER la decisión es automática y el recorrido son 12 llamadas en vez de 13."},
     {v:"POST", r:"/api/reports/html", f:"plano", ms:277,
      t:"70 KB de HTML",
      d:"Con los estilos adentro: el informe se abre sin internet, que es la única forma de que siga sirviendo dentro de un año."}
