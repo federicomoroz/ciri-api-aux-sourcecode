@@ -20,6 +20,26 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
+
+
+def _objeto_js(html: str, declaracion: str) -> str:
+    """El objeto literal que sigue a `declaracion`, balanceando llaves.
+
+    Los diagramas embeben sus datos como un objeto JS dentro de un `<script>`.
+    Es JSON válido, pero no se puede recortar con un regex: las descripciones
+    traen llaves y comillas.
+    """
+    i = html.index(declaracion) + len(declaracion)
+    profundidad, k = 0, i
+    while k < len(html):
+        if html[k] == "{":
+            profundidad += 1
+        elif html[k] == "}":
+            profundidad -= 1
+            if profundidad == 0:
+                return html[i : k + 1]
+        k += 1
+    raise AssertionError(f"no se pudo cerrar el objeto de `{declaracion}`")
 INFORMES = RAIZ / "data" / "informes_demo"
 DOCS = RAIZ / "docs"
 # El build renombra README.md a "1 — LEEME.md" para que quede primero al abrir
@@ -352,11 +372,229 @@ class TestLaDocDeLaApiNoSeQuedaAtras:
         assert int(m.group(1)) == len(reales)
 
     def test_el_recorrido_del_diagrama_existe_de_verdad(self, reales):
-        """Las trece llamadas que el circuito dibuja tienen que ser rutas reales."""
+        """Las llamadas que el circuito dibuja tienen que ser rutas reales."""
         html = (RAIZ / "docs" / "diagrams" / "api.html").read_text(encoding="utf-8")
         del_circuito = {(v, r) for v, r in re.findall(r'\{v:"(\w+)", r:"([^"]+)"', html)}
         assert del_circuito, "el circuito perdio sus pasos"
         assert del_circuito <= reales, f"el circuito dibuja rutas que no existen: {sorted(del_circuito - reales)}"
+
+    def test_el_diagrama_dibuja_el_recorrido_COMPLETO(self):
+        """Y al revés: que no le falte ninguna.
+
+        El test de arriba sólo miraba una dirección —que no dibuje rutas
+        inventadas—, así que agregar un paso al recorrido y no dibujarlo pasaba en
+        verde. Es el mismo modo de falla que un glob que no matchea nada: verde
+        porque no miró, no porque esté bien. Pasó exactamente eso al mover la
+        lógica HITL a la API.
+
+        La referencia es `scripts/seguir_el_flujo.py`, que recorre el circuito de
+        verdad contra la API: si el script llama a un endpoint que el diagrama no
+        dibuja, el dibujo dejó de ser el recorrido.
+        """
+        html = (RAIZ / "docs" / "diagrams" / "api.html").read_text(encoding="utf-8")
+        dibujadas = {r for _, r in re.findall(r'\{v:"(\w+)", r:"([^"]+)"', html)}
+
+        script = (RAIZ / "scripts" / "seguir_el_flujo.py").read_text(encoding="utf-8")
+        # Las rutas que el recorrido llama de verdad. `f?"` cubre las dos formas
+        # en que el script las escribe: literal (`"/api/sla/check"`) y f-string
+        # (`f"/api/logs/{txn}"`), que es como arma las que llevan un id.
+        del_script = {
+            ruta.split("?")[0].split("{")[0].rstrip("/")
+            for ruta in re.findall(
+                r'llamar\(\s*(?:\n\s*)?"[^"]+",\s*"[A-Z]+",\s*f?"(/[^"]+)"', script,
+            )
+        }
+        assert len(del_script) >= 10, (
+            f"solo se leyeron {len(del_script)} llamadas del recorrido: el regex "
+            f"dejo de matchear y este test estaria pasando sin mirar"
+        )
+
+        # Se comparan por forma: el script usa ids concretos donde el diagrama
+        # usa el parámetro (`/api/logs/TXN-1` contra `/api/logs/{tx_id}`).
+        def familia(r: str) -> str:
+            return "/".join(p for p in r.split("/") if not p.startswith("{"))[:24]
+
+        faltan = {r for r in del_script if not any(
+            familia(r).startswith(familia(d)[:18]) or familia(d).startswith(familia(r)[:18])
+            for d in dibujadas
+        )}
+        assert not faltan, (
+            f"el recorrido llama a {sorted(faltan)} y el diagrama no lo dibuja: "
+            f"el circuito que ve el evaluador no es el que corre"
+        )
+
+
+class TestElConteoDeNodosQueLaDocDeclara:
+    """«45 nodos» estaba escrito en 12 lugares de 4 archivos distintos.
+
+    Es el numero que mas se repite en la documentacion —es la tesis del proyecto:
+    orquestacion explicita, cada paso un nodo visible— y por lo tanto el que peor
+    queda desincronizado. Agregar UN nodo al workflow dejaba mintiendo a
+    architecture.md (7 veces), decisions.md, README.md y CLAUDE.md a la vez, y
+    nada avisaba: el conteo no estaba fijado por ningun test.
+
+    Paso exactamente eso al mover la logica HITL fuera del canvas.
+    """
+
+    # (archivo, patron con el numero capturado, que cuenta)
+    DECLARACIONES = (
+        ("docs/architecture.md", r"(\d+) nodos \(\d+ ejecutables \+ \d+ sticky notes\)", "total"),
+        ("docs/architecture.md", r"\((\d+) nodos: \d+ exec \+ \d+ sticky\)", "total"),
+        ("docs/architecture.md", r"n8n \(explicito, (\d+) nodos\)", "total"),
+        ("docs/decisions.md", r"(\d+) nodos explícitos en n8n", "total"),
+        ("README.md", r"El orquestador: (\d+) nodos", "total"),
+        ("CLAUDE.md", r"n8n \((\d+) nodes, explicit\)", "total"),
+        ("CLAUDE.md", r"### n8n Flow \((\d+) nodes:", "total"),
+        ("docs/architecture.md", r"\d+ nodos \((\d+) ejecutables \+ \d+ sticky notes\)", "ejecutables"),
+        ("docs/decisions.md", r"\d+ nodos explícitos en n8n \((\d+) ejecutables", "ejecutables"),
+        ("README.md", r"El orquestador: \d+ nodos, (\d+) ejecutables", "ejecutables"),
+    )
+
+    @staticmethod
+    def _reales() -> dict[str, int]:
+        wf = json.loads(
+            (RAIZ / "n8n/workflow_ciri_agent.json").read_text(encoding="utf-8")
+        )
+        sticky = sum(1 for n in wf["nodes"] if n["type"] == "n8n-nodes-base.stickyNote")
+        return {
+            "total": len(wf["nodes"]),
+            "ejecutables": len(wf["nodes"]) - sticky,
+            "sticky": sticky,
+        }
+
+    @pytest.mark.parametrize(
+        "archivo,patron,que", DECLARACIONES,
+        ids=[f"{a.split('/')[-1]}-{q}-{i}" for i, (a, _, q) in enumerate(DECLARACIONES)],
+    )
+    def test_el_conteo_declarado_es_el_real(self, archivo, patron, que):
+        ruta = RAIZ / archivo
+        if not ruta.exists():
+            # `CLAUDE.md` está en el .gitignore: es el archivo de instrucciones
+            # del agente, no un entregable, y por eso no viaja en el paquete que
+            # arma `scripts/armar_entregables.py`. Sin esta guarda, quien recibe
+            # el paquete y corre los tests se come un FileNotFoundError por un
+            # archivo que nunca debió estar ahí.
+            pytest.skip(f"{archivo} no existe en este árbol (no es un entregable)")
+        doc = ruta.read_text(encoding="utf-8")
+        encontrados = {int(m) for m in re.findall(patron, doc)}
+        assert encontrados, f"{archivo} dejo de declarar el conteo de nodos ({que})"
+        real = self._reales()[que]
+        assert encontrados == {real}, (
+            f"{archivo} dice {sorted(encontrados)} nodos {que} y el workflow tiene "
+            f"{real}: la doc afirma un canvas que no es el que viaja"
+        )
+
+    def test_la_suma_de_los_tres_workflows_cierra(self):
+        """El total que declara la memoria del proyecto, verificable."""
+        total = sum(
+            len(json.loads(f.read_text(encoding="utf-8"))["nodes"])
+            for f in sorted((RAIZ / "n8n").glob("*.json"))
+        )
+        assert total == 60, f"los tres workflows suman {total} nodos, no 60"
+
+    def test_el_diagrama_dibuja_el_canvas_que_viaja(self):
+        """`n8n_workflow_analysis.html` es una réplica a mano del canvas.
+
+        Es el entregable que alguien mira ANTES de importar el workflow, así que
+        un diagrama que dibuja un circuito distinto del JSON contradice la tesis
+        del proyecto —orquestación explícita y auditable— justo donde más se ve.
+
+        Al mover la lógica HITL fuera del canvas, el diagrama se quedó sin el
+        nodo nuevo y conservó una arista que ya no existía. Nada lo detectaba:
+        se dibuja a mano y ningún test lo cruzaba contra el workflow.
+        """
+        diagrama = (RAIZ / "docs/diagrams/n8n_workflow_analysis.html").read_text(encoding="utf-8")
+        wf = json.loads((RAIZ / "n8n/workflow_ciri_agent.json").read_text(encoding="utf-8"))
+
+        reales = {n["name"] for n in wf["nodes"] if n["type"] != "n8n-nodes-base.stickyNote"}
+        dibujados = set(re.findall(r'data-node="([^"]+)" type="button"', diagrama))
+        assert dibujados == reales, (
+            f"el diagrama no dibuja {sorted(reales - dibujados)} y dibuja de más "
+            f"{sorted(dibujados - reales)}"
+        )
+
+        aristas_reales = {
+            (origen, c["node"])
+            for origen, salidas in wf["connections"].items()
+            for rama in salidas.get("main", [])
+            for c in (rama or [])
+        }
+        aristas = set(re.findall(r'data-from="([^"]+)" data-to="([^"]+)"', diagrama))
+        assert aristas == aristas_reales, (
+            f"al diagrama le faltan {sorted(aristas_reales - aristas)} y le sobran "
+            f"{sorted(aristas - aristas_reales)}"
+        )
+
+        # El diagrama guarda las conexiones DOS veces: como paths SVG y como
+        # `from`/`to` en el objeto que alimenta el panel lateral. Actualizar una
+        # y olvidar la otra deja la ficha de un nodo apuntando a un vecino que ya
+        # no tiene — que fue exactamente lo que pasó con el `Wait`.
+        datos = json.loads(_objeto_js(diagrama, "const DATA = "))
+        assert set(datos) == reales, "las fichas del panel no son los nodos del canvas"
+        desde_fichas = {(n, t) for n, v in datos.items() for t in v.get("to", [])}
+        hacia_fichas = {(f, n) for n, v in datos.items() for f in v.get("from", [])}
+        assert desde_fichas == aristas_reales, (
+            f"los `to` de las fichas no son las conexiones reales: "
+            f"faltan {sorted(aristas_reales - desde_fichas)}, "
+            f"sobran {sorted(desde_fichas - aristas_reales)}"
+        )
+        assert hacia_fichas == aristas_reales, (
+            f"los `from` de las fichas no son las conexiones reales: "
+            f"faltan {sorted(aristas_reales - hacia_fichas)}, "
+            f"sobran {sorted(hacia_fichas - aristas_reales)}"
+        )
+
+    def test_la_prosa_del_hitl_no_contradice_la_invariante(self):
+        """`architecture.md` afirmaba «Auto-aprueba tras 5s de timeout».
+
+        Es exactamente lo contrario de lo que hace el sistema, y de lo que
+        `domain/hitl.py` existe para garantizar: sin respuesta del analista el
+        caso NO se aprueba. La línea sobrevivió a varias reescrituras de la
+        sección de arriba, así que el documento afirmaba las dos cosas a la vez
+        sobre la decisión más cara del dominio.
+
+        No se puede verificar prosa contra código en general, pero sí se puede
+        prohibir que el entregable diga la frase opuesta a la invariante.
+        """
+        for archivo in ("docs/architecture.md", "docs/decisions.md", "README.md"):
+            texto = (RAIZ / archivo).read_text(encoding="utf-8").lower()
+            for frase in ("auto-aprueba tras", "se auto-aprueba", "aprueba por timeout"):
+                assert frase not in texto, (
+                    f"{archivo} dice «{frase}»: el HITL falla CERRADO — sin decisión "
+                    f"el caso sale PENDING_HITL (domain/hitl.py y test_hitl.py)"
+                )
+
+    def test_las_opciones_del_formulario_que_la_doc_describe_son_las_reales(self):
+        """La doc decía «(APROBAR/RECHAZAR)» y el formulario ofrece tres.
+
+        Con dos opciones descritas, `MODIFY` parece no existir — y es justamente
+        la que causó el bug de precedentes envenenados.
+        """
+        wf = json.loads((RAIZ / "n8n/workflow_ciri_agent.json").read_text(encoding="utf-8"))
+        wait = next(n for n in wf["nodes"] if n["type"] == "n8n-nodes-base.wait")
+        opciones = wait["parameters"]["formFields"]["values"][0]["fieldOptions"]["values"]
+        doc = (RAIZ / "docs/architecture.md").read_text(encoding="utf-8")
+        assert "APROBAR / RECHAZAR / MODIFICAR" in doc or "APROBAR/RECHAZAR/MODIFICAR" in doc, (
+            f"el formulario ofrece {len(opciones)} opciones "
+            f"({[o['option'] for o in opciones]}) y architecture.md no las describe"
+        )
+
+    def test_las_etapas_suman_los_nodos_ejecutables(self):
+        """`architecture.md` desglosa el canvas en 4 etapas con su conteo.
+
+        Sumaban 37 sobre 39 ejecutables: los cuatro `Stop and Error` no estaban
+        contados en ninguna etapa. Un desglose que no cierra invita a leerlo como
+        si el canvas tuviera menos piezas de las que tiene, que es justo lo que un
+        evaluador va a contar.
+        """
+        doc = (RAIZ / "docs/architecture.md").read_text(encoding="utf-8")
+        etapas = [int(n) for n in re.findall(r"ETAPA \d -- [^(]+\((\d+) nodos\)", doc)]
+        assert len(etapas) == 4, f"architecture.md declara {len(etapas)} etapas, no 4"
+        real = self._reales()["ejecutables"]
+        assert sum(etapas) == real, (
+            f"las etapas suman {sum(etapas)} y hay {real} nodos ejecutables: "
+            f"el desglose {etapas} no cierra"
+        )
 
 
 class TestLosTamanosQueLaDocDeclara:

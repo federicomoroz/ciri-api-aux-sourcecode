@@ -21,11 +21,11 @@
 
 **Orquestacion explicita con herramientas aumentadas por LLM** -- a veces llamado *Pipeline Agentico*.
 
-Esto no es un Agente de IA clasico. En un agente clasico, el LLM decide que herramientas llamar y en que orden. Aca, **n8n decide el flujo de forma explicita** -- 45 nodos (39 ejecutables + 6 sticky notes), siempre la misma secuencia, completamente auditable. El LLM solo razona sobre los datos que recibe; nunca controla el camino de ejecucion.
+Esto no es un Agente de IA clasico. En un agente clasico, el LLM decide que herramientas llamar y en que orden. Aca, **n8n decide el flujo de forma explicita** -- 46 nodos (40 ejecutables + 6 sticky notes), siempre la misma secuencia, completamente auditable. El LLM solo razona sobre los datos que recibe; nunca controla el camino de ejecucion.
 
 | | Agente IA clasico | Este sistema |
 |---|---|---|
-| Quien decide el flujo | El LLM | n8n (explicito, 45 nodos) |
+| Quien decide el flujo | El LLM | n8n (explicito, 46 nodos) |
 | Auditabilidad | Caja negra | Cada paso es un nodo visible |
 | Determinismo | No garantizado | Siempre la misma secuencia |
 | Debugging | Dificil | Nodo por nodo en el canvas |
@@ -38,7 +38,7 @@ El sistema se compone de capas con **una responsabilidad unica y claramente deli
 
 | Capa | Tecnologia | Responsabilidad |
 |---|---|---|
-| Orquestacion | n8n (45 nodos: 39 exec + 6 sticky) -- Cloud o self-hosted | QUE hacer y CUANDO -- webhook, secuenciamiento, control de flujo, visibilidad de guardrails, enrutamiento por riesgo |
+| Orquestacion | n8n (46 nodos: 40 exec + 6 sticky) -- Cloud o self-hosted | QUE hacer y CUANDO -- webhook, secuenciamiento, control de flujo, visibilidad de guardrails, enrutamiento por riesgo |
 | Logica de negocio | FastAPI (Render free tier) | COMO -- RAG retrieval, sintesis de resolucion con guardrails, feedback, auto-indexing |
 | Almacen semantico | Qdrant Cloud (free tier) | Verdad no estructurada -- politicas y casos historicos |
 | Almacen estructurado | SQLite | Verdad relacional -- transacciones, logs, feedback, audit trail |
@@ -79,10 +79,10 @@ catorce llamadas en orden, que toca cada una y las dos veces que va al reves.
 
 **El RAG, de punta a punta:** el diagrama **«el RAG»** sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
 
-El workflow contiene **45 nodos (39 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
+El workflow contiene **46 nodos (40 ejecutables + 6 sticky notes) organizados en 4 etapas**. No hay nodo AI Agent, no hay caja negra, no hay tool calling decidido por un LLM. Cada paso es un nodo visible con un proposito especifico -- nodos nativos de n8n (IF, Switch, Merge, Wait) para el control de flujo, nodos HTTP Request para todo lo que sea logica de negocio. Ningun umbral de negocio vive en el canvas: los limites de SLA por pais, los ratios de contracargo y las reglas de reincidencia se consultan a la API, que los lee de `domain/constants.py`.
 
 ```
-ETAPA 1 -- ENTRADA + CACHE (8 nodos)
+ETAPA 1 -- ENTRADA + CACHE (9 nodos)
    [Webhook -- Entrada]              <- HTTP POST trigger (API/curl)
    [Validar Formato -- IF]           <- IF: valida formato TXN-XXXXX
    [Validar Formato TXN]             <- Set: normaliza campos + resuelve api_base_url
@@ -93,7 +93,7 @@ ETAPA 1 -- ENTRADA + CACHE (8 nodos)
    [Cache Hit?]                      <- IF: si hay cache -> saltea todo el pipeline
    [Formatear Cache]                 <- Code: el HTML cacheado va directo a [Responder]
 
-ETAPA 2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP en paralelo
+ETAPA 2 -- ENSAMBLADO DE CONTEXTO (10 nodos) -- 7 llamadas HTTP en paralelo
    [Obtener Transaccion]             GET  /api/transactions/{id}
    [Obtener Logs]                    GET  /api/logs/{tx_id}
    [Buscar Politicas]                GET  /api/policies/search        <- RAG: Qdrant semantico
@@ -105,7 +105,7 @@ ETAPA 2 -- ENSAMBLADO DE CONTEXTO (9 nodos) -- 7 llamadas HTTP en paralelo
    [Responder -- API No Disponible]  <- 404 si el caso no existe, 503 si la API no responde
    [Propagar -> Error Handler -- API]<- Stop and Error si la API no responde
 
-ETAPA 3 -- ANALISIS CON IA (9 nodos)
+ETAPA 3 -- ANALISIS CON IA (10 nodos)
    [Compilar Contexto]               <- Code: fusiona los outputs de todas las ramas
    [Sintetizar Resolucion]           POST /api/analyze/resolve  <- LLM + RAG + guardrails
    [Verificar Guardrails]            <- Code: hace visibles los guardrails en el canvas
@@ -119,13 +119,14 @@ ETAPA 3 -- ANALISIS CON IA (9 nodos)
 
 ETAPA 4 -- ENRUTAMIENTO POR RIESGO + RESPUESTA (11 nodos)
    [Switch -- Derivacion]              <- pregunta por requires_hitl ANTES que por risk_level
-      BLOCKER / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte]  (200, HTML)
+      BLOCKER / HIGH / MEDIUM / LOW -> [Generar Reporte] -> [Responder -- Reporte] (200, HTML)
                                             \-> [Responder -- Falla del Informe] (502)
       REVISION HUMANA
            -> [Avisar -- Formulario HITL]   POST /api/alerts/ con $execution.resumeFormUrl
            -> [Responder -- Requiere Aprobacion]  <- 303 al formulario: se abre solo
-           -> [Wait -- Aprobacion HITL]     <- formulario, espera al analista hasta 24 h
-           -> [Procesar Respuesta HITL]     <- Code: fusiona la decision; falla cerrado si no hubo
+           -> [Wait -- Aprobacion HITL]     <- formulario, espera al analista (plazo en constants.py)
+           -> [Normalizar Decision HITL]    POST /api/hitl/decide  <- las reglas viven en la API
+           -> [Procesar Respuesta HITL]     <- Code: pega la decision sobre el informe ya armado
            -> [Generar Reporte]             POST /api/reports/html -> [Responder -- Reporte]
            -> [Registrar Feedback HITL]     POST /api/feedback (auto-index si score >= 8.0)
    Cache hit -> [Formatear Cache] -> [Responder -- Reporte]   (sin re-renderizar)
@@ -168,7 +169,7 @@ este orden de prioridad: `api_base_url` del body del webhook -> variable `API_BA
 default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 
 **3 workflows n8n:**
-- `workflow_ciri_agent.json` — workflow principal (45 nodos: 39 exec + 6 sticky)
+- `workflow_ciri_agent.json` — workflow principal (46 nodos: 40 exec + 6 sticky)
 - `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL)
 - `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa)
 
@@ -176,7 +177,11 @@ default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 
 Al importar desde la interfaz, n8n reemplaza el path del formulario por un identificador propio: hay que escribir `chargeback-form` en el campo **Form Path** del nodo. El nodo esta en `typeVersion` 2.1 a proposito — de 2.2 en adelante ese campo no existe y la URL del formulario queda fuera de control de quien importa.
 
-**HITL (Human-in-the-Loop):** Los casos BLOCKER, MEDIUM y LOW se resuelven solos: el Switch los manda directo a generar el reporte y responder. Los HIGH son los unicos que frenan -- el **Wait node** pausa la ejecucion y expone un formulario (APROBAR/RECHAZAR + notas del analista). Cuando el analista responde, `Procesar Respuesta HITL` fusiona su decision en el payload, de modo que el reporte que sale ya refleja lo que decidio una persona, y en paralelo el feedback se registra via `POST /api/feedback` (que reindexa el caso en Qdrant si el Juez lo puntuo >= 8.0). Los reportes HIGH ademas incluyen un formulario HITL embebido como fallback.
+**HITL (Human-in-the-Loop):** Lo que decide si un caso frena es `requires_hitl`, no el nivel de riesgo -- el Switch pregunta por el primero antes que por el segundo, porque un MEDIUM con una politica violada tambien necesita una persona. Los que no lo necesitan (BLOCKER, HIGH, MEDIUM y LOW, cada uno con su rama nombrada) van directo a generar el reporte y responder.
+
+Cuando frena, el **Wait node** pausa la ejecucion y expone un formulario (APROBAR / RECHAZAR / MODIFICAR + notas del analista). Al responder, `[Normalizar Decision HITL]` le pide a `POST /api/hitl/decide` que traduzca esa respuesta, y `[Procesar Respuesta HITL]` pega el resultado sobre el informe que ya se habia armado antes del Wait. En paralelo, el feedback se registra via `POST /api/feedback` (que reindexa el caso en Qdrant si el Juez lo puntuo >= 8.0). Los reportes que esperan decision ademas incluyen un formulario HITL embebido como fallback.
+
+**Por que las reglas del HITL no viven en el canvas.** Decidir que se registra como aprobacion de una persona --y que resolucion entra al corpus de precedentes con el que se resuelven los casos siguientes-- es logica de negocio, y este proyecto sostiene que los nodos de n8n no la contienen. Estuvo ahi: 88 lineas de JavaScript dentro del JSON del workflow, fuera del alcance de `pytest`, de `ruff` y de `domain/constants.py`. Costo dos bugs que el propio nodo documentaba en sus comentarios --un `MODIFY` que se registraba como aprobacion, y un plazo vencido que caia en `APPROVE`--, y ninguno de los dos podia tener un test ahi. Ahora viven en `domain/hitl.py` con las tres reglas fijadas: falla cerrado, `MODIFY` no es `APPROVE`, y solo se indexa lo que una persona avalo tal cual.
 
 **Camino de respuesta unificado:** Los cuatro niveles de riesgo convergen en `[Generar Reporte]` -> `[Responder -- Reporte]`. Los cache hits pasan por `[Formatear Cache]` antes del mismo responder. Los errores usan nodos `stopAndError` que propagan al Error Handler workflow.
 
@@ -228,7 +233,8 @@ flowchart TD
         SWITCH -->|"si -- REVISION HUMANA"| ALERTA[Avisar Formulario HITL]
         ALERTA --> R303([Responder 303 al formulario])
         R303 --> WAIT[Wait -- Aprobacion HITL]
-        WAIT --> PROCESS_HITL[Procesar Respuesta]
+        WAIT --> NORM_HITL[Normalizar Decision -- POST /api/hitl/decide]
+        NORM_HITL --> PROCESS_HITL[Procesar Respuesta]
         PROCESS_HITL --> FEEDBACK[Registrar Feedback]
         PROCESS_HITL --> REPORT[Generar Reporte]
         SWITCH -->|BLOCKER| REPORT
@@ -452,7 +458,11 @@ si es orquestacion.
 
 **Cliente LLM basado en Protocol:** `llm/client.py` define un `Protocol` llamado `LLMClient` con dos implementaciones: `AnthropicClient` (SDK) y `OpenAICompatibleClient` (HTTP crudo), que cubre a los diez proveedores del registro que hablan el dialecto de OpenAI — el unico que queda afuera es Anthropic, que tiene SDK propio. Los tests usan `MockLLMClient`.
 
-**`LLMManager` es la unica puerta.** Nadie fuera de el toca un cliente: los servicios dicen que PASO necesitan —evaluar politicas, sintetizar, juzgar— y reciben un `LLMResult`. La razon no es estetica. Mientras el que llama pueda elegir el cliente, puede elegir el equivocado, y eso paso: el juez resolvia el servicio del modo demo y despues llamaba al de produccion, asi que la mitad del pipeline se iba por Anthropic sin credito mientras la otra mitad corria en Gemini.
+**`LLMManager` es la unica FABRICA.** Nadie fuera de el construye un cliente: los servicios dicen que PASO necesitan —evaluar politicas, sintetizar, juzgar— y reciben un `LLMResult`. La razon no es estetica. Mientras el que llama pueda elegir el cliente, puede elegir el equivocado, y eso paso: el juez resolvia el servicio del modo demo y despues llamaba al de produccion, asi que la mitad del pipeline se iba por Anthropic sin credito mientras la otra mitad corria en Gemini.
+
+**Pero no es la unica puerta, y creerlo costo caro.** `LLMManager.completar()` se presentaba asi, y sobre esa premisa se le habian colgado dos cosas: el reparto de turnos del free tier y la configuracion (`CB_LLM_TEMPERATURE`, `CB_LLM_MAX_TOKENS`). El pipeline efimero del panel —modo demo y BYOK— recibe clientes ya armados de `clientes_para()` / `clientes_demo()` y los invoca directo, asi que ninguna de las dos le aplicaba. Y ese es justamente el camino que corre sobre free tier.
+
+Las dos viven ahora en el cliente (`Cuota` y `Ajustes` en `llm/client.py`), que es por donde pasan las dos puertas. La leccion generalizable: **una invariante que depende de que todos entren por la misma puerta hay que ponerla del otro lado de la puerta.**
 
 **`llm/perfiles.py`: un perfil por familia de modelo.** El sistema esta calibrado para Claude, y el resto necesita traduccion. Lo que cambia, medido y no supuesto:
 
@@ -616,14 +626,17 @@ Estos son los mismos chequeos que FastAPI aplica -- n8n provee visibilidad en ca
 
 ### Fase 4: Enrutamiento por riesgo (S4)
 
-`[Preparar Informe]` construye el payload `ReportRequest`. El nodo Switch enruta por `resolution.risk_level`:
+`[Preparar Informe]` construye el payload `ReportRequest`. El nodo Switch pregunta **primero por `requires_hitl`** y recien despues por `resolution.risk_level` — el orden importa: un MEDIUM con una politica violada tambien necesita una persona, y enrutando por nivel de riesgo salia por la rama que cierra el caso.
 
-- **BLOCKER** -- rechazo automatico. Pago cripto o fraud score critico con politica blocker activa. Reporte generado inmediatamente.
-- **HIGH** -- riesgo elevado. Cliente VIP o transaccion de alto valor. Despues de responder, n8n pausa en un **Wait node** con formulario HITL (APROBAR/RECHAZAR). Auto-aprueba tras 5s de timeout. Feedback registrado via `POST /api/feedback`.
+- **REVISION HUMANA** (`requires_hitl == true`) -- el caso no se cierra solo. Se publica la URL del formulario en `POST /api/alerts/`, se responde 303 al analista, y n8n pausa en un **Wait node** con formulario de tres opciones (APROBAR / RECHAZAR / MODIFICAR). **Si el plazo vence sin respuesta, el caso NO se aprueba**: sale marcado `PENDING_HITL` con `analyst_decision: SIN_RESPUESTA` y su resolucion no entra al corpus de precedentes. El plazo es `HITL_PLAZO_HORAS` en `domain/constants.py`.
+- **BLOCKER** -- rechazo automatico. Pago cripto o fraud score critico con politica bloqueante activa. Reporte generado inmediatamente.
+- **HIGH** -- riesgo elevado sin politica violada (un fraud score severo por si solo). Reporte inmediato.
 - **MEDIUM** -- riesgo estandar. Reporte con razonamiento completo y accion recomendada.
 - **LOW** -- riesgo bajo. Reporte expedito con recomendacion de auto-aprobacion.
 
-Los cuatro niveles convergen en `[Generar Reporte]` -> `[Responder -- Reporte]` (el webhook responde inmediatamente con el reporte HTML). Despues de responder, un nodo IF verifica `risk_level == HIGH`; si es verdadero, la ejecucion continua a Wait -> Procesar -> Feedback. El `respondToWebhook` se dispara **antes** del Wait node, evitando el error de validacion de n8n "unused respondToWebhook" en el resume. Errores en generacion de reportes van a `[Stop and Error]` y propagan al Error Handler workflow.
+Los cuatro niveles que no frenan convergen en `[Generar Reporte]` -> `[Responder -- Reporte]`, y la salida de fallback del Switch va al mismo lugar: un nivel de riesgo que no matchee ninguna regla igual tiene que producir un informe, no desaparecer.
+
+La rama de revision humana pasa antes por `[Wait]` -> `[Normalizar Decision HITL]` (`POST /api/hitl/decide`) -> `[Procesar Respuesta HITL]`, y de ahi al mismo `[Generar Reporte]` mas `[Registrar Feedback HITL]`. El `respondToWebhook` se dispara **antes** del Wait, que es lo unico que permite entregarle al analista la URL del formulario: n8n solo expone `$execution.resumeFormUrl` mientras no se haya llegado al nodo. Errores en la generacion del informe responden 502 y despues van a `[Stop and Error]`, que propaga al Error Handler workflow.
 
 ### Fase 5: Alertas operativas
 
@@ -649,7 +662,7 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Contexto:** Necesitabamos una capa de orquestacion que ofreciera un flujo visual y auditable para stakeholders no tecnicos, y que garantizara un orden de ejecucion determinista para cada investigacion de contracargo.
 
-**Decision:** Usar n8n con 45 nodos (39 ejecutables + 6 sticky notes) -- sin nodo AI Agent, sin tool calling decidido por LLM. Cada paso es un nodo visible. Los nodos nativos de n8n (IF, Switch, Merge, Wait) manejan unicamente el control de flujo; toda la logica de negocio se resuelve por HTTP contra FastAPI. Tanto el LLM de sintesis (`/api/analyze/resolve`) como el Juez (`/api/analyze/judge`) se llaman via FastAPI -- todas las interacciones con LLMs centralizadas con versionado de prompts, manejo de errores y observabilidad Langfuse consistente. Un nodo `Responder -- Reporte` unificado sirve todos los caminos de respuesta. Errores propagan a un Error Handler workflow separado via nodos `stopAndError`.
+**Decision:** Usar n8n con 46 nodos (40 ejecutables + 6 sticky notes) -- sin nodo AI Agent, sin tool calling decidido por LLM. Cada paso es un nodo visible. Los nodos nativos de n8n (IF, Switch, Merge, Wait) manejan unicamente el control de flujo; toda la logica de negocio se resuelve por HTTP contra FastAPI. Tanto el LLM de sintesis (`/api/analyze/resolve`) como el Juez (`/api/analyze/judge`) se llaman via FastAPI -- todas las interacciones con LLMs centralizadas con versionado de prompts, manejo de errores y observabilidad Langfuse consistente. Un nodo `Responder -- Reporte` unificado sirve todos los caminos de respuesta. Errores propagan a un Error Handler workflow separado via nodos `stopAndError`.
 
 **Consecuencias:**
 - Cada investigacion ejecuta exactamente los mismos pasos en el mismo orden, siempre
@@ -866,7 +879,7 @@ quest_ML/
         embedder.py         # Voyage AI embedder (lazy, thread-safe)
       llm/
         client.py           # Protocol LLMClient + Anthropic y OpenAI-compatible
-        manager.py          # LLMManager: la única puerta a los modelos
+        manager.py          # LLMManager: la única fábrica de clientes
         proveedores.py      # UN registro: URL base, perfil y catálogo del panel
         perfiles.py         # Un perfil por familia: tokens, reintentos, frecuencia
         pricing.py          # Costo estimado por modelo
@@ -894,7 +907,7 @@ quest_ML/
         esquema.py          # Crear tablas y migrar columnas. Se corre al arrancar
         loader.py           # Excel → SQLite (maneja row 1 skip + hojas con emojis)
   n8n/
-    workflow_ciri_agent.json  # Workflow principal (45 nodos: 39 exec + 6 sticky)
+    workflow_ciri_agent.json  # Workflow principal (46 nodos: 40 exec + 6 sticky)
     workflow_ciri_errors.json # Error handler (Error Trigger → notificación)
     workflow_ciri_form.json   # Form trigger (formulario nativo n8n)
   scripts/

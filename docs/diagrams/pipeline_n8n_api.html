@@ -316,15 +316,22 @@
     </div>
 
     <div class="fila f-api">
-      <div class="lado-n8n">Generar Reporte</div>
+      <div class="lado-n8n">Normalizar Decisión HITL<span class="sub">sólo si hubo que esperar a una persona</span></div>
       <div class="flecha"><b>13</b></div>
+      <div class="ruta"><i></i><span><span class="met">POST</span> /api/hitl/decide</span></div>
+      <div class="toca"><span class="chip">sin almacén</span></div>
+    </div>
+
+    <div class="fila f-api">
+      <div class="lado-n8n">Generar Reporte</div>
+      <div class="flecha"><b>14</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /api/reports/html</span></div>
       <div class="toca"><span class="chip">Jinja2</span><span class="chip">SQLite</span></div>
     </div>
 
     <div class="fila f-api">
       <div class="lado-n8n">Registrar Feedback HITL<span class="sub">sólo si hubo analista</span></div>
-      <div class="flecha"><b>14</b></div>
+      <div class="flecha"><b>15</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /api/feedback</span></div>
       <div class="toca"><span class="chip">SQLite</span><span class="chip">Qdrant</span></div>
     </div>
@@ -367,8 +374,9 @@
     </div>
     <div>
       <h3>No hay nodo de agente</h3>
-      <p>Ningún modelo elige qué herramienta llamar. Las catorce llamadas ocurren siempre, en este
-      orden, para todos los casos. Eso es lo que hace reproducible una investigación.</p>
+      <p>Ningún modelo elige qué herramienta llamar. Las quince llamadas ocurren siempre en este
+      orden; las tres del tramo HITL sólo cuando el caso necesita una persona. Eso es lo que hace
+      reproducible una investigación.</p>
     </div>
     <div>
       <h3>El circuito completo</h3>

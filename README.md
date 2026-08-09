@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-1089%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1134%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -19,13 +19,14 @@ Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transac
 > detalle caso por caso en `docs/evaluaciones/` y reporta el costo. El método completo está en
 > [`docs/mejora_continua.md`](docs/mejora_continua.md#como-se-midio-el-91).
 >
-> **Y ya corrió una vez**, con el free tier y costo cero:
-> [`docs/evaluaciones/`](docs/evaluaciones/) — 20 casos pedidos, 3 medidos (los otros 17 se
-> toparon con la cuota diaria del proveedor gratuito, y el archivo anota el motivo de cada uno),
-> promedio 8.4. **Ese número no mueve el badge y no debería:** se midió con un modelo gratuito
-> en los tres pasos, no con la configuración documentada, y con n=3 no hay muestra. Lo que
-> cambia es que ahora hay un archivo con su semilla, sus versiones de prompt y sus fracasos,
-> en vez de un número sin procedencia.
+> **Y ya corrió dos veces**, con el free tier y costo cero:
+> [`docs/evaluaciones/`](docs/evaluaciones/) — la última, 7 casos y los 7 medidos con el modelo
+> del modo demo (`--modo demo`), promedio 8.97; la anterior, 3 de 20 sobrevivientes de la cuota
+> diaria, promedio 8.4. **Esos números no mueven el badge y no deberían:** se midieron con
+> modelos gratuitos en los tres pasos, no con la configuración documentada, y los tres casos que
+> ambas corridas comparten se llevan hasta ±1.8 entre sí — cada free tier se puntúa a sí mismo
+> con su propia vara. Lo que cambia es que ahora hay dos archivos con su semilla, sus versiones
+> de prompt y sus fracasos, en vez de un número sin procedencia.
 
 ---
 
@@ -111,7 +112,7 @@ Están en orden de lectura: primero **qué** hace el circuito, después **cómo*
 
 **«n8n y la API»** — quién le pide qué a quién. Las catorce llamadas en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
-**«La API por dentro»** — los 31 endpoints como un circuito, cada uno con su entrada. Además de qué hace cada pieza, explica por qué está separada así: qué principio SOLID sostiene cada corte, qué patrones de diseño usa y dónde. Es la más larga de las cinco y la única que habla de decisiones y no de flujo.
+**«La API por dentro»** — los 32 endpoints como un circuito, cada uno con su entrada. Además de qué hace cada pieza, explica por qué está separada así: qué principio SOLID sostiene cada corte, qué patrones de diseño usa y dónde. Es la más larga de las cinco y la única que habla de decisiones y no de flujo.
 
 **«el RAG»** — la cadena entera de recuperación, seguida con un caso real: qué se indexa y qué no, cómo el código arma la consulta, por qué las dos colecciones se buscan con criterios opuestos, cómo se formatea el contexto y por dónde el índice se escribe solo.
 
@@ -158,7 +159,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 
 | Archivo | Qué es |
 |---|---|
-| `workflow_ciri_agent.json` | El orquestador: 45 nodos, 39 ejecutables |
+| `workflow_ciri_agent.json` | El orquestador: 46 nodos, 40 ejecutables |
 | `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 39 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 
@@ -282,7 +283,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
 | `docs/demo_scenarios.md` | Los tres escenarios, paso a paso, con los comandos |
-| `docs/api.md` | Los 31 endpoints, agrupados por para qué sirven |
+| `docs/api.md` | Los 32 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
 
 ### Tests y cobertura

@@ -211,8 +211,13 @@ Fijado por `tests/unit/test_rag_retriever.py::TestLimiteDeRecuperacionDePolitica
 ```env
 CB_VOYAGE_API_KEY=pa-...          # Requerido — obtener clave gratuita en https://dash.voyageai.com/
 CB_EMBEDDING_MODEL=voyage-multilingual-2
-CB_EMBEDDING_DIM=1024
 ```
+
+La dimension **no** es configurable, y es deliberado: la fija el modelo, así que cambiarla
+sin cambiar el modelo sólo puede romper la colección. Vive en `domain/constants.py` como
+`EMBEDDING_DIM`, que es de donde la lee `QdrantIndexer.ensure_collections()` para recrear
+la colección si el índice quedó con otra. Existía como `CB_EMBEDDING_DIM` y no la leía
+nadie: era una perilla que no movía nada.
 
 **Alternativas consideradas:**
 

@@ -87,18 +87,23 @@ la misma muestra y el resultado se puede volver a obtener. El script aborta ante
 falta la clave, corta si se pasa del tope, e imprime el costo acumulado mientras corre — unos
 USD 0.037 por caso segun la estimacion de mas abajo.
 
-**Se corrio, y dejo su archivo.** [`docs/evaluaciones/2026-08-08-gemini-flash.json`](evaluaciones/2026-08-08-gemini-flash.json):
-20 casos pedidos, **3 medidos**, promedio 8.4 (mediana 8.1, σ 1.28, rango 7.3–9.8), costo USD 0.00.
-Los otros 17 murieron contra los topes del free tier — 15 por la cuota **diaria** de Gemini, 1 por
-los 3 pedidos/minuto de Voyage, 1 por timeout — y el archivo registra el motivo de cada uno.
+**Se corrio dos veces, y dejo sus archivos.** Ambos con el free tier, costo USD 0.00,
+mismos prompts y misma semilla:
 
-**El badge sigue en 9.1 y eso es deliberado.** Con n=3 no hay muestra para mover un numero, y ese
-8.4 no es el score del sistema entregado: se midio con `gemini-flash-latest` en los tres pasos,
-mientras la configuracion documentada es Haiku para politicas y Sonnet para sintesis y juez. Un
-modelo mas chico se penaliza dos veces, porque el juez corre en el mismo modelo que resolvio.
-Lo que cambio no es el numero sino su condicion: antes no habia **ningun** archivo; ahora hay uno,
-con su muestra, su semilla, sus versiones de prompt y sus fracasos anotados. El contexto completo
-esta en [`docs/evaluaciones/README.md`](evaluaciones/README.md).
+| Corrida | Modelo | Medidos | Promedio | σ |
+|---|---|---|---|---|
+| [`2026-08-08-gemini-flash.json`](evaluaciones/2026-08-08-gemini-flash.json) | `gemini-flash-latest` | 3 de 20 (17 contra la cuota diaria) | 8.4 | 1.28 |
+| [`2026-08-09-gemini-flash-lite.json`](evaluaciones/2026-08-09-gemini-flash-lite.json) | `gemini-flash-lite-latest` (`--modo demo`) | **7 de 7** | 8.97 | 0.42 |
+
+**El badge sigue en 9.1 y eso es deliberado.** Ninguno de esos numeros es el score del sistema
+entregado: la configuracion documentada es Haiku para politicas y Sonnet para sintesis y juez, y
+en estas corridas el juez corre en el mismo modelo gratuito que resolvio — cada free tier se
+puntua a si mismo con su propia vara. La prueba esta en los tres casos que ambas corridas
+comparten: los dos modelos les dan hasta ±1.8 de diferencia, en las dos direcciones. Lo que
+cambio no es el numero sino su condicion: antes no habia **ningun** archivo; ahora hay dos, con
+su muestra, su semilla, sus versiones de prompt y sus fracasos anotados. El detalle caso por
+caso y la comparacion entre corridas estan en
+[`docs/evaluaciones/README.md`](evaluaciones/README.md).
 
 Correrlo en la configuracion documentada cuesta unos USD 0.75 para 20 casos y sigue pendiente.
 
@@ -213,11 +218,17 @@ El feedback loop cierra la brecha entre la resolucion automatizada y la experien
 │           │                                                   │             │
 │           └── score < 7.0 -> HITL ──────────────────────────>│             │
 │                              Analista lee reporte HTML        │             │
-│                              Analista confirma o corrige      │             │
+│                              APPROVE / REJECT / MODIFY        │             │
+│                                        │                      │             │
+│                                        v                      │             │
+│                     POST /api/hitl/decide  <- traduce la      │             │
+│                     decision y decide si la resolucion viaja  │             │
 │                                                               v             │
 │  4. FEEDBACK ENVIADO                                                        │
 │     POST /api/feedback/ {transaction_id, analyst_decision,                 │
 │                          final_outcome, judge_score, resolution}            │
+│     `resolution` va en null salvo que el analista haya avalado la del       │
+│     agente TAL CUAL: sin ella, el paso 6 no ocurre.                         │
 │                                │                                            │
 │                                v                                            │
 │  5. REGISTRO EN SQLITE                                                      │
@@ -252,7 +263,18 @@ El analista recibe un reporte HTML renderizado con Jinja2 (`POST /api/reports/ht
 - Scores del Judge por criterio, con fortalezas y debilidades
 - Proximos pasos propuestos por el agente
 
-El analista puede confirmar la recomendacion del agente o corregirla (APPROVE/REJECT/ESCALATE) y agregar notas en texto libre explicando por que.
+El analista puede confirmar la recomendacion del agente o corregirla, y agregar notas en texto libre explicando por que. El formulario del nodo `Wait` ofrece **tres** opciones —`APPROVE`, `REJECT`, `MODIFY`— y las tres se traducen en `POST /api/hitl/decide`, no en el canvas.
+
+**Que entra al corpus de precedentes, y que no.** Solo la resolucion que el analista avalo tal cual:
+
+| Decision | Se registra el feedback | Se indexa como precedente |
+|---|---|---|
+| `APPROVE` | si | si, con `judge_score >= 8.0` |
+| `REJECT` | si | **no** |
+| `MODIFY` | si | **no** — la aprobo con cambios que el sistema no tiene |
+| plazo vencido, sin respuesta | si, como `SIN_RESPUESTA` | **no** |
+
+Las dos ultimas filas son la parte cara. Mientras el mapeo vivio en el canvas y cubrio dos de las tres opciones, un analista que eligio «modificar» quedaba asentado como si hubiera aprobado, y con `judge_score >= 8.0` el caso se indexaba como precedente aprobado — envenenando el corpus con el que se resuelven los siguientes. Y un plazo vencido caia en `APPROVE`, o sea que un contracargo de riesgo alto se aprobaba solo. Las reglas viven ahora en `domain/hitl.py` y `tests/unit/test_hitl.py` las prueba ejecutandolas.
 
 ### Payload de feedback
 

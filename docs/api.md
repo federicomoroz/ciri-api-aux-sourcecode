@@ -1,6 +1,6 @@
 # La API
 
-31 endpoints. Cada uno es una herramienta que el orquestador llama por su nombre.
+32 endpoints. Cada uno es una herramienta que el orquestador llama por su nombre.
 
 Base pública: `https://ciri-chargeback-agent.onrender.com` · Local: `http://localhost:8000`
 
@@ -401,6 +401,40 @@ curl -X POST https://ciri-chargeback-agent.onrender.com/api/feedback/ \
 
 `auto_indexed: true` significa que `historical_cases` creció en uno y que el caso ya
 puede aparecer como precedente. Se comprueba en `GET /health`.
+
+### `POST /api/hitl/decide`
+
+Normaliza lo que contestó el analista en el formulario del nodo `Wait` y arma el cuerpo
+de feedback que le corresponde. **No registra nada**: devuelve las dos piezas para que el
+orquestador siga teniendo un nodo visible por cada efecto.
+
+Existe porque estas reglas eran 88 líneas de JavaScript dentro del workflow, o sea fuera
+del alcance de los tests. Son tres, y las tres son caras de equivocarse:
+
+| | |
+|---|---|
+| **Falla cerrado** | `decision` vacío es el plazo vencido, y **no** aprueba: sale `PENDING_HITL` con `timeout: true` |
+| **`MODIFY` no es `APPROVE`** | El formulario ofrece tres opciones; mientras el mapeo tuvo dos, «modificar» quedaba registrado como aprobación |
+| **Sólo se indexa lo avalado tal cual** | Con `MODIFY` o `REJECT`, `feedback.resolution` vuelve en `null` y el precedente no entra al corpus |
+
+```bash
+curl -X POST https://ciri-chargeback-agent.onrender.com/api/hitl/decide \
+  -H "Content-Type: application/json" \
+  -d '{"decision": "MODIFY", "notes": "Bajar el monto a USD 40",
+       "transaction_id": "TXN-00042", "judge_score": 9.1,
+       "resolution": {"recommended_action": "APPROVE"}}'
+```
+
+```json
+{"hitl_decision": {"analyst_decision": "MODIFY", "analyst_notes": "Bajar el monto a USD 40",
+                   "final_outcome": "MODIFIED", "timestamp": "2026-08-08T14:22:01+00:00",
+                   "timeout": false},
+ "feedback": {"transaction_id": "TXN-00042", "analyst_decision": "MODIFY",
+              "final_outcome": "MODIFIED", "judge_score": 9.1, "resolution": null}}
+```
+
+`resolution: null` es el punto: el analista la aprobó con cambios que el sistema no tiene,
+así que indexarla sería guardar como precedente algo que nadie aprobó.
 
 ---
 

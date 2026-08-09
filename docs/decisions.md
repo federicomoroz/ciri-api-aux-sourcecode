@@ -10,7 +10,7 @@ Una nota sobre el stack: este proyecto fue construido con las restricciones real
 
 **Contexto:** El sistema necesita un orquestador para las investigaciones de contracargos. n8n tiene un nodo "AI Agent" que le da al LLM control sobre qué tools llamar y en qué orden. La alternativa es orquestación explícita con nodos nombrados.
 
-**Decisión:** Usar 45 nodos explícitos en n8n (39 ejecutables + 6 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
+**Decisión:** Usar 46 nodos explícitos en n8n (40 ejecutables + 6 sticky notes) con HTTP Request, Set, Switch, Wait. Sin nodo AI Agent, sin tool-calling del LLM en el workflow.
 
 **Razonamiento:** En una fintech, un regulador o un oficial de compliance necesita ver exactamente qué pasó, en qué orden, para cada caso. Un AI Agent es una caja negra — el LLM decide el flujo en runtime, lo que lo hace no-determinístico e imposible de auditar. Con nodos explícitos, cada investigación sigue los mismos pasos en el mismo orden: 7 llamadas de contexto → evaluación de políticas → síntesis de resolución → Judge → ruteo por riesgo. El flujo queda visible en el canvas de n8n, versionado como JSON, y es reproducible.
 
@@ -82,7 +82,7 @@ El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (mo
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 1089 tests (1056 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 1133 tests (1100 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -277,7 +277,7 @@ Hay tres razones más, todas prácticas:
 
 ## 12. Deuda tecnica asumida: el panel de testing
 
-**Contexto:** `api/app/reports/templates/test_panel.html` tiene 4031 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
+**Contexto:** `api/app/reports/templates/test_panel.html` tiene 4116 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
 
 **Decision:** Dejarlo asi para esta entrega, y anotarlo.
 
@@ -344,6 +344,18 @@ Con el JSON, `POST /api/analyze/resolve` y `POST /api/analyze/judge` responden s
 Quien manda `api_key` en la petición corre el pipeline completo con su propia cuenta, y el modo demo no le aplica.
 
 **Un caso que no está guardado recibe el más cercano en riesgo.** La comparación es por score antifraude y nada más: es la única medida de riesgo disponible sin correr el pipeline, y es la que decide POL-FRD-001. Meterle método de pago o país sería comparar otra cosa.
+
+### La cuota del free tier es parte de la experiencia, no un detalle
+
+Un modelo gratuito tiene techo por minuto, y el del modo demo es bajo: **Gemini free son 5 pedidos por minuto y una investigación hace 3 llamadas**, o sea un análisis por minuto. El segundo análisis seguido siempre espera.
+
+Eso obliga a dos cosas.
+
+**Primero, el turno se pide antes de llamar, y lo pide el cliente.** Reintentar un 429 es reaccionar tarde: la llamada ya se gastó contra el tope diario, que es el que de verdad corta una corrida —medido: 20 casos contra Gemini sin un solo 429 por ráfaga, y aun así 15 perdidos por cuota diaria—. El espaciado vivía en `LLMManager.completar`, que se presentaba como «la puerta al modelo»; no lo era. El pipeline efímero del panel —modo demo y BYOK— recibe clientes ya armados y los invoca directo, así que el único camino que corre sobre free tier era justamente el que no pedía turno. Ahora la cuota vive en el cliente (`llm/client.py::Cuota`), que es por donde pasan los dos.
+
+**Segundo, esperar tiene que verse.** Desde afuera, un limitador haciendo su trabajo y un proceso colgado son indistinguibles: el panel mostraba «Sintetizando resolución…» y un latido durante un minuto sin decir por qué. Ahora el `RateLimiter` avisa antes de dormir y el panel muestra el proveedor, una cuenta atrás y el motivo. El aviso viaja por un `ContextVar` y no por las firmas: quien espera está tres capas abajo de quien quiere avisar, y el limitador se comparte entre peticiones —guardar el callback en la instancia le mandaría los avisos de una investigación al panel de otra—.
+
+La espera se lee entonces como parte del trabajo y no como una falla, que es lo que un evaluador necesita para distinguir «el sistema respeta un límite conocido» de «el sistema se colgó».
 
 **Razonamiento:** La alternativa era consultar el saldo antes de gastar, pero Anthropic no expone el crédito restante en su API —el Admin API reporta consumo, no saldo—. Y aunque lo expusiera, "intentar y caer parado" sigue costando la llamada fallida.
 
@@ -438,13 +450,26 @@ exacto y los modelos más chicos escriben `BLOCKED` o `FAILED`. Ahora un veredic
 trata igual que la lista vacía —no es evidencia favorable, es evidencia que no se pudo leer— y
 el motivo del HITL nombra la política cuyo veredicto no se entendió.
 
+**Dónde viven estas reglas.** Vivían en el canvas: 88 líneas de JavaScript dentro del nodo
+`Procesar Respuesta HITL`. Ahí no las alcanzaba `pytest`, ni `ruff`, ni `domain/constants.py`, y
+los tests que las «cuidaban» lo hacían buscando substrings en el `jsCode` —`"SIN_RESPUESTA" in
+codigo`—, o sea verificando que ciertas palabras estuvieran escritas y no que la regla se
+cumpliera: el mismo test pasaba con un mapeo que dijera `MODIFY: 'APPROVED'`.
+
+Los dos bugs de esta decisión (el plazo vencido que caía en `APPROVE`, el `MODIFY` que se
+registraba como aprobación) nacieron ahí y no podían tener un test ahí. Ahora las reglas son
+`domain/hitl.py`, el canvas las consume por `POST /api/hitl/decide`, y el nodo quedó en 12 líneas
+que sólo unen dos salidas. El plazo es `HITL_PLAZO_HORAS` en `constants.py`, y el workflow lo lee
+desde un único lugar en vez de repetirlo en cuatro.
+
 **Trade-offs:**
 - (+) Ningún caso de riesgo alto se resuelve sin que una persona lo haya visto
 - (+) La traza distingue «aprobado por un analista» de «nadie contestó a tiempo»
 - (+) El corpus de precedentes sólo crece con casos avalados
+- (+) Las tres reglas se prueban ejecutándolas (`tests/unit/test_hitl.py`), no leyendo un JSON
 - (-) Un plazo vencido deja el caso sin resolver: hace falta un proceso que recoja los pendientes
-- (-) Las 24 horas son una constante del canvas, no de `constants.py` — es un parámetro de
-  operación del workflow, no una regla de negocio, pero la frontera acá es discutible
+- (-) Un nodo más en el canvas, y una llamada HTTP más por caso que frena — el precio de que la
+  decisión más cara del sistema sea código con tests en vez de una expresión de n8n
 
 ---
 
@@ -679,7 +704,7 @@ son 5 de las 29 operaciones de `Database`. Donde el consumidor usa casi todo, un
 sola implementación —que nunca va a tener otra, porque hay un backend y no hay ORM— es ceremonia y
 no inversión: agrega una declaración que ningún llamador necesita y una capa más para leer.
 
-**El panel (`routes/panel.py`, 1015 líneas) quedó sin partir.** Tiene ocho responsabilidades y es el
+**El panel (`routes/panel.py`, 1036 líneas) quedó sin partir.** Tiene ocho responsabilidades y es el
 archivo Python más grande del proyecto. Es también periférico —un panel de prueba— y el de menor cobertura
 (91% tras escribirle tests de caracterización, 77% antes). Es donde más se puede romper algo que
 ningún test vea, a cambio de nada visible. La red quedó puesta por si algún día se encara: los seis

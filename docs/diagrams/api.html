@@ -186,9 +186,9 @@
   <p class="eyebrow">Agente Inteligente de Contracargos · CIRI</p>
   <h1>La API es la caja de herramientas, no el agente</h1>
   <p class="bajada">
-    Son <b>31 endpoints</b> y ninguno decide en qué orden se llama a los otros. Eso lo hace n8n, en
+    Son <b>32 endpoints</b> y ninguno decide en qué orden se llama a los otros. Eso lo hace n8n, en
     un canvas donde cada paso es un nodo con nombre. Acá no hay un nodo «AI&nbsp;Agent» eligiendo
-    herramientas por su cuenta: <b>13 de estos endpoints son el recorrido completo de un caso</b>,
+    herramientas por su cuenta: <b>14 de estos endpoints son el recorrido completo de un caso</b>,
     en este orden, siempre.
   </p>
 
@@ -512,10 +512,23 @@
           embeddings no — que es justo el que tiene el techo más bajo. Una capacidad que existe una
           vez y hace falta dos es un componente.
         </p>
+        <p>
+          <b>Y el turno lo pide el cliente, no quien lo llama.</b> <code>LLMManager.completar</code>
+          se presentaba como «la puerta al modelo» y no lo era: el pipeline efímero del panel —modo
+          demo y BYOK— recibe clientes ya armados y los invoca directo. O sea que el único camino
+          que corre sobre free tier era justamente el que no pedía turno. Con la cuota adentro del
+          cliente, pasan por ella las dos puertas.
+        </p>
+        <p>
+          <b>Esperar tiene que verse.</b> Desde afuera, un limitador haciendo su trabajo y un
+          proceso colgado son indistinguibles — y esperar es el caso normal del modo demo: Gemini
+          free son 5 pedidos por minuto y una investigación hace 3 llamadas. El limitador avisa
+          antes de dormir y el panel muestra el proveedor, una cuenta atrás y el motivo.
+        </p>
         <div class="antes-despues">
           <span>privado de <code>LLMManager</code></span>
           <span class="flecha">→</span>
-          <span class="bien">lo usan el modelo y el RAG</span>
+          <span class="bien">lo usan el modelo y el RAG, y espera visible</span>
         </div>
       </div>
     </details>
@@ -788,7 +801,7 @@
   </div>
 
   <p class="pie">
-    31 endpoints · 13 en el recorrido de un caso · 18 para operar el sistema<br>
+    32 endpoints · 14 en el recorrido de un caso · 18 para operar el sistema<br>
     Contrato completo y ejecutable en <code>/docs</code> (OpenAPI). Panel en <code>/panel</code>.
   </p>
 
@@ -835,10 +848,13 @@
      d:"Califica la propuesta del modelo, no la corrección del código: sobre la versión ya corregida, dos de los cinco criterios no podrían bajar de 10 por construcción."},
     {v:"POST", r:"/api/alerts/", f:"sql", ms:283,
      t:"El caso necesita una persona",
-     d:"Publica la URL del formulario de aprobación, que es lo que consumiría Slack o un mail: el analista no es quien disparó el caso. Solo corre en esta rama — en un BLOCKER la decisión es automática y el recorrido son 12 llamadas en vez de 13."},
+     d:"Publica la URL del formulario de aprobación, que es lo que consumiría Slack o un mail: el analista no es quien disparó el caso. Solo corre en esta rama — en un BLOCKER la decisión es automática y el recorrido son 13 llamadas en vez de 14."},
     {v:"POST", r:"/api/reports/html", f:"plano", ms:277,
      t:"70 KB de HTML",
-     d:"Con los estilos adentro: el informe se abre sin internet, que es la única forma de que siga sirviendo dentro de un año."}
+     d:"Con los estilos adentro: el informe se abre sin internet, que es la única forma de que siga sirviendo dentro de un año."},
+    {v:"POST", r:"/api/hitl/decide", f:"plano", ms:4,
+     t:"Sin respuesta: PENDING_HITL, no aprueba",
+     d:"Traduce lo que contestó el analista. Estuvo en 88 líneas de JavaScript dentro del workflow, fuera del alcance de pytest: ahí nacieron sus dos bugs —un MODIFY registrado como aprobación y un plazo vencido que caía en APPROVE— y ahí no podían tener test. Las tres reglas viven ahora en domain/hitl.py."}
   ];
 
   var COLOR = {sql:"var(--sql)", rag:"var(--rag)", llm:"var(--llm)", plano:"var(--plano)"};
