@@ -471,8 +471,8 @@ class TestElConteoDeNodosQueLaDocDeclara:
         if not ruta.exists():
             # `CLAUDE.md` está en el .gitignore: es el archivo de instrucciones
             # del agente, no un entregable, y por eso no viaja en el paquete que
-            # arma `scripts/armar_entregables.py`. Sin esta guarda, quien recibe
-            # el paquete y corre los tests se come un FileNotFoundError por un
+            # arma `tools/armar_entrega.py`. Sin esta guarda, quien recibe el
+            # paquete y corre los tests se come un FileNotFoundError por un
             # archivo que nunca debió estar ahí.
             pytest.skip(f"{archivo} no existe en este árbol (no es un entregable)")
         doc = ruta.read_text(encoding="utf-8")

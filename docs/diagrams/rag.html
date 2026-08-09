@@ -230,7 +230,7 @@ MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
 <span class="et">Observaciones:</span> Error tecnico del procesador</div>
         <dl>
           <dt>carga útil</dt><dd>el caso entero + comercio, monto, método de pago y país de su transacción</dd>
-          <dt>filtrable</dt><dd><code>payment_method</code> tiene índice propio en Qdrant</dd>
+          <dt>filtrable</dt><dd><code>transaction_id</code> tiene índice propio en Qdrant: es el que sostiene la exclusión de los casos propios</dd>
         </dl>
       </div>
     </div>
@@ -370,7 +370,7 @@ MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
           <tr>
             <td>filtro</td>
             <td>ninguno</td>
-            <td>blando por <code>payment_method</code>: <code>should</code>, no <code>must</code> — prefiere, no exige</td>
+            <td><code>must_not</code> por <code>transaction_id</code>: una transacción no es precedente de sí misma. La preferencia por método de pago la aplica el reordenado, no un filtro</td>
           </tr>
           <tr>
             <td>reordenado</td>
@@ -392,6 +392,26 @@ MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="paso" style="margin-top:16px">
+      <div class="paso-q">Una transacción no es precedente de sí misma<span class="sub">must_not por transaction_id</span></div>
+      <div class="paso-cuerpo">
+        <p>
+          <b>47 de las 100 transacciones del dataset tienen un caso propio</b>, y esos casos salían
+          <b>primeros</b> — no por casualidad. El documento indexado de un caso lleva el comercio, el
+          método, el país y el monto de su transacción formateados igual que la consulta, así que el
+          parecido es máximo por construcción; y el reordenado le suma sus dos bonificaciones, que no
+          pueden fallar porque esos campos se copiaron de la misma transacción.
+        </p>
+        <p>
+          En TXN-00006 eso ponía a CB-0025 y CB-0047 en los puestos 1 y 2, y la justificación citaba
+          «CB-0025 fue aprobado en 10d» como si fuera la tendencia de un tercero. <b>Es fuga de la
+          respuesta:</b> el agente leía el final antes de opinar. Se excluye en la recuperación y no
+          en el prompt, y no deja huecos: se piden quince candidatos para cinco lugares, así que los
+          puestos se llenan con precedentes ajenos, que son los únicos que informan algo.
+        </p>
+      </div>
     </div>
 
     <div class="paso" style="margin-top:16px">
