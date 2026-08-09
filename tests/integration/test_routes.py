@@ -20,7 +20,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app.data import esquema
-from api.app.data.db import Database
+from api.app.data.db import Database, cache_key
 from api.app.domain.enums import PaymentMethod, ResolutionOutcome, RiskLevel
 from api.app.llm.client import LLMResult
 from api.app.main import app
@@ -285,16 +285,36 @@ def test_cache_lookup_miss_when_enabled(test_client_routes):
 def test_cache_lookup_hit_when_enabled(test_client_routes):
     """GET /api/cache/lookup should return cached=True when report is stored."""
     client, db, _ = test_client_routes
-    db.store_cached_report("TXN-00051|False", "<html>Cached Report</html>")
+    db.store_cached_report(
+        cache_key("TXN-00051", False, "No reconoce la compra"), "<html>Cached Report</html>",
+    )
 
     resp = client.get("/api/cache/lookup", params={
         "transaction_id": "TXN-00051",
         "cliente_vip": False,
+        "motivo": "No reconoce la compra",
     })
     assert resp.status_code == 200
     data = resp.json()
     assert data["cached"] is True
     assert "Cached Report" in data["html"]
+
+
+def test_cache_lookup_no_devuelve_el_informe_de_otro_reclamo(test_client_routes):
+    """El motivo decide que politicas y precedentes se recuperan: otro motivo,
+    otro analisis. Sin el en la clave, el segundo reclamo sobre la misma
+    transaccion recibia el informe del primero con su recomendacion."""
+    client, db, _ = test_client_routes
+    db.store_cached_report(
+        cache_key("TXN-00051", False, "No reconoce la compra"), "<html>Cached Report</html>",
+    )
+
+    resp = client.get("/api/cache/lookup", params={
+        "transaction_id": "TXN-00051",
+        "cliente_vip": False,
+        "motivo": "Producto defectuoso",
+    })
+    assert resp.json()["cached"] is False
 
 
 # ---- Health Degraded ----
@@ -366,12 +386,14 @@ def test_report_html_caches_when_enabled(test_client_routes):
         "hitl_decision": None,
         "cache_hit": False,
         "guardrail_warnings": [],
+        "motivo": "No reconoce la compra",
     }
     resp = client.post("/api/reports/html", json=payload)
     assert resp.status_code == 200
 
-    # Verify it was cached
-    cached = db.get_cached_report("TXN-00051|False")
+    # Se guarda bajo la clave que incluye el motivo: es lo que despues busca el
+    # lookup, y si las dos formas no coinciden el cache no acierta nunca.
+    cached = db.get_cached_report(cache_key("TXN-00051", False, "No reconoce la compra"))
     assert cached is not None
     assert "TXN-00051" in cached
 

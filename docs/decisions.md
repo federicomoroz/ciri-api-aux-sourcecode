@@ -193,7 +193,9 @@ Esto también me permitió iterar rápido en el prompt del Judge. La versión 2.
 
 **Contexto:** Repetir la investigación del mismo contracargo cuesta dos llamadas a Sonnet y más de cien segundos. Hace falta no volver a pagar por un caso ya resuelto. La opción atractiva es un caché semántico: embeber la consulta, buscar en Qdrant y, si hay algo por encima de cierta similitud, devolver esa resolución.
 
-**Decisión:** Caché exact-match en SQLite, con clave `(transaction_id, cliente_vip)`. Sin caché semántico.
+**Decisión:** Caché exact-match en SQLite, con clave `(transaction_id, cliente_vip, motivo)`. Sin caché semántico.
+
+La clave tiene que cubrir *todo* lo que cambia la salida. El motivo faltaba, y es justamente lo que elige las políticas y los precedentes que recupera el RAG: dos reclamos distintos sobre la misma transacción son dos análisis distintos, y el caché devolvía el primero para el segundo. Se normaliza espaciado y mayúsculas —dos formas de escribir lo mismo no deberían pagar dos análisis—; más que eso (sinónimos, errores de tipeo) sería trabajo de un caché semántico, que es justamente lo que esta decisión descarta.
 
 **Razonamiento:** El caché semántico responde una pregunta distinta de la que hay que responder. Dos contracargos pueden ser 0.95 similares —mismo comercio, mismo método de pago, montos parecidos— y merecer resoluciones opuestas, porque lo que decide el caso son los veredictos de política sobre *esa* transacción y el historial de *ese* cliente. Devolver la resolución de otro caso porque se parece es exactamente el tipo de error que no se puede cometer en un contracargo: el informe llevaría el identificador correcto y el razonamiento de otro.
 
@@ -277,7 +279,7 @@ Hay tres razones más, todas prácticas:
 
 ## 12. Deuda tecnica asumida: el panel de testing
 
-**Contexto:** `api/app/reports/templates/test_panel.html` tiene 4116 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
+**Contexto:** `api/app/reports/templates/test_panel.html` tiene 4120 lineas, con todo el CSS y todo el JavaScript embebidos en un solo archivo. Es el archivo mas grande del proyecto: cuatro veces el modulo Python mas extenso.
 
 **Decision:** Dejarlo asi para esta entrega, y anotarlo.
 

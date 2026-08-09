@@ -42,7 +42,7 @@ def generate_html_report(
     tx_id = req.transaction.get("id", "")
     if settings.report_cache_enabled and tx_id:
         try:
-            key = cache_key(tx_id, req.cliente_vip)
+            key = cache_key(tx_id, req.cliente_vip, req.motivo or "")
             db.store_cached_report(key, html)
             logger.info("Report cached for %s", tx_id)
         except Exception as e:

@@ -9,6 +9,7 @@ from ..domain.constants import (
     ALERTS_DEFAULT_LIMIT,
     DASHBOARD_TOP_N,
     JUDGE_AUTO_INDEX_THRESHOLD,
+    REPORT_CACHE_MAX,
     SQLITE_TIMEOUT_S,
 )
 from ..domain.enums import Severity
@@ -32,9 +33,22 @@ def _caso_en_disputa(alias: str = "") -> str:
     return f"ORDER BY {alias}open_date DESC"
 
 
-def cache_key(transaction_id: str, cliente_vip: bool = False) -> str:
-    """Build the idempotency cache key for a report."""
-    return f"{transaction_id}|{cliente_vip}"
+def cache_key(transaction_id: str, cliente_vip: bool = False, motivo: str = "") -> str:
+    """La clave de idempotencia de un informe.
+
+    **El motivo forma parte de la clave.** No estaba, y era la misma omision que
+    ya se corrigio en `_caso_en_disputa`: el motivo elige que politicas y que
+    precedentes recupera el RAG, asi que es una entrada del analisis y no una
+    etiqueta. Sin el, reclamar «producto defectuoso» sobre una transaccion ya
+    analizada por «no reconoce la compra» devolvia el informe del otro reclamo
+    —con sus politicas, sus precedentes y su recomendacion— y el propio informe
+    mostraba el motivo viejo, asi que nada delataba el cambiazo.
+
+    Se normaliza el espaciado y las mayusculas para que dos formas de escribir
+    el mismo motivo no paguen dos analisis; mas que eso —sinonimos, errores de
+    tipeo— es trabajo del cache semantico, no de una clave exacta.
+    """
+    return f"{transaction_id}|{cliente_vip}|{' '.join(motivo.split()).lower()}"
 
 
 class Database:
@@ -372,10 +386,31 @@ class Database:
         return int(cuantos["n"]) if cuantos else 0
 
     def store_cached_report(self, cache_key: str, html: str) -> None:
+        """Guarda el informe y deja el cache dentro de su tope.
+
+        **El tope no es decorativo.** Una de las tres partes de la clave es el
+        motivo, que es texto libre de quien reclama: dos redacciones del mismo
+        reclamo son dos filas de unos 70 KB, y nada las borraba nunca. Sin
+        tope, la tabla crece con cada variante que alguien escriba.
+
+        Se descartan las mas viejas por fecha de escritura, que para un cache
+        de informes es el criterio correcto: el valor de un informe guardado
+        cae con el tiempo —las politicas se editan y el caso se resuelve— asi
+        que lo viejo es lo primero que conviene volver a calcular. De paso
+        barre las filas que quedaron con un formato de clave anterior, que son
+        justamente las mas viejas y ya no las alcanza ninguna consulta.
+        """
         self._escribir(
             """INSERT OR REPLACE INTO report_cache (cache_key, html, created_at)
                VALUES (?, ?, ?)""",
             (cache_key, html, datetime.now(UTC).isoformat()),
+        )
+        self._escribir(
+            """DELETE FROM report_cache WHERE cache_key NOT IN (
+                   SELECT cache_key FROM report_cache
+                   ORDER BY created_at DESC LIMIT ?
+               )""",
+            (REPORT_CACHE_MAX,),
         )
 
     # --- Alerts (operational event log) ---

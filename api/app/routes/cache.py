@@ -22,14 +22,21 @@ router = APIRouter(prefix="/api/cache", tags=["cache"])
 def cache_lookup(
     transaction_id: str = Query(...),
     cliente_vip: bool = Query(False),
+    motivo: str = Query("", description="Parte de la clave: cambia el analisis entero"),
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> CacheLookupResponse:
-    """Check if a cached HTML report exists for this exact request."""
+    """Check if a cached HTML report exists for this exact request.
+
+    El `motivo` entra en la clave porque decide que politicas y que precedentes
+    recupera el RAG: dos reclamos distintos sobre la misma transaccion son dos
+    analisis distintos. Es opcional para no romper a quien ya llama sin el, pero
+    el orquestador lo manda.
+    """
     if not settings.report_cache_enabled:
         return {"cached": False}
 
-    key = cache_key(transaction_id, cliente_vip=cliente_vip)
+    key = cache_key(transaction_id, cliente_vip=cliente_vip, motivo=motivo)
     html = db.get_cached_report(key)
 
     if html:

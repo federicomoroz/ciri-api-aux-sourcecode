@@ -165,6 +165,7 @@ __all__ = [
     "HITL_NOTAS_POR_VENCIMIENTO",
     "HITL_PLAZO_HORAS",
     # Report template
+    "REPORT_CACHE_MAX",
     "REPORT_TEMPLATE_NAME",
 ]
 
@@ -445,6 +446,14 @@ HEALTH_OK: str = "ok"
 HEALTH_ERROR: str = "error"
 HEALTH_HEALTHY: str = "healthy"
 HEALTH_DEGRADED: str = "degraded"
+
+# ── Cache de informes ─────────────────────────────────
+# Cuantos informes se guardan. El cache no tenia tope y una de sus tres partes
+# de clave es el motivo, que es texto libre de quien reclama: cada redaccion
+# distinta del mismo reclamo agrega una fila de ~70 KB que ya nadie va a leer.
+# Con tope, las viejas se van solas y de paso se barren las que quedaron con un
+# formato de clave anterior.
+REPORT_CACHE_MAX: int = 200
 
 # ── Embeddings ────────────────────────────────────────
 EMBEDDING_CACHE_MAX: int = 512             # textos cacheados en proceso

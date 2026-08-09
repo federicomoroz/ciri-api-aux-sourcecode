@@ -15,7 +15,8 @@ Covers:
 import pytest
 
 from api.app.data import esquema
-from api.app.data.db import Database
+from api.app.data.db import Database, cache_key
+from api.app.domain.constants import REPORT_CACHE_MAX
 from api.app.domain.enums import ResolutionOutcome
 
 
@@ -313,3 +314,83 @@ class TestCualEsElCasoDeLaTransaccion:
         assert del_sla == del_panel, (
             "el analisis se hace sobre un caso y el plazo se mide sobre otro"
         )
+
+
+class TestLaClaveDeCacheCubreLoQueCambiaElAnalisis:
+    """Una clave de idempotencia tiene que incluir todo lo que cambia la salida.
+
+    El motivo no estaba, y es una entrada del analisis: decide que politicas y
+    que precedentes recupera el RAG. Reclamar «producto defectuoso» sobre una
+    transaccion ya analizada por «no reconoce la compra» devolvia el informe del
+    otro reclamo —con sus politicas, sus precedentes y su recomendacion— y el
+    informe mostraba el motivo viejo, asi que nada delataba el cambiazo.
+    """
+
+    def test_dos_motivos_distintos_son_dos_informes(self):
+        assert cache_key("TXN-1", False, "no reconoce la compra") != cache_key(
+            "TXN-1", False, "producto defectuoso",
+        )
+
+    def test_el_mismo_motivo_reusa_el_informe(self):
+        assert cache_key("TXN-1", False, "fraude") == cache_key("TXN-1", False, "fraude")
+
+    def test_no_paga_dos_analisis_por_como_se_escribio(self):
+        """Espaciado y mayusculas no cambian el analisis; sinonimos si, y eso es
+        trabajo del cache semantico, no de una clave exacta."""
+        assert cache_key("TXN-1", False, "  Fraude   Con Tarjeta ") == cache_key(
+            "TXN-1", False, "fraude con tarjeta",
+        )
+
+    def test_el_cliente_vip_sigue_separando(self):
+        assert cache_key("TXN-1", True, "fraude") != cache_key("TXN-1", False, "fraude")
+
+    def test_sin_motivo_sigue_siendo_una_clave_valida(self):
+        """Los llamadores que todavia no lo mandan no pueden romperse."""
+        assert cache_key("TXN-1") == cache_key("TXN-1", False, "")
+
+
+class TestElCacheDeInformesTieneTope:
+    """Un cache sin tope con una clave de texto libre es una fuga.
+
+    Desde que el motivo entra en la clave, cada redaccion distinta del mismo
+    reclamo es una fila nueva de unos 70 KB, y nada las borraba: la tabla crecia
+    con cada variante que alguien escribiera. El tope descarta las mas viejas,
+    que para un informe es el criterio correcto —las politicas se editan y el
+    caso se resuelve, asi que lo viejo es lo primero que conviene recalcular— y
+    de paso barre las filas con formatos de clave anteriores, que ya no las
+    alcanza ninguna consulta.
+    """
+
+    def _llenar(self, db, cuantos: int, desde: int = 0):
+        for i in range(desde, desde + cuantos):
+            db.store_cached_report(f"TXN-{i:05d}|False|motivo {i}", f"<html>{i}</html>")
+
+    def test_no_pasa_del_tope(self, db):
+        self._llenar(db, REPORT_CACHE_MAX + 25)
+        assert self._cuantas(db) == REPORT_CACHE_MAX
+
+    def test_sobrevive_lo_ultimo_escrito(self, db):
+        ultimo = REPORT_CACHE_MAX + 9
+        self._llenar(db, REPORT_CACHE_MAX + 10)
+        assert db.get_cached_report(f"TXN-{ultimo:05d}|False|motivo {ultimo}")
+        assert db.get_cached_report("TXN-00000|False|motivo 0") is None
+
+    def test_barre_las_claves_del_formato_viejo(self, db):
+        """Las que quedaron sin motivo: ninguna consulta las alcanza ya."""
+        db.store_cached_report("TXN-00051|False", "<html>huerfana</html>")
+        self._llenar(db, REPORT_CACHE_MAX)
+        assert db.get_cached_report("TXN-00051|False") is None
+
+    def test_debajo_del_tope_no_borra_nada(self, db):
+        self._llenar(db, 5)
+        assert self._cuantas(db) == 5
+
+    def test_reescribir_la_misma_clave_no_suma_filas(self, db):
+        for _ in range(3):
+            db.store_cached_report("TXN-1|False|fraude", "<html>x</html>")
+        assert self._cuantas(db) == 1
+
+    @staticmethod
+    def _cuantas(db) -> int:
+        with db._conn() as c:                                    # noqa: SLF001
+            return c.execute("SELECT COUNT(*) FROM report_cache").fetchone()[0]

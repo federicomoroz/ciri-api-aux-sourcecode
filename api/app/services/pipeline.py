@@ -74,6 +74,9 @@ class PipelineService:
                 country=country,
                 merchant=tx.get("merchant", ""),
                 amount=float(tx.get("amount_usd", 0)),
+                # Los casos de esta misma transaccion no son precedentes suyos:
+                # citarlos es leerse la respuesta. Ver `retriever._query_cases`.
+                excluir_transaction_id=req.transaction_id,
             ): "rag",
             executor.submit(
                 self.analyzer.merchant_risk_profile, tx.get("merchant", ""),
@@ -85,10 +88,13 @@ class PipelineService:
             # antes de sintetizar, aca tambien, o los dos caminos no dan lo mismo.
             executor.submit(
                 self._sla_del_caso, req.transaction_id, country, req.cliente_vip,
+                str(tx.get("date", "")),
             ): "sla",
         }
 
-    def _sla_del_caso(self, txn_id: str, country: str, cliente_vip: bool) -> dict:
+    def _sla_del_caso(
+        self, txn_id: str, country: str, cliente_vip: bool, transaction_date: str = "",
+    ) -> dict:
         """El SLA se mide sobre el reclamo, no sobre la compra.
 
         Misma resolucion de fechas que hace `POST /api/sla/check`: si hay caso
@@ -106,6 +112,9 @@ class PipelineService:
             country=country,
             cliente_vip=cliente_vip,
             case_close_date=caso.get("close_date") or None,
+            # Para el otro plazo del caso: cuanto tardo el cliente en reclamar.
+            # Lo cuenta `check_sla`, no el modelo. Ver `_plazo_de_disputa`.
+            transaction_date=transaction_date,
         )
 
     def _judge(self, ctx: CaseContext, resolution: dict) -> dict:
@@ -137,6 +146,10 @@ class PipelineService:
             "hitl_decision": None,
             "cache_hit": False,
             "guardrail_warnings": resolution.get("guardrail_warnings", []),
+            # El plazo con el que se decidio la compensacion. Viajaba hasta la
+            # decision y moria ahi: el informe afirmaba «corresponde/no
+            # corresponde compensar» sin mostrar contra que se conto.
+            "sla": ctx.sla,
         }
 
     # ── Public methods ──────────────────────────────────────────────────
@@ -146,7 +159,7 @@ class PipelineService:
         txn_id = req.transaction_id
 
         # Step 0 — cache check
-        key = cache_key(txn_id, req.cliente_vip)
+        key = cache_key(txn_id, req.cliente_vip, req.motivo)
         cached_html = self._informe_cacheado(key)
         if cached_html:
             logger.info("Pipeline cache HIT for %s", txn_id)
@@ -203,7 +216,7 @@ class PipelineService:
         yield ("start", {"transaction_id": txn_id})
 
         # Cache check
-        key = cache_key(txn_id, req.cliente_vip)
+        key = cache_key(txn_id, req.cliente_vip, req.motivo)
         cached_html = self._informe_cacheado(key)
         if cached_html:
             yield ("done", {"html": cached_html, "usage": {"cache_hit": True}})

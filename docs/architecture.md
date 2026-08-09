@@ -501,8 +501,13 @@ Disponible para la proxima resolucion. Sin cambio de codigo.
 ### El cache es exacto, no semantico
 
 Repetir la investigacion de un mismo contracargo cuesta dos llamadas al modelo. El cache de
-idempotencia en SQLite, con clave `(transaction_id, cliente_vip)`, devuelve el informe ya
-generado en milisegundos.
+idempotencia en SQLite, con clave `(transaction_id, cliente_vip, motivo)`, devuelve el informe
+ya generado en milisegundos.
+
+El motivo esta en la clave porque es una entrada del analisis y no una etiqueta: elige que
+politicas y que precedentes recupera el RAG. Sin el, reclamar «producto defectuoso» sobre una
+transaccion ya analizada por «no reconoce la compra» devolvia el informe del otro reclamo, con
+su recomendacion y con el motivo viejo impreso — asi que nada delataba el cambiazo.
 
 Se descarto el cache semantico a proposito: dos contracargos pueden parecerse mucho y merecer
 resoluciones opuestas, porque lo que decide el caso son los veredictos sobre *esa* transaccion.
@@ -885,7 +890,7 @@ quest_ML/
         pricing.py          # Costo estimado por modelo
         parsing.py          # parse_json_safely (parsing de respuestas LLM)
         prompts/
-          v1_policy_eval.py # v1.4 — evaluación de políticas
+          v1_policy_eval.py # v1.5 — evaluación de políticas
           v1_resolution.py  # v3.2 — síntesis de resolución (Sonnet)
           v1_judge.py       # v2.2 — LLM-as-Judge con rubrics
       analysis/

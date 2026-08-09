@@ -356,11 +356,15 @@ requiere una persona. Devuelve `{"html": "..."}` y **guarda el resultado en cach
 
 ### `GET /api/cache/lookup`
 
-Caché de idempotencia por `(transaction_id, cliente_vip)`. Si el caso ya se investigó,
+Caché de idempotencia por `(transaction_id, cliente_vip, motivo)`. Si el caso ya se investigó,
 devuelve el informe sin volver a pagar el modelo: **2 segundos en lugar de 113**.
 
+El motivo forma parte de la clave porque es una entrada del análisis, no una etiqueta: elige
+qué políticas y qué precedentes recupera el RAG. Consultar sin él pregunta por una clave que
+nadie escribe, así que nunca acierta.
+
 ```bash
-curl "https://ciri-chargeback-agent.onrender.com/api/cache/lookup?transaction_id=TXN-00051"
+curl "https://ciri-chargeback-agent.onrender.com/api/cache/lookup?transaction_id=TXN-00051&motivo=No%20reconoce%20la%20compra"
 ```
 
 Devuelve `{"cached": true, "html": "..."}` o `{"cached": false}`. Es exact-match a propósito;

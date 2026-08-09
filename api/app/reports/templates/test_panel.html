@@ -3476,6 +3476,10 @@ async function informeCacheado(payload) {
   const q = new URLSearchParams({
     transaction_id: payload.transaction_id,
     cliente_vip: String(!!payload.cliente_vip),
+    // El motivo es parte de la clave: sin él se pregunta por una clave que
+    // nadie escribe, y el sondeo del desenlace HITL no encontraría nunca el
+    // informe que está esperando.
+    motivo: payload.motivo || '',
   });
   try {
     const r = await fetch(API_BASE + '/api/cache/lookup?' + q.toString());

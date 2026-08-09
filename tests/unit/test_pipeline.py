@@ -15,6 +15,9 @@ TX = {
     "id": "TXN-00051", "client_id": "CLI-0003", "merchant": "Airbnb",
     "amount_usd": 100.0, "fraud_score": 8, "country": "COL",
     "payment_method": PaymentMethod.CRYPTO, "channel": "POS",
+    # La fecha de la compra: contra ella se mide cuanto tardo el cliente en
+    # reclamar, que es uno de los dos plazos del caso.
+    "date": "2024-09-23",
 }
 
 
@@ -62,8 +65,14 @@ class CalculadoraFalsa:
     antes habia que fingir un analizador entero para probar el plazo.
     """
 
-    def check_sla(self, case_open_date, country, cliente_vip=False, today=None, case_close_date=None):
-        self.sla_pedido = {"open": case_open_date, "close": case_close_date}
+    def check_sla(self, case_open_date, country, cliente_vip=False, today=None,
+                  case_close_date=None, transaction_date=""):
+        # `transaction_date` es el otro reloj: cuanto tardo el cliente en
+        # reclamar desde que compro. Se anota para poder afirmar que el pipeline
+        # lo pasa, que es justo lo que este doble existe para vigilar.
+        self.sla_pedido = {
+            "open": case_open_date, "close": case_close_date, "compra": transaction_date,
+        }
         return {"within_sla": False, "days_elapsed": 12, "sla_limit_days": 10,
                 "sla_type": "standard", "policy_reference": "POL-SLA-002",
                 "compensation_applicable": True,
@@ -133,13 +142,20 @@ class TestRun:
         assert pipeline.resolution_svc.ultimo_ctx.sla["within_sla"] is False
         assert pipeline.resolution_svc.ultimo_ctx.sla["days_elapsed"] == 12
 
+    def test_le_pasa_la_fecha_de_la_transaccion_al_sla(self, pipeline):
+        """El plazo de disputa se cuenta desde la compra, y quien la tiene es
+        el pipeline: sin pasarla, `check_sla` no puede medir ese reloj y el
+        prompt volvia a quedarse sin el dato que la politica de plazo pide."""
+        pipeline.run(REQ)
+        assert pipeline.sla.sla_pedido["compra"] == TX["date"]
+
     def test_guarda_el_informe_en_cache(self, pipeline):
         """Regresion: el pipeline leia el cache y nunca lo llenaba."""
         pipeline.run(REQ)
-        assert pipeline.db.escrituras == ["TXN-00051|False"]
+        assert pipeline.db.escrituras == ["TXN-00051|False|no reconoce la compra"]
 
     def test_el_cache_evita_el_pipeline_entero(self):
-        db = DBFalsa(cached={"TXN-00051|False": "<html>cacheado</html>"})
+        db = DBFalsa(cached={"TXN-00051|False|no reconoce la compra": "<html>cacheado</html>"})
         p = PipelineService(db, RetrieverFalso(), AnalyzerFalso(), ResolucionFalsa(), ReporteFalso())
         html, usage = p.run(REQ)
         assert html == "<html>cacheado</html>"
@@ -173,10 +189,10 @@ class TestRunStreaming:
 
     def test_tambien_cachea(self, pipeline):
         self._eventos(pipeline)
-        assert pipeline.db.escrituras == ["TXN-00051|False"]
+        assert pipeline.db.escrituras == ["TXN-00051|False|no reconoce la compra"]
 
     def test_cache_hit_corta_en_el_primer_paso(self):
-        db = DBFalsa(cached={"TXN-00051|False": "<html>cacheado</html>"})
+        db = DBFalsa(cached={"TXN-00051|False|no reconoce la compra": "<html>cacheado</html>"})
         p = PipelineService(db, RetrieverFalso(), AnalyzerFalso(), ResolucionFalsa(), ReporteFalso())
         eventos = list(p.run_streaming(REQ))
         assert [paso for paso, _ in eventos] == ["start", "done"]
