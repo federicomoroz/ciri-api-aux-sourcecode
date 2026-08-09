@@ -107,6 +107,15 @@ caso y la comparacion entre corridas estan en
 
 Correrlo en la configuracion documentada cuesta unos USD 0.75 para 20 casos y sigue pendiente.
 
+**Y hay una segunda medicion, que no depende de un juez.** El Juez es un modelo puntuando a
+otro modelo; el dataset trae 60 resoluciones humanas etiquetadas que el RAG ya usa como
+precedentes y que nadie estaba comparando. `python scripts/medir_acuerdo.py` arma la matriz
+de confusion contra ellas: **12 de 34 casos comparables, 35% de acuerdo** — y toda la
+coincidencia esta en la clase «En escalación». De los 21 casos donde una persona resolvio,
+el agente no reprodujo ninguno, porque por politica no puede resolver. El detalle, el mapeo
+entre los dos vocabularios y lo que la medicion encontro sin buscarlo estan en
+[`docs/acuerdo_con_analistas.md`](acuerdo_con_analistas.md).
+
 ---
 
 **Score por criterio** (rango en los tres escenarios que viajan en el paquete):

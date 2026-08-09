@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-1171%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1196%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -283,6 +283,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
 | `docs/politicas_vs_dataset.md` | Qué políticas se pueden aplicar con los datos que hay, y por qué el agente deriva el 100% de los casos |
+| `docs/acuerdo_con_analistas.md` | La matriz de confusión contra las 60 resoluciones humanas del dataset: en qué coincide el agente con los analistas y en qué no |
 | `docs/demo_scenarios.md` | Los tres escenarios, paso a paso, con los comandos |
 | `docs/api.md` | Los 32 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |
@@ -293,7 +294,7 @@ sólo el código que la API necesita para funcionar.
 pytest tests/unit tests/integration -q --cov=api/app --cov-fail-under=85
 ```
 
-**1137 tests** en 45 archivos y **92% de cobertura** sobre `api/app` — el número que
+**1162 tests** en 46 archivos y **92% de cobertura** sobre `api/app` — el número que
 reporta el CI sobre un checkout limpio, que es el reproducible: medido con un `.env` cargado
 sube unas décimas, porque se ejecutan ramas que sin configuración no corren. Los de `unit/` e `integration/` corren sin n8n ni Qdrant levantados; los 34 de
 `e2e/` llaman a la API publicada y al modelo, así que quedan fuera del CI a propósito —un test

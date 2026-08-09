@@ -1,0 +1,558 @@
+{
+  "generado": "2026-08-09T14:26:55+00:00",
+  "resumen": {
+    "comparables_elegidos": 34,
+    "medidos": 34,
+    "con_error": 0,
+    "coincidencias": 12,
+    "acuerdo": 0.353,
+    "fuera_del_porcentaje": {
+      "Reembolso parcial": {
+        "casos": 6,
+        "por_que": "el agente no tiene una accion de reembolso parcial: su vocabulario es aprobar, rechazar o derivar"
+      },
+      "Caso cerrado sin resolución": {
+        "casos": 7,
+        "por_que": "no es una decision sino la ausencia de una; no hay contra que comparar"
+      }
+    },
+    "matriz_de_confusion": {
+      "A favor del cliente": {
+        "PENDING_HITL": 8,
+        "REJECT": 1
+      },
+      "En escalación": {
+        "PENDING_HITL": 12,
+        "REJECT": 1
+      },
+      "A favor del comercio": {
+        "PENDING_HITL": 12
+      }
+    },
+    "configuracion": {
+      "modo": "demo",
+      "es_free_tier": true,
+      "modelos_por_paso": {
+        "policy_eval": {
+          "proveedor": "anthropic",
+          "modelo": "claude-haiku-4-5-20251001",
+          "personalizado": false,
+          "actualizado": null,
+          "titulo": "Evaluacion de politicas",
+          "detalle": "Compara la transaccion contra cada politica recuperada y emite un veredicto. Tarea mecanica: un modelo rapido alcanza.",
+          "prompt": "v1_policy_eval"
+        },
+        "resolution": {
+          "proveedor": "anthropic",
+          "modelo": "claude-haiku-4-5-20251001",
+          "personalizado": false,
+          "actualizado": null,
+          "titulo": "Sintesis de la resolucion",
+          "detalle": "Redacta la justificacion, razona sobre los precedentes y arma los next_steps. Es donde el razonamiento se nota.",
+          "prompt": "v1_resolution"
+        },
+        "judge": {
+          "proveedor": "anthropic",
+          "modelo": "claude-haiku-4-5-20251001",
+          "personalizado": false,
+          "actualizado": null,
+          "titulo": "Juez de calidad",
+          "detalle": "Puntua la resolucion sobre cinco criterios con rubrica. Evaluar bien es tan dificil como resolver bien.",
+          "prompt": "v1_judge"
+        }
+      },
+      "muestreo": "todos los comparables"
+    }
+  },
+  "mapeo": {
+    "A favor del cliente": "APPROVE",
+    "A favor del comercio": "REJECT",
+    "En escalación": "PENDING_HITL"
+  },
+  "casos": [
+    {
+      "case_id": "CB-0034",
+      "transaction_id": "TXN-00002",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "3 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-001",
+        "POL-SLA-002",
+        "POL-SLA-003"
+      ],
+      "segundos": 18.8
+    },
+    {
+      "case_id": "CB-0045",
+      "transaction_id": "TXN-00004",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "5 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 9.1
+    },
+    {
+      "case_id": "CB-0025",
+      "transaction_id": "TXN-00006",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-003"
+      ],
+      "segundos": 46.0
+    },
+    {
+      "case_id": "CB-0054",
+      "transaction_id": "TXN-00007",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "MEDIUM",
+      "motivo_hitl": "1 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004"
+      ],
+      "segundos": 10.0
+    },
+    {
+      "case_id": "CB-0041",
+      "transaction_id": "TXN-00010",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "5 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-001",
+        "POL-CB-004",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 115.9
+    },
+    {
+      "case_id": "CB-0007",
+      "transaction_id": "TXN-00016",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 9.1
+    },
+    {
+      "case_id": "CB-0026",
+      "transaction_id": "TXN-00019",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "No se evaluo ninguna politica — revisar si el vector store respondio y si la evaluacion del modelo devolvio un JSON valido",
+      "codigos_fallidos": [],
+      "segundos": 47.3
+    },
+    {
+      "case_id": "CB-0027",
+      "transaction_id": "TXN-00022",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-001",
+        "POL-SLA-002",
+        "POL-SLA-004"
+      ],
+      "segundos": 10.3
+    },
+    {
+      "case_id": "CB-0006",
+      "transaction_id": "TXN-00027",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 8.7
+    },
+    {
+      "case_id": "CB-0059",
+      "transaction_id": "TXN-00034",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002"
+      ],
+      "segundos": 45.8
+    },
+    {
+      "case_id": "CB-0035",
+      "transaction_id": "TXN-00037",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 9.4
+    },
+    {
+      "case_id": "CB-0033",
+      "transaction_id": "TXN-00038",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-003",
+        "POL-SLA-002",
+        "POL-SLA-003"
+      ],
+      "segundos": 9.4
+    },
+    {
+      "case_id": "CB-0037",
+      "transaction_id": "TXN-00040",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "1 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004"
+      ],
+      "segundos": 44.5
+    },
+    {
+      "case_id": "CB-0022",
+      "transaction_id": "TXN-00041",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002"
+      ],
+      "segundos": 10.2
+    },
+    {
+      "case_id": "CB-0015",
+      "transaction_id": "TXN-00043",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-001",
+        "POL-SLA-002",
+        "POL-SLA-003"
+      ],
+      "segundos": 46.3
+    },
+    {
+      "case_id": "CB-0020",
+      "transaction_id": "TXN-00053",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002"
+      ],
+      "segundos": 9.8
+    },
+    {
+      "case_id": "CB-0049",
+      "transaction_id": "TXN-00054",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "3 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-001",
+        "POL-SLA-002"
+      ],
+      "segundos": 8.9
+    },
+    {
+      "case_id": "CB-0019",
+      "transaction_id": "TXN-00057",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "5 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 148.4
+    },
+    {
+      "case_id": "CB-0029",
+      "transaction_id": "TXN-00059",
+      "resolution": "A favor del cliente",
+      "accion": "REJECT",
+      "riesgo": "BLOCKER",
+      "motivo_hitl": null,
+      "codigos_fallidos": [
+        "POL-CB-001",
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-EXC-003",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 51.7
+    },
+    {
+      "case_id": "CB-0009",
+      "transaction_id": "TXN-00060",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "3 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-001",
+        "POL-CB-004",
+        "POL-SLA-002"
+      ],
+      "segundos": 8.7
+    },
+    {
+      "case_id": "CB-0032",
+      "transaction_id": "TXN-00062",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "MEDIUM",
+      "motivo_hitl": "1 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004"
+      ],
+      "segundos": 8.4
+    },
+    {
+      "case_id": "CB-0028",
+      "transaction_id": "TXN-00064",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-003"
+      ],
+      "segundos": 47.2
+    },
+    {
+      "case_id": "CB-0004",
+      "transaction_id": "TXN-00066",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "3 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002",
+        "POL-SLA-003"
+      ],
+      "segundos": 9.2
+    },
+    {
+      "case_id": "CB-0005",
+      "transaction_id": "TXN-00067",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-SLA-002",
+        "POL-SLA-003"
+      ],
+      "segundos": 8.3
+    },
+    {
+      "case_id": "CB-0057",
+      "transaction_id": "TXN-00070",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "MEDIUM",
+      "motivo_hitl": "1 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004"
+      ],
+      "segundos": 46.2
+    },
+    {
+      "case_id": "CB-0008",
+      "transaction_id": "TXN-00071",
+      "resolution": "En escalación",
+      "accion": "REJECT",
+      "riesgo": "BLOCKER",
+      "motivo_hitl": null,
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-EXC-003",
+        "POL-FRD-001",
+        "POL-SLA-002",
+        "POL-SLA-003"
+      ],
+      "segundos": 9.6
+    },
+    {
+      "case_id": "CB-0042",
+      "transaction_id": "TXN-00072",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "5 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-003",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 47.1
+    },
+    {
+      "case_id": "CB-0036",
+      "transaction_id": "TXN-00080",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-FRD-001",
+        "POL-SLA-002"
+      ],
+      "segundos": 8.7
+    },
+    {
+      "case_id": "CB-0023",
+      "transaction_id": "TXN-00081",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "5 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-FRD-003",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 8.9
+    },
+    {
+      "case_id": "CB-0014",
+      "transaction_id": "TXN-00085",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-FRD-003",
+        "POL-SLA-002"
+      ],
+      "segundos": 46.5
+    },
+    {
+      "case_id": "CB-0016",
+      "transaction_id": "TXN-00090",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "5 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-SLA-002",
+        "POL-SLA-003",
+        "POL-SLA-004"
+      ],
+      "segundos": 9.8
+    },
+    {
+      "case_id": "CB-0012",
+      "transaction_id": "TXN-00096",
+      "resolution": "A favor del cliente",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "3 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-001",
+        "POL-CB-004",
+        "POL-CB-005"
+      ],
+      "segundos": 45.6
+    },
+    {
+      "case_id": "CB-0055",
+      "transaction_id": "TXN-00098",
+      "resolution": "A favor del comercio",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "4 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-001",
+        "POL-CB-004",
+        "POL-CB-005",
+        "POL-SLA-002"
+      ],
+      "segundos": 11.3
+    },
+    {
+      "case_id": "CB-0056",
+      "transaction_id": "TXN-00100",
+      "resolution": "En escalación",
+      "accion": "PENDING_HITL",
+      "riesgo": "HIGH",
+      "motivo_hitl": "2 violacion(es) de politica — requiere revision de analista",
+      "codigos_fallidos": [
+        "POL-CB-004",
+        "POL-SLA-002"
+      ],
+      "segundos": 8.7
+    }
+  ]
+}
