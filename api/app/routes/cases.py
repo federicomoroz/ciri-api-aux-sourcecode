@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 
 from ..dependencies import get_retriever
 from ..domain.constants import SIMILAR_CASES_TOP_K
+from ..domain.models import BusquedaSemanticaResponse
 from ..rag.formatter import envolver_resultados, format_cases_for_prompt
 from ..rag.retriever import QdrantRetriever
 
@@ -18,7 +19,7 @@ def find_similar_cases(
     motivo: str | None = None,
     top_k: int = SIMILAR_CASES_TOP_K,
     retriever: QdrantRetriever = Depends(get_retriever),
-) -> dict:
+) -> BusquedaSemanticaResponse:
     """Semantic search over 'historical_cases' collection.
     Used by n8n AI Agent as 'find_similar_cases' tool."""
     results = retriever.search_similar_cases(

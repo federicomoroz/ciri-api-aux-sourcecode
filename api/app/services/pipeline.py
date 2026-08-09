@@ -38,6 +38,7 @@ class PipelineService:
         resolution_svc: ResolutionService,
         report_gen: ReportGenerator,
         sla: CalculadoraDeSLA | None = None,
+        cache_enabled: bool = True,
     ):
         self.db = db
         self.retriever = retriever
@@ -47,6 +48,12 @@ class PipelineService:
         # Opcional para no obligar a los tests a construirla: sin una explicita
         # se arma sobre la misma base. El lifespan si inyecta la del proceso.
         self.sla = sla or CalculadoraDeSLA(db)
+        # `CB_REPORT_CACHE_ENABLED`. Lo respetaban las rutas que usa n8n
+        # —`/api/cache/lookup` y `/api/reports/html`— y no este servicio, asi que
+        # apagar el cache apagaba un camino y no el otro: por n8n el analisis
+        # corria de nuevo y por el panel seguia saliendo el HTML guardado. Es un
+        # bool y no `Settings` porque es lo unico que el pipeline necesita saber.
+        self.cache_enabled = cache_enabled
 
     # ── Shared helpers ──────────────────────────────────────────────────
 
@@ -140,7 +147,7 @@ class PipelineService:
 
         # Step 0 — cache check
         key = cache_key(txn_id, req.cliente_vip)
-        cached_html = self.db.get_cached_report(key)
+        cached_html = self._informe_cacheado(key)
         if cached_html:
             logger.info("Pipeline cache HIT for %s", txn_id)
             return cached_html, {"cache_hit": True}
@@ -197,7 +204,7 @@ class PipelineService:
 
         # Cache check
         key = cache_key(txn_id, req.cliente_vip)
-        cached_html = self.db.get_cached_report(key)
+        cached_html = self._informe_cacheado(key)
         if cached_html:
             yield ("done", {"html": cached_html, "usage": {"cache_hit": True}})
             return
@@ -302,12 +309,20 @@ class PipelineService:
         usage = self._aggregate_usage(resolution, judge, model_name)
         yield ("done", {"html": html, "usage": usage})
 
+    def _informe_cacheado(self, key: str) -> str | None:
+        """El informe guardado de ese caso, si el cache esta encendido."""
+        if not self.cache_enabled:
+            return None
+        return self.db.get_cached_report(key)
+
     def _cache_report(self, key: str, html: str, txn_id: str) -> None:
         """Guarda el informe para que la proxima consulta del mismo caso no pague LLM.
 
         Best-effort: si el cache falla, el informe ya esta generado y no hay razon
         para tirar la respuesta.
         """
+        if not self.cache_enabled:
+            return
         try:
             self.db.store_cached_report(key, html)
         except Exception:

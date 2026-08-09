@@ -215,6 +215,7 @@ async def lifespan(app: FastAPI):
     app.state.feedback_service = FeedbackService(db, updater, tracer)
     app.state.pipeline_service = PipelineService(
         db, retriever, analyzer, resolution_service, report_generator, sla,
+        cache_enabled=settings.report_cache_enabled,
     )
     app.state.modelos_service = modelos
     app.state.langfuse_stats_service = LangfuseStatsService(tracer, settings.llm_model)

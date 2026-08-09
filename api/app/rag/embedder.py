@@ -13,6 +13,7 @@ Dos cosas que no son obvias y que el free tier vuelve importantes:
    pueda responder 429 con una explicacion en vez de un 500 mudo.
 """
 
+import functools
 import inspect
 import logging
 import os
@@ -57,6 +58,34 @@ def _opciones_del_cliente(voyageai, key: str) -> dict:
 
 class EmbeddingRateLimit(RuntimeError):
     """El proveedor de embeddings rechazo la peticion por limite de rate."""
+
+
+@functools.cache
+def _limite_de_rate() -> tuple[type[BaseException], ...]:
+    """La excepcion de limite de rate del SDK, para poder atraparla por tipo.
+
+    Antes se preguntaba `type(e).__name__ == "RateLimitError"`. Comparar el
+    nombre de la clase contra un string sobrevive a que el SDK la renombre —no
+    falla, deja de reconocerla—, y ahi el 429 con explicacion que arma
+    `domain/fallos.py` se degrada a un 500 mudo sin que nada avise. El resto del
+    proyecto clasifica por tipo, que es lo que el propio `fallos.py` declara como
+    lo unico que no depende de como redacto el proveedor.
+
+    Se resuelve perezosamente porque `voyageai` tambien se importa perezosamente:
+    el paquete puede no estar instalado hasta que alguien vectoriza de verdad. Si
+    no esta, se devuelve una tupla vacia —que `except` acepta y nunca matchea— y
+    el error cae por la rama generica, que es lo correcto: sin SDK no hay limite
+    de rate que reconocer.
+    """
+    try:
+        from voyageai.error import RateLimitError
+    except ImportError:
+        logger.warning(
+            "No se pudo importar voyageai.error.RateLimitError: el limite de rate "
+            "de embeddings va a llegar como error generico"
+        )
+        return ()
+    return (RateLimitError,)
 
 
 class FastEmbedder:
@@ -118,10 +147,7 @@ class FastEmbedder:
         for intento in range(EMBEDDING_RATE_LIMIT_RETRIES + 1):
             try:
                 return client.embed(textos, model=self._model_name).embeddings
-            except Exception as e:
-                if type(e).__name__ != "RateLimitError":
-                    logger.error("Voyage AI embed() failed for %d texts: %s", len(textos), e)
-                    raise
+            except _limite_de_rate() as e:
                 if intento == EMBEDDING_RATE_LIMIT_RETRIES:
                     logger.warning(
                         "Voyage AI: limite de rate tras %d intentos, %d textos sin vector",
@@ -133,6 +159,9 @@ class FastEmbedder:
                     intento + 1, EMBEDDING_RATE_LIMIT_WAIT_S,
                 )
                 time.sleep(EMBEDDING_RATE_LIMIT_WAIT_S)
+            except Exception as e:
+                logger.error("Voyage AI embed() failed for %d texts: %s", len(textos), e)
+                raise
         raise AssertionError("inalcanzable")  # pragma: no cover
 
     def _cachear(self, vectores: list[list[float]], textos: list[str]) -> None:

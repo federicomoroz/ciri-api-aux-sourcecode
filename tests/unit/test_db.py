@@ -246,22 +246,26 @@ class TestDashboardStats:
 class TestReportCache:
 
     def test_ensure_table_idempotent(self, db):
-        """Calling ensure_report_cache_table twice should not error."""
-        esquema.tabla_de_informes(db)
-        esquema.tabla_de_informes(db)
+        """Preparar el esquema dos veces no puede fallar.
+
+        Lo llama el lifespan en cada arranque, y en Render el contenedor se
+        reinicia cada vez que el servicio despierta del free tier.
+        """
+        esquema.preparar(db)
+        esquema.preparar(db)
 
     def test_store_and_retrieve(self, db):
-        esquema.tabla_de_informes(db)
+        esquema.preparar(db)
         db.store_cached_report("TXN-00051|False", "<html>Test</html>")
         html = db.get_cached_report("TXN-00051|False")
         assert html == "<html>Test</html>"
 
     def test_cache_miss(self, db):
-        esquema.tabla_de_informes(db)
+        esquema.preparar(db)
         assert db.get_cached_report("NONEXISTENT") is None
 
     def test_store_overwrites_existing(self, db):
-        esquema.tabla_de_informes(db)
+        esquema.preparar(db)
         db.store_cached_report("key1", "<html>V1</html>")
         db.store_cached_report("key1", "<html>V2</html>")
         assert db.get_cached_report("key1") == "<html>V2</html>"

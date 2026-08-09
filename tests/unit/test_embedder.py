@@ -25,9 +25,12 @@ OTRA_CONSULTA = "contracargo tarjeta score 4"
 MENSAJE_DEL_LIMITE = "reduced rate limits of 3 RPM"
 MENSAJE_DE_OTRO_ERROR = "modelo inexistente"
 
-# Voyage expone el limite de rate como una clase propia. El embedder la
-# reconoce por nombre para no importar el SDK, asi que el doble tambien.
-RateLimitError = type("RateLimitError", (Exception,), {})
+# La excepcion REAL del SDK, no un doble con el mismo nombre. El embedder la
+# atrapa por tipo, asi que un doble ya no serviria — y esa es justamente la
+# propiedad que interesa fijar: mientras el reconocimiento era por
+# `type(e).__name__`, este test pasaba con una clase inventada y habria seguido
+# pasando si Voyage renombraba la suya. Verificaba el string, no el contrato.
+from voyageai.error import RateLimitError  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

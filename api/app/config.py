@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 
 from .domain.constants import (
-    EMBEDDING_DIM,
     JUDGE_AUTO_INDEX_THRESHOLD,
     LLM_DEFAULT_MAX_RETRIES,
     LLM_DEFAULT_MAX_TOKENS,
@@ -46,7 +45,10 @@ class Settings(BaseSettings):
     # Embeddings (Voyage AI)
     voyage_api_key: str = ""
     embedding_model: str = "voyage-multilingual-2"
-    embedding_dim: int = EMBEDDING_DIM
+    # `embedding_dim` NO va aca. La dimension no es una preferencia del deploy:
+    # la fija el modelo, y cambiarla sin cambiar el modelo solo puede romper la
+    # coleccion. `EMBEDDING_DIM` vive en constants.py, que es de donde la lee
+    # `QdrantIndexer.ensure_collections` para recrear si no coincide.
 
     # SQLite
     sqlite_path: str = "data/chargeback.db"
@@ -100,9 +102,10 @@ class Settings(BaseSettings):
     # Security
     admin_api_key: str = ""  # protects /api/* endpoints (except /api/panel/*)
 
-    # Server
-    host: str = "0.0.0.0"
-    port: int = 8000
+    # `host` y `port` NO van aca. Los declaraba esta clase y no los leia nadie:
+    # quien decide donde escucha el proceso es uvicorn —el CMD del Dockerfile y
+    # el comando de arranque de Render—, asi que `CB_PORT=9000` daba la
+    # impresion de mover el puerto sin mover nada.
 
     model_config = {"env_file": ".env", "env_prefix": "CB_", "extra": "ignore"}
 

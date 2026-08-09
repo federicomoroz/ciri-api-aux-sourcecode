@@ -35,32 +35,10 @@ from .resumen import resumir_trazas
 
 logger = logging.getLogger(__name__)
 
-ESQUEMA = """
-CREATE TABLE IF NOT EXISTS trazas (
-    trace_id   TEXT PRIMARY KEY,
-    nombre     TEXT NOT NULL,
-    metadata   TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS generaciones (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    trace_id   TEXT,
-    nombre     TEXT NOT NULL,
-    modelo     TEXT NOT NULL,
-    tokens_in  INTEGER NOT NULL DEFAULT 0,
-    tokens_out INTEGER NOT NULL DEFAULT 0,
-    latency_ms REAL NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS puntajes (
-    trace_id   TEXT NOT NULL,
-    nombre     TEXT NOT NULL,
-    valor      REAL NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (trace_id, nombre)
-);
-CREATE INDEX IF NOT EXISTS idx_generaciones_trace ON generaciones(trace_id);
-"""
+# Las tablas se declaran en `data/esquema.py` junto con el resto de la base. Este
+# modulo es el unico que las escribe, pero son parte de la forma del mismo
+# archivo SQLite: tenerlas aparte hacia que «que tablas hay» no se pudiera
+# contestar leyendo un solo lugar.
 
 
 class TrazadorLocal:
@@ -79,9 +57,17 @@ class TrazadorLocal:
         return True
 
     def _preparar(self) -> None:
+        # Import local, no perezoso por necesidad: no hay ciclo —`data.esquema`
+        # solo importa de `domain`—. Esta aca porque este modulo se construye en
+        # el arranque, antes de que la base exista, y mantenerlo local deja la
+        # dependencia donde se usa: lo unico que necesita del esquema son sus
+        # tres tablas.
+        from ..data.esquema import OBSERVABILIDAD
+
         try:
             with self._conexion() as c:
-                c.executescript(ESQUEMA)
+                for ddl in OBSERVABILIDAD:
+                    c.execute(ddl)
         except Exception:
             logger.warning("No se pudo preparar el registro local de trazas", exc_info=True)
 

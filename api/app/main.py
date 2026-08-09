@@ -24,6 +24,7 @@ from .routes import (
     config,
     feedback,
     health,
+    hitl,
     langfuse,
     logs,
     merchants,
@@ -206,6 +207,7 @@ app.include_router(merchants.router)
 app.include_router(sla.router)
 app.include_router(analyze.router)
 app.include_router(feedback.router)
+app.include_router(hitl.router)
 app.include_router(analytics.router)
 app.include_router(reports.router)
 app.include_router(panel.router)

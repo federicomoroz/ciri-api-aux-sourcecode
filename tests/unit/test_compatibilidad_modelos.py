@@ -300,7 +300,26 @@ class TestFrecuenciaDeLlamadas:
             ventana_s=LLM_RPM_VENTANA_S, pausa_minima_s=LLM_RPM_PAUSA_MINIMA_S,
             reloj=lambda: reloj["t"], dormir=dormir,
         )
-        settings = SimpleNamespace(llm_rpm={}, **ajustes)
+        # `llm_temperature` y `llm_max_tokens` estan porque `completar()` los
+        # inyecta: son la configuracion del proceso y esta es LA puerta al
+        # modelo. Estaban declarados en `Settings` y no los pasaba nadie, asi que
+        # tocarlos no hacia nada.
+        from api.app.domain.constants import LLM_DEFAULT_MAX_TOKENS, LLM_DEFAULT_TEMPERATURE
+
+        # La superficie que el manager necesita para CONSTRUIR un cliente, no
+        # sólo para responder `rpm_de`: desde que la cuota y los ajustes viven en
+        # el cliente, los tests del limitador arman uno de verdad.
+        settings = SimpleNamespace(
+            llm_rpm={},
+            llm_temperature=LLM_DEFAULT_TEMPERATURE,
+            llm_max_tokens=LLM_DEFAULT_MAX_TOKENS,
+            llm_api_key="clave-de-prueba",
+            llm_api_keys={},
+            anthropic_api_key="sk-ant-de-prueba",
+            llm_base_url="",
+            llm_max_retries=2,
+            **ajustes,
+        )
         m = LLMManager(settings, NoOpTracer(), limitador=limitador)
         m.reloj = reloj
         return m
@@ -367,24 +386,60 @@ class TestFrecuenciaDeLlamadas:
             self._turno(m, "gemini", "gemini-flash-latest")
         assert m.reloj["dormido"] == 0.0
 
-    def test_completar_pide_turno_antes_de_llamar(self, monkeypatch):
-        """El limitador esta en el camino real, no solo disponible.
+    def test_el_turno_lo_pide_el_cliente_y_no_quien_lo_llama(self, monkeypatch):
+        """El espaciado tiene que estar en el camino real, por CUALQUIER puerta.
 
-        Sin este test, `esperar_turno` podria existir y no llamarse nunca: el
-        resto de la clase probaria un componente que nadie usa.
+        Vivia en `LLMManager.completar`, que se presentaba como «LA puerta al
+        modelo». No lo era: el pipeline efimero del panel —modo demo y BYOK—
+        recibe clientes ya armados de `clientes_para()` / `clientes_demo()` y los
+        invoca directo, salteando el manager. Y ese es justo el camino que corre
+        sobre free tier, donde el limite existe: Gemini da 5 pedidos por minuto y
+        una investigacion hace 3 llamadas, o sea un analisis por minuto.
+
+        Ahora el turno lo pide el cliente, que es por donde pasan los dos
+        caminos. Este test invoca `complete()` A SECAS, sin manager, que es
+        exactamente como lo hace el panel.
         """
+        from api.app.llm.client import Cuota, OpenAICompatibleClient
+
         m = self._manager(monkeypatch)
-        pasos = []
+        turnos = []
         monkeypatch.setattr(
             m.limitador, "esperar_turno",
-            lambda clave, limite: pasos.append(("espacio", clave)) or 0.0,
+            lambda clave, limite: turnos.append((clave, limite)) or 0.0,
         )
+        cliente = m.cliente("gemini", "gemini-flash-latest")
+        assert isinstance(cliente, OpenAICompatibleClient)
+        assert isinstance(cliente.cuota, Cuota) and cliente.cuota.rpm > 0, (
+            "el cliente se construyo sin cuota: no va a espaciar nada"
+        )
+
+        monkeypatch.setattr(cliente, "_pedir", lambda carga: {
+            "choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}], "usage": {},
+        })
+        cliente.complete("s", "u")          # sin pasar por el manager
+        assert turnos == [("gemini", cliente.cuota.rpm)], (
+            "el cliente no pidio turno: el modo demo vuelve a rebotar contra el free tier"
+        )
+
+    def test_completar_sigue_pidiendo_turno_una_sola_vez(self, monkeypatch):
+        """Y por la puerta del manager tampoco se pide dos veces.
+
+        Al mover el turno al cliente, dejarlo tambien en `completar()` habria
+        contado cada llamada doble y frenado al sistema a la mitad de la cuota.
+        """
+        m = self._manager(monkeypatch)
+        turnos = []
         monkeypatch.setattr(
-            m, "cliente",
-            lambda p, mo, k="": SimpleNamespaceCliente(pasos),
+            m.limitador, "esperar_turno",
+            lambda clave, limite: turnos.append(clave) or 0.0,
         )
+        cliente = m.cliente("gemini", "gemini-flash-latest")
+        monkeypatch.setattr(cliente, "_pedir", lambda carga: {
+            "choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}], "usage": {},
+        })
         m.completar("gemini", "gemini-flash-latest", "s", "u")
-        assert pasos == [("espacio", "gemini"), ("llamada",)]
+        assert turnos == ["gemini"], f"se pidio turno {len(turnos)} veces por una llamada"
 
 
 class SimpleNamespaceCliente:

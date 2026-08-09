@@ -163,9 +163,3 @@ def clasificar(exc: Exception) -> Fallo | None:
     if LLM_BAD_KEY_MARKER in texto:
         return Fallo.CLAVE_INVALIDA
     return None
-
-
-def respuesta_de(exc: Exception) -> Respuesta | None:
-    """Atajo para quien solo quiere el texto: clasifica y traduce."""
-    fallo = clasificar(exc)
-    return RESPUESTAS[fallo] if fallo else None

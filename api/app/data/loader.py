@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 import openpyxl
 
 from ..domain.constants import POLICY_SEED_BLOQUEANTES, POLICY_SEED_SLA_DIAS
+from . import esquema
 
 logger = logging.getLogger(__name__)
 
@@ -137,80 +138,15 @@ def load_excel(file_path: str) -> dict:
     }
 
 
-# Esquema. Se declara aparte porque es la forma del dominio, no un paso del seed.
-_TABLAS = (
-    """CREATE TABLE IF NOT EXISTS transactions (
-        id TEXT PRIMARY KEY,
-        client_id TEXT NOT NULL,
-        merchant TEXT NOT NULL,
-        amount_usd REAL NOT NULL,
-        date TEXT NOT NULL,
-        payment_method TEXT NOT NULL,
-        country TEXT NOT NULL,
-        channel TEXT NOT NULL,
-        device TEXT NOT NULL,
-        fraud_score INTEGER NOT NULL,
-        status TEXT NOT NULL,
-        notes TEXT
-    )""",
-    """CREATE TABLE IF NOT EXISTS cases (
-        case_id TEXT PRIMARY KEY,
-        transaction_id TEXT NOT NULL,
-        motivo TEXT NOT NULL,
-        resolution TEXT NOT NULL,
-        resolution_days INTEGER NOT NULL,
-        analyst TEXT NOT NULL,
-        observations TEXT,
-        open_date TEXT NOT NULL,
-        close_date TEXT NOT NULL
-    )""",
-    """CREATE TABLE IF NOT EXISTS policies (
-        code TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT NOT NULL,
-        reference TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        -- La semantica ejecutable de la politica, junto a su texto. Estaba en
-        -- constants.py: se podia editar la descripcion por API pero no la
-        -- capacidad de bloquear ni el plazo, que son las dos cosas que la
-        -- politica realmente hace.
-        puede_bloquear INTEGER NOT NULL DEFAULT 0,
-        sla_dias INTEGER
-    )""",
-    """CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT NOT NULL,
-        transaction_id TEXT NOT NULL,
-        event TEXT NOT NULL,
-        service TEXT NOT NULL,
-        code TEXT NOT NULL,
-        detail TEXT NOT NULL,
-        severity TEXT NOT NULL
-    )""",
-    """CREATE TABLE IF NOT EXISTS feedback (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        transaction_id TEXT NOT NULL,
-        analyst_decision TEXT NOT NULL,
-        analyst_notes TEXT NOT NULL,
-        final_outcome TEXT NOT NULL,
-        judge_score REAL NOT NULL,
-        created_at TEXT NOT NULL
-    )""",
-)
-
-# Columnas por las que filtra el pipeline. Declararlos documenta como se consulta.
-_INDICES = (
-    "CREATE INDEX IF NOT EXISTS idx_logs_tx ON logs(transaction_id)",
-    "CREATE INDEX IF NOT EXISTS idx_cases_tx ON cases(transaction_id)",
-    "CREATE INDEX IF NOT EXISTS idx_tx_client ON transactions(client_id)",
-    "CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant)",
-)
-
-
 def _crear_esquema(conn: sqlite3.Connection) -> None:
-    for ddl in _TABLAS + _INDICES:
+    """El esquema sale de `data/esquema.py`, que es su unico dueno.
+
+    Este modulo declaraba cinco tablas por su cuenta mientras `esquema.py`
+    declaraba otras tres y ademas le agregaba columnas a `policies`: la misma
+    tabla se creaba en un archivo y se migraba en otro, asi que responder que
+    forma tiene la base pedia leer los dos y saber cual corre primero.
+    """
+    for ddl in esquema.TODO:
         conn.execute(ddl)
 
 

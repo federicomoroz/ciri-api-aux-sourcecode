@@ -74,6 +74,45 @@ class Database:
             conn.commit()
             return cursor
 
+    # ── Puesta a punto del almacen ──────────────────────────────────────
+
+    def ejecutar_ddl(self, sentencias: tuple[str, ...]) -> None:
+        """Corre las sentencias de DDL en orden. Lo usa `data/esquema.py`.
+
+        **No es atomico, y no puede serlo con este driver.** El modulo `sqlite3`
+        en su modo por defecto hace autocommit de cada `CREATE`/`ALTER`, asi que
+        si una sentencia falla a mitad, las anteriores ya quedaron aplicadas. No
+        importa aca porque todas son `IF NOT EXISTS` o `ALTER` sobre columnas que
+        se comprobaron antes: correr `preparar()` de nuevo termina el trabajo.
+        Decirlo igual, porque el nombre invita a suponer lo contrario.
+
+        Existe para que crear tablas y migrar columnas no tenga que entrar por
+        `_escribir`, que es privado. `esquema.py` se llevo esa responsabilidad
+        —correctamente: crear el esquema no es acceso a datos— pero se la llevo
+        alcanzando los privados de esta clase desde afuera, o sea acoplandose a
+        su implementacion sin que el tipo lo dijera.
+
+        Es un metodo aparte y no `_escribir` publico a proposito: DDL es lo unico
+        que se permite por aca. Escribir filas sigue pasando por los metodos con
+        nombre, que es lo que mantiene las consultas en un solo lugar.
+        """
+        with self._conn() as conn:
+            for sentencia in sentencias:
+                conn.execute(sentencia)
+            conn.commit()
+
+    def columnas_de(self, tabla: str) -> set[str]:
+        """Las columnas que tiene esa tabla ahora mismo.
+
+        La necesitan las migraciones para ser aditivas: una base local con datos
+        previos no puede exigir que se borre para actualizarse.
+        """
+        # El nombre de tabla no puede ir parametrizado en un PRAGMA, asi que se
+        # valida contra el catalogo antes de interpolarlo.
+        if not self._uno("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", (tabla,)):
+            return set()
+        return {c["name"] for c in self._consultar(f"PRAGMA table_info({tabla})")}
+
     # --- Transactions ---
 
     def get_transaction(self, txn_id: str) -> dict | None:
@@ -234,6 +273,23 @@ class Database:
 
     def delete_policy(self, code: str) -> bool:
         return self._escribir("DELETE FROM policies WHERE code = ?", (code,)).rowcount > 0
+
+    def marcar_politicas_bloqueantes(self, codigos: frozenset[str] | set[str]) -> None:
+        """Siembra que politicas pueden emitir un BLOCKER. Solo al migrar."""
+        if not codigos:
+            return
+        marcadores = ",".join("?" * len(codigos))
+        self._escribir(
+            f"UPDATE policies SET puede_bloquear = 1 WHERE code IN ({marcadores})",
+            tuple(sorted(codigos)),
+        )
+
+    def sembrar_plazos_de_politica(self, dias_por_codigo: dict[str, int]) -> None:
+        """Siembra los dias que concede cada politica de SLA. Solo al migrar."""
+        for codigo, dias in dias_por_codigo.items():
+            self._escribir(
+                "UPDATE policies SET sla_dias = ? WHERE code = ?", (dias, codigo),
+            )
 
     # --- Feedback ---
 

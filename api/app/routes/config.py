@@ -11,14 +11,14 @@ una instancia publica que guardara claves ajenas seria un incidente esperando.
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..dependencies import get_modelos_service
-from ..domain.models import ModeloPasoUpdate
+from ..domain.models import ModeloPasoUpdate, ModelosConfigResponse, ModelosPasosResponse
 from ..services.modelos import ModelosService
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 
 @router.get("/modelos")
-def leer_modelos(modelos: ModelosService = Depends(get_modelos_service)) -> dict:
+def leer_modelos(modelos: ModelosService = Depends(get_modelos_service)) -> ModelosConfigResponse:
     """La configuracion vigente por paso, mas el catalogo de proveedores."""
     return {"pasos": modelos.vigente(), "proveedores": modelos.catalogo()}
 
@@ -38,7 +38,7 @@ def guardar_modelo(
 
 
 @router.post("/modelos/reset")
-def restablecer(modelos: ModelosService = Depends(get_modelos_service)) -> dict:
+def restablecer(modelos: ModelosService = Depends(get_modelos_service)) -> ModelosPasosResponse:
     """Vuelve a los valores por defecto: borra lo guardado, no lo pisa."""
     modelos.restablecer()
     return {"pasos": modelos.vigente()}

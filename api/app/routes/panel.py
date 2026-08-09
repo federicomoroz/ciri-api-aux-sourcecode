@@ -47,6 +47,7 @@ from ..domain.constants import (
 from ..domain.contratos import SumideroDeAlertas
 from ..domain.fallos import RESPUESTAS, Fallo, clasificar
 from ..domain.models import AnalyzeRequest
+from ..rate_limiter import avisar_esperas
 from ..reports.generator import ReportGenerator
 from ..services.pipeline import PipelineService
 from ..services.resolution import ResolutionService
@@ -97,6 +98,12 @@ def _pipeline_con(base: PipelineService, request: Request, clientes: dict) -> It
                 alertas=_sumidero_de_alertas(base),
             ),
             report_gen=base.report_gen,
+            sla=base.sla,
+            # El pipeline de esta peticion hereda la configuracion del proceso.
+            # Sin esto, el efimero se armaba con los defaults del constructor y
+            # una corrida con clave propia cacheaba aunque el cache estuviera
+            # apagado, y median el SLA con una calculadora recien construida.
+            cache_enabled=base.cache_enabled,
         )
     finally:
         modelos.manager.cerrar_todos(clientes)
@@ -321,7 +328,7 @@ def _pagina_n8n_no_respondio(
     )
 
 
-def _pagina_de_error(txn_id: str, exc: Exception, settings: Settings) -> str:
+def _pagina_de_error(txn_id: str, exc: Exception) -> str:
     """La pagina cuando el analisis no pudo correr.
 
     Un 'error interno, revise los logs' no sirve: quien evalua no tiene los logs.
@@ -399,12 +406,12 @@ def _correr_directo(
         # antes de correr.
         if _es_falta_de_saldo(exc):
             demo = _respuesta_demo(
-            req.transaction_id, settings, pipeline.db, por_falta_de_saldo=True
-        )
+                req.transaction_id, settings, pipeline.db, por_falta_de_saldo=True,
+            )
             if demo is not None:
                 return demo
         return HTMLResponse(
-            content=_pagina_de_error(req.transaction_id, exc, settings),
+            content=_pagina_de_error(req.transaction_id, exc),
             status_code=500,
         )
 
@@ -449,13 +456,27 @@ def _con_latido(eventos, cada_s: float = SSE_LATIDO_S):
     CORTE = object()
     abandonado = threading.Event()
 
+    def avisar_espera(proveedor: str, segundos: float) -> None:
+        """Una espera por cuota es un evento del analisis, no un cuelgue.
+
+        Llega desde tres capas abajo —el `RateLimiter`, adentro del cliente— y
+        sale por la misma cola que el resto: es el unico hilo que puede escribir
+        en el stream. Sin esto, esperar turno y estar colgado se ven igual.
+        """
+        cola.put(("evento", _sse("espera", {
+            "proveedor": proveedor, "segundos": round(segundos, 1),
+        })))
+
     def bombear():
         try:
-            for evento in eventos:
-                cola.put(("evento", evento))
-                if abandonado.is_set():
-                    # Nadie del otro lado: no se empieza el paso siguiente.
-                    break
+            # El aviso se instala EN ESTE HILO: el ContextVar no se hereda al
+            # crear el thread, y es aca donde corre el pipeline.
+            with avisar_esperas(avisar_espera):
+                for evento in eventos:
+                    cola.put(("evento", evento))
+                    if abandonado.is_set():
+                        # Nadie del otro lado: no se empieza el paso siguiente.
+                        break
         except Exception as exc:            # noqa: BLE001 — se reenvia al cliente
             # Se anota aca ademas de reenviarlo: esto corre en un hilo aparte y
             # lo que el cliente recibe es un mensaje para leer en pantalla. Sin

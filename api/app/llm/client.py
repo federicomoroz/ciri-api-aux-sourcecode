@@ -43,16 +43,69 @@ class LLMClient(Protocol):
         self,
         system: str,
         user: str,
-        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
-        temperature: float = LLM_DEFAULT_TEMPERATURE,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         trace_id: str | None = None,
     ) -> LLMResult:
-        """Send system + user prompt, return text response with token usage."""
+        """Send system + user prompt, return text response with token usage.
+
+        `None` en `max_tokens`/`temperature` significa «lo que tenga configurado
+        el cliente». Antes el default era la constante, y eso hacia imposible
+        distinguir «el llamador no pidio nada» de «el llamador pidio justo el
+        valor por defecto» — que es la ambiguedad por la que el piso de tokens
+        del perfil se desactivaba solo cuando alguien tocaba `CB_LLM_MAX_TOKENS`.
+        """
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class Cuota:
+    """Con que frecuencia se le puede hablar a este proveedor, y quien reparte.
+
+    Vive en el CLIENTE y no en quien lo llama. Es la unica forma de que el turno
+    se pida siempre: `LLMManager.completar` no es la unica puerta al modelo —el
+    pipeline efimero del panel (modo demo y BYOK) recibe clientes ya armados y
+    los invoca directo—, y ese camino es justamente el que corre sobre free tier.
+
+    Medido: Gemini free son 5 pedidos por minuto y una investigacion hace 3
+    llamadas, o sea **un analisis por minuto**. Sin pedir turno, el segundo
+    analisis seguido rebota; y un 429 no es gratis, gasta cuota del tope diario,
+    que es el que de verdad corta la corrida.
+    """
+
+    proveedor: str = ""
+    rpm: int = 0
+    limitador: object | None = None      # RateLimiter; suelto para no acoplar el modulo
+
+    def esperar_turno(self) -> None:
+        if self.limitador is not None and self.rpm > 0:
+            self.limitador.esperar_turno(self.proveedor, self.rpm)
+
+
+@dataclass(frozen=True, slots=True)
+class Ajustes:
+    """Los valores con los que corre este cliente si el llamador no pide otros."""
+
+    temperature: float = LLM_DEFAULT_TEMPERATURE
+    max_tokens: int = LLM_DEFAULT_MAX_TOKENS
+
+    def resueltos(self, max_tokens: int | None, temperature: float | None) -> tuple[int, float]:
+        return (
+            self.max_tokens if max_tokens is None else max_tokens,
+            self.temperature if temperature is None else temperature,
+        )
+
+
 class AnthropicClient:
-    def __init__(self, api_key: str, model: str, tracer: Tracer | None = None, max_retries: int = LLM_DEFAULT_MAX_RETRIES):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        tracer: Tracer | None = None,
+        max_retries: int = LLM_DEFAULT_MAX_RETRIES,
+        cuota: Cuota | None = None,
+        ajustes: Ajustes | None = None,
+    ):
         self.client = anthropic.Anthropic(
             api_key=api_key,
             max_retries=max_retries,
@@ -63,15 +116,19 @@ class AnthropicClient:
         # `tracer.generation()` sin preguntar, asi que el `None` que admite la
         # firma tiene que convertirse en un trazador que no hace nada.
         self.tracer = tracer or NoOpTracer()
+        self.cuota = cuota or Cuota()
+        self.ajustes = ajustes or Ajustes()
 
     def complete(
         self,
         system: str,
         user: str,
-        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
-        temperature: float = LLM_DEFAULT_TEMPERATURE,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         trace_id: str | None = None,
     ) -> LLMResult:
+        max_tokens, temperature = self.ajustes.resueltos(max_tokens, temperature)
+        self.cuota.esperar_turno()
         start = time.time()
         try:
             response = self.client.messages.create(
@@ -156,6 +213,8 @@ class OpenAICompatibleClient:
         max_retries: int = LLM_DEFAULT_MAX_RETRIES,
         perfil: Perfil | None = None,
         proveedor: str = "",
+        cuota: Cuota | None = None,
+        ajustes: Ajustes | None = None,
     ):
         if not base_url:
             raise ValueError("OpenAICompatibleClient necesita base_url")
@@ -165,6 +224,12 @@ class OpenAICompatibleClient:
         # Lo que hay que hacer distinto con esta familia de modelos. El sistema
         # esta calibrado para Claude; el perfil traduce.
         self.perfil = perfil or perfil_de(proveedor, model)
+        # Sin cuota explicita se usa la que el perfil conoce para esta familia:
+        # un cliente construido a mano igual espacia sus llamadas.
+        self.cuota = cuota or Cuota(
+            proveedor=proveedor or self.perfil.nombre, rpm=self.perfil.pedidos_por_minuto,
+        )
+        self.ajustes = ajustes or Ajustes()
         self.client = httpx.Client(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
@@ -176,16 +241,28 @@ class OpenAICompatibleClient:
         self,
         system: str,
         user: str,
-        max_tokens: int = LLM_DEFAULT_MAX_TOKENS,
-        temperature: float = LLM_DEFAULT_TEMPERATURE,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
         trace_id: str | None = None,
     ) -> LLMResult:
+        max_tokens, temperature = self.ajustes.resueltos(max_tokens, temperature)
+        # El turno se pide ACA y no en quien llama: este cliente lo invoca tambien
+        # el pipeline efimero del panel —modo demo y BYOK— sin pasar por
+        # `LLMManager.completar`, y ese es justo el camino que corre sobre free tier.
+        self.cuota.esperar_turno()
         start = time.time()
         # El piso lo pone el perfil: un modelo que razona descuenta lo que
         # piensa de este mismo presupuesto y con el techo de Claude corta la
-        # respuesta a medias. Solo se aplica si el llamador no pidio uno propio.
-        if max_tokens == LLM_DEFAULT_MAX_TOKENS:
-            max_tokens = max(max_tokens, self.perfil.piso_de_tokens)
+        # respuesta a medias.
+        #
+        # Se aplica SIEMPRE, porque es un piso. Antes se aplicaba solo cuando el
+        # llamador no habia pedido nada, y eso se detectaba comparando contra
+        # `LLM_DEFAULT_MAX_TOKENS` — un acoplamiento que se rompio solo en cuanto
+        # `CB_LLM_MAX_TOKENS` empezo a llegar hasta aca: bajarlo por configuracion
+        # desactivaba en silencio la unica proteccion contra respuestas truncadas,
+        # que es justo lo que el operador NO esta pidiendo cuando toca ese numero.
+        # Para Claude el piso es cero, asi que la configuracion documentada no cambia.
+        max_tokens = max(max_tokens, self.perfil.piso_de_tokens)
         cuerpo = self._pedir({
             "model": self.model,
             "max_tokens": max_tokens,

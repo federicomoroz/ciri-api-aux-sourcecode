@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from ..analysis.sla import CalculadoraDeSLA
 from ..data.db import Database
 from ..dependencies import get_db, get_sla
-from ..domain.models import SLACheckRequest
+from ..domain.models import SLACheckRequest, SLACheckResponse
 
 router = APIRouter(prefix="/api/sla", tags=["sla"])
 
@@ -13,7 +13,7 @@ def check_sla(
     req: SLACheckRequest,
     sla: CalculadoraDeSLA = Depends(get_sla),
     db: Database = Depends(get_db),
-) -> dict:
+) -> SLACheckResponse:
     """Check SLA compliance for a case.
 
     Si viene `transaction_id`, las fechas salen del caso historico **y solo de

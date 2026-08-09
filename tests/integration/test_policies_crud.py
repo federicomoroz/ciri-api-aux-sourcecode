@@ -165,7 +165,7 @@ class TestTocarUnaPoliticaInvalidaLosInformes:
         from api.app.data.db import Database
 
         db = Database(str(tmp_path / "c.db"))
-        esquema.tabla_de_informes(db)
+        esquema.preparar(db)
         return db
 
     def test_el_cache_se_puede_vaciar(self, tmp_path):

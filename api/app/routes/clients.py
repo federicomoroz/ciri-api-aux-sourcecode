@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..analysis.analyzer import Analyzer
 from ..dependencies import get_analyzer
+from ..domain.models import ClientHistoryResponse
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
 
 
 @router.get("/{client_id}/history")
-def get_client_history(client_id: str, analyzer: Analyzer = Depends(get_analyzer)) -> dict:
+def get_client_history(client_id: str, analyzer: Analyzer = Depends(get_analyzer)) -> ClientHistoryResponse:
     """Client transaction history with risk flags.
     Used by n8n AI Agent as 'get_client_history' tool."""
     result = analyzer.client_flags(client_id)

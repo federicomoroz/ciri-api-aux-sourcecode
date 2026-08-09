@@ -13,7 +13,7 @@ estado, y **solo al final** substring — y solo donde el SDK no da otra cosa.
 
 import pytest
 
-from api.app.domain.fallos import RESPUESTAS, Fallo, clasificar, respuesta_de
+from api.app.domain.fallos import RESPUESTAS, Fallo, clasificar
 from api.app.rag.embedder import EmbeddingRateLimit
 
 
@@ -116,12 +116,3 @@ class TestCadaFalloTieneQueDecirAlgoUtil:
     def test_una_clave_mal_pegada_no(self):
         """Es la clave de quien la pego, y ya se lo dijimos en la respuesta."""
         assert RESPUESTAS[Fallo.CLAVE_INVALIDA].alerta is False
-
-
-class TestElAtajo:
-
-    def test_devuelve_la_respuesta_de_lo_clasificado(self):
-        assert respuesta_de(EmbeddingRateLimit("x")) is RESPUESTAS[Fallo.CUOTA_DE_EMBEDDINGS]
-
-    def test_y_nada_cuando_no_hay_nombre(self):
-        assert respuesta_de(RuntimeError("boom")) is None

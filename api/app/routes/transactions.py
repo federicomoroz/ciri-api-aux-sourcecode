@@ -2,18 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..data.db import Database
 from ..dependencies import get_db
+from ..domain.models import TransactionListResponse, TransactionResponse
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
 
 @router.get("")
-def list_transactions(db: Database = Depends(get_db)) -> dict:
+def list_transactions(db: Database = Depends(get_db)) -> TransactionListResponse:
     """List all transactions (compact) — used by the test panel dropdown."""
     return {"transactions": db.list_transactions_compact()}
 
 
 @router.get("/{txn_id}")
-def get_transaction(txn_id: str, db: Database = Depends(get_db)) -> dict:
+def get_transaction(txn_id: str, db: Database = Depends(get_db)) -> TransactionResponse:
     """Exact lookup by TXN-XXXXX. Used by n8n AI Agent as 'lookup_transaction' tool."""
     tx = db.get_transaction(txn_id)
     if not tx:

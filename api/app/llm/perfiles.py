@@ -52,8 +52,16 @@ class Perfil:
     """Como hay que tratar a una familia de modelos."""
 
     nombre: str
-    # Piso de `max_tokens`. Se aplica solo si el llamador no pidio uno propio:
-    # un modelo que razona necesita espacio para pensar Y para responder.
+    # Piso de `max_tokens`. Se aplica SIEMPRE, que es lo que un piso significa:
+    # un modelo que razona necesita espacio para pensar Y para responder, y
+    # quedarse corto no corta el razonamiento sino la respuesta.
+    #
+    # Antes se aplicaba solo cuando el llamador no habia pedido nada, y eso se
+    # detectaba comparando contra `LLM_DEFAULT_MAX_TOKENS`. Ese acoplamiento se
+    # rompio solo en cuanto `CB_LLM_MAX_TOKENS` empezo a llegar hasta el cliente:
+    # bajarlo por configuracion desactivaba en silencio la unica proteccion
+    # contra respuestas truncadas. Para Claude el piso es cero, asi que la
+    # configuracion documentada no cambia.
     piso_de_tokens: int = LLM_SIN_PISO
     # Si descuenta su razonamiento del presupuesto de salida. Solo documenta el
     # porque del piso, pero se guarda porque es la razon y no el efecto.

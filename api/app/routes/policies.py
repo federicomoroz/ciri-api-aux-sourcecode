@@ -5,7 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..data.db import Database
 from ..dependencies import get_db, get_retriever, get_updater
 from ..domain.constants import FRAUD_SCORE_DEFAULT
-from ..domain.models import PolicyCreate, PolicyUpdate
+from ..domain.models import (
+    BusquedaSemanticaResponse,
+    PolicyCreate,
+    PolicyResponse,
+    PolicyUpdate,
+)
 from ..rag.formatter import envolver_resultados, format_policies_for_prompt
 from ..rag.retriever import QdrantRetriever
 from ..rag.updater import RAGUpdater
@@ -36,7 +41,7 @@ def search_policies(
         description="Cuantas politicas devolver. Por defecto, todas las indexadas.",
     ),
     retriever: QdrantRetriever = Depends(get_retriever),
-) -> dict:
+) -> BusquedaSemanticaResponse:
     """Semantic search over Qdrant 'policies' collection.
     Used by n8n AI Agent as 'search_policies' tool."""
     results = retriever.search_policies(
@@ -51,13 +56,13 @@ def search_policies(
 
 
 @router.get("/")
-def list_policies(db: Database = Depends(get_db)) -> list[dict]:
+def list_policies(db: Database = Depends(get_db)) -> list[PolicyResponse]:
     """List all policies from SQLite."""
     return db.get_all_policies()
 
 
 @router.get("/{code}")
-def get_policy(code: str, db: Database = Depends(get_db)) -> dict:
+def get_policy(code: str, db: Database = Depends(get_db)) -> PolicyResponse:
     """Get one policy by code."""
     return _politica_o_404(db, code)
 
@@ -89,7 +94,7 @@ def create_policy(
     policy: PolicyCreate,
     db: Database = Depends(get_db),
     updater: RAGUpdater = Depends(get_updater),
-) -> dict:
+) -> PolicyResponse:
     """Create new policy -> save to SQLite + index in Qdrant immediately."""
     policy_dict = db.create_policy_record(policy.model_dump())
     updater.on_policy_created(policy_dict)
@@ -103,7 +108,7 @@ def update_policy(
     policy: PolicyUpdate,
     db: Database = Depends(get_db),
     updater: RAGUpdater = Depends(get_updater),
-) -> dict:
+) -> PolicyResponse:
     """Update policy -> save to SQLite + re-index in Qdrant immediately.
     No redeploy needed — policies are DATA, not CODE."""
     existing = _politica_o_404(db, code)

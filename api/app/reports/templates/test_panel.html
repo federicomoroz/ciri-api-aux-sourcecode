@@ -408,6 +408,22 @@
       margin-top: 3px;
     }
 
+    /* Confirmacion de que el workflow importado llega hasta esta API. Solo
+       aparece cuando hubo un contacto reciente: el resto del tiempo no hay nada
+       que decir. */
+    .contacto-n8n {
+      display: none;
+      font-size: 11px;
+      line-height: 1.45;
+      margin-top: 6px;
+      padding: 6px 9px;
+      border-radius: 6px;
+      background: #ecfdf5;
+      border-left: 3px solid #10b981;
+      color: #065f46;
+    }
+    .contacto-n8n.visible { display: block; }
+
     /* Modo demo */
     .demo-card {
       border: 1px solid var(--border);
@@ -916,6 +932,27 @@
     .loading-subline {
       font-size: 12px;
       color: var(--text-dim);
+    }
+
+    /* La espera por cuota del free tier. Ambar y no rojo: no es un error, es el
+       sistema respetando un limite conocido. */
+    .espera-cuota {
+      display: none;
+      margin: 10px auto 0;
+      max-width: 420px;
+      padding: 9px 13px;
+      font-size: 12px;
+      line-height: 1.5;
+      text-align: left;
+      border-radius: 7px;
+      background: rgba(232, 163, 61, .1);
+      border-left: 3px solid #e8a33d;
+      color: #8a5a10;
+    }
+    .espera-cuota.visible { display: block; }
+    .espera-por-que { opacity: .8; font-size: 11.5px; }
+    @media (prefers-color-scheme: dark) {
+      .espera-cuota { color: #f0c27a; }
     }
 
     .steps-list {
@@ -2009,6 +2046,7 @@
           <div>
             <p class="loading-headline">Agente ejecutando pipeline...</p>
             <p class="loading-subline" id="loading-subline">Inicializando · <span id="timer-display">0s</span></p>
+            <p class="espera-cuota" id="espera-cuota"></p>
           </div>
         </div>
 
@@ -2224,7 +2262,6 @@ let selectedIdx    = null;
 let isCustom       = false;
 let abortCtrl      = null;
 let timerInterval  = null;
-let stepTimers     = [];
 let startTime      = null;
 let allTransactions = [];
 let n8nEditorUrl   = null;
@@ -3188,9 +3225,22 @@ async function _runStreaming(payload, cortarPlazo, reiniciarPlazo) {
         return;
       }
 
+      // Esperar turno del free tier no es un paso del pipeline: es el paso
+      // actual, que todavia no empezo. Sin esto, el panel mostraba «Sintetizando
+      // resolucion...» y un latido durante un minuto entero sin decir por que —
+      // y es el caso normal del modo demo: Gemini free son 5 pedidos por minuto
+      // y una investigacion hace 3 llamadas, asi que el segundo analisis seguido
+      // SIEMPRE espera.
+      if (step === 'espera') {
+        mostrarEspera(event.proveedor, event.segundos);
+        continue;
+      }
+
       // Update step UI with real data
       const idx = STEP_INDEX[step];
       if (idx === undefined) continue;
+      // Llego el paso siguiente: si habia una cuenta atras, ya no aplica.
+      cancelarEspera();
 
       // Mark all prior steps as done
       for (let i = lastIdx + 1; i < idx; i++) markStep(i, 'done');
@@ -3323,24 +3373,13 @@ function buildStepsDom() {
   updateProgress(0);
 }
 
-function scheduleSteps() {
-  clearStepTimers();
-  STEPS.forEach((s, i) => {
-    const t = setTimeout(() => {
-      if (i > 0) markStep(i - 1, 'done');
-      markStep(i, 'active');
-      updateProgress(Math.round((i / STEPS.length) * 90));
-      $('loading-subline').innerHTML = s.label.replace('...', '') +
-        ' · <span id="timer-display">' + elapsed() + 's</span>';
-    }, s.delay);
-    stepTimers.push(t);
-  });
-}
+// `scheduleSteps()` vivia aca: adelantaba los pasos con setTimeout sobre un
+// `s.delay` que ya no existe desde que el progreso viene por SSE. No la llamaba
+// nadie, y si alguien la hubiera llamado los timers habrian disparado todos a la
+// vez (`setTimeout(fn, undefined)` es `setTimeout(fn, 0)`), pintando el pipeline
+// empezar. Con ella se fue el unico lugar que llenaba `stepTimers`, asi que
+// `clearStepTimers()` quedo vaciando un array que ya nadie llena: tambien se va.
 
-function clearStepTimers() {
-  stepTimers.forEach(clearTimeout);
-  stepTimers = [];
-}
 
 function markStep(idx, state, detail) {
   const row = $('step-' + idx);
@@ -3364,6 +3403,42 @@ function updateProgress(pct) {
   $('progress-fill').style.width = pct + '%';
 }
 
+// ─── ESPERA POR CUOTA DEL FREE TIER ───────────────────────
+// El modo demo corre sobre modelos gratuitos, y los gratuitos tienen techo por
+// minuto. Esperar turno es lo correcto —un 429 gasta cuota del tope diario, que
+// es el que de verdad corta la corrida— pero desde afuera es indistinguible de
+// un cuelgue. Esto lo hace visible y le pone una cuenta atras, para que la
+// espera se lea como parte del trabajo y no como una falla.
+let esperaInterval = null;
+
+function mostrarEspera(proveedor, segundos) {
+  cancelarEspera();
+  const aviso = $('espera-cuota');
+  if (!aviso) return;
+  let restan = Math.ceil(Number(segundos) || 0);
+  const quien = proveedor ? proveedor.charAt(0).toUpperCase() + proveedor.slice(1) : 'el proveedor';
+
+  const pintar = () => {
+    aviso.innerHTML =
+      '<b>Esperando turno de ' + quien + '</b> · ' + Math.max(restan, 0) + 's<br>' +
+      '<span class="espera-por-que">Modelo gratuito: tiene un tope de pedidos por minuto. ' +
+      'Se espera en vez de reintentar porque un rechazo gasta la cuota igual.</span>';
+    aviso.classList.add('visible');
+  };
+  pintar();
+  esperaInterval = setInterval(() => {
+    restan -= 1;
+    if (restan <= 0) { cancelarEspera(); return; }
+    pintar();
+  }, 1000);
+}
+
+function cancelarEspera() {
+  if (esperaInterval) { clearInterval(esperaInterval); esperaInterval = null; }
+  const aviso = $('espera-cuota');
+  if (aviso) aviso.classList.remove('visible');
+}
+
 // ─── TIMER ────────────────────────────────────────────────
 function elapsed() {
   return ((Date.now() - startTime) / 1000).toFixed(1);
@@ -3377,6 +3452,10 @@ function updateTimer() {
 function stopTimer() {
   clearInterval(timerInterval);
   timerInterval = null;
+  // El analisis termino —bien o mal—: si quedaba una cuenta atras de espera por
+  // cuota, ya no aplica. Se corta aca porque es el unico punto por el que pasan
+  // todos los finales: `done`, error del stream, y el corte por plazo.
+  cancelarEspera();
 }
 
 // ─── PANEL VISIBILITY ─────────────────────────────────────
@@ -3574,7 +3653,6 @@ function showError(msg, isNetwork) {
 function resetPanel() {
   if (abortCtrl) { abortCtrl.abort(); abortCtrl = null; }
   pararSondaHitl();
-  clearStepTimers();
   stopTimer();
 
   showPanel('idle');
@@ -3812,6 +3890,13 @@ async function checkHealth() {
           ? 'La API dejo de llegar a ' + data.url + '. El pipeline volvio a Directo.'
           : 'Para elegir el pipeline con orquestacion: Tiene que ser una URL PUBLICA —n8n Cloud, por ejemplo—: al webhook lo llama esta API, no tu navegador. Un n8n en tu maquina no le es alcanzable; para ese caso, levanta el proyecto con docker-compose y usa su panel.');
     }
+
+    // La API viene contando los contactos del workflow desde que arranco. Es la
+    // unica confirmacion de que el n8n importado llega de verdad hasta aca:
+    // desde el otro lado no se puede comprobar. Corre en el chequeo periodico y
+    // no al pegar la URL porque el contacto puede ocurrir despues, cuando el
+    // analisis se dispara.
+    mostrarContactoN8n(data.ultimo_contacto_hace_s);
 
     // Store n8n base URL for modal link
     if (data.url) n8nEditorUrl = data.url;

@@ -37,11 +37,46 @@ import logging
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 logger = logging.getLogger(__name__)
 
 SIN_LIMITE = 0
+
+# Quien quiere enterarse de que se esta esperando, si hay alguien.
+#
+# Esperar turno es correcto, pero desde afuera es indistinguible de un cuelgue:
+# el panel mostraba «Sintetizando resolucion...» y un latido durante un minuto
+# entero sin decir por que. Y es el caso NORMAL del modo demo — Gemini free son 5
+# pedidos por minuto y una investigacion hace 3 llamadas—, o sea que el segundo
+# analisis seguido siempre espera.
+#
+# Es un ContextVar y no un parametro porque el que espera esta tres capas abajo
+# (`RateLimiter` <- cliente <- servicio <- pipeline) y el que quiere avisar esta
+# arriba de todo. Hacerlo viajar por las firmas obligaria a que cada capa
+# intermedia conozca algo que no le importa. Y es un ContextVar y no un atributo
+# de la instancia porque el limitador se comparte entre peticiones: un callback
+# guardado ahi le mandaria los avisos de una investigacion al panel de otra.
+AVISO_DE_ESPERA: ContextVar[Callable[[str, float], None] | None] = ContextVar(
+    "aviso_de_espera", default=None,
+)
+
+
+@contextmanager
+def avisar_esperas(aviso: Callable[[str, float], None]) -> Iterator[None]:
+    """Mientras dure el bloque, cada espera se le informa a `aviso(clave, segundos)`.
+
+    Se instala en el hilo que consume el pipeline. El aviso llega ANTES de
+    dormir, con lo que falta, para que quien mire pueda mostrar una cuenta atras
+    en vez de un spinner mudo.
+    """
+    token = AVISO_DE_ESPERA.set(aviso)
+    try:
+        yield
+    finally:
+        AVISO_DE_ESPERA.reset(token)
 
 
 class RateLimiter:
@@ -98,8 +133,25 @@ class RateLimiter:
                 clave, limite, self._ventana_s, falta,
             )
             pausa = max(falta, self._pausa_minima_s)
+            self._avisar(clave, pausa)
             self._dormir(pausa)
             esperado += pausa
+
+    @staticmethod
+    def _avisar(clave: str, segundos: float) -> None:
+        """Le cuenta la espera a quien la haya pedido. Nunca puede tumbar la llamada.
+
+        Si el que escucha falla —el cliente cerro la pestania, la cola se
+        rompio—, se anota y se sigue esperando: informar sobre la espera no puede
+        ser una forma nueva de que la espera falle.
+        """
+        aviso = AVISO_DE_ESPERA.get()
+        if aviso is None:
+            return
+        try:
+            aviso(clave, segundos)
+        except Exception:
+            logger.debug("No se pudo avisar de la espera de %s", clave, exc_info=True)
 
     def turnos_usados(self, clave: str) -> int:
         """Cuántas llamadas hay dentro de la ventana. Para tests y diagnóstico."""

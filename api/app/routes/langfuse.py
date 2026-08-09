@@ -13,9 +13,9 @@ from ..services.langfuse_stats import LangfuseStatsService
 router = APIRouter(prefix="/api/langfuse", tags=["langfuse"])
 
 
-@router.get("/stats", response_model=LangfuseStatsResponse)
+@router.get("/stats")
 def langfuse_stats(
     service: LangfuseStatsService = Depends(get_langfuse_stats_service),
-) -> dict:
+) -> LangfuseStatsResponse:
     """Return Langfuse observability stats for display in the test panel."""
     return service.get_stats()

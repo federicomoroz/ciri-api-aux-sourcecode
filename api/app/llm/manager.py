@@ -25,12 +25,14 @@ import logging
 
 from ..config import Settings
 from ..domain.constants import (
+    LLM_DEFAULT_MAX_TOKENS,
+    LLM_DEFAULT_TEMPERATURE,
     LLM_RPM_PAUSA_MINIMA_S,
     LLM_RPM_VENTANA_S,
 )
 from ..observability.tracer import Tracer
 from ..rate_limiter import RateLimiter
-from .client import AnthropicClient, LLMClient, OpenAICompatibleClient
+from .client import Ajustes, AnthropicClient, Cuota, LLMClient, OpenAICompatibleClient
 from .perfiles import perfil_de
 from .proveedores import PROVEEDOR_ANTHROPIC, base_url_de, existe
 
@@ -86,6 +88,26 @@ class LLMManager:
             self._cache[llave] = self._construir(proveedor, modelo, "")
         return self._cache[llave]
 
+    def _ajustes(self) -> Ajustes:
+        """`CB_LLM_TEMPERATURE` y `CB_LLM_MAX_TOKENS`, con los que corre el cliente.
+
+        `getattr` y no acceso directo, igual que `clave_de` y `rpm_de`: lo que
+        llega como `settings` no siempre es la clase `Settings` —los tests y los
+        scripts pasan objetos con la superficie que necesitan—.
+        """
+        return Ajustes(
+            temperature=getattr(self.settings, "llm_temperature", LLM_DEFAULT_TEMPERATURE),
+            max_tokens=getattr(self.settings, "llm_max_tokens", LLM_DEFAULT_MAX_TOKENS),
+        )
+
+    def _cuota(self, proveedor: str, modelo: str) -> Cuota:
+        """El reparto de turnos de este proveedor, compartido entre todos sus clientes."""
+        return Cuota(
+            proveedor=proveedor or PROVEEDOR_ANTHROPIC,
+            rpm=self.rpm_de(proveedor, modelo),
+            limitador=self.limitador,
+        )
+
     def _construir(self, proveedor: str, modelo: str, api_key: str) -> LLMClient:
         clave = api_key or self.clave_de(proveedor)
         base = base_url_de(
@@ -109,11 +131,13 @@ class LLMManager:
             return AnthropicClient(
                 api_key=clave, model=modelo,
                 tracer=self.tracer, max_retries=self.settings.llm_max_retries,
+                cuota=self._cuota(proveedor, modelo), ajustes=self._ajustes(),
             )
         return OpenAICompatibleClient(
             api_key=clave, model=modelo, base_url=base,
             tracer=self.tracer, max_retries=self.settings.llm_max_retries,
             proveedor=proveedor,
+            cuota=self._cuota(proveedor, modelo), ajustes=self._ajustes(),
         )
 
     def completar(
@@ -132,8 +156,16 @@ class LLMManager:
         Las diferencias entre modelos —cuanto presupuesto de tokens necesita uno
         que razona, que errores vale la pena reintentar— se resuelven adentro,
         que es donde se sabe con quien se esta hablando.
+
+        **Este metodo ya no es el que aplica la cuota ni la configuracion.** Las
+        aplica el cliente, porque no es la unica puerta: el pipeline efimero del
+        panel —modo demo y BYOK— recibe clientes ya armados de `clientes_para()`
+        / `clientes_demo()` y los invoca directo. Mientras el turno se pedia aca,
+        ese camino no lo pedia, y es justamente el que corre sobre free tier:
+        Gemini son 5 pedidos por minuto y una investigacion hace 3 llamadas, o
+        sea un analisis por minuto. El segundo seguido rebotaba, y un 429 gasta
+        cuota del tope diario igual que una llamada que sirve.
         """
-        self.limitador.esperar_turno(proveedor, self.rpm_de(proveedor, modelo))
         return self.cliente(proveedor, modelo, api_key).complete(
             system, user, trace_id=trace_id, **extra,
         )

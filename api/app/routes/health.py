@@ -6,7 +6,7 @@ from qdrant_client import QdrantClient
 from ..config import Settings
 from ..data.db import Database
 from ..dependencies import get_db, get_qdrant, get_settings
-from ..domain.constants import HEALTH_DEGRADED, HEALTH_HEALTHY, HEALTH_OK
+from ..domain.constants import HEALTH_DEGRADED, HEALTH_ERROR, HEALTH_HEALTHY, HEALTH_OK
 from ..domain.models import HealthResponse
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def health(
     try:
         db.get_all_policies()
     except Exception as e:
-        sqlite_status = "error"
+        sqlite_status = HEALTH_ERROR
         logger.error("SQLite health check failed: %s", e)
 
     try:
@@ -39,7 +39,7 @@ def health(
             info = qdrant.get_collection(name)
             collections[name] = info.points_count
     except Exception as e:
-        qdrant_status = "error"
+        qdrant_status = HEALTH_ERROR
         logger.error("Qdrant health check failed: %s", e)
 
     overall = HEALTH_HEALTHY if sqlite_status == HEALTH_OK and qdrant_status == HEALTH_OK else HEALTH_DEGRADED

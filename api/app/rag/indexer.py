@@ -43,6 +43,47 @@ def _policy_to_markdown(policy: dict) -> str:
     )
 
 
+def _payload_de_politica(policy: dict) -> dict:
+    """Lo que se guarda en Qdrant de una politica.
+
+    Un solo constructor para el alta masiva y para la individual. Estaban
+    escritos dos veces con los mismos ocho campos, asi que agregar uno pedia dos
+    ediciones y olvidarse de una dejaba el indice con documentos de dos formas
+    distintas segun por donde hubieran entrado — que es exactamente lo que ya
+    paso con `puede_bloquear`.
+    """
+    return {
+        "code": policy["code"],
+        "name": policy["name"],
+        "category": policy["category"],
+        "description": policy["description"],
+        "reference": policy["reference"],
+        "markdown": _policy_to_markdown(policy),
+        # Sin esto, el guardrail que decide que politica puede bloquear tendria
+        # que volver a SQLite por cada veredicto.
+        "puede_bloquear": bool(policy.get("puede_bloquear", False)),
+        "sla_dias": policy.get("sla_dias"),
+    }
+
+
+def _payload_de_caso(case: dict, tx: dict, texto: str) -> dict:
+    """Lo que se guarda en Qdrant de un caso historico, con su transaccion.
+
+    Mismo motivo que arriba: el alta masiva y la individual comparten forma, y
+    de estos campos dependen el filtro por `payment_method` y el rerank por
+    `country` del retriever.
+    """
+    return {
+        **case,
+        "merchant": tx.get("merchant", ""),
+        "amount_usd": tx.get("amount_usd", 0),
+        "payment_method": tx.get("payment_method", ""),
+        "country": tx.get("country", ""),
+        "fraud_score": tx.get("fraud_score", 0),
+        "_text": texto,
+    }
+
+
 def _case_to_text(case: dict, tx: dict | None) -> str:
     """Convert a case + its transaction to searchable text."""
     parts = [
@@ -121,18 +162,7 @@ class QdrantIndexer:
             points.append(PointStruct(
                 id=_make_id(policy["code"]),
                 vector=vector.tolist(),
-                payload={
-                    "code": policy["code"],
-                    "name": policy["name"],
-                    "category": policy["category"],
-                    "description": policy["description"],
-                    "reference": policy["reference"],
-                    "markdown": _policy_to_markdown(policy),
-                    # Sin esto, el guardrail que decide que politica puede
-                    # bloquear tendria que volver a SQLite por cada veredicto.
-                    "puede_bloquear": bool(policy.get("puede_bloquear", False)),
-                    "sla_dias": policy.get("sla_dias"),
-                },
+                payload=_payload_de_politica(policy),
             ))
 
         if points:
@@ -154,19 +184,12 @@ class QdrantIndexer:
         vectors = self.embedder.encode(texts)
 
         for case, text, vector in zip(cases, texts, vectors, strict=True):
-            tx = tx_map.get(case["transaction_id"], {})
             points.append(PointStruct(
                 id=_make_id(case["case_id"]),
                 vector=vector.tolist(),
-                payload={
-                    **case,
-                    "merchant": tx.get("merchant", ""),
-                    "amount_usd": tx.get("amount_usd", 0),
-                    "payment_method": tx.get("payment_method", ""),
-                    "country": tx.get("country", ""),
-                    "fraud_score": tx.get("fraud_score", 0),
-                    "_text": text,
-                },
+                payload=_payload_de_caso(
+                    case, tx_map.get(case["transaction_id"], {}), text,
+                ),
             ))
 
         if points:
@@ -185,15 +208,7 @@ class QdrantIndexer:
         point = PointStruct(
             id=_make_id(case["case_id"]),
             vector=vector.tolist(),
-            payload={
-                **case,
-                "merchant": tx.get("merchant", ""),
-                "amount_usd": tx.get("amount_usd", 0),
-                "payment_method": tx.get("payment_method", ""),
-                "country": tx.get("country", ""),
-                "fraud_score": tx.get("fraud_score", 0),
-                "_text": text,
-            },
+            payload=_payload_de_caso(case, tx, text),
         )
         try:
             self.client.upsert(collection_name=self.cases_collection, points=[point])
@@ -209,16 +224,7 @@ class QdrantIndexer:
         point = PointStruct(
             id=_make_id(policy["code"]),
             vector=vector.tolist(),
-            payload={
-                "code": policy["code"],
-                "name": policy["name"],
-                "category": policy["category"],
-                "description": policy["description"],
-                "reference": policy["reference"],
-                "markdown": text,
-                "puede_bloquear": bool(policy.get("puede_bloquear", False)),
-                "sla_dias": policy.get("sla_dias"),
-            },
+            payload=_payload_de_politica(policy),
         )
         try:
             self.client.upsert(collection_name=self.policies_collection, points=[point])

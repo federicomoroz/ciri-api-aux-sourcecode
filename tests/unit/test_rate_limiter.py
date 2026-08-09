@@ -13,7 +13,7 @@ import threading
 
 import pytest
 
-from api.app.rate_limiter import SIN_LIMITE, RateLimiter
+from api.app.rate_limiter import SIN_LIMITE, RateLimiter, avisar_esperas
 
 
 @pytest.fixture
@@ -150,3 +150,118 @@ class TestEsSeguroEntreHilos:
 
         assert not any(h.is_alive() for h in hilos), "alguno quedo esperando de mas"
         assert limitador.turnos_usados("compartida") == 8
+
+
+class TestAvisarLaEspera:
+    """Esperar turno es correcto; parecer colgado no.
+
+    Desde afuera, un limitador haciendo su trabajo y un proceso trabado se ven
+    exactamente igual: el panel mostraba «Sintetizando resolucion...» y un latido
+    durante un minuto sin decir por que. Y es el caso NORMAL del modo demo —
+    Gemini free son 5 pedidos por minuto y una investigacion hace 3 llamadas, o
+    sea que el segundo analisis seguido siempre espera.
+    """
+
+    def test_avisa_antes_de_dormir_y_con_lo_que_falta(self, limitador, reloj):
+        """Antes, no despues: un aviso posterior llega cuando ya no sirve."""
+        avisos = []
+        with avisar_esperas(lambda clave, seg: avisos.append((clave, seg, reloj["dormido"]))):
+            for _ in range(6):
+                limitador.esperar_turno("gemini", 5)
+
+        assert len(avisos) == 1, "la sexta llamada es la unica que espera"
+        clave, segundos, dormido_al_avisar = avisos[0]
+        assert clave == "gemini"
+        assert segundos > 0, "un aviso sin cuanto falta no permite mostrar una cuenta atras"
+        assert dormido_al_avisar == 0.0, "el aviso llego DESPUES de dormir: ya no sirve"
+
+    def test_sin_nadie_escuchando_no_pasa_nada(self, limitador):
+        """El limitador se usa tambien fuera del panel: scripts, n8n, tests."""
+        otorgados = [limitador.esperar_turno("gemini", 5) for _ in range(6)]
+        assert len(otorgados) == 6, "alguna llamada no volvio"
+        assert otorgados[-1] > 0, "la sexta tenia que esperar"
+
+    def test_un_aviso_que_revienta_no_tumba_la_espera(self, limitador):
+        """El que escucha puede haberse ido: cerro la pestania a mitad del analisis.
+
+        Informar sobre la espera no puede ser una forma nueva de que la espera
+        falle — el mismo criterio que el tracer.
+        """
+        def se_rompe(clave, segundos):
+            raise RuntimeError("el cliente se fue")
+
+        with avisar_esperas(se_rompe):
+            otorgados = [limitador.esperar_turno("gemini", 5) for _ in range(6)]
+        assert len(otorgados) == 6, "el aviso roto corto la espera"
+        assert otorgados[-1] > 0, "la sexta tenia que esperar igual"
+
+    def test_el_aviso_no_se_filtra_a_otra_peticion(self, limitador):
+        """El limitador se COMPARTE entre peticiones; el aviso no puede.
+
+        Guardarlo en la instancia le mandaria los avisos de una investigacion al
+        panel de otra. Por eso es un ContextVar y no un atributo.
+        """
+        mios = []
+        otro_hilo_recibio = []
+
+        def otra_peticion():
+            # Sin contexto propio: no tiene que recibir los avisos de la de al lado.
+            from api.app.rate_limiter import AVISO_DE_ESPERA
+            otro_hilo_recibio.append(AVISO_DE_ESPERA.get())
+
+        with avisar_esperas(lambda c, s: mios.append(c)):
+            for _ in range(6):
+                limitador.esperar_turno("gemini", 5)
+            hilo = threading.Thread(target=otra_peticion)
+            hilo.start()
+            hilo.join(timeout=5)
+
+        assert mios == ["gemini"], "el aviso propio no llego"
+        assert otro_hilo_recibio == [None], "el aviso se filtro a otro hilo"
+
+    def test_al_salir_del_bloque_deja_de_avisar(self, limitador):
+        avisos = []
+        with avisar_esperas(lambda c, s: avisos.append(c)):
+            for _ in range(6):
+                limitador.esperar_turno("gemini", 5)
+        limitador.olvidar()
+        for _ in range(6):
+            limitador.esperar_turno("gemini", 5)
+        assert len(avisos) == 1, "siguio avisando fuera del bloque"
+
+
+class TestLaEsperaLlegaAlPanel:
+    """El circuito entero: del limitador al stream que mira el evaluador.
+
+    Las piezas se prueban arriba por separado; esto verifica que esten
+    conectadas. El aviso nace tres capas abajo del generador —`RateLimiter`,
+    dentro del cliente, dentro del servicio— y tiene que salir por la misma cola
+    SSE que el resto, que es el unico hilo autorizado a escribir en el stream.
+    """
+
+    def test_una_espera_por_cuota_sale_como_evento_sse(self):
+        import json
+
+        import api.app.routes.panel as panel
+
+        reloj = {"t": 0.0}
+        limitador = RateLimiter(
+            ventana_s=60.0, reloj=lambda: reloj["t"],
+            dormir=lambda s: reloj.__setitem__("t", reloj["t"] + s),
+        )
+
+        def eventos():
+            yield panel._sse("resolving", {})
+            for _ in range(6):          # la sexta se topa con el techo de 5/min
+                limitador.esperar_turno("gemini", 5)
+            yield panel._sse("done", {"html": "<html/>", "usage": {}})
+
+        salida = list(panel._con_latido(eventos(), cada_s=0.05))
+        esperas = [linea for linea in salida if '"step": "espera"' in linea]
+        assert esperas, "la espera no llego al stream: el panel la ve como un cuelgue"
+
+        evento = json.loads(esperas[0].removeprefix("data: ").strip())
+        assert evento["proveedor"] == "gemini"
+        assert evento["segundos"] > 0, "sin cuanto falta no se puede mostrar una cuenta atras"
+        # Y llega ANTES de que el paso termine, que es cuando sirve.
+        assert salida.index(esperas[0]) < len(salida) - 1

@@ -244,16 +244,16 @@ class TestLosErroresSeNombran:
         assert not _es_clave_invalida(self.OTRO)
 
     def test_sin_saldo_ofrece_el_modo_demo_como_salida(self, settings):
-        assert "modo demo" in _pagina_de_error(SIN_INFORME, self.SIN_SALDO, settings)
+        assert "modo demo" in _pagina_de_error(SIN_INFORME, self.SIN_SALDO)
 
     def test_clave_invalida_dice_como_es_una_clave_valida(self, settings):
-        pagina = _pagina_de_error(SIN_INFORME, self.CLAVE_MALA, settings)
+        pagina = _pagina_de_error(SIN_INFORME, self.CLAVE_MALA)
         assert "sk-ant-" in pagina
         assert "console.anthropic.com" in pagina
 
     def test_un_fallo_desconocido_no_promete_nada(self, settings):
         """Inventar una causa seria peor que decir que hay que mirar los logs."""
-        pagina = _pagina_de_error(SIN_INFORME, self.OTRO, settings)
+        pagina = _pagina_de_error(SIN_INFORME, self.OTRO)
         assert "sk-ant-" not in pagina
         assert "saldo" not in pagina
 
@@ -287,7 +287,15 @@ class TestLaClaveDelVisitanteManda:
         monkeypatch.setattr(panel, "ResolutionService", lambda *a, **k: MagicMock())
         monkeypatch.setattr(panel, "PipelineService", lambda **k: MagicMock())
 
-        base = SimpleNamespace(db=None, retriever=None, analyzer=None, report_gen=None)
+        # `sla` y `cache_enabled` estan porque el pipeline efimero los hereda del
+        # que corre en el proceso: son configuracion de ESTE deploy, no del
+        # visitante. Sin heredarlos, una corrida con clave propia se armaba con
+        # los defaults del constructor y cacheaba aunque el cache estuviera
+        # apagado.
+        base = SimpleNamespace(
+            db=None, retriever=None, analyzer=None, report_gen=None,
+            sla=None, cache_enabled=True,
+        )
         peticion = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
             tracer=MagicMock(), modelos_service=modelos,
         )))

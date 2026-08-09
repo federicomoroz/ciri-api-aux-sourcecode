@@ -105,13 +105,13 @@ def test_client_routes(in_memory_db_path, mock_llm_blocker):
     app.state.settings.llm_base_url = ""
     app.state.settings.llm_api_key = ""
     app.state.settings.anthropic_api_key = "test"
-    esquema.tabla_de_modelos(db)
+    esquema.preparar(db)
     app.state.modelos_service = ModelosService(
         db, app.state.settings, LLMManager(app.state.settings, mock_tracer),
     )
 
     # Ensure report cache table exists
-    esquema.tabla_de_informes(db)
+    esquema.preparar(db)
 
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client, db, mock_updater

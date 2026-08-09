@@ -106,6 +106,7 @@ __all__ = [
     "SLA_TYPE_DIAS_POR_DEFECTO",
     # Health status
     "HEALTH_OK",
+    "HEALTH_ERROR",
     "HEALTH_HEALTHY",
     "HEALTH_DEGRADED",
     # LLM Pricing
@@ -155,6 +156,14 @@ __all__ = [
     # Guardrail strings
     "GUARDRAIL_AUTO_CORRECTED_PREFIX",
     "GUARDRAIL_HITL_REASON_GENERIC",
+    # Decision humana (HITL)
+    "HITL_APROBADA",
+    "HITL_RECHAZADA",
+    "HITL_MODIFICADA",
+    "HITL_RESULTADO_POR_DECISION",
+    "HITL_DECISION_SIN_RESPUESTA",
+    "HITL_NOTAS_POR_VENCIMIENTO",
+    "HITL_PLAZO_HORAS",
     # Report template
     "REPORT_TEMPLATE_NAME",
 ]
@@ -433,6 +442,7 @@ SLA_TYPE_DIAS_POR_DEFECTO: dict[str, int] = {
 
 # ── Health Status ────────────────────────────────────────────────────────────
 HEALTH_OK: str = "ok"
+HEALTH_ERROR: str = "error"
 HEALTH_HEALTHY: str = "healthy"
 HEALTH_DEGRADED: str = "degraded"
 
@@ -496,6 +506,29 @@ PIPELINE_THREAD_TIMEOUT_S: int = 60
 ALERT_EVENT_BLOCKER_REJECT: str = "blocker_auto_reject"
 ALERT_EVENT_HITL_REQUIRED: str = "hitl_required"
 ALERT_SOURCE_RESOLVE: str = "resolve"
+
+# ── Decision humana (HITL) ─────────────────────────────────────────────────
+# Las opciones que ofrece el formulario del nodo `Wait`, traducidas al resultado
+# que guarda el sistema. Estaba escrito en JavaScript adentro del workflow, o
+# sea fuera de todo test: mientras mapeo dos de las tres opciones, un analista
+# que elegia «modificar» quedaba registrado como si hubiera aprobado.
+HITL_APROBADA: str = "APPROVED"
+HITL_RECHAZADA: str = "DENIED"
+HITL_MODIFICADA: str = "MODIFIED"
+HITL_RESULTADO_POR_DECISION: dict[str, str] = {
+    "APPROVE": HITL_APROBADA,
+    "APPROVED": HITL_APROBADA,
+    "REJECT": HITL_RECHAZADA,
+    "REJECTED": HITL_RECHAZADA,
+    "MODIFY": HITL_MODIFICADA,
+    "MODIFIED": HITL_MODIFICADA,
+}
+HITL_DECISION_SIN_RESPUESTA: str = "SIN_RESPUESTA"
+HITL_NOTAS_POR_VENCIMIENTO: str = "El plazo de espera vencio sin decision de un analista."
+# Cuanto espera el nodo `Wait` a que una persona conteste. Vive aca porque el
+# workflow lo repetia en cuatro lugares —el `resumeAmount`, la metadata de la
+# alerta y dos textos en prosa— y moverlo pedia acordarse de los cuatro.
+HITL_PLAZO_HORAS: int = 24
 
 # ── Guardrail Strings ──────────────────────────────────────────────────────
 GUARDRAIL_AUTO_CORRECTED_PREFIX: str = "Auto-corregido"

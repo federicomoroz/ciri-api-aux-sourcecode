@@ -6,7 +6,7 @@ Data structures for LLM I/O (Resolution, PolicyVerdict, etc.) are documented
 in docs/prompts.md and flow as plain dicts through the pipeline.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .context import CaseContext
 from .enums import ResolutionOutcome, RiskLevel, Severity, VerdictType
@@ -279,6 +279,202 @@ class LangfuseStatsResponse(BaseModel):
     # y no sobreviven a un reinicio; los de Langfuse son el historico entero.
     # El panel lo dice en pantalla en vez de presentar los dos como lo mismo.
     fuente: str = "langfuse"
+
+
+# ---- Respuestas de las herramientas que consume n8n ----
+# Cada una es un SUPERSET exacto de lo que la ruta ya devolvia. Un response model
+# filtra lo que no declara, asi que un campo olvidado aca no da error: desaparece
+# de la respuesta y el nodo de n8n que lo leia recibe `undefined`. Por eso se
+# modelan contra lo que el codigo produce, no contra lo que la documentacion dice.
+
+
+class TransactionResponse(BaseModel):
+    """Una fila de `transactions`. Las columnas salen de `data/esquema.py`."""
+
+    id: str
+    client_id: str
+    merchant: str
+    amount_usd: float
+    date: str
+    payment_method: str
+    country: str
+    channel: str
+    device: str
+    fraud_score: int
+    status: str
+    notes: str | None = None
+
+
+class TransactionCompact(BaseModel):
+    """Lo que necesita el desplegable del panel, con el motivo del caso abierto."""
+
+    id: str
+    merchant: str
+    amount_usd: float
+    country: str
+    payment_method: str
+    fraud_score: int
+    channel: str
+    status: str
+    motivo: str | None = None
+
+
+class TransactionListResponse(BaseModel):
+    """Response from GET /api/transactions."""
+
+    transactions: list[TransactionCompact]
+
+
+class LogsResponse(BaseModel):
+    """Response from GET /api/logs/{tx_id}."""
+
+    transaction_id: str
+    log_count: int
+    logs: list[dict]
+    severity_summary: dict[str, int]
+
+
+class BusquedaSemanticaResponse(BaseModel):
+    """Response de las dos rutas de RAG: politicas y casos similares.
+
+    `results` queda como `list[dict]` a proposito: son documentos de Qdrant y su
+    payload cambia con lo que se indexo. Declararlos campo por campo convertiria
+    cada reindexado en un recorte silencioso.
+    """
+
+    query_used: str
+    results: list[dict]
+    formatted_for_llm: str
+    count: int
+
+
+class MerchantRiskResponse(BaseModel):
+    """Response from GET /api/merchants/{name}/risk."""
+
+    merchant: str
+    total_transactions: int
+    total_chargebacks: int
+    cb_ratio: float
+    total_volume_usd: float
+    avg_transaction_usd: float
+    # El ratio solo se lee bien al lado de su referencia.
+    cb_ratio_baseline: float
+    flags: list[str] = []
+    is_strategic: bool = False
+
+
+class ClientHistoryResponse(BaseModel):
+    """Response from GET /api/clients/{id}/history."""
+
+    client_id: str
+    total_transactions: int
+    total_chargebacks: int
+    rejected_transactions: int
+    countries_used: list[str] = []
+    payment_methods_used: list[str] = []
+    flags: list[str] = []
+
+
+class SLACheckResponse(BaseModel):
+    """Response from POST /api/sla/check.
+
+    `within_sla` y `days_elapsed` admiten `None` a proposito: es un reclamo sin
+    fecha de apertura registrada, o sea un plazo que no se pudo medir. No es lo
+    mismo que estar en plazo, y ponerles un default lo disimularia.
+    """
+
+    within_sla: bool | None = None
+    days_elapsed: int | None = None
+    sla_limit_days: int
+    sla_type: str
+    policy_reference: str
+    compensation_applicable: bool
+    medido_desde: str | None = None
+    medido_hasta: str | None = None
+    caso_cerrado: bool = False
+    pais_desconocido: bool = False
+    sin_reclamo_registrado: bool = False
+
+
+class PolicyResponse(BaseModel):
+    """Una politica tal como esta guardada."""
+
+    code: str
+    name: str
+    category: str
+    description: str
+    reference: str
+    created_at: str = ""
+    updated_at: str = ""
+    puede_bloquear: bool = False
+    sla_dias: int | None = None
+
+
+class CacheLookupResponse(BaseModel):
+    """Response from GET /api/cache/lookup."""
+
+    cached: bool
+    html: str | None = None
+
+
+class ReportHtmlResponse(BaseModel):
+    """Response from POST /api/reports/html."""
+
+    html: str
+
+
+class ModelosConfigResponse(BaseModel):
+    """Response from GET /api/config/modelos."""
+
+    pasos: dict[str, dict]
+    proveedores: list[dict]
+
+
+class ModelosPasosResponse(BaseModel):
+    """Response from POST /api/config/modelos/reset."""
+
+    pasos: dict[str, dict]
+
+
+class HitlDecideRequest(BaseModel):
+    """Lo que el nodo `Wait` recogio del analista, sin interpretar.
+
+    Los nombres con acento son los del formulario del Wait; los otros, los de
+    una llamada directa al `resumeUrl`. Los dos llegan crudos: normalizarlos es
+    justamente lo que hace `domain/hitl.py`, y por eso `decision` admite vacio —
+    ese es el caso del plazo vencido, que NO es una aprobacion.
+    """
+
+    decision: str = ""
+    notes: str = ""
+    transaction_id: str = Field(min_length=1)
+    # Sin cota, y se acota despues. La nota llega desde `JudgeResponse.overall_score`,
+    # que es un float sin validar: `validate_llm_output` devuelve el dict CRUDO
+    # cuando la validacion falla —a proposito, para que los guardrails lo vean—,
+    # asi que un modelo que responde 95 en vez de 9.5 puede llegar hasta aca. Con
+    # `Field(le=10.0)` eso era un 422, y un 422 en este endpoint tira la rama HITL
+    # entera: se pierde la decision de un analista que ya la tomo, y no se le
+    # puede volver a pedir. Una nota fuera de rango no puede costar eso.
+    judge_score: float = 0.0
+    resolution: dict | None = None
+    motivo: str | None = None
+
+    @field_validator("judge_score")
+    @classmethod
+    def _acotar(cls, v: float) -> float:
+        """La nota entra al rango en vez de rechazar la peticion."""
+        return min(max(v, 0.0), 10.0)
+
+
+class HitlDecideResponse(BaseModel):
+    """Response from POST /api/hitl/decide."""
+
+    hitl_decision: dict
+    # El cuerpo listo para `POST /api/feedback`. Se devuelve en vez de
+    # registrarse aca para que el orquestador siga teniendo un nodo visible por
+    # cada efecto: n8n es un orquestador explicito, y un registro que ocurre
+    # adentro de otra llamada deja de verse en el canvas.
+    feedback: dict
 
 
 class AlertRequest(BaseModel):

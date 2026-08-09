@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from ..config import Settings
 from ..data.db import Database, cache_key
 from ..dependencies import get_db, get_settings
+from ..domain.models import CacheLookupResponse
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ def cache_lookup(
     cliente_vip: bool = Query(False),
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> CacheLookupResponse:
     """Check if a cached HTML report exists for this exact request."""
     if not settings.report_cache_enabled:
         return {"cached": False}

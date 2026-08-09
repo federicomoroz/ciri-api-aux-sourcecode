@@ -6,7 +6,7 @@ from ..config import Settings
 from ..data.db import Database, cache_key
 from ..data.precomputados import informe_demo
 from ..dependencies import get_db, get_report_generator, get_settings
-from ..domain.models import ReportRequest
+from ..domain.models import ReportHtmlResponse, ReportRequest
 from ..reports.generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ def generate_html_report(
     generator: ReportGenerator = Depends(get_report_generator),
     db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict:
+) -> ReportHtmlResponse:
     """Generate an HTML report and auto-store in SQLite cache for idempotency."""
     # Si la resolucion es un ejemplo de otro caso, el informe tiene que ser ese
     # ejemplo entero. Renderizar la transaccion pedida con la resolucion de otra

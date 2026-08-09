@@ -9,9 +9,8 @@ import logging
 from fastapi import APIRouter, Depends
 
 from ..config import Settings
-from ..data.db import Database
 from ..data.precomputados import analisis_demo, caso_mas_cercano_en_riesgo
-from ..dependencies import get_db, get_modelos_service, get_resolution_service, get_settings
+from ..dependencies import get_modelos_service, get_resolution_service, get_settings
 from ..domain.models import JudgeRequest, JudgeResponse, ResolveRequest, ResolveResponse
 from ..services.modelos import ModelosService
 from ..services.resolution import ResolutionService
@@ -79,7 +78,6 @@ def _demo_de(
 def resolve(
     req: ResolveRequest,
     service: ResolutionService = Depends(get_resolution_service),
-    db: Database = Depends(get_db),
     settings: Settings = Depends(get_settings),
     modelos: ModelosService = Depends(get_modelos_service),
 ) -> ResolveResponse:
