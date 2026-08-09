@@ -260,3 +260,82 @@ class TestElRerankPuedeCambiarQuienEntra:
         ids = [c["case_id"] for c in entregados]
         assert "CB-BOOST" in ids, "el boost no alcanzó a meterlo en el set entregado"
         assert ids[0] == "CB-BOOST", "0.74 + 0.08 supera al mejor de 0.80"
+
+
+class TestUnaTransaccionNoEsPrecedenteDeSiMisma:
+    """El filtro que impide que el agente se lea la respuesta antes de opinar.
+
+    Los casos de la propia transaccion analizada salian primeros y no por
+    casualidad: el documento indexado lleva su merchant, su metodo, su pais y su
+    monto formateado igual que la consulta, asi que el parecido es maximo por
+    construccion, y encima el rerank les da los dos boosts —esos campos se
+    copiaron de la misma transaccion, no pueden no coincidir—. En TXN-00006 eso
+    puso a CB-0025 y CB-0047, sus dos casos propios, en los puestos 1 y 2, y la
+    justificacion cito «CB-0025 fue aprobado en 10d» como tendencia de terceros.
+
+    Se afirma sobre el `query_filter` que se le manda a Qdrant y no sobre los
+    resultados: el mock devuelve lo mismo pase lo que pase, asi que filtrar mal
+    era indetectable. Es la razon por la que el defecto vivio hasta hoy.
+    """
+
+    def _retriever(self):
+        client = MagicMock()
+        client.query_points.return_value = MagicMock(points=[])
+        embedder = MagicMock()
+        # Dos vectores: la busqueda combinada embebe politicas y casos de una.
+        embedder.encode.return_value = [MagicMock(tolist=lambda: [0.0] * 1024)] * 2
+        return QdrantRetriever(client, embedder), client
+
+    @staticmethod
+    def _excluidos(client) -> list[str]:
+        """Los transaction_id que el filtro enviado a Qdrant deja afuera."""
+        f = client.query_points.call_args.kwargs["query_filter"]
+        return [
+            c.match.value for c in (f.must_not or [])
+            if getattr(c, "key", "") == "transaction_id"
+        ]
+
+    def test_excluye_los_casos_de_la_transaccion_analizada(self):
+        retriever, client = self._retriever()
+        retriever.search_similar_cases(
+            "MercadoLibre", 4671.09, PaymentMethod.CREDIT_VISA, "CHL", 46,
+            excluir_transaction_id="TXN-00006",
+        )
+        assert self._excluidos(client) == ["TXN-00006"]
+
+    def test_la_busqueda_combinada_tambien_excluye(self):
+        """El pipeline real pasa por aca, no por `search_similar_cases`."""
+        retriever, client = self._retriever()
+        retriever.search_policies_and_cases(
+            motivo="No reconoce la compra", payment_method=PaymentMethod.CREDIT_VISA,
+            country="CHL", merchant="MercadoLibre", amount=4671.09,
+            excluir_transaction_id="TXN-00006",
+        )
+        assert self._excluidos(client) == ["TXN-00006"]
+
+    def test_sin_transaccion_que_excluir_no_se_filtra_nada(self):
+        """Un `must_not` con el id vacio excluiria los casos sin transaccion."""
+        retriever, client = self._retriever()
+        retriever.search_similar_cases(
+            "MercadoLibre", 4671.09, PaymentMethod.CREDIT_VISA, "CHL", 46,
+        )
+        f = client.query_points.call_args.kwargs["query_filter"]
+        assert not f.must_not
+
+    def test_el_metodo_de_pago_no_excluye_a_nadie(self):
+        """La preferencia por el mismo metodo la aplica el rerank, no el filtro.
+
+        Habia un `should` por `payment_method` puesto para «preferir sin
+        exigir», y en Qdrant un filtro que solo tiene `should` las vuelve
+        obligatorias: era una igualdad exacta de string disfrazada de
+        preferencia. Un metodo escrito distinto dejaba el informe sin ningun
+        precedente. La preferencia sigue viva en `_rerank`, que suma un boost.
+        """
+        retriever, client = self._retriever()
+        retriever.search_similar_cases(
+            "MercadoLibre", 4671.09, PaymentMethod.CREDIT_VISA, "CHL", 46,
+            excluir_transaction_id="TXN-00006",
+        )
+        f = client.query_points.call_args.kwargs["query_filter"]
+        assert not f.should, "un `should` solitario es un filtro duro, no una preferencia"
+        assert not f.must, "nada mas puede exigirse: el unico filtro duro es la autoexclusion"

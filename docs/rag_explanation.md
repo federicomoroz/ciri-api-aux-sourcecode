@@ -186,7 +186,11 @@ Fijado por `tests/unit/test_rag_retriever.py::TestLimiteDeRecuperacionDePolitica
 
 **Por que threshold=0.40:** Para precedentes, solo los matches semanticamente significativos deben incluirse. Un caso con 38% de similitud (ej. diferente pais, diferente metodo de pago) seria un precedente pobre y podria desviar al LLM. El umbral filtra coincidencias debiles mientras captura casos que comparten atributos clave del perfil financiero.
 
-**Indice de payload:** Se crea un indice `KEYWORD` sobre el campo `payment_method` para acelerar los filtros `should` de Qdrant en busquedas de casos similares.
+**Indice de payload:** un solo indice `KEYWORD`, sobre `transaction_id`, que es el que sostiene la exclusion de abajo. Se indexa lo que se filtra: el rerank lee `payment_method` del payload y para eso no hace falta indice.
+
+**Una transaccion no es precedente de si misma.** La busqueda excluye los casos cuyo `transaction_id` es el de la transaccion en analisis (`must_not` en `_query_cases`). No es una precaucion teorica: sin eso salian **primeros**, y por construccion. El documento indexado de un caso lleva el merchant, el metodo, el pais y el monto de su transaccion formateados igual que la consulta (`USD {amount:.2f}`), asi que el parecido es maximo; y el rerank le suma sus dos bonificaciones, que no pueden fallar porque esos campos se copiaron de la misma transaccion. En TXN-00006 eso ponia a CB-0025 y CB-0047 —sus dos casos propios— en los puestos 1 y 2, y la justificacion citaba «CB-0025 fue aprobado en 10d» como si fuera la tendencia de un tercero. Es fuga de la respuesta: para las **47 de 100** transacciones del dataset que tienen caso propio, el agente podia leer el final antes de opinar.
+
+Excluir no deja huecos, porque se piden 15 candidatos y se entregan 5: los lugares se llenan con precedentes ajenos, que son los unicos que informan algo. Verificado contra Qdrant: los cinco de TXN-00006 pasan a ser CB-0016, CB-0040, CB-0060, CB-0019 y CB-0015.
 
 
 ## Modelo de embeddings
@@ -314,7 +318,9 @@ def _rerank(results, payment_method, country):
 | Mismo pais | +0.03 | Casos del mismo pais comparten regulaciones y SLAs similares (LATAM vs. non-LATAM). |
 | Techo maximo | 1.0 | El score nunca excede 1.0 para evitar distorsion en el ranking. |
 
-Ademas, Qdrant recibe un filtro `should` por `payment_method` que actua como soft filter (bonifica pero no excluye). Combinado con el reranking post-busqueda, los casos con el mismo perfil financiero tienden a aparecer primero.
+La preferencia por el mismo metodo de pago vive **solo** en este rerank. Hubo tambien un filtro `should` por `payment_method` en la consulta a Qdrant, puesto con la intencion de «bonificar sin excluir», y hacia lo contrario: un filtro que solo tiene clausulas `should` las vuelve obligatorias —al menos una tiene que coincidir—, asi que era una igualdad exacta de string. Comprobado contra la coleccion real: con un metodo inexistente devolvia 0 de 64 puntos, y un acento que llegara mal dejaba el informe sin ningun precedente y sin nada que lo delatara.
+
+Sacarlo tiene un costo medido y vale declararlo: antes el 100% de los precedentes compartia metodo de pago y ahora lo hace alrededor del 44%, porque el boost reordena pero no puede meter a quien la busqueda vectorial no trajo. Se acepta a proposito. Que dos contracargos compartan instrumento de pago no los hace comparables —lo que decide un precedente es el motivo, el comercio y como se resolvio— y a cambio desaparece un modo de falla silencioso: quedarse sin precedentes por como estaba escrito un campo.
 
 ---
 

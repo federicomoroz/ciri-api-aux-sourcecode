@@ -100,9 +100,13 @@ def recorrer(api: str, txn: str, motivo: str) -> tuple[list[Paso], dict[str, str
     salud = llamar("Despertar API", "GET", "/health")
     pasos[-1].detalle = str(salud.get("status", "?")) if isinstance(salud, dict) else "?"
 
+    # El motivo va en la consulta porque va en la clave: el nodo `Verificar
+    # Caché` del workflow lo manda, y este script existe para recorrer el mismo
+    # camino que el orquestador.
     cache = llamar(
         "Verificar Caché", "GET",
-        f"/api/cache/lookup?transaction_id={urllib.parse.quote(txn)}&cliente_vip=false",
+        f"/api/cache/lookup?transaction_id={urllib.parse.quote(txn)}&cliente_vip=false"
+        f"&motivo={urllib.parse.quote(motivo)}",
     )
     hubo_cache = bool(isinstance(cache, dict) and cache.get("cached"))
     pasos[-1].detalle = "hay caché — el canvas responde acá" if hubo_cache else "sin caché"
@@ -128,6 +132,9 @@ def recorrer(api: str, txn: str, motivo: str) -> tuple[list[Paso], dict[str, str
         "merchant": tx["merchant"], "amount": tx["amount_usd"],
         "payment_method": tx["payment_method"], "country": tx["country"],
         "fraud_score": tx["fraud_score"], "motivo": motivo,
+        # Los casos de esta transaccion no son precedentes suyos. El nodo del
+        # workflow lo manda, y este script recorre el mismo camino.
+        "transaction_id": txn,
     })
     cas = llamar("Buscar Casos Similares", "GET", f"/api/cases/similar?{q}")
     similares = cas.get("results", []) if isinstance(cas, dict) else []

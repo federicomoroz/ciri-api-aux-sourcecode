@@ -143,6 +143,11 @@ def _contexto(db: Database, retriever: QdrantRetriever, analyzer: Analyzer, tx: 
         payment_method=tx.get("payment_method", ""),
         fraud_score=int(tx.get("fraud_score", 0)), country=tx.get("country", ""),
         merchant=tx.get("merchant", ""), amount=float(tx.get("amount_usd", 0)),
+        # El harness tiene que medir el pipeline que se entrega, no uno
+        # parecido. Sin esto seguia recuperando los casos de la propia
+        # transaccion como precedentes —47 de las 100 tienen uno— y publicaria
+        # como score del sistema el de un pipeline con fuga de respuesta.
+        excluir_transaction_id=tx["id"],
     )
     return CaseContext(
         transaction=tx, motivo=motivo, cliente_vip=False,
@@ -158,6 +163,7 @@ def _contexto(db: Database, retriever: QdrantRetriever, analyzer: Analyzer, tx: 
             case_open_date=caso.get("open_date") or "",
             country=tx.get("country", ""),
             case_close_date=caso.get("close_date") or None,
+            transaction_date=str(tx.get("date", "")),
         ),
     )
 

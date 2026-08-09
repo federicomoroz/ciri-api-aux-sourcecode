@@ -138,8 +138,16 @@ class QdrantIndexer:
 
     def _ensure_payload_indexes(self) -> None:
         """Create payload indexes required by retriever filters."""
+        # Se indexa lo que se FILTRA, no lo que se lee. `payment_method` estuvo
+        # aca mientras hubo un filtro por metodo de pago; ese filtro se saco
+        # —era duro sin querer serlo— y la preferencia la aplica ahora el rerank,
+        # que lee el payload y no consulta indice. Un indice sin filtro es peso
+        # muerto que ademas insinua un filtro que no existe.
         indexes = [
-            (self.cases_collection, "payment_method", PayloadSchemaType.KEYWORD),
+            # El retriever excluye por aca los casos de la propia transaccion
+            # analizada. El campo ya viajaba en el payload (`{**case}`), pero sin
+            # indice el `must_not` recorre la coleccion entera.
+            (self.cases_collection, "transaction_id", PayloadSchemaType.KEYWORD),
         ]
         for collection, field, schema in indexes:
             try:

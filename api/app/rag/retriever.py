@@ -142,11 +142,42 @@ class QdrantRetriever:
         country: str,
         top_k: int = SIMILAR_CASES_TOP_K,
         score_threshold: float = SIMILAR_CASES_SCORE_THRESHOLD,
+        excluir_transaction_id: str = "",
     ) -> list[dict]:
-        """Busca precedentes con un vector ya calculado, filtra suave y reordena."""
-        # Filtro blando: prefiere el mismo metodo de pago, no lo exige.
+        """Busca precedentes con un vector ya calculado, filtra suave y reordena.
+
+        **Una transaccion no es precedente de si misma.** Sin el `must_not`, los
+        casos de la propia transaccion analizada salen primeros —y no por
+        casualidad: el documento indexado lleva su merchant, su metodo, su pais y
+        su monto formateado igual que la consulta (`indexer.py`), asi que el
+        parecido es maximo por construccion; encima el rerank les regala los dos
+        boosts, que nunca fallan porque esos campos se copiaron de la misma
+        transaccion. En TXN-00006 eso puso a CB-0025 y CB-0047 —sus dos casos
+        propios— en los puestos 1 y 2, y la justificacion cito la resolucion
+        historica del caso como si fuera la de otro. Es fuga de la respuesta:
+        para las 47 de 100 transacciones del dataset que tienen caso propio, el
+        agente podia estar leyendo el final antes de opinar.
+
+        Excluir no deja huecos: se piden 15 candidatos y se entregan 5, asi que
+        los lugares se llenan con precedentes ajenos, que son los unicos que
+        informan algo.
+        """
+        # La preferencia por el mismo metodo de pago la aplica `_rerank`, que
+        # suma un boost sin excluir a nadie. Aca iba ademas un `should` con la
+        # intencion de "preferir sin exigir", y hacia lo contrario: en Qdrant un
+        # filtro que solo tiene clausulas `should` las vuelve obligatorias —al
+        # menos una tiene que coincidir—, asi que era un filtro duro por
+        # igualdad exacta de string. Comprobado contra la coleccion real: con un
+        # metodo inexistente devolvia 0 de 64 puntos. Un metodo de pago nuevo
+        # escrito distinto, o con un acento que llego mal, dejaba el informe sin
+        # ningun precedente y sin nada que lo delatara.
         query_filter = Filter(
-            should=[FieldCondition(key="payment_method", match=MatchValue(value=payment_method))]
+            must_not=(
+                [FieldCondition(
+                    key="transaction_id", match=MatchValue(value=excluir_transaction_id),
+                )]
+                if excluir_transaction_id else None
+            ),
         )
         # Se piden mas candidatos de los que se van a entregar: el rerank tiene
         # que poder cambiar QUIEN entra, no solo el orden de los que ya entraron.
@@ -163,6 +194,17 @@ class QdrantRetriever:
         except Exception as e:
             logger.error("Qdrant case search failed: %s", e)
             raise
+        # Cero precedentes es un resultado, no un no-resultado, y hasta ahora no
+        # dejaba rastro en ningun lado: el informe decia «no se encontraron
+        # precedentes similares» y era indistinguible de una busqueda que no
+        # llego a correr. Se anota con contra que se busco, para poder decidir
+        # despues si el corpus no tenia nada parecido o el umbral quedo alto.
+        if not results:
+            logger.info(
+                "Sin precedentes para «%s» (umbral %.2f, %d candidatos pedidos%s)",
+                query, score_threshold, candidatos,
+                f", excluyendo {excluir_transaction_id}" if excluir_transaction_id else "",
+            )
         results = self._rerank(results, payment_method, country)[:top_k]
         return [{**r.payload, "score": round(r.score, 4), "_query": query} for r in results]
 
@@ -193,13 +235,19 @@ class QdrantRetriever:
         motivo: str | None = None,
         top_k: int = SIMILAR_CASES_TOP_K,
         score_threshold: float = SIMILAR_CASES_SCORE_THRESHOLD,
+        excluir_transaction_id: str = "",
     ) -> list[dict]:
-        """Hybrid search: vector similarity + metadata filtering + reranking."""
+        """Hybrid search: vector similarity + metadata filtering + reranking.
+
+        `excluir_transaction_id` es la transaccion que se esta analizando: sus
+        propios casos no son precedentes suyos. Ver `_query_cases`.
+        """
         query = QueryBuilder.for_similar_cases(
             merchant, amount, payment_method, country, fraud_score, motivo
         )
         return self._query_cases(
             self._embed(query), query, payment_method, country, top_k, score_threshold,
+            excluir_transaction_id=excluir_transaction_id,
         )
 
     def search_policies_and_cases(
@@ -212,6 +260,7 @@ class QdrantRetriever:
         country: str = "",
         merchant: str = "",
         amount: float = 0.0,
+        excluir_transaction_id: str = "",
     ) -> tuple[list[dict], list[dict]]:
         """Las dos busquedas con una sola llamada a Voyage.
 
@@ -229,7 +278,10 @@ class QdrantRetriever:
 
         return (
             self._query_policies(policy_vec, policy_query),
-            self._query_cases(case_vec, case_query, payment_method, country),
+            self._query_cases(
+                case_vec, case_query, payment_method, country,
+                excluir_transaction_id=excluir_transaction_id,
+            ),
         )
 
     @staticmethod
