@@ -1,0 +1,167 @@
+{
+  "resumen": {
+    "generado": "2026-08-09T01:27:26+00:00",
+    "casos_evaluados": 7,
+    "casos_con_error": 0,
+    "promedio": 8.97,
+    "mediana": 9.1,
+    "desvio": 0.42,
+    "minimo": 8.1,
+    "maximo": 9.4,
+    "aprobados": 7,
+    "promedio_por_criterio": {
+      "policy_consistency": 9.93,
+      "justification_quality": 9.06,
+      "precedent_usage": 8.66,
+      "risk_assessment": 9.71,
+      "actionability": 7.69
+    },
+    "costo_usd": 0.0,
+    "configuracion": {
+      "modo": "demo",
+      "es_free_tier": true,
+      "modelos_por_paso": {
+        "policy_eval": {
+          "proveedor": "gemini",
+          "modelo": "gemini-flash-lite-latest"
+        },
+        "resolution": {
+          "proveedor": "gemini",
+          "modelo": "gemini-flash-lite-latest"
+        },
+        "judge": {
+          "proveedor": "gemini",
+          "modelo": "gemini-flash-lite-latest"
+        }
+      },
+      "temperatura": 0.3,
+      "prompts": {
+        "v1_policy_eval": "v1.4",
+        "v1_resolution": "v3.2",
+        "v1_judge": "v2.2"
+      },
+      "muestreo": "7 casos, semilla 20260807"
+    }
+  },
+  "casos": [
+    {
+      "transaction_id": "TXN-00024",
+      "overall_score": 9.1,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 9.2,
+        "precedent_usage": 8.8,
+        "risk_assessment": 10.0,
+        "actionability": 7.8
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 40.8
+    },
+    {
+      "transaction_id": "TXN-00042",
+      "overall_score": 9.1,
+      "criteria": {
+        "policy_consistency": 9.5,
+        "justification_quality": 9.5,
+        "precedent_usage": 9.0,
+        "risk_assessment": 9.5,
+        "actionability": 8.5
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 41.2
+    },
+    {
+      "transaction_id": "TXN-00064",
+      "overall_score": 9.1,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 9.2,
+        "precedent_usage": 8.8,
+        "risk_assessment": 10.0,
+        "actionability": 7.5
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 22.1
+    },
+    {
+      "transaction_id": "TXN-00033",
+      "overall_score": 8.1,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 8.0,
+        "precedent_usage": 8.5,
+        "risk_assessment": 8.5,
+        "actionability": 5.5
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 43.1
+    },
+    {
+      "transaction_id": "TXN-00026",
+      "overall_score": 9.4,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 9.5,
+        "precedent_usage": 9.0,
+        "risk_assessment": 10.0,
+        "actionability": 9.0
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "MEDIUM",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 20.2
+    },
+    {
+      "transaction_id": "TXN-00095",
+      "overall_score": 8.8,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 8.5,
+        "precedent_usage": 8.0,
+        "risk_assessment": 10.0,
+        "actionability": 7.5
+      },
+      "approved": true,
+      "recommended_action": "REJECT",
+      "risk_level": "BLOCKER",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 43.7
+    },
+    {
+      "transaction_id": "TXN-00049",
+      "overall_score": 9.2,
+      "criteria": {
+        "policy_consistency": 10.0,
+        "justification_quality": 9.5,
+        "precedent_usage": 8.5,
+        "risk_assessment": 10.0,
+        "actionability": 8.0
+      },
+      "approved": true,
+      "recommended_action": "PENDING_HITL",
+      "risk_level": "HIGH",
+      "propuesta_del_modelo": {},
+      "guardrail_warnings": [],
+      "segundos": 51.0
+    }
+  ]
+}

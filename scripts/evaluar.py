@@ -64,6 +64,7 @@ from api.app.config import Settings  # noqa: E402
 from api.app.data import esquema  # noqa: E402
 from api.app.data.db import Database  # noqa: E402
 from api.app.llm.pricing import estimar_costo_usd  # noqa: E402
+from api.app.llm.prompts import versiones as versiones_de_prompt  # noqa: E402
 from api.app.observability.tracer import NoOpTracer  # noqa: E402
 from api.app.rag.embedder import FastEmbedder  # noqa: E402
 from api.app.rag.retriever import QdrantRetriever  # noqa: E402
@@ -79,7 +80,24 @@ CRITERIOS = (
 )
 
 
-def _servicios(settings: Settings):
+def _modo_efectivo(settings: Settings, pedido: str) -> bool:
+    """Si esta corrida mide el modo demo. `auto` sigue lo que el sistema tiene puesto.
+
+    Medir algo distinto de lo que corre no sirve de nada, y hasta ahora habia que
+    acordarse: el harness pedia siempre la configuracion de produccion, asi que
+    para medir el modo demo habia que pisar `CB_LLM_PROVIDER` y `CB_LLM_MODEL` a
+    mano desde afuera. Eso es una segunda fuente de verdad sobre que modelo corre
+    —justo lo que `ModelosService` existe para evitar— y ademas silenciosa: nada
+    impedia medir Claude y rotular el archivo como si fuera el modo demo.
+    """
+    if pedido == "demo":
+        return True
+    if pedido == "produccion":
+        return False
+    return bool(settings.demo_mode)
+
+
+def _servicios(settings: Settings, demo: bool = False):
     from qdrant_client import QdrantClient
 
     from api.app.llm.manager import LLMManager
@@ -103,7 +121,17 @@ def _servicios(settings: Settings):
     # panel—, no una fija: medir algo distinto de lo que corre no sirve de nada.
     # Y el servicio se pide, no se arma: la fabrica es una sola.
     modelos = ModelosService(db, settings, LLMManager(settings, tracer))
-    return db, retriever, Analyzer(db), modelos.servicio(), modelos
+    servicio = modelos.servicio(demo=demo)
+    if servicio is None:
+        # `servicio(demo=True)` devuelve None cuando no hay modelo de demo
+        # configurado. Caer a produccion en silencio seria medir Claude y
+        # rotularlo como free tier.
+        raise SystemExit(
+            "Se pidio medir el modo demo pero no hay modelo configurado: falta "
+            "CB_DEMO_PROVIDER / CB_DEMO_MODEL, o su clave. Con --modo produccion "
+            "se mide la configuracion documentada."
+        )
+    return db, retriever, Analyzer(db), servicio, modelos
 
 
 def _contexto(db: Database, retriever: QdrantRetriever, analyzer: Analyzer, tx: dict, motivo: str):
@@ -152,18 +180,20 @@ def _elegir(db: Database, args) -> list[dict]:
 def _costo(resolucion: dict, juicio: dict, config: dict) -> float:
     """Cotiza cada llamada con el modelo de SU paso.
 
-    Un proveedor con free tier no tiene tarifa cargada y cuenta cero, que es lo
-    correcto: el punto de correrlo asi es justamente que no cuesta.
+    La tarifa la decide `llm/pricing.py` y nada mas. Aca habia una regla propia
+    —«si el proveedor no es anthropic, cuenta cero»— que ademas de duplicar la
+    tabla la contradecia: `tarifa_de` ya distingue el free tier (`LLM_SIN_TARIFA`,
+    que cuenta cero de verdad) de un proveedor de pago sin tarifa cargada (que
+    cae a la de referencia, porque informar cero por un modelo pago es peor que
+    estimar). Con la regla de aca, una corrida contra OpenAI figuraba en USD 0.00
+    en el JSON que el README cita como evidencia.
     """
     from api.app.domain.constants import PASO_JUEZ, PASO_POLITICAS, PASO_RESOLUCION
 
     r, j = resolucion.get("_usage", {}), juicio.get("_usage", {})
 
     def cotizar(paso: str, entrada: int, salida: int) -> float:
-        cfg = config[paso]
-        if cfg["proveedor"] != "anthropic":
-            return 0.0   # free tier: no hay tarifa que aplicar
-        return estimar_costo_usd(cfg["modelo"], entrada, salida)
+        return estimar_costo_usd(config[paso]["modelo"], entrada, salida)
 
     # `resolve` cuenta dos llamadas juntas —politicas y sintesis—: se reparten.
     mitad_in, mitad_out = r.get("input_tokens", 0) // 2, r.get("output_tokens", 0) // 2
@@ -182,6 +212,10 @@ def main() -> int:
     p.add_argument("--motivo", default=MOTIVO_POR_DEFECTO)
     p.add_argument("--semilla", type=int, default=SEMILLA)
     p.add_argument("--tope-usd", type=float, default=2.0, help="aborta si el costo lo supera")
+    p.add_argument(
+        "--modo", choices=("auto", "demo", "produccion"), default="auto",
+        help="que configuracion medir. auto (por defecto) sigue a CB_DEMO_MODE",
+    )
     p.add_argument("--salida", default="", help="por defecto docs/evaluaciones/<fecha>.json")
     args = p.parse_args()
 
@@ -192,10 +226,21 @@ def main() -> int:
             "un proveedor con free tier (groq, gemini, openrouter, cerebras, github)"
         )
 
-    db, retriever, analyzer, servicio, modelos = _servicios(settings)
-    config_modelos = modelos.vigente()
+    demo = _modo_efectivo(settings, args.modo)
+    db, retriever, analyzer, servicio, modelos = _servicios(settings, demo=demo)
+    # La configuracion que se esta midiendo DE VERDAD: en modo demo es la del
+    # free tier, no la documentada. Lo que se cotiza y lo que se escribe en el
+    # artefacto salen de aca.
+    config_modelos = modelos.config_demo() if demo else modelos.vigente()
     casos = _elegir(db, args)
-    print(f"Evaluando {len(casos)} casos · tope USD {args.tope_usd} · motivo: «{args.motivo}»\n")
+    etiqueta = "MODO DEMO (free tier)" if demo else "produccion (config documentada)"
+    print(f"Evaluando {len(casos)} casos · {etiqueta} · tope USD {args.tope_usd}")
+    print(f"Motivo: «{args.motivo}»")
+    for paso, cfg in config_modelos.items():
+        print(f"   {paso:12} {cfg['proveedor']}/{cfg['modelo']}")
+    if demo:
+        print("   OJO: un score del free tier NO es el score del sistema entregado.")
+    print()
 
     filas: list[dict] = []
     gastado = 0.0
@@ -222,7 +267,10 @@ def main() -> int:
             "approved": juicio.get("approved", False),
             "recommended_action": resolucion.get("recommended_action"),
             "risk_level": resolucion.get("risk_level"),
-            "propuesta_del_modelo": resolucion.get("_propuesta_del_modelo", {}),
+            # Sin guion bajo: el campo se renombro cuando el serializador de
+            # Pydantic se comia los que empezaban con `_`, y este lector quedo
+            # leyendo el nombre viejo — dos artefactos salieron con `{}` aca.
+            "propuesta_del_modelo": resolucion.get("propuesta_del_modelo", {}),
             "guardrail_warnings": resolucion.get("guardrail_warnings", []),
             "segundos": round(time.monotonic() - arranque, 1),
         })
@@ -255,12 +303,21 @@ def main() -> int:
         "promedio_por_criterio": por_criterio,
         "costo_usd": round(gastado, 4),
         "configuracion": {
+            # Que se midio, no que hay configurado: en modo demo son distintos, y
+            # un artefacto que no lo diga se lee como la corrida de la
+            # configuracion documentada.
+            "modo": "demo" if demo else "produccion",
+            "es_free_tier": demo,
             "modelos_por_paso": {
                 paso: {"proveedor": cfg["proveedor"], "modelo": cfg["modelo"]}
-                for paso, cfg in modelos.vigente().items()
+                for paso, cfg in config_modelos.items()
             },
             "temperatura": settings.llm_temperature,
-            "prompts": _versiones_de_prompt(),
+            # Las versiones salen de `llm.prompts.versiones()`, que es de donde
+            # las lee tambien el informe. Aca habia una segunda implementacion
+            # del mismo regex sobre los mismos archivos, y ya nombraban distinto
+            # lo mismo: `judge` de un lado, `v1_judge` del otro.
+            "prompts": versiones_de_prompt(),
             "muestreo": (
                 f"{len(casos)} casos, semilla {args.semilla}" if not args.casos and not args.todos
                 else ("dataset completo" if args.todos else "lista explicita")
@@ -293,18 +350,6 @@ def main() -> int:
     print(f"\n  {destino}")
     print("  Ese archivo es la evidencia: versionalo y citalo junto al badge.")
     return 0
-
-
-def _versiones_de_prompt() -> dict[str, str]:
-    """La cabecera `# PROMPT VERSION: vX.Y` de cada prompt, leida del archivo."""
-    import re
-
-    versiones = {}
-    for archivo in sorted((RAIZ / "api" / "app" / "llm" / "prompts").glob("v1_*.py")):
-        m = re.search(r"PROMPT VERSION:\s*(v[\d.]+)", archivo.read_text(encoding="utf-8"))
-        if m:
-            versiones[archivo.stem.removeprefix("v1_")] = m.group(1)
-    return versiones
 
 
 if __name__ == "__main__":

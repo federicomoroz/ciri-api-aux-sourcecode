@@ -17,7 +17,8 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(RAIZ))
 
-from scripts.evaluar import SEMILLA, _elegir, _versiones_de_prompt  # noqa: E402
+from api.app.llm.prompts import versiones as versiones_de_prompt  # noqa: E402
+from scripts.evaluar import SEMILLA, _elegir  # noqa: E402
 
 TRANSACCIONES = [{"id": f"TXN-{i:05d}", "merchant": "X"} for i in range(1, 101)]
 
@@ -67,17 +68,47 @@ class TestConfiguracionRegistrada:
     """Un resultado sin la configuracion con la que se obtuvo no es evidencia."""
 
     def test_lee_las_versiones_reales_de_los_prompts(self):
-        versiones = _versiones_de_prompt()
-        assert set(versiones) == {"policy_eval", "resolution", "judge"}
+        """Las lee `llm.prompts.versiones()`, que es la misma fuente del informe.
+
+        El script tenia su propia copia del regex sobre los mismos archivos, y
+        las dos ya nombraban distinto lo mismo: `judge` aca, `v1_judge` alla. Dos
+        lecturas de una sola verdad que ademas discrepaban en la clave.
+        """
+        versiones = versiones_de_prompt()
+        assert set(versiones) == {"v1_policy_eval", "v1_resolution", "v1_judge"}
         assert all(v.startswith("v") for v in versiones.values())
 
     def test_las_versiones_coinciden_con_las_cabeceras(self):
         import re
 
-        for nombre, version in _versiones_de_prompt().items():
-            archivo = RAIZ / "api" / "app" / "llm" / "prompts" / f"v1_{nombre}.py"
+        for nombre, version in versiones_de_prompt().items():
+            archivo = RAIZ / "api" / "app" / "llm" / "prompts" / f"{nombre}.py"
             primera = archivo.read_text(encoding="utf-8").splitlines()[0]
             assert re.search(rf"PROMPT VERSION:\s*{re.escape(version)}\b", primera)
+
+    def test_los_campos_que_lee_de_la_resolucion_existen(self):
+        """Los `.get()` del harness contra los campos reales de `ResolveResponse`.
+
+        `.get()` con default no avisa si la clave no existe: cuando
+        `_propuesta_del_modelo` perdio el guion bajo, este lector quedo con el
+        nombre viejo y dos artefactos salieron con `{}` en ese campo sin que
+        nada fallara. Si el servicio renombra un campo, esto tiene que romper.
+        """
+        import re
+
+        from api.app.domain.models import ResolveResponse
+
+        fuente = (RAIZ / "scripts" / "evaluar.py").read_text(encoding="utf-8")
+        leidas = set(re.findall(r'resolucion\.get\("([^"]+)"', fuente))
+        assert leidas, "el harness ya no lee la resolucion con .get()? revisar el regex"
+        # `_usage` es interno del servicio —tokens para calcular el costo— y el
+        # serializador lo quita a proposito; el harness lo ve porque llama al
+        # servicio directo, sin pasar por HTTP. Es la unica excepcion valida.
+        permitidas = set(ResolveResponse.model_fields) | {"_usage"}
+        assert leidas <= permitidas, (
+            f"el harness lee campos que la resolucion no tiene: "
+            f"{sorted(leidas - permitidas)}"
+        )
 
 
 def test_sin_clave_aborta_sin_gastar():
