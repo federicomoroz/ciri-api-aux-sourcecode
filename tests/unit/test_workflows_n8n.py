@@ -54,20 +54,51 @@ class TestHITL:
             "una espera sin limite deja ejecuciones colgadas para siempre"
         )
 
-    def test_no_hay_decision_por_defecto(self):
-        """Regresion: `|| 'APPROVE'` aprobaba solo los casos de riesgo alto."""
-        codigo = nodo(cargar(ORQUESTADOR), "Procesar Respuesta HITL")["parameters"]["jsCode"]
-        assert "|| 'APPROVE'" not in codigo and '|| "APPROVE"' not in codigo, (
-            "sin respuesta del analista el caso se aprobaba solo, y quedaba "
-            "registrado como si lo hubiera aprobado una persona"
-        )
-        assert "SIN_RESPUESTA" in codigo, "falta la rama de plazo vencido"
+    def test_la_decision_la_normaliza_la_api(self):
+        """Las reglas del HITL salieron del canvas.
 
-    def test_el_feedback_lleva_la_resolucion(self):
-        """Sin `resolution`, el caso nunca se indexa como precedente."""
+        Antes vivian en 88 lineas de JavaScript adentro de este JSON: el mapeo de
+        las tres opciones del formulario, el vencimiento del plazo y la regla de
+        que resolucion entra al corpus de precedentes. Los tests que las cuidaban
+        lo hacian grepeando el `jsCode` —buscando `SIN_RESPUESTA`, `huboAnalista`,
+        `!== 'MODIFIED'`—, o sea verificando que ciertas palabras estuvieran
+        escritas, no que las reglas se cumplieran.
+
+        Ahora estan en `domain/hitl.py` y su comportamiento lo fija
+        `tests/unit/test_hitl.py`. Lo que corresponde comprobar aca es lo unico
+        que el canvas todavia decide: que llame a la API en vez de resolverlo
+        solo.
+        """
+        wf = cargar(ORQUESTADOR)
+        n = nodo(wf, "Normalizar Decisión HITL")
+        assert n["type"] == "n8n-nodes-base.httpRequest"
+        assert n["parameters"]["url"].endswith("/api/hitl/decide")
+        assert salidas(wf, "Wait — Aprobación HITL")[0] == ["Normalizar Decisión HITL"]
+        assert salidas(wf, "Normalizar Decisión HITL")[0] == ["Procesar Respuesta HITL"]
+
+    def test_el_canvas_no_vuelve_a_decidir_por_su_cuenta(self):
+        """La regresion que este test cuida es que la logica VUELVA al nodo."""
         codigo = nodo(cargar(ORQUESTADOR), "Procesar Respuesta HITL")["parameters"]["jsCode"]
-        assert "resolution:" in codigo.split("_feedback_payload")[0] or "resolution:" in codigo
-        assert "motivo:" in codigo
+        sin_comentarios = "\n".join(
+            linea for linea in codigo.splitlines() if not linea.lstrip().startswith("//")
+        )
+        for rastro in ("APPROVED", "DENIED", "MODIFIED", "SIN_RESPUESTA", "PENDING_HITL"):
+            assert rastro not in sin_comentarios, (
+                f"'{rastro}' volvio al canvas: el mapeo de decisiones vive en "
+                f"domain/hitl.py, donde tiene tests"
+            )
+
+    def test_lo_que_manda_a_normalizar_alcanza_para_decidir(self):
+        """Sin `resolution` no hay precedente que indexar; sin la nota, no hay feedback."""
+        cuerpo = nodo(cargar(ORQUESTADOR), "Normalizar Decisión HITL")["parameters"]["jsonBody"]
+        for campo in ("decision", "notes", "transaction_id", "judge_score", "resolution", "motivo"):
+            assert f"{campo}:" in cuerpo, f"falta {campo} en lo que se manda a /api/hitl/decide"
+
+    def test_recoge_las_dos_formas_en_que_llega_la_decision(self):
+        """El formulario del Wait manda 'Decisión'; el `resumeUrl` directo, 'decision'."""
+        cuerpo = nodo(cargar(ORQUESTADOR), "Normalizar Decisión HITL")["parameters"]["jsonBody"]
+        assert "Decisión" in cuerpo and "$json.decision" in cuerpo
+        assert "Notas del Analista" in cuerpo and "$json.notes" in cuerpo
 
     def test_el_feedback_viaja_como_json(self):
         """`resolution` es un objeto: bodyParameters lo aplanaba a string."""
@@ -75,24 +106,16 @@ class TestHITL:
         assert fb["parameters"].get("specifyBody") == "json"
         assert "_feedback_payload" in fb["parameters"]["jsonBody"]
 
-    def test_un_caso_sin_revisar_no_se_vuelve_precedente(self):
-        """La regla, no la linea exacta.
+    def test_el_informe_no_se_arma_dos_veces(self):
+        """`Preparar Informe` ya lo armo antes del Wait.
 
-        Antes esto fijaba `huboAnalista ? resolution : null` como texto. Cuando
-        se sumo la condicion de MODIFY —una resolucion aprobada con cambios que
-        el sistema no tiene tampoco puede indexarse— el test fallo por una
-        reescritura que respetaba lo que el test defiende. Un test que se rompe
-        cuando el codigo mejora esta fijando la implementacion, no la regla.
+        Este nodo lo reconstruia campo por campo: la tercera copia de los mismos
+        catorce campos de `ReportRequest`, con las otras dos en `Preparar
+        Informe` y en `PipelineService._build_report_data`.
         """
         codigo = nodo(cargar(ORQUESTADOR), "Procesar Respuesta HITL")["parameters"]["jsCode"]
-        envio = next(
-            linea for linea in codigo.splitlines()
-            if linea.strip().startswith("resolution:")
-        )
-        assert "huboAnalista" in envio and "null" in envio, (
-            "un caso que nadie reviso no puede convertirse en el ejemplo con el "
-            f"que se resuelve el proximo — se manda: {envio.strip()}"
-        )
+        assert "$('Preparar Informe')" in codigo
+        assert "policies_evaluated" not in codigo, "volvio a armar el payload a mano"
 
 
 class TestSinLogicaDeNegocioEnElCanvas:
@@ -367,8 +390,49 @@ class TestElFormularioSeAbreSolo:
 
     def test_el_formulario_sigue_avisando_que_vence(self):
         wait = nodo(cargar(ORQUESTADOR), "Wait — Aprobación HITL")
-        assert "24 horas" in wait["parameters"]["formDescription"]
+        assert "horas el caso NO se aprueba" in wait["parameters"]["formDescription"]
         assert wait["parameters"]["limitWaitTime"] is True
+
+    def test_el_default_del_canvas_es_el_de_constants(self):
+        """`HITL_PLAZO_HORAS` no la puede importar el workflow: es un JSON.
+
+        Lo único que puede hacer un canvas es traer el número escrito, así que la
+        «fuente única» sólo es cierta si algo comprueba que los dos coinciden.
+        Sin este test, `constants.py` decía 24 y el canvas podía decir 48 sin que
+        nada avisara — que es la misma duplicación que el cambio decía cerrar,
+        movida un nivel más arriba.
+        """
+        import re
+
+        from api.app.domain.constants import HITL_PLAZO_HORAS
+
+        asignaciones = nodo(cargar(ORQUESTADOR), "Validar Formato TXN")[
+            "parameters"]["assignments"]["assignments"]
+        campo = next(a for a in asignaciones if a["name"] == "hitl_plazo_horas")
+        m = re.search(r"\|\|\s*(\d+)", str(campo["value"]))
+        assert m, f"el canvas no declara un default para el plazo: {campo['value']}"
+        assert int(m.group(1)) == HITL_PLAZO_HORAS, (
+            f"el canvas usa {m.group(1)} horas y constants.py dice {HITL_PLAZO_HORAS}"
+        )
+
+    def test_el_plazo_se_declara_una_sola_vez(self):
+        """Estaba escrito en cuatro lugares y moverlo pedia acordarse de los cuatro.
+
+        El `resumeAmount` del Wait, la metadata de la alerta y dos textos en
+        prosa. Tres de los cuatro son lo que LEE el analista, asi que una
+        discrepancia le dice que tiene mas tiempo del que tiene.
+        """
+        wf = cargar(ORQUESTADOR)
+        fuente = "hitl_plazo_horas"
+        wait = nodo(wf, "Wait — Aprobación HITL")["parameters"]
+        assert fuente in str(wait["resumeAmount"])
+        assert fuente in wait["formDescription"]
+        assert fuente in nodo(wf, "Avisar — Formulario HITL")["parameters"]["jsonBody"]
+        assert fuente in nodo(wf, "Responder — Requiere Aprobación")["parameters"]["responseBody"]
+
+        # Y el valor sale del mismo Set que define la base de la API.
+        asignaciones = nodo(wf, "Validar Formato TXN")["parameters"]["assignments"]["assignments"]
+        assert any(a["name"] == fuente for a in asignaciones)
 
 
 class TestNingunCaminoContestaVacio:
@@ -505,30 +569,32 @@ class TestUnaDecisionQueNoSeEntiendeNoAprueba:
     quedaba asentado como si hubiera aprobado, y con judge >= 8.0 el caso se
     indexaba como precedente aprobado — envenenando el corpus con el que se
     resuelven los siguientes.
+
+    **Estos tests verificaban la regla grepeando el JavaScript del nodo.** Eso
+    fija que ciertas palabras esten escritas, no que la regla se cumpla: el mismo
+    test pasaba con un mapeo que dijera `MODIFY: 'APPROVED'`. La regla ahora vive
+    en `domain/hitl.py` y su comportamiento lo prueba `tests/unit/test_hitl.py`
+    ejecutandola. Lo que queda aca es lo unico que el canvas sigue decidiendo:
+    que las opciones que ofrece el formulario sean las que la API sabe traducir.
     """
 
-    @property
-    def codigo(self) -> str:
-        return nodo(cargar(ORQUESTADOR), "Procesar Respuesta HITL")["parameters"]["jsCode"]
+    def test_toda_opcion_del_formulario_la_entiende_la_api(self):
+        """La lista del canvas y la tabla de la API no pueden divergir.
 
-    def test_modify_tiene_su_propio_resultado(self):
-        assert "'MODIFIED'" in self.codigo
-        assert "MODIFY:" in self.codigo
+        Es la costura real entre los dos: si alguien agrega una cuarta opcion al
+        desplegable y no la mapea, cae en PENDING_HITL sin que nada avise — el
+        analista elige algo y su decision no se registra.
+        """
+        from api.app.domain.constants import HITL_RESULTADO_POR_DECISION
 
-    def test_una_decision_desconocida_no_cae_en_aprobado(self):
-        """Es el mismo fail-closed que el resto del sistema."""
-        assert "|| 'PENDING_HITL'" in self.codigo
-
-    def test_una_resolucion_modificada_no_se_indexa_como_precedente(self):
-        """El analista la aprobo con cambios que el sistema no tiene."""
-        assert "!== 'MODIFIED'" in self.codigo
-
-    def test_las_tres_opciones_del_formulario_estan_mapeadas(self):
         opciones = nodo(cargar(ORQUESTADOR), "Wait — Aprobación HITL")[
             "parameters"]["formFields"]["values"][0]["fieldOptions"]["values"]
-        codigo = self.codigo
+        assert opciones, "el formulario se quedo sin opciones"
         for o in opciones:
-            assert f"{o['option']}:" in codigo, f"{o['option']} no esta mapeado"
+            assert o["option"] in HITL_RESULTADO_POR_DECISION, (
+                f"el formulario ofrece «{o['option']}» y domain/constants.py no lo "
+                f"sabe traducir: esa eleccion cae en PENDING_HITL en silencio"
+            )
 
 
 class TestElErrorDeLaApiNoSeConfundeConDatoFaltante:

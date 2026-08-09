@@ -206,6 +206,25 @@ def recorrer(api: str, txn: str, motivo: str) -> tuple[list[Paso], dict[str, str
     html = informe.get("html", "") if isinstance(informe, dict) else ""
     pasos[-1].detalle = f"{len(html) // 1024} KB de HTML"
 
+    # Espeja el nodo `Normalizar Decisión HITL`. Se llama SIEMPRE, incluso cuando
+    # el caso no necesita analista, y con la decision vacia a proposito: ese es el
+    # camino del plazo vencido, o sea la invariante mas cara del dominio —sin
+    # respuesta no hay aprobacion— y el unico endpoint del canvas que ningun otro
+    # recorrido ejercita. Un paso que solo corre en algunos casos es un paso que
+    # nadie prueba.
+    decidido = llamar("Normalizar Decisión HITL", "POST", "/api/hitl/decide", {
+        "decision": "", "notes": "", "transaction_id": txn,
+        "judge_score": (juez or {}).get("overall_score", 0) if isinstance(juez, dict) else 0,
+        "resolution": res, "motivo": motivo,
+    })
+    if isinstance(decidido, dict):
+        d = decidido.get("hitl_decision", {})
+        indexa = (decidido.get("feedback") or {}).get("resolution") is not None
+        pasos[-1].detalle = (
+            f"plazo vencido -> {d.get('final_outcome')} · "
+            f"{'INDEXA (mal)' if indexa else 'no indexa precedente'}"
+        )
+
     salteados["Registrar Feedback HITL"] = "necesita la decision de un analista"
     ctx = {"tx": tx, "resolucion": res, "juez": juez, "sla": sla, "html": html}
     return pasos, salteados, ctx

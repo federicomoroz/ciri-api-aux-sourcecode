@@ -8,13 +8,13 @@
         "width": 6160,
         "color": 4
       },
-      "id": "5016d055-5315-4234-b256-01936115aca7",
+      "id": "7d2fffaf-a822-4064-924b-fc060f0a0b15",
       "name": "Sticky Note — Resumen",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        32832,
-        14080
+        52592,
+        22592
       ]
     },
     {
@@ -24,13 +24,13 @@
         "width": 1016,
         "color": 5
       },
-      "id": "f5719b4c-95bf-4ca6-b73d-4b5b78414a34",
+      "id": "fd55b8c2-5e84-4b9e-8ab3-0bcb3d9bbbe5",
       "name": "Sticky Note — Sección 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        32832,
-        14208
+        52592,
+        22720
       ]
     },
     {
@@ -40,13 +40,13 @@
         "width": 1820,
         "color": 3
       },
-      "id": "112ff2f7-ea22-4350-9542-c04f606e13d5",
+      "id": "2c4a04c0-e55a-49e3-8803-bd81a7ad3615",
       "name": "Sticky Note — Sección 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        33872,
-        14208
+        53632,
+        22720
       ]
     },
     {
@@ -56,13 +56,13 @@
         "width": 1912,
         "color": 2
       },
-      "id": "de6c19f5-69d6-43ce-a7b9-d89dbf1bb40f",
+      "id": "5094f242-02dd-41ac-abda-d92c45e68cbb",
       "name": "Sticky Note — Sección 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        35712,
-        14208
+        55472,
+        22720
       ]
     },
     {
@@ -72,13 +72,13 @@
         "width": 1344,
         "color": 6
       },
-      "id": "b09028ea-3624-4075-9336-29f0f2453e7d",
+      "id": "606c93da-6fd2-4335-9ce3-e4cd8082060e",
       "name": "Sticky Note — Sección 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        37648,
-        14208
+        57408,
+        22720
       ]
     },
     {
@@ -88,13 +88,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "0d99d197-9f76-47e3-ad90-9fd6fd8c414f",
+      "id": "8ccba2db-618c-4dca-8eae-1b1d8a47ff31",
       "name": "Webhook — Entrada",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        32912,
-        15024
+        52672,
+        23536
       ],
       "webhookId": "ciri-chargeback-agent"
     },
@@ -122,13 +122,13 @@
         },
         "options": {}
       },
-      "id": "344231c5-a13c-4994-adb9-43dbe6fde84b",
+      "id": "ca76bc6a-de1f-4f95-88cd-38803c251642",
       "name": "Validar Formato — IF",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        33232,
-        15024
+        52992,
+        23536
       ]
     },
     {
@@ -158,18 +158,24 @@
               "name": "api_base_url",
               "value": "={{ ($input.first().json.body?.api_base_url || $input.first().json.api_base_url || $vars.API_BASE_URL || 'https://ciri-chargeback-agent.onrender.com').replace(/\\/+$/, '') }}",
               "type": "string"
+            },
+            {
+              "id": "field-hitl-horas",
+              "name": "hitl_plazo_horas",
+              "value": "={{ $vars.HITL_PLAZO_HORAS || 24 }}",
+              "type": "number"
             }
           ]
         },
         "options": {}
       },
-      "id": "6287951c-0066-48cf-8481-9113f36e13a3",
+      "id": "ed9921fe-2f6a-46e0-81ee-0bde0266f6ac",
       "name": "Validar Formato TXN",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        33552,
-        15008
+        53312,
+        23520
       ]
     },
     {
@@ -188,13 +194,13 @@
           "timeout": 30000
         }
       },
-      "id": "c4c98cca-069d-4464-a199-8f473a8e8956",
+      "id": "b0a4d8db-1f05-40e0-89c6-e8b1b24ef8e4",
       "name": "Obtener Transacción",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34512,
-        15008
+        54272,
+        23520
       ],
       "settings": {
         "retryOnFail": true,
@@ -213,13 +219,13 @@
           "timeout": 30000
         }
       },
-      "id": "7556618f-0ce6-48cf-86f2-64ee47f0e5af",
+      "id": "232d7ca4-3821-45f0-860b-b147c9a10fd6",
       "name": "Obtener Logs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34832,
-        14608
+        54592,
+        23120
       ],
       "settings": {
         "retryOnFail": true,
@@ -263,13 +269,13 @@
           "timeout": 30000
         }
       },
-      "id": "4d3d01eb-5582-46fe-85f1-8b919a4f545c",
+      "id": "a146c162-2d1f-425a-a312-e6a7dadeafe0",
       "name": "Buscar Políticas",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34832,
-        14800
+        54592,
+        23312
       ],
       "settings": {
         "retryOnFail": true,
@@ -317,13 +323,13 @@
           "timeout": 30000
         }
       },
-      "id": "6f2f6410-363c-4070-8ab8-ebd6ae606692",
+      "id": "32ff3fee-3d50-4045-9afd-caa3899ad9de",
       "name": "Buscar Casos Similares",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34832,
-        14992
+        54592,
+        23504
       ],
       "settings": {
         "retryOnFail": true,
@@ -342,13 +348,13 @@
           "timeout": 30000
         }
       },
-      "id": "dc457b49-687a-456f-b6f7-71c0ce79d03f",
+      "id": "af8ca964-280b-4418-97ab-42789280f42c",
       "name": "Riesgo del Comercio",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34832,
-        15216
+        54592,
+        23728
       ],
       "settings": {
         "retryOnFail": true,
@@ -367,13 +373,13 @@
           "timeout": 30000
         }
       },
-      "id": "e253088d-e3a9-4680-8ed4-9691a0bf8ffc",
+      "id": "b126f536-0233-4be7-b29f-9630c84255b7",
       "name": "Historial del Cliente",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34832,
-        15456
+        54592,
+        23968
       ],
       "settings": {
         "retryOnFail": true,
@@ -396,13 +402,13 @@
           "timeout": 30000
         }
       },
-      "id": "277e12b3-530b-45c9-9bb1-d06ddcbbf1c8",
+      "id": "5fdad418-7406-49dc-9aa9-8b2e3f7cb09b",
       "name": "Verificar SLA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34832,
-        15680
+        54592,
+        24192
       ],
       "settings": {
         "retryOnFail": true,
@@ -420,26 +426,26 @@
       "parameters": {
         "numberInputs": 6
       },
-      "id": "b98b23e8-3773-477f-a95e-e52ec35422d1",
+      "id": "6b571b83-3e4e-4f39-87f2-6ab9fd145c95",
       "name": "Merge — Contexto Paralelo",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        35536,
-        14944
+        55296,
+        23456
       ]
     },
     {
       "parameters": {
         "jsCode": "// Fusionar todos los datos recopilados en un objeto unificado\nconst input    = $('Validar Formato TXN').first().json;\nconst txn      = $('Obtener Transacción').first().json || {};\nconst logsData = $('Obtener Logs').first().json || {};\nconst policies = $('Buscar Políticas').first().json || {};\nconst cases    = $('Buscar Casos Similares').first().json || {};\nconst sla      = $('Verificar SLA').first().json || {};\n\n// Merchant y cliente: los flags ya vienen calculados por la API.\n// Los umbrales viven en domain/constants.py, no en n8n.\nlet merchant = {};\ntry {\n  merchant = $('Riesgo del Comercio').first().json;\n} catch (e) { merchant = { error: e.message }; }\n\nlet client = {};\ntry {\n  client = $('Historial del Cliente').first().json;\n} catch (e) { client = { error: e.message }; }\n\nconst slaStatus = sla.within_sla != null\n  ? (sla.within_sla\n    ? `dentro de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`\n    : `FUERA de SLA (${sla.days_elapsed}d / ${sla.sla_limit_days}d)`)\n  : 'SLA no calculado';\n\nconst agentAnalysis = [\n  `Caso ${input.transaction_id}: ${txn.merchant || 'N/A'}, USD ${txn.amount_usd || 0},`,\n  `canal ${txn.channel || 'N/A'}, país ${txn.country || 'N/A'}, score fraude ${txn.fraud_score ?? 'N/A'}.`,\n  `Motivo: ${input.motivo || 'no especificado'}.`,\n  `SLA: ${slaStatus}.`,\n  `Cliente VIP: ${input.cliente_vip ? 'sí' : 'no'}.`,\n  `Políticas encontradas: ${(policies.results || []).length}.`,\n  `Casos similares: ${(cases.results || []).length}.`,\n].join(' ');\n\nreturn [{\n  json: {\n    transaction_id:  input.transaction_id,\n    motivo:          input.motivo,\n    cliente_vip:     input.cliente_vip,\n    tx_data:         txn,\n    logs:            logsData.logs || [],\n    policies:        policies.results || [],\n    similar_cases:   cases.results || [],\n    merchant_risk:   merchant,\n    client_history:  client,\n    sla:             sla,\n    agent_analysis:  agentAnalysis,\n  }\n}];"
       },
-      "id": "3ddc5e59-bbfc-4193-b363-5aaa5c1332db",
+      "id": "eddaf820-fd19-40a0-90a3-c2be8059414c",
       "name": "Compilar Contexto",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        35792,
-        15008
+        55552,
+        23520
       ],
       "onError": "continueRegularOutput"
     },
@@ -454,13 +460,13 @@
           "timeout": 120000
         }
       },
-      "id": "3171a3ed-fb58-46f4-bf5e-81cb64d626a9",
+      "id": "f52773b6-2cc1-4f5b-ae43-f75f8d717cde",
       "name": "Sintetizar Resolución",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        36080,
-        15008
+        55840,
+        23520
       ],
       "settings": {
         "retryOnFail": true,
@@ -495,13 +501,13 @@
           "timeout": 120000
         }
       },
-      "id": "41898c80-de3d-4adb-a488-a24ebadb3591",
+      "id": "6d4a2a75-e45a-440a-b4bc-a247e302a76c",
       "name": "Juez de Calidad",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        36752,
-        14992
+        56512,
+        23504
       ],
       "settings": {
         "retryOnFail": true,
@@ -527,27 +533,27 @@
         },
         "options": {}
       },
-      "id": "d722f3d7-31da-4640-bedd-45a1934aab15",
+      "id": "beda5268-ab44-4151-b93b-8d65b9a8d65e",
       "name": "Extraer Evaluación — Juez",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        37072,
-        14976
+        56832,
+        23488
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resolución').first().json;\nconst judge      = $input.first().json.judge_evaluation || {\n  overall_score: 5.0,\n  criteria: {},\n  approved: false,\n  strengths: [],\n  weaknesses: ['Judge evaluation unavailable'],\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  resolution.policy_verdicts || [],\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    motivo:              ctx.motivo || '',\n    cliente_vip:         ctx.cliente_vip || false,\n  }\n}];"
+        "jsCode": "// Construir el payload exacto que espera POST /api/reports/html (ReportRequest)\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resolución').first().json;\nconst judge      = $input.first().json.judge_evaluation || {\n  overall_score: 5.0,\n  criteria: {},\n  approved: false,\n  strengths: [],\n  weaknesses: ['Judge evaluation unavailable'],\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  resolution.policy_verdicts || [],\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       null,\n    cache_hit:           false,\n    // Del nodo que los verifica, con la resolucion como respaldo: `Verificar\n    // Guardrails` tiene onError=continueRegularOutput, asi que si falla su salida\n    // llega vacia. Sin el respaldo, el informe saldria sin los avisos — que son la\n    // unica constancia de que el modelo se contradijo — y sin que nada lo delate.\n    guardrail_warnings:  $('Verificar Guardrails').first().json._guardrails?.warnings\n                         || resolution.guardrail_warnings || [],\n    motivo:              ctx.motivo || '',\n    cliente_vip:         ctx.cliente_vip || false,\n  }\n}];"
       },
-      "id": "e8fdce70-1ef2-4086-a378-8b037f86a9a3",
+      "id": "648b9b50-b6d1-41ad-8a44-788baf079887",
       "name": "Preparar Informe",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        37712,
-        14960
+        57472,
+        23472
       ],
       "onError": "continueRegularOutput"
     },
@@ -615,6 +621,31 @@
                 },
                 "conditions": [
                   {
+                    "id": "cond-high",
+                    "leftValue": "={{ $json.resolution.risk_level }}",
+                    "rightValue": "HIGH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "HIGH"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
                     "id": "cond-medium",
                     "leftValue": "={{ $json.resolution.risk_level }}",
                     "rightValue": "MEDIUM",
@@ -661,13 +692,13 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "65a80ded-2a85-4472-8d35-8125c39a9b3f",
+      "id": "de5a0059-1748-422a-b53c-eec569e9f20d",
       "name": "Switch — Derivación",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
-        38032,
-        15008
+        57792,
+        23520
       ]
     },
     {
@@ -686,13 +717,13 @@
           "timeout": 90000
         }
       },
-      "id": "31e76109-f159-400a-80ec-b2e8c002b305",
+      "id": "94bcc2b4-e507-4c3f-bbc6-0101b42770be",
       "name": "Despertar API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        33936,
-        15008
+        53696,
+        23520
       ],
       "settings": {
         "retryOnFail": true,
@@ -711,13 +742,13 @@
           "timeout": 10000
         }
       },
-      "id": "4da66704-625e-4952-8c27-1ef8ce9b951b",
+      "id": "4a147a97-db92-4043-9760-e7bc148916a6",
       "name": "Verificar Caché",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        34176,
-        15008
+        53936,
+        23520
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -748,39 +779,39 @@
         },
         "options": {}
       },
-      "id": "212dc5f6-99ed-425f-883b-f04e867cc660",
+      "id": "f9eb5fda-220e-4294-ab53-1d595f23adac",
       "name": "¿Cache Hit?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        34352,
-        14768
+        54112,
+        23280
       ]
     },
     {
       "parameters": {
         "jsCode": "// Cache hit: return JSON with cached flag + HTML\nconst html = $input.first().json.html;\nreturn [{ json: { cached: true, html } }];"
       },
-      "id": "1e532c1e-e734-4e2e-8665-febbc9952369",
+      "id": "805f9a15-4f11-4103-8d2f-c73f629a5736",
       "name": "Formatear Caché",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        34832,
-        14448
+        54592,
+        22960
       ]
     },
     {
       "parameters": {
         "jsCode": "// Hacer visibles en el canvas los guardrails que ya corrieron en la API.\n//\n// Antes este nodo recalculaba los umbrales (1.1, 0.95, 2 fails) copiados de\n// domain/constants.py. Eran una segunda fuente de verdad que nadie leia: los\n// nodos de abajo releen $('Sintetizar Resolucion'), no la salida de este.\n// Ahora solo resume lo que la API ya decidio.\nconst resolution = $input.first().json;\nconst warnings   = resolution.guardrail_warnings || [];\n\nreturn [{\n  json: {\n    ...resolution,\n    _guardrails: {\n      total: warnings.length,\n      warnings: warnings,\n      status: warnings.length > 0 ? 'GUARDRAILS ACTIVADOS' : 'Sin alertas',\n    },\n  }\n}];"
       },
-      "id": "f182edf3-7967-4d0a-96aa-e8831634218f",
+      "id": "cb892056-00d2-4d59-b389-451e92160125",
       "name": "Verificar Guardrails",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        36432,
-        14992
+        56192,
+        23504
       ]
     },
     {
@@ -808,13 +839,13 @@
         },
         "options": {}
       },
-      "id": "92cc84f3-30a7-482a-b399-676b609af23f",
+      "id": "9160d5ca-3791-4a95-893e-0455727c8dad",
       "name": "¿Juez Aprueba?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        37264,
-        14976
+        57024,
+        23488
       ],
       "notesInFlow": true,
       "notes": "El umbral lo decide la API (JUDGE_APPROVAL_THRESHOLD). Acá solo se lee `approved`."
@@ -834,52 +865,52 @@
         "includeOtherFields": true,
         "options": {}
       },
-      "id": "e262f0ff-177e-4a27-863c-b685c0029371",
+      "id": "5458a883-0419-4eb5-8c7f-870ba891d338",
       "name": "Marcar — Calidad Baja",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        37472,
-        15152
+        57232,
+        23664
       ]
     },
     {
       "parameters": {
         "errorMessage": "Formato de transaction_id inválido. Se esperaba TXN-XXXXX."
       },
-      "id": "9c93665f-7455-43a7-9bbf-fab9ab6a7af8",
+      "id": "f5b4ad6d-78dd-42bd-9095-f785a8d79c25",
       "name": "Propagar → Error Handler — TXN",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        33616,
-        15280
+        53376,
+        23792
       ]
     },
     {
       "parameters": {
         "errorMessage": "API no disponible después de 3 reintentos (cold start)."
       },
-      "id": "c61f1abc-a3b8-4b8f-a7f2-4329e4f5da5c",
+      "id": "4065d647-5ca4-4032-9c13-87862603bb51",
       "name": "Propagar → Error Handler — API",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        34496,
-        15312
+        54256,
+        23824
       ]
     },
     {
       "parameters": {
         "errorMessage": "Error en análisis LLM (Anthropic). Verifique créditos de API."
       },
-      "id": "0a572f5d-f3e9-4c60-a101-704c03b67dc5",
+      "id": "0ba1918e-d241-4119-8131-3c66b3f6b884",
       "name": "Propagar → Error Handler — Análisis",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        36992,
-        15392
+        56752,
+        23904
       ]
     },
     {
@@ -893,13 +924,13 @@
           "timeout": 30000
         }
       },
-      "id": "a9e92125-8a54-40fa-b3f2-49ab3b5cd50d",
+      "id": "f63ec1f4-21f0-4991-bcd8-5fc4dd02d6d4",
       "name": "Generar Reporte",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        38656,
-        14992
+        58416,
+        23504
       ],
       "retryOnFail": true,
       "maxTries": 3,
@@ -922,20 +953,20 @@
           }
         }
       },
-      "id": "2e09dca3-66d0-42ca-b258-68c85e67151a",
+      "id": "2bbe7b91-dc93-4678-ba98-15b410dd51bb",
       "name": "Responder — Reporte",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        38800,
-        14704
+        58560,
+        23216
       ]
     },
     {
       "parameters": {
         "resume": "form",
         "formTitle": "=Aprobacion requerida — {{ $('Preparar Informe').first().json.resolution.transaction_id }}",
-        "formDescription": "=El analisis corrio entero —politicas, precedentes, guardrails y juez— y quedo en riesgo {{ $('Preparar Informe').first().json.resolution.risk_level }}. {{ $('Preparar Informe').first().json.resolution.hitl_reason || 'Al menos una politica fallo.' }} El sistema no cierra un caso asi por su cuenta. Al enviar esta decision se genera el informe completo. Sin respuesta en 24 horas el caso NO se aprueba: sale marcado como pendiente y queda registrada la alerta.",
+        "formDescription": "=El analisis corrio entero —politicas, precedentes, guardrails y juez— y quedo en riesgo {{ $('Preparar Informe').first().json.resolution.risk_level }}. {{ $('Preparar Informe').first().json.resolution.hitl_reason || 'Al menos una politica fallo.' }} El sistema no cierra un caso asi por su cuenta. Al enviar esta decision se genera el informe completo. Sin respuesta en {{ $('Validar Formato TXN').first().json.hitl_plazo_horas }} horas el caso NO se aprueba: sale marcado como pendiente y queda registrada la alerta.",
         "formFields": {
           "values": [
             {
@@ -965,16 +996,16 @@
         },
         "responseMode": "responseNode",
         "limitWaitTime": true,
-        "resumeAmount": 24,
+        "resumeAmount": "={{ $('Validar Formato TXN').first().json.hitl_plazo_horas }}",
         "options": {}
       },
-      "id": "229fa5b9-94fd-46ad-97f5-8a763646c293",
+      "id": "749e62a7-67b3-44d1-a635-7fa94dedca29",
       "name": "Wait — Aprobación HITL",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        38288,
-        15504
+        57808,
+        24016
       ],
       "webhookId": "ciri-hitl-resume",
       "notesInFlow": true,
@@ -982,15 +1013,15 @@
     },
     {
       "parameters": {
-        "jsCode": "// Procesar la decision del analista y armar el payload del informe.\n//\n// Falla CERRADO. Antes, la ausencia de decision caia en 'APPROVE' por defecto:\n// un contracargo de riesgo alto se aprobaba solo y quedaba registrado como si\n// lo hubiera aprobado una persona. Si el Wait vence sin respuesta, el caso sale\n// marcado como pendiente y no se registra ninguna decision de analista.\nconst resume     = $input.first().json;\nconst ctx        = $('Compilar Contexto').first().json;\nconst resolution = $('Sintetizar Resolución').first().json;\nconst judge      = $('Extraer Evaluación — Juez').first().json.judge_evaluation || {\n  overall_score: 5.0, criteria: {}, approved: false,\n  strengths: [], weaknesses: ['Judge evaluation unavailable'],\n};\n\n// El formulario del Wait manda 'Decisión' / 'Notas del Analista'; una llamada\n// directa al resumeUrl manda 'decision' / 'notes'.\nconst decisionCruda = String(resume['Decisión'] || resume.decision || '').trim();\nconst notasCrudas   = String(resume['Notas del Analista'] || resume.notes || '').trim();\nconst huboAnalista  = decisionCruda !== '';\n\nconst DECISION = decisionCruda.toUpperCase();\n\n// El formulario ofrece tres opciones y esto mapeaba dos. `RECHAZA ? 'DENIED' :\n// 'APPROVED'` metia MODIFY en la rama de APPROVED: un analista que eligio\n// «modificar» quedaba registrado como si hubiera aprobado, y con judge >= 8 el\n// caso se indexaba como precedente aprobado. Envenenaba el corpus que alimenta\n// las decisiones siguientes.\nconst RESULTADO = {\n  REJECT:   'DENIED',\n  REJECTED: 'DENIED',\n  MODIFY:   'MODIFIED',\n  MODIFIED: 'MODIFIED',\n  APPROVE:  'APPROVED',\n  APPROVED: 'APPROVED',\n};\n\nconst hitlDecision = huboAnalista\n  ? {\n      analyst_decision: DECISION,\n      analyst_notes:    notasCrudas,\n      // Sin mapeo conocido no se asume aprobacion: es lo mismo que hace el\n      // resto del sistema con una entrada que no entiende.\n      final_outcome:    RESULTADO[DECISION] || 'PENDING_HITL',\n      timestamp:        new Date().toISOString(),\n    }\n  : {\n      analyst_decision: 'SIN_RESPUESTA',\n      analyst_notes:    'El plazo de espera vencio sin decision de un analista.',\n      final_outcome:    'PENDING_HITL',\n      timestamp:        new Date().toISOString(),\n      timeout:          true,\n    };\n\n// El precedente se indexa desde la resolucion, y solo si una persona la avalo.\n// Sin decision humana no se manda: un caso que nadie reviso no puede convertirse\n// en el ejemplo con el que se resuelve el proximo.\nconst feedbackPayload = {\n  transaction_id:   ctx.transaction_id,\n  analyst_decision: hitlDecision.analyst_decision,\n  analyst_notes:    hitlDecision.analyst_notes,\n  final_outcome:    hitlDecision.final_outcome,\n  judge_score:      judge.overall_score ?? 0,\n  motivo:           ctx.motivo || null,\n  // La resolucion viaja solo si el analista la avalo TAL CUAL. Con MODIFY la\n  // aprobo con cambios que el sistema no tiene, asi que indexar esta version\n  // como precedente seria guardar algo que nadie aprobo.\n  resolution:       (huboAnalista && hitlDecision.final_outcome !== 'MODIFIED') ? resolution : null,\n};\n\nreturn [{\n  json: {\n    transaction:         ctx.tx_data,\n    resolution:          resolution,\n    judge_evaluation:    judge,\n    agent_analysis:      ctx.agent_analysis,\n    merchant_risk:       ctx.merchant_risk,\n    client_profile:      ctx.client_history,\n    logs:                ctx.logs,\n    policies_evaluated:  resolution.policy_verdicts || [],\n    similar_cases:       ctx.similar_cases,\n    hitl_decision:       hitlDecision,\n    cache_hit:           false,\n    guardrail_warnings:  resolution.guardrail_warnings || [],\n    motivo:              ctx.motivo || '',\n    cliente_vip:         ctx.cliente_vip || false,\n    _feedback_payload:   feedbackPayload,\n  }\n}];"
+        "jsCode": "// Pega la decision del analista sobre el informe que YA se armo antes del Wait.\n//\n// Este nodo tenia 88 lineas: normalizaba la decision, mapeaba las tres opciones\n// del formulario, resolvia el vencimiento del plazo y decidia que resolucion\n// entraba al corpus de precedentes. Todo eso es logica de negocio y ahora vive\n// en la API (`domain/hitl.py`, con tests). Aca queda lo que le toca a un\n// orquestador: unir dos salidas.\n//\n// El payload del informe no se vuelve a armar. `Preparar Informe` ya lo\n// construyo antes de derivar al Wait, asi que rehacerlo era la tercera copia de\n// los mismos catorce campos.\nconst informe  = $('Preparar Informe').first().json;\nconst decidido = $input.first().json;\n\n// Si la API no contesto, el nodo de arriba deja pasar un item de error. No se\n// inventa una decision aca: eso seria devolver al canvas exactamente la logica\n// que se le saco. El informe sale diciendo que la decision no se pudo registrar,\n// y sin feedback no hay precedente que indexar — el mismo fallo cerrado.\nconst huboDecision = decidido && decidido.hitl_decision;\n\nreturn [{\n  json: {\n    ...informe,\n    hitl_decision:     huboDecision ? decidido.hitl_decision : null,\n    _feedback_payload: huboDecision ? decidido.feedback : null,\n    _hitl_sin_registrar: !huboDecision,\n  }\n}];"
       },
-      "id": "f3fd597b-10ea-4396-9590-af994758ac1b",
+      "id": "090b3fcb-5f71-41c8-8eb9-7a6fc21dff15",
       "name": "Procesar Respuesta HITL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        38496,
-        15504
+        58256,
+        24016
       ]
     },
     {
@@ -999,18 +1030,18 @@
         "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/feedback",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json._feedback_payload) }}",
+        "jsonBody": "={{ JSON.stringify($json._feedback_payload || {}) }}",
         "options": {
           "timeout": 120000
         }
       },
-      "id": "6755a22a-3b73-49f0-908d-8077e7971733",
+      "id": "c2827bce-5a87-4e5d-84bf-ffa57eaefb61",
       "name": "Registrar Feedback HITL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        38720,
-        15504
+        58480,
+        24016
       ],
       "settings": {
         "retryOnFail": true,
@@ -1024,31 +1055,31 @@
     },
     {
       "parameters": {
-        "content": "## ⚙️ Configuración — cero setup\n\nTodos los nodos HTTP usan `{{ $('Validar Formato TXN').first().json.api_base_url }}`: **una sola fuente de verdad**, definida en el nodo *Validar Formato TXN*.\n\nPor defecto apunta a la API pública en Render, así que **el workflow corre apenas lo importás, sin configurar nada**.\n\nPara apuntarlo a otra API, en orden de prioridad:\n1. Mandar `api_base_url` en el body del webhook  →  `{\"transaction_id\": \"TXN-00051\", \"motivo\": \"...\", \"api_base_url\": \"http://api:8000\"}`\n2. Settings → Variables → `API_BASE_URL`  (requiere n8n con licencia)\n3. Default: `https://ciri-chargeback-agent.onrender.com`\n\n### Los 7 ejes de la consigna, en este canvas\n**1. Ingesta** → etapa 1 Webhook + IF de validación (y el workflow `form` con Form Trigger nativo)  ·  **2. RAG** → etapa 2 Buscar Políticas + Buscar Casos Similares (Qdrant)  ·  **3. Agente** → etapa 3 Sintetizar Resolución (prompts versionados en FastAPI)  ·  **4. Automatización** → etapa 4 Switch por riesgo + Generar Reporte + workflow de alertas  ·  **5. Identificación de fallas** → etapa 2 Riesgo del Comercio / Historial del Cliente / Logs → patrones de error  ·  **6. Auto-mejora** → etapa 3 Juez de Calidad + Registrar Feedback HITL (score ≥ 8 reindexa el caso en Qdrant)  ·  **7. Observabilidad** → Langfuse en la API + Error Handler + POST /api/alerts/",
+        "content": "## ⚙️ Configuración — cero setup\n\nTodos los nodos HTTP usan `{{ $('Validar Formato TXN').first().json.api_base_url }}`: **una sola fuente de verdad**, definida en el nodo *Validar Formato TXN*.\n\nPor defecto apunta a la API pública en Render, así que **el workflow corre apenas lo importás, sin configurar nada**.\n\nPara apuntarlo a otra API, en orden de prioridad:\n1. Mandar `api_base_url` en el body del webhook  →  `{\"transaction_id\": \"TXN-00051\", \"motivo\": \"...\", \"api_base_url\": \"http://api:8000\"}`\n2. Settings → Variables → `API_BASE_URL`  (requiere n8n con licencia)\n3. Default: `https://ciri-chargeback-agent.onrender.com`\n\n> **Si levantaste la API local, mandá `api_base_url`.** Sin eso el workflow le escribe a la instancia pública: las alertas, el feedback que reindexa precedentes y el informe cacheado quedan allá, y tu panel local los busca donde no están. Todas las respuestas del webhook devuelven `api_base_url` para que se vea de una.\n\n### Los 7 ejes de la consigna, en este canvas\n**1. Ingesta** → etapa 1 Webhook + IF de validación (y el workflow `form` con Form Trigger nativo)  ·  **2. RAG** → etapa 2 Buscar Políticas + Buscar Casos Similares (Qdrant)  ·  **3. Agente** → etapa 3 Sintetizar Resolución (prompts versionados en FastAPI)  ·  **4. Automatización** → etapa 4 Switch por riesgo + Generar Reporte + workflow de alertas  ·  **5. Identificación de fallas** → etapa 2 Riesgo del Comercio / Historial del Cliente / Logs → patrones de error  ·  **6. Auto-mejora** → etapa 3 Juez de Calidad + Registrar Feedback HITL (score ≥ 8 reindexa el caso en Qdrant)  ·  **7. Observabilidad** → Langfuse en la API + Error Handler + POST /api/alerts/",
         "height": 640,
         "width": 6160,
         "color": 7
       },
-      "id": "acebd211-d278-43b0-897c-da202d709319",
+      "id": "bb0b3896-da7c-4936-b24a-11bef8e4b938",
       "name": "Sticky Note — Configuración y Ejes",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        32832,
-        16032
+        52592,
+        24544
       ]
     },
     {
       "parameters": {
         "errorMessage": "No se pudo generar el informe HTML (POST /api/reports/html)."
       },
-      "id": "d2e91694-62f5-4bb2-a2cf-d2843f047fd8",
+      "id": "71614c5c-fc42-4797-9d59-707bc2d82312",
       "name": "Propagar → Error Handler — Informe",
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        38864,
-        15376
+        58576,
+        23856
       ]
     },
     {
@@ -1057,18 +1088,18 @@
         "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/alerts/",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ event_type: 'hitl_form_ready', severity: 'WARN', message: 'El caso ' + $json.resolution.transaction_id + ' espera la decision de un analista. Formulario de aprobacion: ' + $execution.resumeFormUrl, source: 'n8n:wait-hitl', transaction_id: $json.resolution.transaction_id, metadata: { form_url: $execution.resumeFormUrl, risk_level: $json.resolution.risk_level, hitl_reason: $json.resolution.hitl_reason || '', vence_en_horas: 24 } }) }}",
+        "jsonBody": "={{ JSON.stringify({ event_type: 'hitl_form_ready', severity: 'WARN', message: 'El caso ' + $json.resolution.transaction_id + ' espera la decision de un analista. Formulario de aprobacion: ' + $execution.resumeFormUrl, source: 'n8n:wait-hitl', transaction_id: $json.resolution.transaction_id, metadata: { form_url: $execution.resumeFormUrl, risk_level: $json.resolution.risk_level, hitl_reason: $json.resolution.hitl_reason || '', vence_en_horas: $('Validar Formato TXN').first().json.hitl_plazo_horas } }) }}",
         "options": {
           "timeout": 30000
         }
       },
-      "id": "daf619d0-90ce-491e-a09f-64c88eab4a33",
+      "id": "487e2552-7fcb-40b2-88dc-506fa568787a",
       "name": "Avisar — Formulario HITL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        38320,
-        15280
+        58080,
+        23792
       ],
       "notesInFlow": true,
       "retryOnFail": true,
@@ -1080,7 +1111,7 @@
     {
       "parameters": {
         "respondWith": "text",
-        "responseBody": "=<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"0;url={{ $execution.resumeFormUrl }}\"><title>Aprobacion requerida — {{ $('Preparar Informe').first().json.resolution.transaction_id }}</title><style>body{margin:0;font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;background:#f9fafb;color:#1f2937;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.c{background:#fff;border-radius:16px;padding:32px;max-width:560px;box-shadow:0 10px 15px -3px rgb(0 0 0/.1)}.t{font-size:.75rem;letter-spacing:.05em;text-transform:uppercase;color:#c2410c;font-weight:700}h1{font-size:1.75rem;margin:.4rem 0 0}p{line-height:1.6;color:#4b5563;margin:.9rem 0 0}.m{margin-top:1.2rem;padding:12px 16px;background:#fff7ed;border-left:4px solid #fb923c;border-radius:8px;font-size:.9rem;color:#9a3412}a.b{display:inline-block;margin-top:1.4rem;background:#ea580c;color:#fff;padding:12px 24px;border-radius:9999px;font-weight:700;text-decoration:none}.s{margin-top:1.1rem;font-size:.8rem;color:#6b7280}</style></head><body><div class=\"c\"><p class=\"t\">Agente Inteligente de Contracargos · CIRI</p><h1>{{ $('Preparar Informe').first().json.resolution.transaction_id }} necesita una decision humana</h1><p>El analisis corrio entero —politicas, precedentes, guardrails y juez— y quedo en riesgo <b>{{ $('Preparar Informe').first().json.resolution.risk_level }}</b>. El sistema no cierra un caso asi por su cuenta.</p><div class=\"m\">{{ $('Preparar Informe').first().json.resolution.hitl_reason || 'Al menos una politica fallo: hace falta que un analista revise la evidencia.' }}</div><a class=\"b\" href=\"{{ $execution.resumeFormUrl }}\">Abrir el formulario de aprobacion</a><p class=\"s\">Al enviarlo se recibe el informe completo. Sin respuesta en 24 horas el caso <b>no</b> se aprueba: sale marcado como pendiente.</p></div></body></html>",
+        "responseBody": "=<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta http-equiv=\"refresh\" content=\"0;url={{ $execution.resumeFormUrl }}\"><title>Aprobacion requerida — {{ $('Preparar Informe').first().json.resolution.transaction_id }}</title><style>body{margin:0;font-family:ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;background:#f9fafb;color:#1f2937;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}.c{background:#fff;border-radius:16px;padding:32px;max-width:560px;box-shadow:0 10px 15px -3px rgb(0 0 0/.1)}.t{font-size:.75rem;letter-spacing:.05em;text-transform:uppercase;color:#c2410c;font-weight:700}h1{font-size:1.75rem;margin:.4rem 0 0}p{line-height:1.6;color:#4b5563;margin:.9rem 0 0}.m{margin-top:1.2rem;padding:12px 16px;background:#fff7ed;border-left:4px solid #fb923c;border-radius:8px;font-size:.9rem;color:#9a3412}a.b{display:inline-block;margin-top:1.4rem;background:#ea580c;color:#fff;padding:12px 24px;border-radius:9999px;font-weight:700;text-decoration:none}.s{margin-top:1.1rem;font-size:.8rem;color:#6b7280}</style></head><body><div class=\"c\"><p class=\"t\">Agente Inteligente de Contracargos · CIRI</p><h1>{{ $('Preparar Informe').first().json.resolution.transaction_id }} necesita una decision humana</h1><p>El analisis corrio entero —politicas, precedentes, guardrails y juez— y quedo en riesgo <b>{{ $('Preparar Informe').first().json.resolution.risk_level }}</b>. El sistema no cierra un caso asi por su cuenta.</p><div class=\"m\">{{ $('Preparar Informe').first().json.resolution.hitl_reason || 'Al menos una politica fallo: hace falta que un analista revise la evidencia.' }}</div><a class=\"b\" href=\"{{ $execution.resumeFormUrl }}\">Abrir el formulario de aprobacion</a><p class=\"s\">Al enviarlo se recibe el informe completo. Sin respuesta en {{ $('Validar Formato TXN').first().json.hitl_plazo_horas }} horas el caso <b>no</b> se aprueba: sale marcado como pendiente.</p></div></body></html>",
         "options": {
           "responseCode": 303,
           "responseHeaders": {
@@ -1097,13 +1128,13 @@
           }
         }
       },
-      "id": "607f408c-8eb5-4e8b-a927-e27c3e1b4262",
+      "id": "b454424c-49b4-43b6-a692-7083c770151b",
       "name": "Responder — Requiere Aprobación",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        38048,
-        15504
+        57552,
+        24016
       ],
       "notesInFlow": true,
       "notes": "303 al formulario: se abre solo. El cuerpo queda para quien no redirija."
@@ -1116,13 +1147,13 @@
           "responseCode": 400
         }
       },
-      "id": "c859a374-3fd5-482a-acea-5daaf4685566",
+      "id": "56326ba3-d143-4c22-82e7-c3038e06fb1a",
       "name": "Responder — Formato Inválido",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        33424,
-        15280
+        53184,
+        23792
       ],
       "notesInFlow": true,
       "notes": "400: lo mando mal quien llamo, no fallo el sistema."
@@ -1130,18 +1161,18 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ error: (/^\\s*404\b/.test($json.error?.message || '') ? 'La transaccion no existe en la base' : 'La API no respondio como se esperaba. Si es la primera llamada en un rato, puede estar arrancando: el free tier de Render duerme el servicio a los 15 minutos.'), transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "responseBody": "={{ JSON.stringify({ error: (/^\\s*404\\b/.test($json.error?.message || '') ? 'La transaccion no existe en la base' : 'La API no respondio como se esperaba. Si es la primera llamada en un rato, puede estar arrancando: el free tier de Render duerme el servicio a los 15 minutos.'), api_base_url: $('Validar Formato TXN').first().json.api_base_url, transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
         "options": {
-          "responseCode": "={{ ($json.error?.message || '').includes('404') ? 404 : 503 }}"
+          "responseCode": "={{ /^\\s*404\\b/.test($json.error?.message || '') ? 404 : 503 }}"
         }
       },
-      "id": "6f87c529-0965-47e6-a17c-2e809d712c5a",
+      "id": "99cce42c-2cdc-416d-9693-c3080dec1068",
       "name": "Responder — API No Disponible",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        34256,
-        15312
+        54016,
+        23824
       ],
       "notesInFlow": true,
       "notes": "404 si el caso no existe, 503 si la API no respondio (cold start de Render)."
@@ -1149,18 +1180,18 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ error: \"El analisis con el modelo fallo\", transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "responseBody": "={{ JSON.stringify({ error: \"El analisis con el modelo fallo\", api_base_url: $('Validar Formato TXN').first().json.api_base_url, transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
         "options": {
           "responseCode": 502
         }
       },
-      "id": "5a837be1-c2c4-40b2-b6fd-f2bca09b560a",
+      "id": "bdfebcff-43f8-4d2d-8c56-163f1e4bdd31",
       "name": "Responder — Falla del Análisis",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        36608,
-        15392
+        56368,
+        23904
       ],
       "notesInFlow": true,
       "notes": "502: fallo un servicio de atras, no la peticion."
@@ -1168,21 +1199,45 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ error: \"El analisis termino pero no se pudo generar el informe HTML\", transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
+        "responseBody": "={{ JSON.stringify({ error: \"El analisis termino pero no se pudo generar el informe HTML\", api_base_url: $('Validar Formato TXN').first().json.api_base_url, transaction_id: $('Webhook — Entrada').first().json.body?.transaction_id || null, detalle: $json.error?.message || $json.message || null, sugerencia: 'El detalle completo queda en el workflow de errores y en GET /api/alerts/.' }) }}",
         "options": {
           "responseCode": 502
         }
       },
-      "id": "ba3e07fd-f4eb-4c55-99c0-ba5eb9312d42",
+      "id": "76413222-a4d4-4084-b9a7-366367a36ab6",
       "name": "Responder — Falla del Informe",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        38832,
-        15120
+        58592,
+        23632
       ],
       "notesInFlow": true,
       "notes": "502: el caso se resolvio; lo que fallo fue el render."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Validar Formato TXN').first().json.api_base_url }}/api/hitl/decide",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ decision: $json['Decisión'] || $json.decision || '', notes: $json['Notas del Analista'] || $json.notes || '', transaction_id: $('Compilar Contexto').first().json.transaction_id, judge_score: $('Extraer Evaluación — Juez').first().json.judge_evaluation?.overall_score ?? 0, resolution: $('Sintetizar Resolución').first().json, motivo: $('Compilar Contexto').first().json.motivo || null }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "c41173f4-b26c-4d60-8636-d344770ed8a3",
+      "name": "Normalizar Decisión HITL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        58032,
+        24016
+      ],
+      "retryOnFail": true,
+      "notesInFlow": true,
+      "onError": "continueRegularOutput",
+      "notes": "Las reglas viven en la API (domain/hitl.py), no en un nodo Code."
     }
   ],
   "pinData": {},
@@ -1543,7 +1598,7 @@
       "main": [
         [
           {
-            "node": "Procesar Respuesta HITL",
+            "node": "Normalizar Decisión HITL",
             "type": "main",
             "index": 0
           }
@@ -1571,6 +1626,13 @@
         [
           {
             "node": "Avisar — Formulario HITL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generar Reporte",
             "type": "main",
             "index": 0
           }
@@ -1670,6 +1732,17 @@
           }
         ]
       ]
+    },
+    "Normalizar Decisión HITL": {
+      "main": [
+        [
+          {
+            "node": "Procesar Respuesta HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -1681,7 +1754,7 @@
     "errorWorkflow": "teWDCm7Y2erv1u3f",
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "672d6197-2fbc-4d99-b38a-43338e505277",
+  "versionId": "5ce441e2-4973-43d1-8a8e-a71abc2012c1",
   "meta": {
     "instanceId": "92936ca510fad697deadd62294080b90dc71bd9e892063c4b055dfcec9e98a2e"
   },
