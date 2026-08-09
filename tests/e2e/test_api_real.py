@@ -124,6 +124,34 @@ class TestCases:
         assert "results" in data
         assert isinstance(data["results"], list)
 
+    def test_una_transaccion_no_es_precedente_de_si_misma(self, client: httpx.Client):
+        """La invariante, contra el Qdrant real y no contra un mock.
+
+        Los tests unitarios afirman sobre el filtro que se le manda a Qdrant;
+        este afirma sobre lo que Qdrant devuelve, que es lo unico que el
+        evaluador va a ver. Se pide sin excluir y con exclusion, y se comprueba
+        que los casos propios desaparecen sin dejar la lista mas corta: hay 15
+        candidatos para llenar 5 lugares.
+        """
+        tx = client.get("/api/transactions/TXN-00006").json()
+        pedido = {
+            "merchant": tx["merchant"], "amount": tx["amount_usd"],
+            "payment_method": tx["payment_method"], "country": tx["country"],
+            "fraud_score": tx["fraud_score"], "motivo": "No reconoce la compra",
+        }
+        sin_excluir = client.get("/api/cases/similar", params=pedido).json()["results"]
+        excluyendo = client.get(
+            "/api/cases/similar", params={**pedido, "transaction_id": tx["id"]},
+        ).json()["results"]
+
+        propios = [c["case_id"] for c in sin_excluir if c.get("transaction_id") == tx["id"]]
+        assert propios, (
+            "TXN-00006 tiene casos propios en el dataset; si no aparecen sin excluir, "
+            "este test dejo de probar lo que dice probar"
+        )
+        assert not [c for c in excluyendo if c.get("transaction_id") == tx["id"]]
+        assert len(excluyendo) == len(sin_excluir), "excluir no deberia dejar huecos"
+
 
 # ──────────────────────────────────────────────────────────────
 # Analysis endpoints (merchant, client, SLA)
@@ -259,9 +287,18 @@ class TestResolveEndpoint:
             "country": tx["country"],
             "fraud_score": tx["fraud_score"],
             "motivo": "No reconoce la compra",
+            # Igual que el nodo del workflow: sus propios casos no son
+            # precedentes suyos. Si esto se cae, el E2E deja de espejar al
+            # orquestador y no mide lo que se entrega.
+            "transaction_id": tx["id"],
         }).json()
         merchant_risk = client.get(f"/api/merchants/{tx['merchant']}/risk").json()
         client_history = client.get(f"/api/clients/{tx['client_id']}/history").json()
+        # El plazo medido: el workflow lo consulta antes de sintetizar y lo pasa
+        # a resolve. Sin el, el E2E ejercita un contexto que produccion no arma.
+        sla = client.post("/api/sla/check", json={
+            "transaction_id": tx["id"], "country": tx["country"], "cliente_vip": False,
+        }).json()
         return {
             "tx": tx,
             "logs": logs_data["logs"],
@@ -269,6 +306,7 @@ class TestResolveEndpoint:
             "cases": cases_data.get("results", []),
             "merchant_risk": merchant_risk,
             "client_history": client_history,
+            "sla": sla,
         }
 
     @pytest.fixture(scope="class")
@@ -283,6 +321,7 @@ class TestResolveEndpoint:
             "logs": context["logs"],
             "merchant_risk": context["merchant_risk"],
             "client_history": context["client_history"],
+            "sla": context["sla"],
             "motivo": "No reconoce la compra",
             "cliente_vip": False,
         })
@@ -343,9 +382,18 @@ class TestJudgeEndpoint:
             "country": tx["country"],
             "fraud_score": tx["fraud_score"],
             "motivo": "No reconoce la compra",
+            # Igual que el nodo del workflow: sus propios casos no son
+            # precedentes suyos. Si esto se cae, el E2E deja de espejar al
+            # orquestador y no mide lo que se entrega.
+            "transaction_id": tx["id"],
         }).json()
         merchant_risk = client.get(f"/api/merchants/{tx['merchant']}/risk").json()
         client_history = client.get(f"/api/clients/{tx['client_id']}/history").json()
+        # El plazo medido: el workflow lo consulta antes de sintetizar y lo pasa
+        # a resolve. Sin el, el E2E ejercita un contexto que produccion no arma.
+        sla = client.post("/api/sla/check", json={
+            "transaction_id": tx["id"], "country": tx["country"], "cliente_vip": False,
+        }).json()
 
         policies = policies_data.get("results", [])
         cases = cases_data.get("results", [])
@@ -360,6 +408,7 @@ class TestJudgeEndpoint:
             "logs": logs_data["logs"],
             "merchant_risk": merchant_risk,
             "client_history": client_history,
+            "sla": sla,
             "motivo": "No reconoce la compra",
             "cliente_vip": False,
         })

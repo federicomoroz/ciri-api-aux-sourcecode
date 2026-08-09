@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-1134%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1160%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)

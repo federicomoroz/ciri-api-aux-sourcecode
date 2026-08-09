@@ -83,7 +83,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 
 | Prompt | Versión | Modelo |
 |---|---|---|
-| `v1_policy_eval.py` | v1.4 | Haiku 4.5 |
+| `v1_policy_eval.py` | v1.5 | Haiku 4.5 |
 | `v1_resolution.py` | v3.2 | Sonnet |
 | `v1_judge.py` | v2.2 | Sonnet |
 
