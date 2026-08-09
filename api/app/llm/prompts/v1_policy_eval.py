@@ -1,3 +1,4 @@
+# PROMPT VERSION: v1.5 | DATE: 2026-08 | CHANGES: Recibe los plazos ya medidos; no se declara cumplimiento por falta de prueba; la region sale del pais de la transaccion
 # PROMPT VERSION: v1.4 | DATE: 2026-08 | CHANGES: Quien puede bloquear lo dice la marca [PUEDE BLOQUEAR] de cada politica, no su codigo escrito en el texto
 # PROMPT VERSION: v1.3 | DATE: 2026-08 | CHANGES: La lista de paises LATAM sale de domain.enums, no del texto
 # PURPOSE: Evaluate a transaction against all retrieved policies
@@ -39,11 +40,22 @@ REGLAS ESTRICTAS:
    IMPORTANTE: Si un comercio esta suspendido, las politicas de plazos de respuesta del comercio SIGUEN SIENDO RELEVANTES para el procesamiento del chargeback. No marques como NOT_APPLICABLE — evalua si el plazo aplica o usa WARNING con nota sobre la suspension.
 8. Responde UNICAMENTE con un array JSON valido. Sin texto adicional, sin markdown.
 9. DETERMINACION DE REGION (LATAM vs no-LATAM):
-   - Distingue entre PAIS DE LA TRANSACCION (campo "country") y PAIS DEL COMERCIO (puede diferir si el merchant es internacional).
    - Paises LATAM: {latam}.
-   - Si la politica refiere a "comercios fuera de LATAM", evalua el pais del COMERCIO (de PERFIL DE RIESGO DEL COMERCIO si esta disponible, o del campo merchant_country). Si no hay dato explicito del pais del comercio, usa WARNING: "country de transaccion es [X] (LATAM), pero pais del comercio [merchant] no confirmado — si el comercio es internacional, aplicarian plazos extendidos".
-   - Si la politica refiere a la "operacion" o "transaccion", usa el campo "country" de la TRANSACCION.
+   - La region SIEMPRE se determina por el campo "country" de la TRANSACCION, tambien cuando la politica habla de "comercios fuera de LATAM". No existe un pais del comercio: el corpus no tiene ese dato, ni en PERFIL DE RIESGO DEL COMERCIO ni en ningun otro lado.
+   - Por eso NO pidas el pais del comercio ni marques WARNING por no tenerlo: es un dato que no falta por accidente, no existe. Pedirlo dejaba a la politica de plazos extendidos en WARNING permanente.
+   - Es ademas el mismo criterio que aplica el calculo determinista del plazo, que usa el country de la transaccion para decidir entre limite estandar y extendido. Evaluar con otro criterio haria que el veredicto y el plazo medido se contradigan.
 10. DOCUMENTACION: Si una politica requiere documentacion y marcas WARNING, ESPECIFICA que documentos faltan y si la ausencia BLOQUEA la decision actual o es un paso previo a la revision HITL. Ejemplo: "WARNING — no se encontro comprobante de entrega ni confirmacion de recepcion en notas. Documentos necesarios: comprobante de entrega, ID de seguimiento. No bloquea PENDING_HITL pero es requisito para resolucion definitiva."
+11. NO DECLARES CUMPLIMIENTO POR FALTA DE PRUEBA:
+   - PASS significa que los datos MUESTRAN que la condicion de violacion no se cumple. Si el dato necesario para verificarlo no esta, el veredicto es WARNING.
+   - "No hay registro de que se haya excedido el plazo" NO es un PASS: es un WARNING que dice que el plazo no se pudo medir. Un caso sin datos no es un caso cumplido.
+   - Es la contracara de la regla 1: un valor que existe y no supera el umbral es PASS; un valor que no existe es WARNING. Lo que decide es si el dato esta, no si encontraste algo malo.
+   - Esto NO es «evita el PASS». Cuando el dato ESTA y la condicion de violacion NO se cumple, el veredicto es PASS y es obligatorio: no lo degrades a FAIL ni a WARNING por prudencia.
+   - EL VEREDICTO TIENE QUE COINCIDIR CON TU PROPIO RAZONAMIENTO. Si escribis «esta dentro del plazo», el veredicto es PASS. Un FAIL exige que la condicion de violacion DE ESA politica se cumpla — no que otra politica haya fallado, ni que el caso sea riesgoso en general. Cada politica se evalua sola.
+   - Dos veredictos sobre el mismo dato faltante tienen que decir lo mismo. No marques WARNING en una politica de plazos por falta de fechas y PASS en otra que necesita esas mismas fechas.
+12. PLAZOS: los plazos del caso vienen YA MEDIDOS en su seccion, con la fecha de apertura del reclamo, la de corte y los dias habiles transcurridos contra el limite que aplica. Usalos antes de declarar que una fecha falta — casi todas las politicas de plazo se pueden evaluar con esa seccion. Si esa seccion dice que no hay reclamo registrado, entonces si falta el dato y corresponde WARNING.
+   - Son DOS plazos distintos y los dos vienen CONTADOS. El de DISPUTA —cuanto tardo el cliente en reclamar desde que compro— es `dias_hasta_el_reclamo`, en dias corridos. El de RESOLUCION —cuanto tarda la fintech desde que el reclamo se abrio— es `days_elapsed`, en dias habiles.
+   - NO restes fechas: los dos numeros ya estan. Si una politica pide un plazo, compara el numero que corresponde contra su umbral y cita cual usaste.
+   - Si `fechas_inconsistentes` es true, las fechas del caso no se ordenan (el reclamo figura antes de la compra) y el plazo de disputa NO se puede evaluar: eso es WARNING, y decilo asi.
 
 Formato de respuesta (array JSON):
 [
@@ -101,10 +113,31 @@ USER_TEMPLATE = """## TRANSACCION
 ## HISTORIAL DEL CLIENTE
 {client_history}
 
+## PLAZOS DEL CASO (ya medidos, en dias habiles)
+`medido_desde` es LA FECHA DE APERTURA DEL RECLAMO y `medido_hasta` la de corte o cierre del caso. `days_elapsed` son los dias HABILES entre las dos —el plazo de RESOLUCION— y `sla_limit_days` el limite que aplica. `dias_hasta_el_reclamo` son los dias CORRIDOS entre la compra y el reclamo —el plazo de DISPUTA—; viene en null si no se pudo contar, y `fechas_inconsistentes` dice por que. `sin_reclamo_registrado` en true significa que no hay reloj que correr: ahi ningun plazo se evaluo. `caso_cerrado` dice si el caso ya termino, y `compensation_applicable` si el incumplimiento habilita compensacion.
+{sla}
+
 ## POLITICAS A EVALUAR (recuperadas por RAG — {policy_count} politicas)
 {policies_text}
 
 Evalua cada politica usando TODOS los datos disponibles y devuelve el array JSON."""
+
+SIN_PLAZOS = (
+    "No se midieron los plazos de este caso. Las politicas que dependen de fechas "
+    "van a WARNING por falta de dato, no a PASS."
+)
+
+
+def _hay_plazo(sla: dict | None) -> bool:
+    """Si eso es un plazo medido, y no un dict que casualmente tiene algo.
+
+    No alcanza con que `sla` sea truthy. Cuando el nodo `Verificar SLA` de n8n
+    falla sigue adelante —`onError: continueRegularOutput`— y lo que llega es
+    `{"error": ...}`, que es truthy: se rendia la seccion «PLAZOS DEL CASO (ya
+    medidos)» con un objeto de error adentro, bajo una leyenda que afirma que el
+    sistema los conto. Se pregunta por el campo que solo existe si hubo calculo.
+    """
+    return bool(sla) and "sla_limit_days" in sla
 
 
 def render(
@@ -113,12 +146,22 @@ def render(
     policy_count: int,
     merchant_risk: dict | None = None,
     client_history: dict | None = None,
+    sla: dict | None = None,
 ) -> tuple[str, str]:
-    """Returns (system_prompt, user_prompt)."""
+    """Returns (system_prompt, user_prompt).
+
+    `sla` es el resultado de `check_sla`: trae la fecha de apertura del reclamo,
+    la de corte, los dias habiles transcurridos y el limite que aplica. Sin el,
+    el evaluador declaraba «no se proporciona la fecha de inicio del reclamo»
+    sobre un dato que el sistema tenia medido dos pasos antes, y esas politicas
+    caian en WARNING —cada uno con `requires_human_review`— asi que el caso se
+    derivaba a una persona por como se armaba el contexto y no por su riesgo.
+    """
     user = USER_TEMPLATE.format(
         transaction_json=bloque_json(transaction),
         merchant_risk=bloque_json(merchant_risk or {}),
         client_history=bloque_json(client_history or {}),
+        sla=bloque_json(sla) if _hay_plazo(sla) else SIN_PLAZOS,
         policies_text=policies_text,
         policy_count=policy_count,
     )

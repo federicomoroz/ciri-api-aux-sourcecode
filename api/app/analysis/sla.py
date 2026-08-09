@@ -37,6 +37,18 @@ from ..domain.constants import (
 logger = logging.getLogger(__name__)
 
 
+def _fecha_o_none(valor: str | None) -> date | None:
+    """La fecha que dice ese texto, o None si no dice ninguna.
+
+    Acepta un ISO con hora («2024-08-08T05:17:58») porque asi vienen las fechas
+    que escribe el feedback: se queda con los diez primeros caracteres.
+    """
+    try:
+        return datetime.strptime(valor[:10], "%Y-%m-%d").date()
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
 def dias_habiles_entre(start: date, end: date) -> int:
     """Dias habiles transcurridos, sin contar el dia de apertura.
 
@@ -87,6 +99,7 @@ class CalculadoraDeSLA:
         cliente_vip: bool = False,
         today: date | None = None,
         case_close_date: str | None = None,
+        transaction_date: str = "",
     ) -> dict:
         """Check SLA compliance based on policy rules.
 
@@ -124,12 +137,10 @@ class CalculadoraDeSLA:
         today = today or datetime.now(UTC).date()
 
         def _fecha(valor: str | None, defecto: date, campo: str) -> date:
-            try:
-                return datetime.strptime(valor[:10], "%Y-%m-%d").date()
-            except (ValueError, TypeError, IndexError):
-                if valor:
-                    logger.warning("Fecha invalida en %s: %r", campo, valor)
-                return defecto
+            leida = _fecha_o_none(valor)
+            if leida is None and valor:
+                logger.warning("Fecha invalida en %s: %r", campo, valor)
+            return defecto if leida is None else leida
 
         sin_apertura = not (case_open_date or "").strip()
         open_date = _fecha(case_open_date, today, "case_open_date")
@@ -182,4 +193,33 @@ class CalculadoraDeSLA:
             # Para que el informe y el modelo puedan decir POR QUE no se evaluo,
             # en vez de mostrar un plazo cumplido que nadie midio.
             "sin_reclamo_registrado": sin_apertura,
+            **self._plazo_de_disputa(transaction_date, None if sin_apertura else open_date),
         }
+
+    @staticmethod
+    def _plazo_de_disputa(transaction_date: str, apertura: date | None) -> dict:
+        """Dias corridos entre la compra y el reclamo — el otro plazo del caso.
+
+        Son dos relojes distintos: el de RESOLUCION mide cuanto tarda la fintech
+        desde que el reclamo se abre, y es el que da `days_elapsed`; el de
+        DISPUTA mide cuanto tardo el cliente en reclamar desde que compro, y es
+        contra el que se evalua POL-CB-001.
+
+        **Lo cuenta el codigo y no el modelo.** Estuvo un rato pedido en el
+        prompt como «restale la fecha de la transaccion a `medido_desde`», y era
+        doblemente malo: una resta de fechas es trabajo determinista, y ademas
+        en 24 de las 47 transacciones con caso el reclamo figura ANTES de la
+        compra —ruido del dataset sintetico, el mismo que pone logs seis meses
+        antes de su transaccion—, asi que la cuenta daba negativa la mitad de
+        las veces y el modelo tenia que decidir solo que hacer con eso.
+
+        Cuando las fechas no se ordenan, no se informa un numero sin sentido: se
+        dice que son inconsistentes, que es lo unico cierto que se puede decir.
+        """
+        compra = _fecha_o_none(transaction_date)
+        if compra is None or apertura is None:
+            return {"dias_hasta_el_reclamo": None, "fechas_inconsistentes": False}
+        dias = (apertura - compra).days
+        if dias < 0:
+            return {"dias_hasta_el_reclamo": None, "fechas_inconsistentes": True}
+        return {"dias_hasta_el_reclamo": dias, "fechas_inconsistentes": False}

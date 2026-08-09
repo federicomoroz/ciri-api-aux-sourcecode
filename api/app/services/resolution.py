@@ -229,6 +229,9 @@ class ResolutionService:
             policy_count=len(ctx.policies),
             merchant_risk=ctx.merchant_risk,
             client_history=ctx.client_history,
+            # El plazo ya medido. Sin esto el evaluador pedia fechas que el
+            # sistema tenia, y las politicas de plazo caian en WARNING.
+            sla=ctx.sla,
         )
         result = self._completar(PASO_POLITICAS, sys_eval, usr_eval, trace_id)
         verdicts = validate_llm_output(result.text, PolicyVerdictOutput, [])

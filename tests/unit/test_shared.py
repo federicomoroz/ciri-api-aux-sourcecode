@@ -107,9 +107,18 @@ class TestCaseContext:
         evidencia = ctx.para_el_juez()
         assert set(evidencia) == {
             "transaction", "motivo", "policies", "similar_cases",
-            "merchant_risk", "client_history", "logs",
+            "merchant_risk", "client_history", "logs", "sla",
         }
         assert evidencia["transaction"]["id"] == "TXN-1"
+
+    def test_el_juez_ve_el_plazo_medido(self):
+        """Califica si la resolucion cita evidencia verificable; el plazo es una.
+
+        Sin el, no podia verificar nada de lo que la resolucion dijera sobre
+        plazos ni sobre la compensacion, que el codigo decide con este dato.
+        """
+        sla = {"within_sla": False, "days_elapsed": 14, "sla_limit_days": 10}
+        assert CaseContext(transaction={}, sla=sla).para_el_juez()["sla"] == sla
 
     def test_es_inmutable(self):
         """El contexto se arma una vez y viaja; nadie deberia reescribirlo."""

@@ -118,6 +118,13 @@ class ReportRequest(BaseModel):
     guardrail_warnings: list[str] = []
     motivo: str | None = None
     cliente_vip: bool = False
+    # El plazo ya medido, para que el informe muestre contra que se conto en vez
+    # de solo afirmar si corresponde compensar.
+    sla: dict = {}
+    # Que parte del contexto no se pudo reunir. Es distinto de que no exista: un
+    # informe sin precedentes porque la busqueda fallo se leia igual que uno sin
+    # precedentes porque no hay ninguno parecido, y son dos cosas opuestas.
+    avisos_de_contexto: list[str] = []
 
 
 class AnalyzeRequest(BaseModel):

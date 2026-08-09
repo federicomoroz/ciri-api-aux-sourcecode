@@ -128,3 +128,79 @@ class TestNingunPromptDictaLoQueUnaPoliticaHace:
         assert "[PUEDE BLOQUEAR]" not in format_policies_for_prompt(
             [{**cripto, "puede_bloquear": False}]
         )
+
+
+class TestElPlazoMedidoLlegaAlEvaluador:
+    """El evaluador de politicas pedia fechas que el sistema ya tenia medidas.
+
+    `check_sla` devuelve la apertura del reclamo, la fecha de corte y los dias
+    habiles contra el limite que aplica. Ese resultado se usaba solo para la
+    compensacion y no entraba al prompt, asi que varias politicas de plazo
+    salian en WARNING con la razon «no se proporciona la fecha de inicio del
+    reclamo» — sobre un dato que el paso anterior habia calculado. Cada uno de
+    esos WARNING pide revision humana: el caso se derivaba a una persona por
+    como se armaba el contexto y no por su riesgo.
+    """
+
+    SLA = {
+        "within_sla": True, "days_elapsed": 6, "sla_limit_days": 10,
+        "medido_desde": "2024-08-08", "medido_hasta": "2024-08-18",
+        "policy_reference": "POL-SLA-002", "sin_reclamo_registrado": False,
+    }
+
+    def _usuario(self, **kw) -> str:
+        _, usuario = prompts.v1_policy_eval.render(
+            transaction={"id": "TXN-00006"}, policies_text="POL-SLA-002", policy_count=1, **kw,
+        )
+        return usuario
+
+    def test_las_fechas_medidas_viajan_al_prompt(self):
+        usuario = self._usuario(sla=self.SLA)
+        assert "2024-08-08" in usuario, "la apertura del reclamo tiene que llegar"
+        assert "2024-08-18" in usuario
+        assert '"days_elapsed": 6' in usuario
+
+    def test_sin_plazo_medido_lo_dice_en_vez_de_callarse(self):
+        """Un hueco en silencio invita a inventar; declarado, produce WARNING."""
+        usuario = self._usuario()
+        assert prompts.v1_policy_eval.SIN_PLAZOS in usuario
+
+    def test_un_sla_vacio_se_trata_como_ausente(self):
+        """`{}` es lo que llega cuando el nodo de SLA no respondio."""
+        assert prompts.v1_policy_eval.SIN_PLAZOS in self._usuario(sla={})
+
+
+class TestNoSeDeclaraCumplimientoPorFaltaDePrueba:
+    """PASS es «los datos muestran que no se viola», no «no encontre nada malo».
+
+    POL-SLA-003 salia PASS «sin registro de que el caso haya permanecido abierto
+    por mas de 15 dias», y en el mismo informe POL-SLA-002 salia WARNING por
+    faltarle las mismas fechas. Dos veredictos opuestos sobre el mismo hueco.
+    """
+
+    def test_la_regla_esta_en_el_prompt(self):
+        assert "NO DECLARES CUMPLIMIENTO POR FALTA DE PRUEBA" in prompts.v1_policy_eval.SYSTEM
+
+    def test_manda_que_dos_politicas_con_el_mismo_hueco_digan_lo_mismo(self):
+        sistema = prompts.v1_policy_eval.SYSTEM
+        assert "tienen que decir lo mismo" in sistema
+
+
+class TestLaRegionSaleDelPaisDeLaTransaccion:
+    """No hay pais del comercio en ningun lado, y el prompt lo pedia igual.
+
+    La regla mandaba marcar WARNING si el pais del comercio «no estaba
+    confirmado», y no esta nunca: no existe la columna, ni la tabla. La politica
+    de plazos extendidos quedaba en WARNING permanente por un dato inexistente,
+    mientras el ejemplo del mismo prompt resolvia el caso por el pais de la
+    transaccion. El criterio ahora es uno solo, y es el que aplica `check_sla`.
+    """
+
+    def test_ya_no_pide_el_pais_del_comercio(self):
+        sistema = prompts.v1_policy_eval.SYSTEM
+        assert "merchant_country" not in sistema
+        assert "pais del comercio [merchant] no confirmado" not in sistema
+
+    def test_manda_usar_el_country_de_la_transaccion(self):
+        sistema = prompts.v1_policy_eval.SYSTEM
+        assert 'campo "country" de la TRANSACCION' in sistema

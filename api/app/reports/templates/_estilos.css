@@ -120,7 +120,8 @@ svg, img { display: block; max-width: 100%; }
 .text-yellow-700 { color: #a16207; } .text-yellow-800 { color: #854d0e; }
 .text-orange-500 { color: #f97316; } .text-orange-600 { color: #ea580c; }
 .text-orange-700 { color: #c2410c; } .text-orange-800 { color: #9a3412; }
-.text-amber-900 { color: #78350f; }
+.text-amber-600 { color: #d97706; } .text-amber-700 { color: #b45309; }
+.text-amber-800 { color: #92400e; } .text-amber-900 { color: #78350f; }
 
 /* ── Fondo ─────────────────────────────────────────────────────────────── */
 .bg-white { background-color: #fff; }
@@ -143,13 +144,14 @@ svg, img { display: block; max-width: 100%; }
 .border-b { border-bottom-width: 1px; }
 .border-l-4 { border-left-width: 4px; }
 .border-gray-50 { border-color: #f9fafb; }   .border-gray-100 { border-color: #f3f4f6; }
+.border-gray-200 { border-color: #e5e7eb; }
 .border-gray-300 { border-color: #d1d5db; }
 .border-red-200 { border-color: #fecaca; }
 .border-blue-200 { border-color: #bfdbfe; }
 .border-yellow-200 { border-color: #fef08a; } .border-yellow-400 { border-color: #facc15; }
 .border-orange-400 { border-color: #fb923c; }
 .border-purple-100 { border-color: #f3e8ff; }
-.border-amber-400 { border-color: #fbbf24; }
+.border-amber-300 { border-color: #fcd34d; } .border-amber-400 { border-color: #fbbf24; }
 .rounded { border-radius: .25rem; }
 .rounded-lg { border-radius: .5rem; }
 .rounded-xl { border-radius: .75rem; }

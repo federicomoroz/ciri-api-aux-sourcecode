@@ -35,7 +35,14 @@ class CaseContext:
         return str(self.transaction.get("id", ""))
 
     def para_el_juez(self) -> dict:
-        """La evidencia que ve el Juez, con los nombres que espera su prompt."""
+        """La evidencia que ve el Juez, con los nombres que espera su prompt.
+
+        El `sla` esta aca porque el Juez califica, entre otras cosas, si la
+        resolucion cita evidencia verificable. Sin el plazo medido no podia
+        verificar nada de lo que la resolucion dijera sobre plazos ni sobre la
+        compensacion —que el codigo decide justamente a partir de este dato—, y
+        calificaba esa parte a ciegas.
+        """
         return {
             "transaction": self.transaction,
             "motivo": self.motivo,
@@ -44,4 +51,5 @@ class CaseContext:
             "merchant_risk": self.merchant_risk,
             "client_history": self.client_history,
             "logs": self.logs,
+            "sla": self.sla,
         }

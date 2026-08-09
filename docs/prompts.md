@@ -51,7 +51,7 @@ El pipeline utiliza dos modelos Claude para optimizar costo vs. calidad:
 
 | Llamada | Modelo | Razon |
 |---|---|---|
-| Call 1: Evaluacion de politicas (v1.4) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
+| Call 1: Evaluacion de politicas (v1.5) | **Haiku** | Tarea mecanica: comparar datos contra reglas. Haiku es rapido y suficiente. |
 | Call 2: Sintesis de resolucion (v3.2) | **Sonnet** | Tarea analitica: razonar sobre precedentes, conectar evidencias, justificar. |
 | Call 3: Juez de calidad (v2.2) | **Sonnet** | Tarea evaluativa: aplicar rubrica detallada, detectar inconsistencias. |
 
@@ -89,6 +89,7 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 | v1_policy_eval | v1.2 | 2025-07 | Logica matematica de umbrales (>, >=, <), determinacion LATAM, contexto de comercio/cliente, documentacion, ventanas temporales |
 | v1_policy_eval | v1.3 | 2026-08 | La lista de paises LATAM se interpola desde `domain.enums`, no esta escrita en el texto |
 | v1_policy_eval | v1.4 | 2026-08 | Quien puede bloquear lo dice la marca `[PUEDE BLOQUEAR]` de cada politica, no su codigo escrito en las reglas |
+| v1_policy_eval | v1.5 | 2026-08 | Recibe los plazos ya medidos (`check_sla`); no se declara cumplimiento por falta de prueba; la region sale del pais de la transaccion, que es el unico que existe |
 | v1_resolution | v1.0 | 2025-01 | Version inicial — 8 reglas estrictas, vocabulario de 4 acciones |
 | v1_resolution | v2.0 | 2025-07 | Extraccion mecanica para Haiku — campos deterministas calculados externamente |
 | v1_resolution | v3.0 | 2025-07 | Razonamiento analitico para Sonnet — "el codigo decide, el LLM explica" |
@@ -101,7 +102,7 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6         # Call 2 + Call 3
 
 ---
 
-## Prompt 1: v1_policy_eval (v1.4)
+## Prompt 1: v1_policy_eval (v1.5)
 
 **Archivo:** `api/app/llm/prompts/v1_policy_eval.py`
 **Modelo:** Haiku (Call 1)
@@ -123,6 +124,23 @@ Auditor de cumplimiento de politicas para una fintech latinoamericana especializ
 | `policy_count` | `int` | Numero de politicas a evaluar |
 | `merchant_risk` | `dict` | Perfil de riesgo del comercio (cb_ratio, flags, suspension) |
 | `client_history` | `dict` | Historial del cliente (total_chargebacks, countries, flags) |
+| `sla` | `dict` | Los plazos del caso **ya medidos** por `check_sla`: apertura del reclamo, corte, dias habiles transcurridos contra el limite, y los dias corridos entre la compra y el reclamo |
+
+**Por que el `sla` entra al prompt (v1.5).** Estaba calculado dos pasos antes y solo se
+usaba para decidir la compensacion. El evaluador no lo veia, asi que respondia «no se
+proporciona la fecha de inicio del reclamo» sobre un dato que el sistema tenia, y las
+politicas de plazo caian en WARNING — cada uno con `requires_human_review`, o sea que el
+caso se derivaba a una persona por como se armaba el contexto y no por su riesgo. En
+TXN-00006 eso eran 8 WARNING; con los plazos a la vista quedan 2, y POL-CB-001,
+POL-SLA-002 y POL-SLA-003 pasan a PASS citando el numero contra el umbral.
+
+**Las cuentas las hace el codigo.** Los dos plazos —el de disputa, en dias corridos desde
+la compra, y el de resolucion, en dias habiles desde la apertura— llegan contados. Al
+prompt se le paso un rato la instruccion de restar fechas, y estaba mal por dos motivos:
+una resta de fechas es trabajo determinista, y en 24 de las 47 transacciones con caso el
+reclamo figura antes de la compra —ruido del dataset sintetico—, asi que la cuenta daba
+negativa la mitad de las veces. Ahora `check_sla` devuelve `dias_hasta_el_reclamo` o,
+cuando las fechas no se ordenan, `fechas_inconsistentes: true`.
 
 ### Especificacion de salida
 
@@ -165,8 +183,10 @@ Array JSON de objetos `PolicyVerdict`:
 6. Usar TODOS los datos disponibles: transaccion, perfil de riesgo del comercio e historial del cliente
 7. `NOT_APPLICABLE` solo cuando la politica genuinamente no aplica; comercios suspendidos siguen siendo relevantes para politicas de plazos
 8. Responder UNICAMENTE con un array JSON valido, sin texto adicional
-9. **Determinacion LATAM:** Distinguir entre pais de la transaccion (campo `country`) y pais del comercio. La lista de paises LATAM se inyecta desde `domain/enums.py`, no se escribe en el prompt: cuando estaba escrita, decia 20 paises y el enum tenia 7, asi que para un ECU el codigo aplicaba plazo extendido de no-LATAM y el LLM leia que ECU si era LATAM
+9. **Determinacion de region:** siempre por el campo `country` de la TRANSACCION, tambien cuando la politica habla de "comercios fuera de LATAM". La lista de paises LATAM se inyecta desde `domain/enums.py`, no se escribe en el prompt: cuando estaba escrita, decia 20 paises y el enum tenia 7, asi que para un ECU el codigo aplicaba plazo extendido de no-LATAM y el LLM leia que ECU si era LATAM. Hasta v1.4 la regla ademas pedia el *pais del comercio* y mandaba WARNING si no constaba — y no consta nunca: no existe esa columna ni esa tabla, asi que la politica de plazos extendidos quedaba en WARNING permanente por un dato inexistente, mientras el EJEMPLO 3 del mismo prompt la resolvia por el pais de la transaccion. Es ademas el criterio que aplica `check_sla`, que es lo que evita que el veredicto y el plazo medido se contradigan
 10. **Documentacion:** Si una politica requiere documentacion y se marca WARNING, especificar que documentos faltan y si bloquean la decision
+11. **No se declara cumplimiento por falta de prueba:** `PASS` significa que los datos muestran que la condicion de violacion no se cumple; si el dato necesario no esta, es `WARNING`. "No hay registro de que se haya excedido el plazo" no es un PASS. Y la simetria vale: con el dato presente y la condicion no cumplida, el `PASS` es obligatorio — la regla no es "evitar el PASS". El veredicto tiene que coincidir con el propio razonamiento, y un `FAIL` exige que la condicion *de esa politica* se cumpla, no que otra haya fallado
+12. **Plazos:** los dos llegan contados por `check_sla` — el de disputa en dias corridos (`dias_hasta_el_reclamo`), el de resolucion en dias habiles (`days_elapsed`)—. El prompt no resta fechas: si `fechas_inconsistentes` es true, el plazo de disputa no se evalua y corresponde WARNING
 
 ### Ejemplo de prompt de usuario renderizado (abreviado)
 

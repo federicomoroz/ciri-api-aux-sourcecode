@@ -215,6 +215,24 @@ def _matriz() -> dict:
         for cierre in (None, "2024-01-20")
     }
 
+    # El otro reloj del caso, aparte: la matriz de arriba no manda fecha de
+    # transaccion, asi que sin esto el plazo de disputa quedaria grabado en
+    # `null` sesenta y cuatro veces y el golden no diria nada de el.
+    salida["plazo_de_disputa"] = {
+        nombre: calculadora.check_sla(
+            "2024-02-01", "ARG", today=HOY, transaction_date=compra,
+        )
+        for nombre, compra in {
+            "compra_antes_del_reclamo": "2024-01-05",
+            "compra_el_mismo_dia": "2024-02-01",
+            # 24 de las 47 transacciones con caso del dataset estan asi.
+            "reclamo_antes_de_la_compra": "2024-03-10",
+            "sin_fecha_de_compra": "",
+            "fecha_de_compra_invalida": "no-es-una-fecha",
+            "compra_con_hora": "2024-01-05T13:45:00",
+        }.items()
+    }
+
     return salida
 
 
@@ -225,7 +243,8 @@ def _matriz() -> dict:
 FUNCIONES = (
     "build_precedent_summary", "check_sla", "clasificar_resolucion", "codigos",
     "detect_error_patterns", "determine_compensation", "determine_outcome",
-    "detect_divergence", "extraer_propuesta", "summarize_logs", "validate_resolution",
+    "detect_divergence", "extraer_propuesta", "plazo_de_disputa", "summarize_logs",
+    "validate_resolution",
 )
 
 
