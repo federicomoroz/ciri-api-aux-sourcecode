@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-1158%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1170%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -282,6 +282,7 @@ sólo el código que la API necesita para funcionar.
 | `docs/prompts.md` | Los prompts, versionados, y por qué cambiaron |
 | `docs/rag_explanation.md` | La estrategia RAG: qué se indexa, qué no, y cómo se arma cada consulta |
 | `docs/mejora_continua.md` | El circuito de mejora: Juez, guardrails, feedback, auto-indexado |
+| `docs/politicas_vs_dataset.md` | Qué políticas se pueden aplicar con los datos que hay, y por qué el agente deriva el 100% de los casos |
 | `docs/demo_scenarios.md` | Los tres escenarios, paso a paso, con los comandos |
 | `docs/api.md` | Los 32 endpoints, agrupados por para qué sirven |
 | `docs/HTML_Output_Examples/` | Informes HTML ya generados, uno por escenario |

@@ -132,6 +132,8 @@ sólo se descubre cuando ya falló algo.
 | Clientes con señales | `analyzer.py::client_flags` — reincidencia, anomalía geográfica |
 | Inconsistencias de política | El LLM evalúa cada política recuperada y emite veredicto PASS / WARNING / FAIL / BLOCKER con cita; los conflictos quedan visibles en el reporte. Sólo puede emitir BLOCKER la política que lo declara (`puede_bloquear`, columna de SQLite): habilitar una nueva es un `POST`, no un deploy |
 
+**El hallazgo de este eje está medido, no narrado.** [`docs/politicas_vs_dataset.md`](politicas_vs_dataset.md) cruza las 17 políticas contra el dataset y cuenta: 9 se pueden evaluar, 3 sólo en parte, y **5 piden un dato que el dataset no tiene**. Una de ellas —POL-CB-002, que exige comprobante, comunicación y evidencia— es insatisfacible por construcción y su propio texto dice que sin esos elementos el caso no avanza: por eso el agente no cierra ningún caso solo, y eso es cumplir el reglamento, no fallarle. Se reproduce con `python scripts/auditar_politicas.py`.
+
 Los umbrales de todo esto viven en `api/app/domain/constants.py`, en un solo lugar. Ninguno
 está en el canvas de n8n.
 

@@ -1,0 +1,191 @@
+{
+  "generado": "2026-08-09",
+  "resumen": {
+    "politicas": 17,
+    "evaluables": 9,
+    "parciales": 3,
+    "sin_dato": 5,
+    "bloquean_todo_caso": [
+      "POL-CB-002"
+    ],
+    "nunca_se_disparan": [
+      "POL-EXC-001",
+      "POL-EXC-002",
+      "POL-FRD-002",
+      "POL-FRD-004",
+      "POL-SLA-001"
+    ]
+  },
+  "politicas": [
+    {
+      "codigo": "POL-CB-001",
+      "necesita": "fecha de la compra + fecha de apertura del reclamo",
+      "estado": "parcial",
+      "detalle": "Las dos fechas existen, pero solo 47 de 100 transacciones tienen un reclamo registrado. Y en 24 de esas 47 el reclamo figura ANTES de la compra, asi que el plazo da negativo y no se puede evaluar.",
+      "alcanza": 23,
+      "cobertura": "23 de 100 transacciones son evaluables",
+      "consecuencia": "Fuera de termino, el reclamo se rechaza automaticamente.",
+      "descripcion": "El cliente tiene hasta 120 días corridos desde la fecha de la transacción para iniciar un reclamo de contracargo. Reclamos fuera de término son rechazados automáticamente."
+    },
+    {
+      "codigo": "POL-CB-002",
+      "necesita": "comprobante, comunicacion con el comercio y evidencia del cliente",
+      "estado": "sin dato",
+      "detalle": "El dataset no tiene ningun campo para los tres elementos que la politica exige. El unico texto libre es `notes`, poblado en 40 de 100 transacciones, y sus valores son: 'Alto riesgo detectado', 'Revisar manualmente' — ninguno es un comprobante, una comunicacion ni una evidencia.",
+      "alcanza": 100,
+      "cobertura": "las 100 transacciones",
+      "consecuencia": "La politica dice que sin los tres elementos el caso NO PUEDE AVANZAR. Como los tres faltan siempre, ningun caso puede resolverse solo.",
+      "descripcion": "Para procesar un CB, el analista debe reunir: (a) comprobante de la transacción, (b) comunicación con el comercio, (c) evidencia del cliente. Sin los tres elementos, el caso no puede avanzar."
+    },
+    {
+      "codigo": "POL-CB-003",
+      "necesita": "fecha de notificacion al comercio + fecha de su respuesta",
+      "estado": "parcial",
+      "detalle": "No hay campo de fecha de notificacion ni de respuesta. Los logs traen MERCHANT_NOTIFIED en 9 transacciones y MERCHANT_NO_RESPONSE en 12, que permite inferir el hecho pero no medir los 10 dias habiles: haria falta el par de timestamps de la misma transaccion.",
+      "alcanza": 21,
+      "cobertura": "21 de 100 transacciones tienen alguna senal",
+      "consecuencia": "Si el comercio no responde, el CB se resuelve a favor del cliente.",
+      "descripcion": "El comercio tiene 10 días hábiles para presentar su defensa ante un CB iniciado. Si no responde en ese plazo, el CB se resuelve automáticamente a favor del cliente."
+    },
+    {
+      "codigo": "POL-CB-004",
+      "necesita": "transacciones y contracargos por comercio y por mes",
+      "estado": "evaluable",
+      "detalle": "El dato esta y la politica se evalua sin problema. El resultado es el problema: 15 de 15 comercios superan el 1% y 15 de 15 superan el 2%. El ratio mas bajo del dataset es 11.1% y el mas alto 80.0%. El umbral del 1% es una cifra de industria sobre TODAS las transacciones; este dataset es una muestra de disputas, con un ratio de corpus de 60%. Comparar una cosa contra la otra da quince de quince.",
+      "alcanza": 15,
+      "cobertura": "los 15 comercios",
+      "consecuencia": "El COMERCIO queda sujeto a revision, o suspendido. La politica no dice nada sobre el contracargo del cliente que se esta analizando.",
+      "descripcion": "Todo comercio que supere el 1% de CBs sobre el total de transacciones en un mes calendario queda sujeto a revisión. Si supera el 2%, se suspende preventivamente."
+    },
+    {
+      "codigo": "POL-CB-005",
+      "necesita": "contracargos del cliente con sus fechas",
+      "estado": "evaluable",
+      "detalle": "Los contracargos por cliente se cuentan y tienen fecha de apertura, asi que la ventana de 6 meses se puede verificar. 6 clientes superan los 3 contracargos.",
+      "alcanza": 21,
+      "cobertura": "21 transacciones pertenecen a clientes reincidentes",
+      "consecuencia": "Requiere aprobacion del jefe de area: es una derivacion legitima.",
+      "descripcion": "Un cliente que presente más de 3 CBs en 6 meses es marcado como de alto riesgo. A partir del cuarto, se requiere aprobación del jefe de área para procesar el reclamo."
+    },
+    {
+      "codigo": "POL-EXC-001",
+      "necesita": "volumen mensual por comercio",
+      "estado": "evaluable",
+      "detalle": "El volumen se calcula. Ninguno se acerca al umbral: el comercio de mayor volumen del dataset es Netflix con USD 30,097 en total — el umbral es USD 1.000.000 por mes. La politica nunca aplica, y eso es correcto: es una excepcion, no una regla.",
+      "alcanza": 0,
+      "cobertura": "ningun comercio la alcanza",
+      "consecuencia": "Concede un SLA extendido. Que no aplique no frena ningun caso.",
+      "descripcion": "Los comercios con más de USD 1M en volumen mensual tienen un SLA extendido de 30 días y acceso a un analista dedicado para resolución de disputas."
+    },
+    {
+      "codigo": "POL-EXC-002",
+      "necesita": "nivel de fidelidad del cliente",
+      "estado": "sin dato",
+      "detalle": "El dataset no tiene nivel de fidelidad en ninguna tabla, asi que el sistema no puede saber por si mismo si un cliente es Platinum o Gold. La API acepta `cliente_vip` como entrada de quien dispara el caso, que es un parche razonable pero deja la politica sin poder evaluarse con los datos propios.",
+      "alcanza": 0,
+      "cobertura": "ninguna transaccion tiene el dato",
+      "consecuencia": "Concede prioridad. No aplicarla no frena el caso, pero un cliente VIP real no recibe su trato preferente salvo que alguien lo declare.",
+      "descripcion": "Clientes con nivel de fidelidad Platinum o Gold tienen resolución prioritaria (SLA de 5 días hábiles) y pueden iniciar un CB por teléfono sin necesidad de documentación inicial."
+    },
+    {
+      "codigo": "POL-EXC-003",
+      "necesita": "metodo de pago",
+      "estado": "evaluable",
+      "detalle": "`payment_method` esta poblado en las 100 transacciones. 11 son en cripto.",
+      "alcanza": 11,
+      "cobertura": "11 de 100 transacciones",
+      "consecuencia": "Es la unica politica habilitada para bloquear: rechaza el caso sin intervencion humana, que es lo correcto para un pago irreversible.",
+      "descripcion": "Las transacciones realizadas con criptomonedas no son elegibles para chargeback bajo ninguna circunstancia. Se aplica política de 'no reversibilidad' inherente al protocolo."
+    },
+    {
+      "codigo": "POL-EXC-004",
+      "necesita": "pais del comercio",
+      "estado": "parcial",
+      "detalle": "No existe el pais del comercio en ninguna tabla: solo el pais de la TRANSACCION. El sistema usa ese como aproximacion, y lo declara — es la misma eleccion que hace el calculo determinista del plazo, asi que al menos el veredicto y el plazo medido no se contradicen. Pero un comercio internacional que opera en LATAM queda clasificado como local.",
+      "alcanza": 11,
+      "cobertura": "sobre 100 transacciones, por aproximacion",
+      "consecuencia": "Extiende el plazo del comercio. No frena el caso.",
+      "descripcion": "Para CBs contra comercios fuera de LATAM, el plazo del comercio para responder se extiende a 15 días hábiles, considerando diferencias horarias y procesamiento cross-border."
+    },
+    {
+      "codigo": "POL-FRD-001",
+      "necesita": "score antifraude",
+      "estado": "evaluable",
+      "detalle": "`fraud_score` esta poblado en las 100 transacciones. 33 estan por debajo de 30.",
+      "alcanza": 33,
+      "cobertura": "33 de 100 transacciones",
+      "consecuencia": "Rechazo automatico o revision manual. Es una derivacion legitima.",
+      "descripcion": "Toda transacción con score antifraude inferior a 30 debe ser rechazada automáticamente o derivada a revisión manual antes de ser procesada."
+    },
+    {
+      "codigo": "POL-FRD-002",
+      "necesita": "timestamps de transaccion por cliente y pais",
+      "estado": "sin dato",
+      "detalle": "La politica pide «mas de 3 transacciones en paises distintos en menos de 24h» y `transactions.date` es una fecha sin hora ('2024-05-05'), asi que la ventana de 24 horas no se puede medir. Y no hace falta llegar tan lejos: hay 0 clientes con mas de una transaccion el mismo dia en todo el dataset. La condicion es imposible de cumplir por construccion.",
+      "alcanza": 0,
+      "cobertura": "0 de 100 transacciones pueden cumplirla",
+      "consecuencia": "Generaria una alerta y un bloqueo preventivo. Nunca se dispara.",
+      "descripcion": "Si el cliente realiza más de 3 transacciones en países distintos en menos de 24h, el sistema debe generar una alerta y bloquear preventivamente."
+    },
+    {
+      "codigo": "POL-FRD-003",
+      "necesita": "canal, monto y acumulado diario por cliente",
+      "estado": "evaluable",
+      "detalle": "Las dos mitades se pueden evaluar. IVR: 23 de 24 transacciones por ese canal superan los USD 500. App Movil: 6 combinaciones de cliente y dia superan los USD 3.000 acumulados.",
+      "alcanza": 29,
+      "cobertura": "23 por IVR + 6 por App Movil",
+      "consecuencia": "Violacion de limite operativo: derivacion legitima.",
+      "descripcion": "Las transacciones por IVR no pueden superar USD 500 por operación. Las de App Móvil tienen un límite de USD 3,000 por día por cliente."
+    },
+    {
+      "codigo": "POL-FRD-004",
+      "necesita": "denuncia de la tarjeta y su hora",
+      "estado": "sin dato",
+      "detalle": "No hay campo de denuncia ni de su hora. Los logs mencionan «robada» en 5 lineas, pero como texto libre dentro del detalle: no permiten ubicar la transaccion antes o despues de la denuncia, que es lo que la politica pregunta.",
+      "alcanza": 0,
+      "cobertura": "ninguna transaccion tiene el dato",
+      "consecuencia": "Haria inelegible el reembolso al comercio. Nunca se puede afirmar.",
+      "descripcion": "Una vez reportada como robada o extraviada, la tarjeta debe ser bloqueada en un máximo de 15 minutos. Toda transacción posterior a la denuncia es inelegible para reembolso al comercio."
+    },
+    {
+      "codigo": "POL-SLA-001",
+      "necesita": "marca de tiempo de la primera respuesta al cliente",
+      "estado": "sin dato",
+      "detalle": "No hay registro de la primera respuesta al cliente en ninguna tabla. El plazo de 48 horas habiles no se puede verificar ni incumplir: no hay contra que medirlo.",
+      "alcanza": 0,
+      "cobertura": "ninguna transaccion tiene el dato",
+      "consecuencia": "Sin dato, el evaluador solo puede marcarla como no verificable.",
+      "descripcion": "Todo caso de CB debe tener una primera respuesta al cliente dentro de las 48 horas hábiles desde la apertura del reclamo."
+    },
+    {
+      "codigo": "POL-SLA-002",
+      "necesita": "apertura, cierre y complejidad del caso",
+      "estado": "evaluable",
+      "detalle": "Las dos fechas estan en 60 de 60 casos, y la distincion «complejo o escalado» se puede inferir de `resolution` (13 en escalacion). El plazo se mide y se compara.",
+      "alcanza": 60,
+      "cobertura": "60 de 60 casos",
+      "consecuencia": "Habilita la compensacion de POL-SLA-004 si se supera.",
+      "descripcion": "El tiempo objetivo de resolución es de 10 días hábiles para casos estándar y 20 días hábiles para casos complejos o escalados."
+    },
+    {
+      "codigo": "POL-SLA-003",
+      "necesita": "apertura del caso y estado de resolucion",
+      "estado": "evaluable",
+      "detalle": "Se puede medir: 0 casos sin fecha de cierre y 24 de 60 con resolucion pendiente o escalada.",
+      "alcanza": 24,
+      "cobertura": "24 de 60 casos",
+      "consecuencia": "Escalar al supervisor: es una derivacion legitima y deseada.",
+      "descripcion": "Casos sin resolución tras 15 días hábiles deben ser escalados automáticamente al supervisor de área y notificados al cliente."
+    },
+    {
+      "codigo": "POL-SLA-004",
+      "necesita": "el plazo medido por POL-SLA-002",
+      "estado": "evaluable",
+      "detalle": "Se deriva del plazo medido por POL-SLA-002, y el codigo la calcula sin LLM. Es el unico caso donde una politica produce un monto.",
+      "alcanza": null,
+      "cobertura": "depende de POL-SLA-002",
+      "consecuencia": "Acredita USD 15 al cliente. No frena el caso.",
+      "descripcion": "Si la empresa supera el SLA de resolución, el cliente recibe una compensación de USD 15 en su cuenta virtual como resarcimiento por demora."
+    }
+  ]
+}
