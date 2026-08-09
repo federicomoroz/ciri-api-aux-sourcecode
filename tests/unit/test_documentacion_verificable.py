@@ -171,6 +171,43 @@ def test_el_conteo_de_tests_del_readme_es_el_real():
     )
 
 
+def test_los_conteos_de_la_prosa_del_readme_tambien_son_reales():
+    """El badge tenia test y la prosa de al lado no, asi que la prosa mintio.
+
+    Decia «1089 tests en 44 archivos» y «los 33 de e2e» con el badge en 1170:
+    los tres numeros del parrafo estaban viejos porque nadie los recalculaba,
+    justo debajo del unico que si tenia quien lo vigilara. Es la tesis del
+    proyecto —una invariante en prosa es una invariante sin test— demostrada
+    por su propia portada.
+    """
+    readme = LEEME.read_text(encoding="utf-8")
+
+    def _recolecta(*rutas: str) -> int:
+        salida = subprocess.run(
+            [sys.executable, "-m", "pytest", *rutas, "--collect-only", "-q",
+             "-p", "no:cacheprovider"],
+            capture_output=True, text=True, cwd=RAIZ, timeout=300,
+        ).stdout
+        m = re.search(r"(\d+) tests? collected", salida)
+        assert m, f"no se pudo recolectar {rutas}:\n{salida[-400:]}"
+        return int(m.group(1))
+
+    for patron, real, que in (
+        (r"\*\*(\d+) tests\*\* en \d+ archivos", _recolecta("tests/unit", "tests/integration"),
+         "tests de unit+integration"),
+        (r"\*\*\d+ tests\*\* en (\d+) archivos",
+         len(list((RAIZ / "tests" / "unit").glob("test_*.py"))
+             + list((RAIZ / "tests" / "integration").glob("test_*.py"))),
+         "archivos de test"),
+        (r"los (\d+) de\s*\n?`e2e/`", _recolecta("tests/e2e"), "tests de e2e"),
+    ):
+        m = re.search(patron, readme)
+        assert m, f"{LEEME.name} dejo de declarar {que}"
+        assert int(m.group(1)) == real, (
+            f"el README dice {m.group(1)} {que} y hay {real}"
+        )
+
+
 NIVELES = {"blocker", "high", "medium", "low"}
 
 
