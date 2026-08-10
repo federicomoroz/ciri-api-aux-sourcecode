@@ -39,12 +39,26 @@ DEL_MODELO = frozenset({"justification", "confidence", "next_steps", "transactio
 CONGELADOS = ("HTML_Output_Examples", "evaluaciones")
 
 
+def _visible(p: Path) -> bool:
+    """Fuera lo que vive en un directorio oculto: es herramienta, no documentacion.
+
+    `docs/diagrams/.pytest_cache/README.md` existe apenas alguien corre pytest
+    parado en esa carpeta, y como este modulo parametriza **por archivo**, dos
+    tests aparecian y desaparecian segun la maquina. El CI recolectaba tres menos
+    que local y el guardian del README se ponia rojo culpando al numero del badge,
+    que era el unico dato correcto de los tres.
+
+    Un conteo que depende de por donde alguien corrio pytest no es un conteo.
+    """
+    return not any(parte.startswith(".") for parte in p.relative_to(RAIZ).parts)
+
+
 def _documentos() -> list[Path]:
     """Todo lo que un evaluador lee: los .md y los diagramas que se abren solos."""
     docs = [*(RAIZ / "docs").rglob("*.md"), *(RAIZ / "docs").rglob("*.html")]
     return [
         p for p in [*docs, RAIZ / "README.md"]
-        if not any(c in p.parts for c in CONGELADOS)
+        if not any(c in p.parts for c in CONGELADOS) and _visible(p)
     ]
 
 

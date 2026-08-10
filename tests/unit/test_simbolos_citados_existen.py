@@ -19,9 +19,13 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
+# Los directorios ocultos quedan afuera: `docs/diagrams/.pytest_cache/README.md`
+# aparece apenas alguien corre pytest parado en esa carpeta, y como este modulo
+# parametriza por archivo, el conteo de tests cambiaba segun la maquina.
 DOCS = sorted(
     f for f in RAIZ.joinpath("docs").rglob("*")
     if f.suffix in (".md", ".html") and f.is_file()
+    and not any(parte.startswith(".") for parte in f.relative_to(RAIZ).parts)
 )
 
 # Lo que el codigo define hoy: nombres de def/class y constantes en mayusculas.

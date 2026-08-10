@@ -1,5 +1,11 @@
 .env
 *.db
+# El WAL de SQLite: `*.db` no los alcanza porque el sufijo va DESPUES de la
+# extension. Se colaron una vez en un `git add -A`, y como la entrega se arma
+# con `git ls-files`, habrian viajado dos binarios de estado al evaluador.
+*.db-shm
+*.db-wal
+*.db-journal
 .claude/
 *.pdf
 qdrant_data/
