@@ -7,18 +7,18 @@
 <style>
   :root{
     --paper:#fcfcfa; --surface:#fff; --ink:#17171b; --muted:#68686f; --faint:#95959d;
-    --rule:#e5e4df; --rule-mid:#d3d2cb; --wire:#c3c2ba;
+    --rule:#e5e4df; --rule-mid:#d3d2cb;
     --api:#2563eb; --rag:#0d9488; --llm:#7c3aed; --logic:#64748b;
-    --decide:#b45309; --human:#be185d; --vuelta:#be185d;
+    --vuelta:#be185d;
     --shadow:0 1px 2px rgba(20,20,25,.06);
     --code-bg:#f5f4f0;
   }
   @media (prefers-color-scheme: dark){
     :root{
       --paper:#131316; --surface:#1b1b1f; --ink:#f0efec; --muted:#a3a3ac; --faint:#7a7a84;
-      --rule:#2b2b31; --rule-mid:#3a3a42; --wire:#4a4a53;
+      --rule:#2b2b31; --rule-mid:#3a3a42;
       --api:#7ea6ff; --rag:#4fd1c5; --llm:#b794f6; --logic:#94a3b8;
-      --decide:#e0a04a; --human:#f472b6; --vuelta:#f472b6;
+      --vuelta:#f472b6;
       --shadow:0 1px 2px rgba(0,0,0,.4);
       --code-bg:#232329;
     }
@@ -103,7 +103,6 @@
     background:var(--surface);
   }
   .tarj.acento{border-left:3px solid var(--rag)}
-  .tarj.gris{border-left:3px solid var(--logic)}
   .tarj.vuelta{border-left:3px solid var(--vuelta)}
   .tarj h3{
     font-size:13px; margin:0 0 4px; font-weight:650;
@@ -116,20 +115,13 @@
   .tarj dt{color:var(--faint); font-family:ui-monospace,monospace; font-size:11.5px}
   .tarj dd{margin:0; color:var(--ink)}
 
-  .chip{
-    display:inline-block; border:1px solid var(--rule-mid); border-radius:11px;
-    padding:1px 8px; font:11.5px/1.7 ui-monospace,monospace; color:var(--faint);
-    white-space:nowrap;
-  }
-  .chip.si{border-color:var(--rag); color:var(--rag)}
-  .chip.no{border-color:var(--rule-mid); color:var(--faint)}
-
   /* ── comparación de las dos búsquedas ───────────────────── */
   table{border-collapse:collapse; width:100%; font-size:12.5px; margin:0}
   th,td{text-align:left; padding:8px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
   th{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); font-weight:600}
   td:first-child{color:var(--faint); font-family:ui-monospace,monospace; font-size:11.5px; width:26%}
-  .col-pol{color:var(--rag)} .col-cas{color:var(--llm)}
+  /* las dos son colecciones de Qdrant: mismo color, distinto peso */
+  .col-pol{color:var(--rag); font-weight:700} .col-cas{color:var(--rag); font-weight:500}
   .tabla-envoltura{overflow-x:auto; border:1px solid var(--rule); border-radius:8px; background:var(--surface)}
 
   /* ── el aparte de qué NO se indexa ──────────────────────── */
@@ -148,6 +140,8 @@
   .cierre h3{font-size:13px; margin:0 0 5px; font-weight:650}
   .cierre p{margin:0; font-size:13px; color:var(--muted)}
   .cierre code{font-size:12px; color:var(--ink)}
+  .c-api{color:var(--api); font-weight:600}
+  .c-rag{color:var(--rag); font-weight:600}
 
   @media (max-width:760px){
     .hoja{padding:32px 18px 56px}
@@ -217,19 +211,19 @@ reversibilidad' inherente al protocolo.
 <span class="et">**Referencia:** Manual de Excepciones v1.0, Sec. 4</span></div>
         <dl>
           <dt>id del punto</dt><dd><code>uuid5(código)</code> — determinista, permite reescribir</dd>
-          <dt>carga útil</dt><dd>código, nombre, categoría, descripción, referencia, markdown</dd>
+          <dt>carga útil</dt><dd>código, nombre, categoría, descripción, referencia, markdown, <code>puede_bloquear</code> y <code>sla_dias</code></dd>
         </dl>
       </div>
 
       <div class="tarj acento">
         <h3>historical_cases <span class="n">60 · crece con cada caso avalado</span></h3>
         <p>Un caso no se embebe solo: se le pega su transacción, porque el precedente sin su contexto no se parece a nada.</p>
-        <div class="bloque"><span class="et">Caso CB-0038: contracargo por</span> cargo duplicado
-<span class="et">Resolucion:</span> Aprobado <span class="et">en</span> PayPal Store, <span class="et">Credito Visa,
-MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
-<span class="et">Observaciones:</span> Error tecnico del procesador</div>
+        <div class="bloque"><span class="et">Caso CB-0038: contracargo por</span> Monto incorrecto
+<span class="et">Resolucion:</span> Caso cerrado sin resolución <span class="et">en</span> Rappi, Cuenta Virtual,
+CHL, <span class="et">USD</span> 1187.58<span class="et">, score antifraude</span> 74
+<span class="et">Observaciones:</span> Error en sistema de pagos detectado — cargo doble por timeout.</div>
         <dl>
-          <dt>carga útil</dt><dd>el caso entero + comercio, monto, método de pago y país de su transacción</dd>
+          <dt>carga útil</dt><dd>el caso entero + comercio, monto, método de pago, país y <code>fraud_score</code> de su transacción, más el texto que se embebió</dd>
           <dt>filtrable</dt><dd><code>transaction_id</code> tiene índice propio en Qdrant: es el que sostiene la exclusión de los casos propios</dd>
         </dl>
       </div>
@@ -312,14 +306,17 @@ MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
   <section class="etapa">
     <div class="etapa-cab">
       <span class="etapa-n">03</span><span class="etapa-t">Un solo viaje a Voyage</span>
-      <span class="etapa-d"><code>GET /api/policies/search</code> · <code>GET /api/cases/similar</code></span>
+      <span class="etapa-d"><code>rag/retriever.py</code> · <code>search_policies_and_cases()</code></span>
     </div>
     <p>
-      Las dos consultas se embeben en <b>una sola llamada</b> a la API de embeddings
-      (<code>_embed_batch</code>). No es una micro-optimización: en el free tier de Voyage, cada
-      viaje cuenta, y las dos búsquedas siempre ocurren juntas. La alternativa —dos llamadas
-      independientes— daría exactamente el mismo resultado por el doble de viajes, con el riesgo
-      añadido de que las dos rutas divergieran con el tiempo.
+      Por el pipeline directo —el del panel, que es el modo por defecto— las dos consultas se
+      embeben en <b>una sola llamada</b> a la API de embeddings: <code>search_policies_and_cases()</code>
+      junta los dos textos y los manda con <code>_embed_batch</code>. No es una micro-optimización:
+      en el free tier de Voyage cada viaje cuenta, y las dos búsquedas siempre ocurren juntas.
+      <b>Por n8n el ahorro no aplica</b>: <code>GET /api/policies/search</code> y
+      <code>GET /api/cases/similar</code> son dos nodos HTTP distintos y cada uno embebe su propia
+      consulta, así que son dos viajes. El resultado es idéntico por los dos caminos —la consulta la
+      arma el mismo código— y lo único que cambia es cuántas veces se sale a la red.
     </p>
     <div class="paso">
       <div class="paso-q">2 textos → 2 vectores<span class="sub">1024 dimensiones cada uno</span></div>
@@ -433,34 +430,41 @@ MEX, USD</span> 412.50<span class="et">, score antifraude</span> 71
   <section class="etapa">
     <div class="etapa-cab">
       <span class="etapa-n">05</span><span class="etapa-t">El contexto que ve el modelo</span>
-      <span class="etapa-d"><code>rag/formatter.py</code> · fuente única del formato</span>
+      <span class="etapa-d"><code>rag/formatter.py</code> + <code>domain/precedentes.py</code> · un solo criterio de orden y etiqueta</span>
     </div>
     <p>
-      Los resultados no van crudos al prompt. Se formatean una vez, en un módulo aparte, y de ahí
-      salen para los dos usos: el prompt y el resumen determinista del informe. Estaban duplicados
-      y llegaron a divergir — el mismo precedente se describía distinto según quién lo mirara.
+      Los resultados no van crudos al prompt. Lo que está unificado no es el formato —cada uso
+      arma su texto, y la línea suelta del resumen que se ve abajo la escribe
+      <code>domain/precedentes.py</code>— sino <b>el criterio</b>:
+      <code>annotate_by_motivo</code> decide una sola vez, en un módulo aparte, qué precedente
+      comparte patrón, de dónde vino ese parecido y en qué orden van. De ahí salen los dos usos: el
+      prompt y el resumen determinista del informe. Estaban duplicados y llegaron a divergir — el
+      mismo precedente se describía distinto según quién lo mirara.
     </p>
 
     <div class="rejilla">
       <div class="tarj acento">
         <h3>Políticas <span class="n">→ v1_policy_eval · Haiku</span></h3>
-        <p>Secciones numeradas en Markdown, con su código y su referencia. El modelo emite un veredicto por cada una: PASS, FAIL, WARNING, BLOCKER o NOT_APPLICABLE, siempre citando el código.</p>
-        <div class="bloque"><span class="et">### 1. POL-EXC-003 — Transacciones en cripto</span>
-Las transacciones realizadas con criptomonedas…
-<span class="et">Referencia: Manual de Excepciones v1.0, Sec. 4</span></div>
+        <p>Secciones numeradas en Markdown, un campo por viñeta. El modelo emite un veredicto por cada una: PASS, FAIL, WARNING, BLOCKER o NOT_APPLICABLE, siempre citando el código. La marca <code>[PUEDE BLOQUEAR]</code> sale del campo <code>puede_bloquear</code> de la política, no de una lista de códigos en el prompt: por eso el prompt puede pedir «sólo las marcadas pueden bloquear» sin nombrar a <code>POL-EXC-003</code> a mano.</p>
+        <div class="bloque"><span class="et">### Politica 1</span> <span class="on">[PUEDE BLOQUEAR]</span> <span class="et">(relevancia: …%)</span>
+- Codigo: POL-EXC-003
+- Categoria: EXCEPCIÓN
+- Nombre: Transacciones en cripto
+- Descripcion: Las transacciones realizadas con criptomonedas…
+- Referencia: Manual de Excepciones v1.0, Sec. 4</div>
+        <p>El porcentaje va elidido a propósito: es el coseno contra el índice del momento y cambia con cada corrida. Todo lo demás es la salida textual de <code>format_policies_for_prompt</code>.</p>
       </div>
 
       <div class="tarj acento">
         <h3>Precedentes <span class="n">→ v1_resolution · Sonnet</span></h3>
         <p>Antes de formatear, cada caso pasa por <code>annotate_by_motivo</code>: seis grupos de sinónimos deciden si comparte patrón con el caso actual. Los que matchean van primero y llevan etiqueta.</p>
-        <div class="bloque"><span class="on">[MOTIVO SIMILAR]</span> CB-0038 · cargo duplicado
-  aprobado en 2d · <span class="on">[MISMO MERCHANT]</span> PayPal Store
-  <span class="et">Relevancia: mismo patrón de cargo duplicado
-  (match por observaciones)</span></div>
+        <div class="bloque">CB-0038: Monto incorrecto, Caso cerrado sin resolución en 24d, merchant=Rappi</div>
         <p>
-          La etiqueta dice también <b>de dónde</b> vino el match — del campo motivo o de las
-          observaciones —, porque un match indirecto vale menos y conviene poder decirlo en vez de
-          presentarlos todos como equivalentes.
+          Éste sale <b>sin etiqueta</b>: «Monto incorrecto» y «No reconoce la compra» caen en grupos
+          de sinónimos distintos, así que no hay patrón compartido que declarar y la línea termina
+          ahí. Cuando el match vino de <b>las observaciones</b> y no del campo motivo, la línea lo
+          dice, porque un match indirecto vale menos y conviene poder decirlo en vez de presentarlos
+          todos como equivalentes.
         </p>
       </div>
     </div>
@@ -498,8 +502,8 @@ Las transacciones realizadas con criptomonedas…
     <div>
       <h3>Unir el RAG con la base de datos</h3>
       <p>
-        Es el patrón que pedía la consigna, y acá la división es literal: SQLite responde
-        <em>qué pasó</em> —esta transacción, estos logs, este historial— y Qdrant responde
+        Es el patrón que pedía la consigna, y acá la división es literal: <b class="c-api">SQLite</b> responde
+        <em>qué pasó</em> —esta transacción, estos logs, este historial— y <b class="c-rag">Qdrant</b> responde
         <em>qué se hace con esto</em> —qué normas aplican, qué se decidió antes en casos
         parecidos—. Ninguna de las dos sola alcanza para justificar una resolución.
       </p>

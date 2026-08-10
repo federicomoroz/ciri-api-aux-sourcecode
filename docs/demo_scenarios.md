@@ -16,9 +16,11 @@ https://ciri-chargeback-agent.onrender.com/panel
 
 Elegí un caso y hacé clic en **Analizar**.
 
-> **Sobre el modo demo.** El panel arranca en modo demo y el toggle de arriba lo cambia. En modo demo **no se llama al modelo**: los tres escenarios de este documento se sirven con su análisis ya calculado, al instante y sin costo. El informe abre con un cartel **DEMO (Caso prearmado)** y la respuesta trae `X-Modo-Demo: true`, así que nunca se confunde con un análisis recién hecho.
+> **Sobre el modo demo.** El panel arranca en modo demo y el toggle de arriba lo cambia. En modo demo **el pipeline corre entero, de verdad**: el deploy tiene configurado un modelo con free tier (`gemini-flash-lite-latest`) y la clave del servidor, así que se puede analizar cualquier transacción del dataset sin que le cueste a nadie. El informe abre con un cartel **ANÁLISIS REAL (modelo gratuito)** que nombra el modelo y declara que la nota del juez puede desviarse hasta ±2.5 puntos respecto de la configuración documentada.
 >
-> Para verlo ejecutarse de verdad: apagá el toggle (**Modo producción**) y cargá tu clave de Anthropic en el campo **API key**. Esa clave reemplaza a la del servidor y podés analizar cualquier transacción del dataset, gastando de tu cuenta.
+> Si no hay free tier configurado, el modo demo **no llama al modelo**: los tres escenarios de este documento se sirven con su análisis ya calculado, al instante y sin costo. Ahí el informe abre con un cartel **DEMO (Caso prearmado)** y la respuesta trae `X-Modo-Demo: true`, así que nunca se confunde con un análisis recién hecho.
+>
+> Para verlo en la configuración documentada (Haiku para políticas, Sonnet para síntesis y juez): apagá el toggle (**Modo producción**) y cargá tu clave de Anthropic en el campo **API key**. Esa clave reemplaza a la del servidor y podés analizar cualquier transacción del dataset, gastando de tu cuenta.
 >
 > Si pedís un caso que no tiene análisis guardado y el modelo no está disponible, se responde con el **más cercano en riesgo** de los tres —se compara el score antifraude— y el cartel nombra las dos transacciones para que quede claro de cuál es el informe. El porqué está en [`decisions.md`](decisions.md), decisión 14.
 
@@ -33,7 +35,7 @@ El panel de pruebas está disponible en `http://localhost:8000/panel`.
 
 ### El formulario, como segunda vía de entrada
 
-`http://localhost:5678/form/chargeback-form` — al enviar el formulario, ese workflow llama al webhook del orquestador, así que el caso corre los 39 pasos igual que por el webhook.
+`http://localhost:5678/form/chargeback-form` — al enviar el formulario, ese workflow llama al webhook del orquestador, así que el caso corre los 36 pasos igual que por el webhook.
 
 Para probarlo sin navegador hay un detalle: n8n nombra los inputs `field-0`, `field-1`, `field-2` por posición, no por su etiqueta.
 
@@ -56,10 +58,10 @@ El sistema utiliza una estrategia de dos modelos para optimizar costo y calidad:
 | Etapa | Modelo | Justificación |
 |-------|--------|---------------|
 | Evaluación de políticas (call 1) | `claude-haiku-4-5` | Rápido y económico — evalúa 17 políticas contra datos estructurados |
-| Síntesis de resolución (call 2) | `claude-sonnet-4` | Mayor capacidad de razonamiento para generar justificaciones citadas |
-| Juez de calidad (call 3) | `claude-sonnet-4` | Evaluación crítica — requiere juicio calibrado (5 criterios, score 1-10) |
+| Síntesis de resolución (call 2) | `claude-sonnet-4-6` | Mayor capacidad de razonamiento para generar justificaciones citadas |
+| Juez de calidad (call 3) | `claude-sonnet-4-6` | Evaluación crítica — requiere juicio calibrado (5 criterios, score 1-10) |
 
-Los tres escenarios de esta página promedian **8.7/10** — son los tres casos más contenciosos del dataset, elegidos por cubrir los tres niveles de riesgo y no por su puntaje. Sobre el conjunto de corridas de desarrollo el promedio fue **9.1/10**; la metodología está en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91).
+Los tres escenarios de esta página promedian **8.7/10** — son los tres casos más contenciosos del dataset, elegidos por cubrir los dos desenlaces del enrutador —rechazo automático (`TXN-00051`, BLOCKER) y revisión humana (`TXN-00042` y `TXN-00089`, los dos HIGH)— y tres situaciones de política distintas: el blocker de cripto, el cliente VIP con score de fraude, y el SLA extendido fuera de LATAM. No por su puntaje. Sobre el conjunto de corridas de desarrollo el promedio fue **9.1/10**; la metodología está en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91).
 
 ---
 
@@ -67,7 +69,7 @@ Los tres escenarios de esta página promedian **8.7/10** — son los tres casos 
 
 ### Qué demuestra
 
-La capacidad del sistema para aplicar exclusiones de política no negociables. Las transacciones con criptomonedas son irreversibles por definición (POL-EXC-003). Combinado con un fraud_score de 8/100 (POL-FRD-001, umbral mínimo 15), este caso produce un BLOCKER y tres FAIL. **Un solo BLOCKER alcanza**: `puede_bloquear` contiene únicamente a POL-EXC-003, así que cualquier otro veredicto bloqueante que emita el modelo se degrada a FAIL con revisión humana. La resolución debe ser `REJECT` sin importar cualquier otra evidencia. Este escenario también muestra el guardrail: si el LLM alucinara un `APPROVE`, el sistema lo corrige automáticamente.
+La capacidad del sistema para aplicar exclusiones de política no negociables. Las transacciones con criptomonedas son irreversibles por definición (POL-EXC-003). Combinado con un fraud_score de 8/100 (POL-FRD-001, umbral mínimo 30), este caso produce un BLOCKER y tres FAIL. **Un solo BLOCKER alcanza**: `puede_bloquear` contiene únicamente a POL-EXC-003, así que cualquier otro veredicto bloqueante que emita el modelo se degrada a FAIL con revisión humana. La resolución debe ser `REJECT` sin importar cualquier otra evidencia. Este escenario también muestra el guardrail: si el LLM alucinara un `APPROVE`, el sistema lo corrige automáticamente.
 
 ### Perfil de la transacción
 
@@ -111,7 +113,7 @@ La capacidad del sistema para aplicar exclusiones de política no negociables. L
 curl -s http://localhost:8000/api/transactions/TXN-00051 | jq .
 
 # Paso 2: Ver qué políticas recupera el RAG (el QueryBuilder enriquece la query automáticamente)
-curl -s "http://localhost:8000/api/policies/search?payment_method=Cripto&fraud_score=8&country=ARG" \
+curl -s "http://localhost:8000/api/policies/search?payment_method=Cripto&fraud_score=8&country=COL" \
   | jq '{query: .query_used, count: .count}'
 
 # Paso 3: Buscar precedentes similares
@@ -126,7 +128,7 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
 
 # Paso 4b (alternativa): Panel interactivo — abrir en el navegador:
 #   http://localhost:8000/panel
-#   Ingresar TXN-00051 → clic en "Investigar"
+#   Ingresar TXN-00051 → clic en "Analizar"
 
 # Paso 4c (alternativa): Demo en vivo en Render:
 #   https://ciri-chargeback-agent.onrender.com/panel
@@ -183,7 +185,7 @@ completo —con los 17 veredictos y la evaluación del Juez— viaja en
 
 ### Observaciones clave
 
-1. **Un BLOCKER y tres FAIL:** POL-EXC-003 (cripto = irreversible) es el único que puede bloquear — es el único código en `puede_bloquear`. POL-FRD-001 (score 8 < 15), POL-CB-003 y POL-CB-004 quedan en FAIL. La acción `REJECT` se determina de forma determinística antes de que el LLM sintetice la justificación.
+1. **Un BLOCKER y tres FAIL:** POL-EXC-003 (cripto = irreversible) es el único que puede bloquear — es el único código en `puede_bloquear`. POL-FRD-001 (score 8 < 30), POL-CB-003 y POL-CB-004 quedan en FAIL. La acción `REJECT` se determina de forma determinística antes de que el LLM sintetice la justificación.
 2. **Guardrail no activado:** El LLM produce correctamente `REJECT` — el guardrail no tiene nada que corregir. Si hubiera dicho `APPROVE`, el sistema lo habría sobrescrito.
 3. **Sin HITL:** Los casos BLOCKER son determinísticos — la revisión del analista no agrega valor.
 4. **Sin compensación:** El SLA no fue incumplido (el caso se rechazó inmediatamente).
@@ -203,10 +205,10 @@ La ruta de escalamiento Human-in-the-Loop del sistema. Cuando el fraud_score=4 i
 | Campo | Valor |
 |-------|-------|
 | ID | TXN-00042 |
-| Comercio | TechStore AR |
-| Monto | USD 234.50 |
-| Método de pago | Credito Visa |
-| País | ARG |
+| Comercio | Airbnb |
+| Monto | USD 2.055,76 |
+| Método de pago | Crédito Visa |
+| País | BRA |
 | Fraud score | 4 / 100 |
 | Canal | Web |
 | Cliente VIP | Sí |
@@ -217,9 +219,9 @@ La ruta de escalamiento Human-in-the-Loop del sistema. Cuando el fraud_score=4 i
 1. Webhook/Panel recibe {"transaction_id": "TXN-00042", "cliente_vip": true}
 2. Recopilación de contexto (7 llamadas HTTP en paralelo)
 3. POST /api/analyze/resolve → LLM evalúa políticas (Haiku) + sintetiza (Sonnet)
-   → POL-FRD-001: FAIL (score 4 < umbral 15, pero NO es BLOCKER — Visa es reversible)
+   → POL-FRD-001: FAIL (score 4 < umbral 30, pero NO es BLOCKER — Visa es reversible)
    → Sin BLOCKERs → acción no determinística
-   → fraud_score < 15 → riesgo HIGH
+   → fraud_score < 15 (`RISK_FRAUD_SEVERE`) → riesgo HIGH
    → Acción: PENDING_HITL (score crítico + VIP = requiere juicio humano)
 4. POST /api/analyze/judge → Juez (Sonnet) → score 8.7/10
 5. POST /api/reports/html → Reporte HTML con formulario HITL integrado
@@ -233,10 +235,10 @@ La ruta de escalamiento Human-in-the-Loop del sistema. Cuando el fraud_score=4 i
 curl -s http://localhost:8000/api/transactions/TXN-00042 | jq .
 
 # Paso 2: Verificar historial del cliente (el estado VIP influye en la resolución)
-curl -s http://localhost:8000/api/clients/CLI-0042/history | jq .
+curl -s http://localhost:8000/api/clients/CLI-0036/history | jq .
 
 # Paso 3: Verificar perfil de riesgo del comercio
-curl -s http://localhost:8000/api/merchants/TechStore+AR/risk | jq .
+curl -s http://localhost:8000/api/merchants/Airbnb/risk | jq .
 
 # Paso 4a: Investigación completa vía webhook n8n
 curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
@@ -245,7 +247,7 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -o reporte_hitl.html
 
 # Paso 4b (alternativa): Panel interactivo
-#   http://localhost:8000/panel → TXN-00042 → Investigar
+#   http://localhost:8000/panel → TXN-00042 → Analizar
 
 # Paso 4c (alternativa): Demo en vivo
 #   https://ciri-chargeback-agent.onrender.com/panel
@@ -258,8 +260,8 @@ curl -s -X POST http://localhost:8000/api/analyze/judge \
     "full_context": {
       "transaction_id": "TXN-00042",
       "fraud_score": 4,
-      "payment_method": "Credito Visa",
-      "country": "ARG",
+      "payment_method": "Crédito Visa",
+      "country": "BRA",
       "cliente_vip": true
     },
     "resolution": {
@@ -282,7 +284,7 @@ curl -s -X POST http://localhost:8000/api/feedback/ \
     "analyst_decision": "APPROVED",
     "analyst_notes": "Cliente VIP con historial limpio de 18 meses. Score bajo pero patrón de compra consistente. Riesgo aceptado por política de fidelización.",
     "final_outcome": "APPROVED",
-    "judge_score": 9.0,
+    "judge_score": 8.7,
     "resolution": {
       "recommended_action": "PENDING_HITL",
       "justification": "Score 4/100 activa POL-FRD-001 FAIL. Sin BLOCKER — caso requiere evaluación humana dado el perfil VIP del cliente."
@@ -305,7 +307,7 @@ curl -s -X POST http://localhost:8000/api/feedback/ \
     {
       "policy_code": "POL-FRD-001",
       "verdict": "FAIL",
-      "reasoning": "Score 4/100 inferior al umbral mínimo de 15. Alto riesgo de fraude.",
+      "reasoning": "Score 4/100 inferior al umbral mínimo de 30. Alto riesgo de fraude.",
       "requires_human_review": true
     }
   ],
@@ -319,13 +321,13 @@ curl -s -X POST http://localhost:8000/api/feedback/ \
 
 ```json
 {
-  "overall_score": 9.0,
+  "overall_score": 8.7,
   "criteria": {
-    "policy_consistency": 9.5,
-    "justification_quality": 9.0,
-    "precedent_usage": 8.5,
-    "risk_assessment": 9.0,
-    "actionability": 9.5
+    "policy_consistency": 9.1,
+    "justification_quality": 8.8,
+    "precedent_usage": 8.6,
+    "risk_assessment": 8.9,
+    "actionability": 8.3
   },
   "approved": true,
   "strengths": [
@@ -356,8 +358,8 @@ curl -s -X POST http://localhost:8000/api/feedback/ \
 2. **Score del Juez 8.7/10** (`data/informes_demo/analisis_TXN-00042.json`)**:** Buena consistencia entre políticas citadas y acción recomendada. El escalamiento a HITL es apropiado dada la ambigüedad VIP vs. riesgo.
 3. **El analista sobrescribe a APPROVE:** El estado VIP del cliente y su historial limpio justifican aceptar el riesgo. Esta es una decisión de juicio que el LLM correctamente delegó.
 4. **`auto_indexed: true`:** El score del feedback de 8.7 supera el umbral de 8.0 (`JUDGE_AUTO_INDEX_THRESHOLD`). Este caso de excepción VIP ahora está indexado como precedente en Qdrant.
-5. **Aprendizaje del sistema:** La próxima vez que un cliente VIP con fraud_score entre 1-10 presente un contracargo en TechStore AR, este precedente aparecerá en los top-5 resultados y el agente propondrá una resolución más matizada.
-6. **Alerta emitida:** El pipeline emite una alerta `hitl_required` (severidad WARNING) via `POST /api/alerts/`, visible en el log de alertas del panel.
+5. **Aprendizaje del sistema:** La próxima vez que un cliente VIP con fraud_score entre 1-10 presente un contracargo en Airbnb, este precedente aparecerá en los top-5 resultados y el agente propondrá una resolución más matizada.
+6. **Alerta emitida:** El pipeline emite una alerta `hitl_required` (severidad WARN) via `POST /api/alerts/`, visible en el log de alertas del panel.
 
 ---
 
@@ -372,12 +374,12 @@ La detección de políticas geográficas del sistema. Las transacciones de país
 | Campo | Valor |
 |-------|-------|
 | ID | TXN-00089 |
-| Comercio | GameZone Pro |
-| Monto | USD 129.99 |
-| Método de pago | Debito Visa |
+| Comercio | Booking |
+| Monto | USD 889,02 |
+| Método de pago | Débito Visa |
 | País | USA |
 | Fraud score | 8 / 100 |
-| Canal | Web |
+| Canal | App Móvil |
 | Cliente VIP | No |
 
 ### Flujo esperado del pipeline
@@ -389,10 +391,10 @@ La detección de políticas geográficas del sistema. Las transacciones de país
    → deadline: 15 días hábiles (en vez de 10)
    → sla_type: "extended"
 4. POST /api/analyze/resolve → LLM evalúa políticas (Haiku) + sintetiza (Sonnet)
-   → POL-FRD-001: FAIL (score 8 < umbral 15)
+   → POL-FRD-001: FAIL (score 8 < umbral 30)
    → POL-EXC-004: WARNING (país no-LATAM, SLA extendido)
    → POL-SLA-002: NOT_APPLICABLE (aplica solo a LATAM)
-   → fraud_score < 15 → riesgo HIGH
+   → fraud_score < 15 (`RISK_FRAUD_SEVERE`) → riesgo HIGH
    → Acción: PENDING_HITL (score crítico + caso internacional)
 5. POST /api/analyze/judge → Juez (Sonnet) → score ~8.7/10
 6. POST /api/reports/html → Reporte HTML con badge WARNING amarillo
@@ -421,7 +423,7 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   -o reporte_warning.html
 
 # Paso 4b (alternativa): Panel interactivo
-#   http://localhost:8000/panel → TXN-00089 → Investigar
+#   http://localhost:8000/panel → TXN-00089 → Analizar
 
 # Paso 4c (alternativa): Demo en vivo
 #   https://ciri-chargeback-agent.onrender.com/panel
@@ -433,7 +435,7 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
 
 ```json
 {
-  "query": "contracargo Servicio no entregado, Web, Debito Visa, score 8/100, USA transaccion de alto riesgo fraude score bajo internacional fuera LATAM plazo extendido",
+  "query": "contracargo Servicio no entregado, App Móvil, Débito Visa, score 8/100, USA transaccion de alto riesgo fraude score bajo internacional fuera LATAM plazo extendido",
   "retrieved_policies": [
     "POL-EXC-004",
     "POL-SLA-002",
@@ -453,12 +455,12 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   "recommended_action": "PENDING_HITL",
   "confidence": 0.72,
   "risk_level": "HIGH",
-  "justification": "TXN-00089 presenta score antifraude de 8/100 (POL-FRD-001 FAIL — umbral 15). Transacción originada en USA activa POL-EXC-004 — plazo de resolución extendido a 15 días hábiles en lugar de los 10 días LATAM estándar. No hay BLOCKER (Débito Visa es reversible). El riesgo de fraude alto combinado con la complejidad de un caso internacional justifica revisión humana.",
+  "justification": "TXN-00089 presenta score antifraude de 8/100 (POL-FRD-001 FAIL — umbral 30). Transacción originada en USA activa POL-EXC-004 — plazo de resolución extendido a 15 días hábiles en lugar de los 10 días LATAM estándar. No hay BLOCKER (Débito Visa es reversible). El riesgo de fraude alto combinado con la complejidad de un caso internacional justifica revisión humana.",
   "policy_verdicts": [
     {
       "policy_code": "POL-FRD-001",
       "verdict": "FAIL",
-      "reasoning": "Score antifraude 8/100, umbral mínimo 15. FAIL confirmado.",
+      "reasoning": "Score antifraude 8/100, umbral mínimo 30. FAIL confirmado.",
       "requires_human_review": true
     },
     {
@@ -481,8 +483,8 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
   "next_steps": [
     "Notificar al cliente que el plazo de resolución es de 15 días hábiles (POL-EXC-004, no 10 días LATAM)",
     "Solicitar evidencia de no entrega del servicio al cliente dentro de 5 días",
-    "Contactar a GameZone Pro para obtener prueba de entrega del servicio digital",
-    "Escalar al equipo de fraude internacional si GameZone Pro no responde en 48h"
+    "Contactar a Booking para obtener prueba de entrega del servicio digital",
+    "Escalar al equipo de fraude internacional si Booking no responde en 48h"
   ],
   "guardrail_warnings": []
 }
@@ -559,11 +561,11 @@ curl -s -X POST http://localhost:5678/webhook/chargeback-agent \
 | TXN | Acción | Riesgo | HITL | Política clave | Score Juez |
 |-----|--------|--------|------|----------------|------------|
 | TXN-00051 | REJECT | BLOCKER | No | POL-EXC-003 (Cripto) + POL-FRD-001 | 8.6 |
-| TXN-00042 | PENDING_HITL | HIGH | Sí | POL-FRD-001 (score=4) + VIP | ~9.0 |
+| TXN-00042 | PENDING_HITL | HIGH | Sí | POL-FRD-001 (score=4) + VIP | 8.7 |
 | TXN-00089 | PENDING_HITL | HIGH | Sí | POL-EXC-004 (USA, WARNING) + POL-FRD-001 | 8.7 |
 
 ### Nota sobre idempotencia y cache
 
-La segunda ejecución de cualquier escenario se beneficia del cache de idempotencia (SQLite exact-match). El tiempo de respuesta baja de ~113s a ~2s en ejecuciones subsiguientes con los mismos parámetros. Esto es visible en el reporte HTML como "Cache hit: true".
+La segunda ejecución de cualquier escenario se beneficia del cache de idempotencia (SQLite exact-match). El tiempo de respuesta baja de ~113s a ~2s en ejecuciones subsiguientes con los mismos parámetros. Esto es visible en el reporte HTML como "Cache hit: Sí".
 
-El pipeline directo (panel de testing) también implementa cache check al inicio — si ya existe un reporte para la misma combinación `transaction_id|cliente_vip`, lo devuelve inmediatamente sin ejecutar el pipeline. El historial del panel guarda los reportes HTML generados; al hacer clic en un análisis del historial, se muestra el reporte directamente sin re-ejecutar.
+El pipeline directo (panel de testing) también implementa cache check al inicio — si ya existe un reporte para la misma combinación `transaction_id|cliente_vip|motivo`, lo devuelve inmediatamente sin ejecutar el pipeline. El historial del panel guarda los reportes HTML generados; al hacer clic en un análisis del historial, se muestra el reporte directamente sin re-ejecutar.

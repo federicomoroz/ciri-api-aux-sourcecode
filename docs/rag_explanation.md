@@ -94,7 +94,7 @@ Observaciones: Cliente VIP, primer contracargo en 18 meses
 
 El contexto transaccional (comercio, monto, metodo de pago, pais, fraud_score) se embebe junto con el resultado del caso. Esto permite al retriever encontrar casos similares no solo en descripcion sino en perfil financiero.
 
-**Crecimiento automatico:** Se indexan nuevos casos cada vez que `POST /api/feedback/` recibe un `judge_score >= 8.0`. La coleccion comienza con ~60 casos y crece con el tiempo a medida que el agente procesa mas contracargos.
+**Crecimiento automatico:** Se indexa un caso nuevo cuando `POST /api/feedback/` recibe un `judge_score >= 8.0` **y** el cuerpo trae la `resolution` —cualquier dict no vacio alcanza; sin ella el feedback se guarda igual, pero el precedente no nace— **y** la transaccion existe en SQLite, porque el caso se indexa junto con su contexto transaccional. La coleccion comienza con ~60 casos y crece con el tiempo a medida que el agente procesa mas contracargos.
 
 
 ## Que NO se indexa (y por que)
@@ -139,7 +139,9 @@ Indexar logs en Qdrant complicaria el pipeline sin beneficio: siempre se recuper
   "category": "EXCEPCION",
   "description": "Las transacciones con criptomonedas...",
   "reference": "Reg. Fintech 2024/03",
-  "markdown": "# POL-EXC-003\n**Categoria:** ..."
+  "markdown": "# POL-EXC-003\n**Categoria:** ...",
+  "puede_bloquear": true,
+  "sla_dias": null
 }
 ```
 
@@ -456,7 +458,7 @@ caso, que es exactamente el error que no se puede cometer en un contracargo.
 Subir el umbral hasta que sea seguro lo convierte en una comparacion exacta, que es lo que ya
 hace SQLite sin costo de embedding ni latencia vectorial.
 
-**Lo que si existe:** cache de idempotencia exacto, con clave `(transaction_id, cliente_vip)`.
+**Lo que si existe:** cache de idempotencia exacto, con clave `(transaction_id, cliente_vip, motivo)`.
 Investigar dos veces la misma transaccion devuelve el informe ya generado: **113 segundos la
 primera vez, 2 segundos la segunda.** La ganancia de no repetir trabajo se obtiene igual.
 

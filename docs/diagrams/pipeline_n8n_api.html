@@ -172,7 +172,7 @@
     <span><i class="pip" style="background:var(--rag)"></i>Búsqueda semántica (RAG)</span>
     <span><i class="pip" style="background:var(--llm)"></i>Llamada a un modelo</span>
     <span><i class="pip" style="background:var(--logic)"></i>Regla de negocio, sin modelo</span>
-    <span><i class="pip" style="background:var(--vuelta)"></i>La API llamando a n8n</span>
+    <span><i class="pip" style="background:var(--vuelta)"></i>Alguien llamando al webhook de n8n</span>
   </div>
 
   <!-- ── 1 ─────────────────────────────────────────────── -->
@@ -240,7 +240,7 @@
     <div class="fila f-api">
       <div class="lado-n8n">Riesgo del Comercio</div>
       <div class="flecha"><b>07</b></div>
-      <div class="ruta"><i></i><span><span class="met">GET</span> /api/merchants/{n}/risk</span></div>
+      <div class="ruta"><i></i><span><span class="met">GET</span> /api/merchants/{name}/risk</span></div>
       <div class="toca"><span class="chip">SQLite</span></div>
     </div>
 
@@ -287,7 +287,7 @@
 
     <div class="canvas-hace">
       <span class="q">Verificar Guardrails</span>
-      <span>El canvas comprueba la respuesta contra los veredictos. Un APPROVE con un BLOCKER activo se marca.</span>
+      <span>La API ya comprobó la respuesta contra los veredictos —un APPROVE con un BLOCKER activo queda marcado—; el canvas sólo lo muestra para que se vea en la ejecución.</span>
     </div>
   </section>
 
@@ -295,7 +295,7 @@
   <section class="etapa">
     <div class="etapa-cab">
       <span class="etapa-n">04</span><span class="etapa-t">Informe y cierre</span>
-      <span class="etapa-d">Los casos de riesgo alto frenan y esperan a una persona</span>
+      <span class="etapa-d">Frena el que tiene una política violada sin resolver, no el más grave</span>
     </div>
 
     <div class="canvas-hace">
@@ -315,7 +315,7 @@
       <span>Un 303 al formulario del Wait. Su URL se genera al correr y n8n sólo la expone <b>antes</b> de llegar al nodo: por eso el aviso y la respuesta van primero. Ningún servidor puede abrir una ventana en otra máquina, así que el link sale por las cuatro vías en que alguien puede estar mirando: el 303 lo sigue un navegador, el cuerpo guardado lleva <code>meta refresh</code> para quien usó curl, el panel navega su iframe, y la alerta <code>hitl_form_ready</code> queda para el analista, que no es quien disparó el caso.</span>
     </div>
 
-    <div class="fila f-api">
+    <div class="fila f-calc">
       <div class="lado-n8n">Normalizar Decisión HITL<span class="sub">sólo si hubo que esperar a una persona</span></div>
       <div class="flecha"><b>13</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /api/hitl/decide</span></div>
@@ -361,7 +361,7 @@
       <div class="lado-n8n">El formulario<span class="sub">workflow aparte, con su Form Trigger</span></div>
       <div class="flecha vuelve"><b>↩</b></div>
       <div class="ruta"><i></i><span><span class="met">POST</span> /webhook/chargeback-agent</span></div>
-      <div class="toca"><span class="chip">corre los 39 pasos igual</span></div>
+      <div class="toca"><span class="chip">corre los 36 pasos igual</span></div>
     </div>
   </div>
 
@@ -374,8 +374,9 @@
     </div>
     <div>
       <h3>No hay nodo de agente</h3>
-      <p>Ningún modelo elige qué herramienta llamar. Las quince llamadas ocurren siempre en este
-      orden; las tres del tramo HITL sólo cuando el caso necesita una persona. Eso es lo que hace
+      <p>Ningún modelo elige qué herramienta llamar. Las quince llamadas están escritas de antemano
+      y siempre en este orden. Cuáles corren depende del caso: con informe en caché terminan dos, y
+      las tres del tramo HITL sólo cuando hace falta una persona. Eso es lo que hace
       reproducible una investigación.</p>
     </div>
     <div>

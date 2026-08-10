@@ -55,7 +55,7 @@ El sistema esta disenado para funcionar dentro de los limites de servicios gratu
 
 - **n8n Cloud** (trial): orquestacion visual, webhook publico, HITL con Wait nodes
 - **Render** (free tier): la API se duerme tras 15 minutos de inactividad. El workflow incluye un nodo `[Despertar API]` que hace `GET /health` antes de cualquier llamada para manejar el cold start
-- **Qdrant Cloud** (free tier): 1GB de almacenamiento, suficiente para las 3 colecciones del sistema. Los clusters gratuitos se suspenden tras una semana sin uso y se borran a las cuatro, asi que hay dos defensas: el arranque de la API tolera que Qdrant no responda (`dependencies.py` — levanta igual y lo registra, en vez de morir en el lifespan), y un workflow semanal de GitHub Actions (`.github/workflows/keep-alive.yml`) hace una busqueda real contra el cluster para que no llegue a suspenderse
+- **Qdrant Cloud** (free tier): 1GB de almacenamiento, suficiente para las 2 colecciones del sistema. Los clusters gratuitos se suspenden tras una semana sin uso y se borran a las cuatro, asi que hay dos defensas: el arranque de la API tolera que Qdrant no responda (`dependencies.py` — levanta igual y lo registra, en vez de morir en el lifespan), y un workflow semanal de GitHub Actions (`.github/workflows/keep-alive.yml`) hace una busqueda real contra el cluster para que no llegue a suspenderse
 - **Voyage AI** (free tier): embeddings multilingues. El sistema usa batch embedding (1 API call para policies + cases) para minimizar consumo
 
 Estas restricciones no son ideales, pero el sistema las maneja de forma transparente. En produccion se reemplazarian por instancias dedicadas sin cambiar una linea de codigo.
@@ -66,16 +66,16 @@ Estas restricciones no son ideales, pero el sistema las maneja de forma transpar
 
 ## Orquestacion Explicita con n8n
 
-Los cuatro diagramas de la raiz de la entrega estan numerados en orden de lectura: primero
+Los cinco diagramas de la raiz de la entrega estan numerados en orden de lectura: primero
 QUE hace el circuito, despues COMO se hablan las dos piezas.
 
 **El flujo completo, navegable:** el diagrama **«el circuito completo»** es una pagina
-autocontenida con los 39 pasos en orden de ejecucion, cada conexion trazada, el endpoint que
+autocontenida con los 36 pasos en orden de ejecucion mas las 4 salidas de error, cada conexion trazada, el endpoint que
 llama cada nodo y una ficha explicativa al tocarlos. Se genera desde el propio JSON del
 workflow, no a mano, asi que no puede quedar desfasado del flujo real.
 
 **Como se hablan n8n y la API:** el diagrama **«n8n y la API»** resume la conversacion — las
-catorce llamadas en orden, que toca cada una y las dos veces que va al reves.
+quince llamadas en orden, que toca cada una y las dos veces que va al reves.
 
 **El RAG, de punta a punta:** el diagrama **«el RAG»** sigue la cadena de recuperacion con un caso real del dataset — que entra al indice y que no, como el codigo arma la consulta, por que las dos colecciones se buscan con criterios opuestos, y los dos caminos por los que el indice se reescribe sin deploy. El desarrollo escrito esta en [`rag_explanation.md`](rag_explanation.md).
 
@@ -101,7 +101,7 @@ ETAPA 2 -- ENSAMBLADO DE CONTEXTO (10 nodos) -- 7 llamadas HTTP en paralelo
    [Riesgo del Comercio]             GET  /api/merchants/{name}/risk  <- cb_ratio + flags
    [Historial del Cliente]           GET  /api/clients/{id}/history   <- flags de reincidencia
    [Verificar SLA]                   POST /api/sla/check              <- dias habiles del reclamo
-   [Merge -- Contexto Paralelo]      <- Merge: espera las 7 ramas paralelas
+   [Merge -- Contexto Paralelo]      <- Merge: espera las 6 ramas paralelas
    [Responder -- API No Disponible]  <- 404 si el caso no existe, 503 si la API no responde
    [Propagar -> Error Handler -- API]<- Stop and Error si la API no responde
 
@@ -163,17 +163,17 @@ y un `stopAndError` cortaba antes de llegar a uno: un transaction_id mal formado
 un informe generado se veian igual desde afuera.
 ```
 
-**Una sola fuente de verdad para la URL de la API:** los 14 nodos HTTP usan
+**Una sola fuente de verdad para la URL de la API:** los 15 nodos HTTP usan
 `{{ $('Validar Formato TXN').first().json.api_base_url }}`. Ese campo se resuelve una vez, con
 este orden de prioridad: `api_base_url` del body del webhook -> variable `API_BASE_URL` de n8n ->
 default publico. Importar el workflow y ejecutarlo no requiere configurar nada.
 
 **3 workflows n8n:**
 - `workflow_ciri_agent.json` — workflow principal (46 nodos: 40 exec + 6 sticky)
-- `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL)
+- `workflow_ciri_errors.json` — error handler (Error Trigger → Extraer Info → POST /api/alerts/ → Send Email a $vars.ALERT_EMAIL, **deshabilitado**: pide credencial SMTP)
 - `workflow_ciri_form.json` — form trigger (formulario nativo n8n como entrada alternativa)
 
-**El formulario no llama a la API por su cuenta.** Es un workflow aparte, con su propio Form Trigger; cuando recibe un caso hace una llamada saliente al webhook del orquestador (`/webhook/chargeback-agent`) sobre la misma instancia. Es una segunda via de entrada **al agente**, no un atajo que lo esquive, asi que corre los 39 pasos igual que el webhook. Un formulario que llamara directo a un endpoint REST haria irrelevante la orquestacion, que es justamente el entregable.
+**El formulario no llama a la API por su cuenta.** Es un workflow aparte, con su propio Form Trigger; cuando recibe un caso hace una llamada saliente al webhook del orquestador (`/webhook/chargeback-agent`) sobre la misma instancia. Es una segunda via de entrada **al agente**, no un atajo que lo esquive, asi que corre los 36 pasos igual que el webhook. Un formulario que llamara directo a un endpoint REST haria irrelevante la orquestacion, que es justamente el entregable.
 
 Al importar desde la interfaz, n8n reemplaza el path del formulario por un identificador propio: hay que escribir `chargeback-form` en el campo **Form Path** del nodo. El nodo esta en `typeVersion` 2.1 a proposito — de 2.2 en adelante ese campo no existe y la URL del formulario queda fuera de control de quien importa.
 
@@ -266,9 +266,9 @@ flowchart TD
 
 Investigar un caso cuesta dinero real: Haiku evalua cada politica recuperada, Sonnet sintetiza, Sonnet vuelve a correr como Juez. Quien recibe esta prueba tecnica no deberia tener que consumir la cuenta de nadie para ver si el sistema funciona.
 
-Por eso la instancia publicada arranca en **modo demo**, con un toggle en el panel para apagarlo. En ese modo **no se llama al modelo**: no es que intente y falle, no gasta.
+Por eso la instancia publicada arranca en **modo demo**, con un toggle en el panel para apagarlo. En ese modo **el pipeline corre entero, pero contra un modelo de free tier**: `config_demo()` arma los tres pasos con `CB_DEMO_PROVIDER` / `CB_DEMO_MODEL` y `clientes_demo()` devuelve clientes reales, asi que se llama al modelo y no se gasta. Solo si esa configuracion falta se sirven los informes ya calculados de los tres casos de ejemplo.
 
-**El modo demo no toca la orquestacion.** El diagrama del workflow es el mismo con demo encendido o apagado: los mismos 39 pasos, las mismas conexiones, los mismos endpoints. Lo unico que cambia es de donde sale la respuesta de dos de esos pasos.
+**El modo demo no toca la orquestacion.** El diagrama del workflow es el mismo con demo encendido o apagado: los mismos 36 pasos, las mismas conexiones, los mismos endpoints. Lo unico que cambia es de donde sale la respuesta de dos de esos pasos.
 
 ```
                           MODO PRODUCCION          MODO DEMO
@@ -304,7 +304,9 @@ Esta es la decision de diseno mas importante del sistema, y vale la pena explica
 
 En un agente de IA tipico, el LLM decide todo: la accion recomendada, el nivel de riesgo, si necesita revision humana, la razon. El problema es que un LLM puede alucinar, contradecirse, o ignorar una politica que acaba de evaluar como FAIL. En un sistema de compliance financiero, eso es inaceptable.
 
-Nuestro enfoque: **el codigo Python determina 6 de los 11 campos de la resolucion de forma deterministica**. El LLM solo genera los campos narrativos (razonamiento, resumen, confianza, compensacion sugerida, observaciones).
+Nuestro enfoque: **el codigo Python determina 9 de los 13 campos de `ResolutionOutput` de forma deterministica**. El LLM solo escribe cuatro: la justificacion, la confianza, los proximos pasos y el identificador que recibio.
+
+El reparto exacto vive en [`prompts.md`](prompts.md), y no es una descripcion: `tests/unit/test_campos_deterministas.py` cuenta los campos del modelo Pydantic y los que `resolve()` sobrescribe, y falla si esta tabla deja de coincidir con el codigo.
 
 ### Campos deterministas (Python los calcula, el LLM no puede cambiarlos)
 
@@ -314,18 +316,20 @@ Nuestro enfoque: **el codigo Python determina 6 de los 11 campos de la resolucio
 | `risk_level` | BLOCKER activo -> BLOCKER. >= 2 FAILs o fraud_score < 15 -> HIGH. 1 FAIL -> MEDIUM. Sin FAILs -> LOW |
 | `requires_hitl` | `true` si hay algun FAIL o `requires_human_review` en verdicts |
 | `hitl_reason` | Texto generado desde conteo de violaciones y codigos de politica |
-| `policy_verdicts` | Lista de evaluaciones (el LLM las genera, pero pasan por sanitizacion) |
+| `policy_verdicts` | Lista de evaluaciones (el LLM las genera, pero pasan por `decision.degradar_blockers_no_habilitados()`) |
 | `precedent_summary` | Resumen de precedentes construido por `precedentes.resumir_precedentes()` |
+| `log_summary` | Severidades y patrones, por `precedentes.resumir_logs()` — hasta v3.1 el modelo lo parafraseaba y su version era la que quedaba |
+| `compensation_applicable` | `decision.compensacion_por_sla()` — lee el plazo ya medido por `check_sla`, no lo infiere |
+| `compensation_amount_usd` | `decision.compensacion_por_sla()` — tope de la politica, acotado al monto de la transaccion |
 
 ### Campos narrativos (el LLM los genera)
 
 | Campo | Proposito |
 |---|---|
-| `reasoning` | Explicacion paso a paso de por que se llega a la conclusion |
-| `summary` | Resumen ejecutivo del caso |
+| `justification` | El analisis: por que este nivel de riesgo, que dicen los precedentes, que evidencia lo sostiene |
 | `confidence` | Nivel de confianza del LLM en su analisis (0-1) |
-| `compensation_amount_usd` | Monto sugerido de compensacion |
-| `observations` | Notas adicionales del analisis |
+| `next_steps` | Acciones concretas para el analista que recibe el caso |
+| `transaction_id` | Lo devuelve tal como lo recibio |
 
 El LLM recibe como parte del prompt el `determined_outcome` (la decision que Python ya tomo), y su trabajo es **explicar y justificar** esa decision, no inventar otra. Si intenta devolver algo distinto, el override post-LLM lo corrige silenciosamente.
 
@@ -360,7 +364,7 @@ El pipeline de resolucion hace 3 llamadas LLM. No todas necesitan el mismo nivel
 
 La configuracion es via variables de entorno:
 - `CB_LLM_MODEL=claude-haiku-4-5-20251001` -- modelo por defecto (eval de politicas)
-- `CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-20250514` -- modelo para sintesis y juez
+- `CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6` -- modelo para sintesis y juez
 
 Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo. Esto permite que los tests corran con un solo mock.
 
@@ -372,7 +376,7 @@ Si `CB_LLM_MODEL_RESOLUTION` esta vacio, se usa el modelo por defecto para todo.
   deploy--. Sin esto, el panel de una instalacion disparaba n8n y las alertas, el
   feedback y el informe terminaban en otra: el caso quedaba partido en dos.
 
-Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1089 tests (1056 unit/integration + 33 E2E contra la API real).
+Con esta configuracion, el score promedio del Juez fue **9.1/10** sobre las corridas de desarrollo — los tres escenarios que viajan en el paquete promedian 8.7, y el porque de la diferencia esta en [`mejora_continua.md`](mejora_continua.md#como-se-midio-el-91). Los 1235 tests (1201 unit/integration + 34 E2E contra la API real).
 
 ---
 
@@ -434,7 +438,7 @@ Vivian dentro de `ResolutionService` como quince metodos estaticos de veintidos.
 Cuando dos tercios de una clase no necesita el estado de la clase, el limite esta
 mal trazado; y mientras estuvieron ahi, esa logica arrastraba `Tracer`,
 `LLMClient` y `ModelosService` en su grafo de dependencias por el solo hecho de
-compartir archivo. `ResolutionService` paso de 819 a 328 lineas y quedo con lo que
+compartir archivo. `ResolutionService` paso de 819 a 331 lineas y quedo con lo que
 si es orquestacion.
 
 **Consecuencias practicas de esta estructura:**
@@ -601,13 +605,13 @@ la API, que es donde vive la logica.
 4. `GET /api/cases/similar` -- top-5 casos historicos semanticamente similares de Qdrant, con etiquetado [MOTIVO SIMILAR] y [MISMO MERCHANT]
 5. `GET /api/merchants/{name}/risk` -- perfil de riesgo del comerciante calculado por `Analyzer.merchant_risk_profile()`: cb_ratio, total_transactions, flags (suspended/high_cb_ratio), is_strategic
 6. `GET /api/clients/{id}/history` -- flags del cliente calculados por `Analyzer.client_flags()`: total_transactions, total_chargebacks, flags (recidivist, geo_anomaly), paises/metodos usados
-7. `POST /api/sla/check` -- `Analyzer.check_sla()` cuenta **dias habiles** entre la apertura del caso y hoy, y los compara contra el limite que corresponda: 5 VIP (POL-EXC-002) / 10 LATAM (POL-SLA-002) / 15 fuera de LATAM (POL-EXC-004). De ese resultado sale la compensacion, que el codigo determina y el modelo solo explica
+7. `POST /api/sla/check` -- `CalculadoraDeSLA.check_sla()` cuenta **dias habiles** entre la apertura del caso y hoy, y los compara contra el limite que corresponda: 5 VIP (POL-EXC-002) / 10 LATAM (POL-SLA-002) / 15 fuera de LATAM (POL-EXC-004). De ese resultado sale la compensacion, que el codigo determina y el modelo solo explica
 
-Las 7 ramas paralelas convergen en `[Merge -- Contexto Paralelo]` (nodo Merge, indices 0-6 conectados explicitamente).
+Las 6 ramas paralelas convergen en `[Merge -- Contexto Paralelo]` (nodo Merge, `numberInputs: 6`, indices 0-5 conectados explicitamente). Son 7 las llamadas de contexto y 6 las ramas que convergen: `[Obtener Transaccion]` corre **antes** y es la que abre el abanico, asi que su salida entra al contexto por `[Compilar Contexto]` y no por el Merge.
 
 ### Fase 3: Sintesis de resolucion (S3)
 
-`[Compilar Contexto]` fusiona los outputs de las siete ramas en un solo objeto estructurado. No evalua nada: solo arma la estructura que espera `ResolveRequest`. `POST /api/analyze/resolve` ejecuta internamente:
+`[Compilar Contexto]` fusiona los outputs de las siete herramientas en un solo objeto estructurado. No evalua nada: solo arma la estructura que espera `ResolveRequest`. `POST /api/analyze/resolve` ejecuta internamente:
 
 1. Verifica el cache de idempotencia -- si esa transaccion ya se investigo, devuelve el informe cacheado
 2. **Evaluacion de politicas** (Haiku): evalua cada politica contra la transaccion, genera lista de verdicts
@@ -615,7 +619,7 @@ Las 7 ramas paralelas convergen en `[Merge -- Contexto Paralelo]` (nodo Merge, i
 4. **Outcome determinista**: Python calcula action, risk_level, requires_hitl desde los verdicts
 5. **Precedent summary**: etiquetado [MOTIVO SIMILAR] + [MISMO MERCHANT] + analisis de patron
 6. **Sintesis** (Sonnet): genera razonamiento, resumen, confianza. Recibe el outcome determinista como dato, no como sugerencia
-7. **Override post-LLM**: los 8 campos deterministas sobreescriben cualquier cosa que el LLM haya devuelto
+7. **Override post-LLM**: los 9 campos deterministas sobreescriben cualquier cosa que el LLM haya devuelto
 8. **Guardrails post-LLM**: APPROVE + BLOCKER activo -> forzar REJECT (guardia anti-alucinacion)
 
 **`[Verificar Guardrails]`** -- un nodo Code nativo que ejecuta chequeos de defensa en profundidad directamente en el canvas de n8n, haciendo visible el estado de guardrails sin necesidad de abrir los logs de FastAPI:
@@ -625,7 +629,7 @@ Las 7 ramas paralelas convergen en `[Merge -- Contexto Paralelo]` (nodo Merge, i
 
 Estos son los mismos chequeos que FastAPI aplica -- n8n provee visibilidad en canvas, FastAPI provee enforcement.
 
-`[Juez de Calidad]` llama a `POST /api/analyze/judge` via FastAPI usando Sonnet. El prompt `v1_judge` esta versionado en `llm/prompts/v1_judge.py` y se ejecuta a traves del mismo `AnthropicClient`, asegurando observabilidad consistente via Langfuse. El nodo `[Extraer Evaluacion -- Juez]` parsea la respuesta JSON. Devuelve `overall_score` de 1.0 a 10.0 evaluando 5 criterios: precision factual, cumplimiento de politicas, calidad del razonamiento, clasificacion de riesgo, claridad de la recomendacion.
+`[Juez de Calidad]` llama a `POST /api/analyze/judge` via FastAPI usando Sonnet. El prompt `v1_judge` esta versionado en `llm/prompts/v1_judge.py` y se ejecuta por el mismo camino que los otros dos pasos --`ModelosService` le pide el cliente a `LLMManager`, que segun el proveedor configurado devuelve `AnthropicClient` u `OpenAICompatibleClient`--, asegurando observabilidad consistente via Langfuse. El nodo `[Extraer Evaluacion -- Juez]` parsea la respuesta JSON. Devuelve `overall_score` de 1.0 a 10.0 evaluando 5 criterios: precision factual, cumplimiento de politicas, calidad del razonamiento, clasificacion de riesgo, claridad de la recomendacion.
 
 **`[Juez Aprueba?]`** -- un nodo IF nativo que lee el campo `approved` que ya viene en la respuesta de `/api/analyze/judge`. Los aprobados pasan directo a `[Preparar Informe]`; el resto pasa por `[Marcar -- Calidad Baja]`, un nodo Set que agrega un flag `LOW_QUALITY` que el informe muestra en la seccion del Juez. El umbral vive en `JUDGE_APPROVAL_THRESHOLD` (`domain/constants.py`) y en ningun otro lado: antes el canvas comparaba contra un 7 escrito a mano, asi que mover la constante en Python no movia el workflow.
 
@@ -647,9 +651,9 @@ La rama de revision humana pasa antes por `[Wait]` -> `[Normalizar Decision HITL
 
 Despues de cada resolucion, el pipeline emite alertas automaticamente:
 - **BLOCKER detectado** → alerta `blocker_auto_reject` (ERROR) registrada en SQLite via `POST /api/alerts/`
-- **HITL requerido** → alerta `hitl_required` (WARNING) registrada en SQLite
+- **HITL requerido** → alerta `hitl_required` (WARN) registrada en SQLite
 
-Si el workflow de n8n falla, el Error Handler (`workflow_ciri_errors.json`) captura el error via `Error Trigger`, registra la alerta en la API y envia un email a `$vars.ALERT_EMAIL`.
+Si el workflow de n8n falla, el Error Handler (`workflow_ciri_errors.json`) captura el error via `Error Trigger` y registra la alerta en la API. Trae ademas un nodo `Enviar Email de Alerta` a `$vars.ALERT_EMAIL`, pero **viaja deshabilitado**: mandar mail pide una credencial SMTP que el entregable no puede incluir. Tal como se importa, el aviso queda en el log de alertas y habilitar el nodo es un clic.
 
 El panel de testing muestra estas alertas en tiempo real (polling cada 30 segundos).
 
@@ -690,8 +694,8 @@ Cuando un analista envia feedback via `POST /api/feedback`, `FeedbackService` lo
 
 **Consecuencias:**
 - Cada pieza de logica se testea con `pytest` independientemente de n8n
-- 633 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
-- 33 tests E2E adicionales corren contra la API real desplegada en Render (LLM real, Qdrant real, sin mocks)
+- 1201 tests unitarios/integracion pasan sin que n8n ni Qdrant esten corriendo (mockeados en `tests/conftest.py`)
+- 34 tests E2E adicionales corren contra la API real desplegada en Render (LLM real, Qdrant real, sin mocks)
 - n8n es reemplazable (Temporal, Airflow, un cron job) sin tocar FastAPI
 - La documentacion OpenAPI en `/docs` se autogenera y siempre esta actualizada
 
@@ -759,9 +763,11 @@ El riesgo obvio de este enfoque es que el LLM puede interpretar mal una politica
 **Consecuencias:**
 - La misma transaccion siempre genera la misma consulta -- reproducible y debuggeable
 - Cero costo de tokens en tiempo de recuperacion
-- Para politicas: `top_k=17, threshold=0.0` -- recuperar todas, dejar que el LLM determine relevancia
+- Para politicas: `threshold=0.0` y un limite que sale de contar la coleccion en cada busqueda -- recuperar todas, dejar que el LLM determine relevancia (si el conteo falla, hasta `POLICIES_TOP_K_FALLBACK`, 64)
 - Para casos: `top_k=5, threshold=0.40` -- solo precedentes semanticamente significativos
 - Reranking post-Qdrant: boost de +0.05 si coincide metodo de pago, +0.03 si coincide pais
+
+Ese limite de politicas era una constante fija en 17, las 17 politicas del dataset. Cargar la politica 18 por la API la indexaba bien, pero la peor rankeada de las 18 desaparecia del contexto sin log ni aviso: por eso hoy se cuenta la coleccion en cada busqueda.
 
 Ademas, las busquedas de politicas y casos se hacen en un solo batch de embedding (1 llamada a Voyage AI en vez de 2) via `search_policies_and_cases()`, lo que reduce el consumo en el free tier.
 
@@ -797,7 +803,7 @@ El sistema implementa un pipeline de alertas operativas para visibilidad de erro
 | Fuente | Evento | Severidad |
 |--------|--------|-----------|
 | Pipeline de resolucion | Caso BLOCKER (rechazo automatico) | ERROR |
-| Pipeline de resolucion | Caso requiere HITL | WARNING |
+| Pipeline de resolucion | Caso requiere HITL | WARN |
 | n8n Error Handler | Error no manejado en workflow | ERROR |
 
 ### Flujo de alertas
@@ -827,7 +833,8 @@ Workflow separado de 5 nodos que captura errores no manejados del workflow princ
 Error Trigger -> Extraer Info -> POST /api/alerts/ -> Send Email ($vars.ALERT_EMAIL)
 ```
 
-- `onError: continueRegularOutput` en el POST para que el email siempre se intente enviar
+- `onError: continueRegularOutput` en el POST para que un fallo al registrar la alerta no corte el resto del handler
+- El nodo de email viaja `disabled: true`: sin credencial SMTP no puede funcionar, y un nodo que falla en cada error seria peor que no tenerlo. Habilitarlo es un clic
 - Requiere variable `ALERT_EMAIL` en n8n Settings -> Variables
 - Credencial SMTP placeholder "SMTP CIRI" (configurable por el evaluador)
 
@@ -835,14 +842,14 @@ Error Trigger -> Extraer Info -> POST /api/alerts/ -> Send Email ($vars.ALERT_EM
 
 El panel soporta 3 modos de pipeline: **Directo (sin n8n)** (default), **n8n Test** y **n8n Production**.
 
-**BYOK (Bring Your Own Key):** El panel requiere que cada visitante ingrese su propia API key de Anthropic. La key se envía en el body del request (`api_key` en `AnalyzeRequest`), se usa para crear un `AnthropicClient` temporal por request, y nunca se almacena (ni en localStorage, ni servidor, ni logs). Esto permite compartir el panel publicamente sin exponer creditos propios. La key del servidor (`CB_ANTHROPIC_API_KEY`) sigue activa para n8n webhooks y endpoints API directos.
+**BYOK (Bring Your Own Key):** El panel acepta que cada visitante ingrese su propia API key, del proveedor que elija. No es obligatoria: el deploy arranca en modo demo (`CB_DEMO_MODE`, default `true`) y `api_key` es opcional en `AnalyzeRequest`, asi que se puede analizar sin ninguna. Cuando viene, la key se envía en el body del request, se usa para crear un cliente temporal por request (`AnthropicClient` u `OpenAICompatibleClient`, segun el proveedor elegido en `modelos`), y nunca se almacena (ni en localStorage, ni servidor, ni logs). Esto permite compartir el panel publicamente sin exponer creditos propios. La key del servidor (`CB_ANTHROPIC_API_KEY`) sigue activa para n8n webhooks y endpoints API directos.
 
 En modo directo, el panel usa SSE streaming (`POST /api/panel/analyze-stream`) para mostrar el progreso del pipeline en tiempo real. Cada paso emite un evento SSE con datos reales a medida que se completa: nombre del comercio, cantidad de politicas recuperadas, desglose de veredictos (PASS/FAIL/BLOCKER), score del juez, etc. El endpoint usa `PipelineService.run_streaming()`, un generador que yield-ea tuplas `(step, data)` y ejecuta pasos paralelos con `as_completed()`. El header `X-Accel-Buffering: no` asegura compatibilidad con Render/nginx.
 
 En modo n8n, el panel muestra un spinner simple con "Esperando respuesta de n8n..." sin pasos intermedios.
 
 El panel tambien incluye un "Log de alertas" que muestra las ultimas 20 alertas con:
-- Color por severidad (rojo=ERROR, amarillo=WARNING, azul=INFO)
+- Color por severidad (rojo=ERROR, amarillo=WARN, azul=INFO)
 - Polling automatico cada 30 segundos
 - Actualizacion manual via boton "Actualizar"
 
@@ -918,7 +925,7 @@ quest_ML/
   scripts/
     seed_data.py              # Seeding Excel → SQLite + Qdrant
     evaluar.py                # Mide el Judge sobre N casos y versiona el resultado
-  tests/                      # 1089 tests (unit + integration + E2E)
+  tests/                      # 1235 tests (unit + integration + E2E)
   docs/
     architecture.md           # Arquitectura del sistema, flujo n8n
     decisions.md              # 23 decisiones técnicas con razonamiento
@@ -937,7 +944,7 @@ quest_ML/
 ## La Suite de Tests
 
 Corren solos en cada push y cada pull request
-(`.github/workflows/tests.yml`): lint, los 633 de `unit` e `integration` con
+(`.github/workflows/tests.yml`): lint, los 1201 de `unit` e `integration` con
 cobertura, y una validacion de que los tres JSON de n8n sean importables —nodos
 que existen y conexiones que apuntan a algo—. Un workflow roto no compila nada,
 asi que sin ese paso el problema aparecia recien al importarlo a mano.
@@ -963,7 +970,7 @@ python -m pytest tests/unit/ -v
 python -m pytest tests/integration/ -v
 ```
 
-1089 tests en 44 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
+1235 tests en 47 archivos (unit + integration + E2E) y **92% de cobertura** sobre `api/app`.
 Es el numero que reporta el CI sobre un checkout limpio, que es el reproducible: medido con un
 `.env` cargado sube unas decimas, porque se ejecutan ramas que sin configuracion no corren.
 El CI falla por debajo del 85%: el piso no esta para presumir un numero sino para que una
@@ -971,61 +978,84 @@ caida se vea en el diff que la causo.
 
 | Paquete | Cobertura | Sentencias |
 |---|---|---|
-| `domain` | 100% | 323 |
-| `reports` | 100% | 26 |
-| `services` | 94,5% | 602 |
-| `analysis` | 92,1% | 114 |
-| `data` | 90,8% | 295 |
-| `llm` | 90,5% | 315 |
-| `rag` | 87,2% | 327 |
-| `routes` | 78,2% | 596 |
-| `observability` | 70,3% | 138 |
+| `reports` | 100% | 30 |
+| `domain` | 99,5% | 600 |
+| `analysis` | 96,2% | 132 |
+| `services` | 94,7% | 529 |
+| `llm` | 91,7% | 348 |
+| `routes` | 91,4% | 659 |
+| `observability` | 91,2% | 160 |
+| `data` | 88,5% | 338 |
+| `rag` | 87,5% | 353 |
+| raiz de `api/app` | 86,5% | 333 |
 
-Las dos mas bajas son las que mas dependen de que algo externo responda: en `routes`, las
-ramas de error de servicios caidos; en `observability`, los caminos que solo se ejecutan con
-Langfuse configurado. Cubrirlas del todo seria mockear el mundo hasta que el test deje de
-significar algo.
+Las tres mas bajas, en orden: en la raiz del paquete, el cableado de arranque (`main.py`,
+`dependencies.py`, `config.py`), que solo se recorre entero con todas las dependencias
+levantadas; en `rag`, los caminos de `indexer.py` y `embedder.py` que solo corren contra un
+Qdrant y un Voyage de verdad; en `data`, la carga del Excel y las migraciones de esquema.
+Cubrirlas del todo seria mockear el mundo hasta que el test deje de significar algo.
 
-**53 de esos tests no verifican codigo, verifican el entregable**: que el workflow de n8n este
-cableado (`test_workflows_n8n`, 33), que los numeros del README sean los reales y que los
-informes que viajan se abran sin internet (`test_documentacion_verificable`, 12), y que cada
+**132 de esos tests no verifican codigo, verifican el entregable**: que el workflow de n8n este
+cableado (`test_workflows_n8n`, 63), que los numeros del README sean los reales y que los
+informes que viajan se abran sin internet (`test_documentacion_verificable`, 61), y que cada
 informe declare como se produjo (`test_informe_autodescriptivo`, 8). El diagrama
-**«los tests»** recorre los ocho defectos reales que hoy tienen un test que los fija — ninguno
-de los ocho rompia un import.
+**«los tests»** recorre los dieciseis defectos reales que hoy tienen un test que los fija —
+ninguno de los dieciseis rompia un import.
 
 ```
 tests/
-  conftest.py                      # MockLLMClient, datos de ejemplo, SQLite in-memory
+  conftest.py                               # MockLLMClient, datos de ejemplo, SQLite in-memory
   unit/
-    test_analysis.py                  #  26 · SLA, patrones de error, riesgo de comercio, flags de cliente
-    test_contacto_n8n.py              #  10 · La señal de que un n8n llegó, sin guardar su origen
-    test_data_loader.py               #  12 · Carga Excel → SQLite
-    test_db.py                        #  27 · Capa de base de datos: CRUD, stats, caché
-    test_embedder.py                  #  16 · Caché de embeddings y límite de rate del proveedor
-    test_error_handlers.py            #  10 · Errores de proveedor explicados, no 500 mudos
-    test_formatter.py                 #  21 · Verificación de output del formatter RAG
-    test_guardrails.py                #  33 · Validación post-LLM de guardrails
-    test_guardrails_edge.py           #  12 · Edge cases: boundaries, warnings combinados
-    test_indexer.py                   #  18 · QdrantIndexer con client mockeado
-    test_informe_autodescriptivo.py   #   8 · El informe lleva sus datos embebidos
-    test_langfuse_stats.py            #   8 · Servicio de estadísticas Langfuse
-    test_langfuse_stats_fetch.py      #  13 · Traída de trazas y cálculo de costos
-    test_modo_demo.py                 #  72 · Modo demo: qué se sirve, cómo se declara, qué no se mezcla
-    test_parsing.py                   #  15 · Extracción de JSON de la salida del modelo
-    test_pipeline.py                  #   9 · PipelineService: timeouts, caché, agregación de uso
-    test_rag_retriever.py             #  13 · Reglas de enriquecimiento del QueryBuilder
-    test_report_generator.py          #   9 · Rendering Jinja2 HTML + prevención XSS
-    test_services.py                  #  17 · ResolutionService: resolve, judge, overrides
-    test_shared.py                    #  23 · Piezas compartidas: tarifas, contexto, clasificador
-    test_updater.py                   #   8 · Re-indexación al editar política o resolver caso
+    test_analysis.py                        #  48 · SLA, patrones de error, riesgo de comercio, flags de cliente
+    test_auditoria_de_politicas.py          #   8 · Qué políticas se pueden evaluar con los datos que hay
+    test_campos_deterministas.py            #  48 · Qué campos fija el código y cuáles escribe el modelo
+    test_compatibilidad_modelos.py          #  40 · Los prompts sirven con cualquier modelo decente
+    test_contacto_n8n.py                    #  10 · La señal de que un n8n llegó, sin guardar su origen
+    test_data_loader.py                     #  16 · Carga Excel → SQLite
+    test_db.py                              #  39 · Capa de base de datos: CRUD, stats, caché
+    test_documentacion_verificable.py       #  61 · Los números que la doc afirma son los reales
+    test_embedder.py                        #  16 · Caché de embeddings y límite de rate del proveedor
+    test_error_handlers.py                  #  10 · Errores de proveedor explicados, no 500 mudos
+    test_evaluar.py                         #  11 · El harness de evaluación: muestreo reproducible
+    test_fallos.py                          #  32 · Clasificar un fallo por tipo y código, no por substring
+    test_formatter.py                       #  21 · Verificación de output del formatter RAG
+    test_guardrails.py                      #  63 · Validación post-LLM de guardrails
+    test_guardrails_edge.py                 #  12 · Edge cases: boundaries, warnings combinados
+    test_hitl.py                            #  20 · Las tres reglas de la decisión de un analista
+    test_indexer.py                         #  18 · QdrantIndexer con client mockeado
+    test_informe_autodescriptivo.py         #   8 · El informe lleva sus datos embebidos
+    test_langfuse_stats.py                  #  11 · Servicio de estadísticas Langfuse
+    test_langfuse_stats_fetch.py            #  20 · Traída de trazas y cálculo de costos
+    test_los_dos_caminos_reunen_lo_mismo.py #   3 · Los dos caminos reúnen el mismo contexto
+    test_medir_acuerdo.py                   #  21 · El acuerdo con las resoluciones humanas, medido
+    test_modelos.py                         #  60 · Qué modelo corre en cada paso, sin deploy
+    test_modo_demo.py                       # 109 · Modo demo: qué se sirve, cómo se declara, qué no se mezcla
+    test_nucleo_no_cambia.py                #  14 · Golden master del núcleo determinista
+    test_panel_sin_copias.py                #  14 · El panel no reescribe lo que ya decide el dominio
+    test_parsing.py                         #  15 · Extracción de JSON de la salida del modelo
+    test_pipeline.py                        #  12 · PipelineService: timeouts, caché, agregación de uso
+    test_prompts_sin_copias.py              #  16 · Los prompts reciben los valores del dominio, no los copian
+    test_rag_retriever.py                   #  25 · Reglas de enriquecimiento del QueryBuilder
+    test_rate_limiter.py                    #  21 · Turnos repartidos antes del 429, con reloj inyectado
+    test_registro_de_proveedores.py         #  57 · Agregar un proveedor es una sola edición
+    test_report_generator.py                #  36 · Rendering Jinja2 HTML + prevención XSS
+    test_scripts_arrancan.py                #  12 · Los scripts que el entregable ofrece arrancan
+    test_services.py                        #  17 · ResolutionService: resolve, judge, overrides
+    test_shared.py                          #  24 · Piezas compartidas: tarifas, contexto, clasificador
+    test_simbolos_citados_existen.py        #  20 · Los símbolos que la doc cita existen en el código
+    test_tracer_contrato.py                 #  23 · Las tres implementaciones de Tracer, mismo contrato
+    test_updater.py                         #   8 · Re-indexación al editar política o resolver caso
+    test_workflows_n8n.py                   #  63 · El canvas de n8n, verificado como código
   integration/
-    test_full_flow.py                 #  16 · Ciclo completo resolve → judge → feedback → report
-    test_panel_n8n.py                 #  13 · El panel no disimula cuando n8n no puede ejecutar
-    test_policies_crud.py             #   6 · CRUD de políticas + re-indexación en Qdrant
-    test_routes.py                    #  15 · Integración a nivel de rutas: SLA, caché, health
+    test_arranque_sin_qdrant.py             #   4 · La API arranca aunque Qdrant no responda
+    test_full_flow.py                       #  16 · Ciclo completo resolve → judge → feedback → report
+    test_panel_modos.py                     #  40 · Los seis caminos del panel y su precedencia
+    test_panel_n8n.py                       #  25 · El panel no disimula cuando n8n no puede ejecutar
+    test_policies_crud.py                   #  10 · CRUD de políticas + re-indexación en Qdrant
+    test_routes.py                          #  24 · Integración a nivel de rutas: SLA, caché, health
   e2e/
-    conftest.py                       #       httpx.Client contra la API real
-    test_api_real.py                  #  33 · Contra la API desplegada (LLM real, Qdrant real)
+    conftest.py                             #       httpx.Client contra la API real
+    test_api_real.py                        #  34 · Contra la API desplegada (LLM real, Qdrant real)
 ```
 
 ### Tests E2E (sin mocks — API real)
@@ -1035,14 +1065,14 @@ tests/
 CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
 ```
 
-33 tests E2E que verifican invariantes de negocio contra la API real:
+34 tests E2E que verifican invariantes de negocio contra la API real:
 
 | Suite | Tests | Qué verifica |
 |-------|-------|-------------|
 | Health | 2 | Health check, colecciones Qdrant |
 | Transactions | 4 | Listado, lookup por ID, 404, logs |
 | Policies | 3 | Listado, búsqueda por código, RAG semántico |
-| Cases | 1 | Casos similares (Qdrant) |
+| Cases | 2 | Casos similares (Qdrant) |
 | Analysis | 3 | Riesgo de comercio, historial de cliente, SLA |
 | Full Pipeline | 6 | Streaming SSE, REJECT/BLOCKER, score Judge, HTML |
 | Resolve | 6 | Resolve con contexto completo (LLM real) |
@@ -1065,6 +1095,6 @@ CB_E2E_BASE_URL=https://ciri-chargeback-agent.onrender.com pytest tests/e2e/ -v
 | SQL Injection | Queries parametrizadas (`?` placeholders) en todo `db.py` |
 | PII en Qdrant | Solo datos de negocio indexados (merchant, monto, pais). Sin nombres ni documentos personales |
 | Prompt injection | Output del LLM validado contra Pydantic models (`validate_llm_output`); guardrails post-LLM detectan contradicciones |
-| Alucinacion LLM | 8/11 campos de resolucion son overrides deterministicos; whitelist de BLOCKER impide rechazos automaticos falsos |
+| Alucinacion LLM | 9 de los 13 campos de resolucion son overrides deterministicos; whitelist de BLOCKER impide rechazos automaticos falsos |
 | Request correlation | `X-Request-ID` en middleware para auditoria y trazabilidad |
 | Manejo de errores | Global exception handler retorna JSON estructurado, sin stack traces al cliente |

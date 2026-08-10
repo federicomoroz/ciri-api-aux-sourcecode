@@ -163,7 +163,7 @@ Array JSON de objetos `PolicyVerdict`:
 |---|---|
 | `PASS` | La transaccion cumple esta politica (la condicion de violacion NO se cumple) |
 | `FAIL` | La transaccion viola esta politica (la condicion de violacion SI se cumple) |
-| `BLOCKER` | Violacion critica — la transaccion es TECNICAMENTE IRREVERSIBLE (reservado para Cripto via POL-EXC-003). Un comercio suspendido o un cliente riesgoso NO son BLOCKER |
+| `BLOCKER` | Violacion critica — la transaccion es TECNICAMENTE IRREVERSIBLE. Reservado a las politicas marcadas `[PUEDE BLOQUEAR]` (hoy solo POL-EXC-003, por la semilla `POLICY_SEED_BLOQUEANTES`; la marca sale de la columna `puede_bloquear`, editable). Un comercio suspendido o un cliente riesgoso NO son BLOCKER |
 | `WARNING` | SOLO cuando falta un dato necesario para evaluar la condicion (ej: timestamps ausentes para verificar ventana temporal) |
 | `NOT_APPLICABLE` | La politica genuinamente no aplica (ej: POL-EXC-002 VIP cuando el cliente no es VIP) |
 
@@ -176,8 +176,8 @@ Array JSON de objetos `PolicyVerdict`:
    - Citar datos especificos: score=X, monto=USD Y, cb_count=N vs umbral=M, operador exacto
    - `total_chargebacks` del historial = conteo PREVIO (no incluir caso actual)
    - Ventanas temporales: si no hay timestamps, marcar WARNING (no FAIL)
-2. `POL-EXC-003` aplica SIEMPRE como `BLOCKER` cuando el metodo de pago es "Cripto"
-3. `POL-FRD-001` aplica como `FAIL` o `BLOCKER` cuando el score antifraude es inferior al umbral
+2. **Quien puede bloquear lo dice la politica, no su codigo:** solo las politicas marcadas `[PUEDE BLOQUEAR]` en su encabezado pueden recibir `BLOCKER`, y ademas su condicion tiene que cumplirse — marcada + condicion que no se cumple = `PASS`. Una politica sin la marca cuya condicion si se cumple es `FAIL`, con `requires_human_review=true` si el caso necesita una persona
+3. Las condiciones —umbrales, metodos de pago, plazos— se leen de la descripcion de cada politica: no aplicar una condicion que la politica no diga, ni recordar reglas de politicas que no esten en la lista
 4. Un `BLOCKER` significa que la resolucion final DEBE rechazar el contracargo
 5. Evaluar TODAS las politicas proporcionadas — no omitir ninguna
 6. Usar TODOS los datos disponibles: transaccion, perfil de riesgo del comercio e historial del cliente
@@ -217,18 +217,24 @@ Array JSON de objetos `PolicyVerdict`:
 }
 
 ## POLITICAS A EVALUAR (recuperadas por RAG — 17 politicas)
-**POL-EXC-003** — EXCEPCION
-Nombre: Exclusion de criptomonedas
-Descripcion: Las transacciones realizadas con criptomonedas son irreversibles...
-Referencia: Reg. Fintech 2024/03
+### Politica 1 [PUEDE BLOQUEAR] (relevancia: NN%)
+- Codigo: POL-EXC-003
+- Categoria: EXCEPCION
+- Nombre: Exclusion de criptomonedas
+- Descripcion: Las transacciones realizadas con criptomonedas son irreversibles...
+- Referencia: Reg. Fintech 2024/03
 
-**POL-FRD-001** — FRAUDE
-Nombre: Umbral antifraude
-Descripcion: Transacciones con score < 15 requieren revision manual obligatoria...
+### Politica 2 (relevancia: NN%)
+- Codigo: POL-FRD-001
+- Categoria: FRAUDE
+- Nombre: Umbral antifraude
+- Descripcion: Transacciones con score < 15 requieren revision manual obligatoria...
 ...
 
 Evalua cada politica usando TODOS los datos disponibles y devuelve el array JSON.
 ```
+
+El bloque de politicas lo arma `format_policies_for_prompt` (`api/app/rag/formatter.py`): el encabezado numerado lleva `[PUEDE BLOQUEAR]` solo cuando la politica esta habilitada para bloquear, y esa es la marca que busca la regla 2. La relevancia va como porcentaje del score de Qdrant y cambia con cada consulta, por eso aca queda como `NN%`.
 
 ### Ejemplo de salida esperada
 
@@ -306,16 +312,18 @@ Analista senior de contracargos en una fintech latinoamericana.
 | `recommended_action` | **Codigo** (override post-LLM) | El LLM debe copiar el valor de DECISION DETERMINADA |
 | `risk_level` | **Codigo** (override post-LLM) | Idem |
 | `requires_hitl` | **Codigo** (override post-LLM) | Idem |
+| `hitl_reason` | **Codigo** (override post-LLM) | `decision.decidir()` — se sobrescribe cuando la decision trae motivo (`resolution.py` 157-158) |
 | `policy_verdicts` | **Codigo** (inyectado post-LLM) | Se insertan los veredictos de Call 1 directamente |
 | `precedent_summary` | **Codigo** (override post-LLM) | Generado por `precedentes.resumir_precedentes()` |
 | `justification` | **LLM** | Campo analitico principal — razonamiento sobre evidencias |
 | `confidence` | **LLM** | Estimacion de certeza (0.0–1.0) |
 | `next_steps` | **LLM** | Pasos concretos derivados de las politicas y precedentes |
-| `log_summary` | **LLM** (con input determinista) | El LLM recibe el resumen pre-computado y lo reformula |
-| `compensation_applicable` | **LLM** | Evaluacion de SLA segun POL-SLA-004 |
-| `compensation_amount_usd` | **LLM** | Maximo USD 15 segun POL-SLA-004 |
+| `log_summary` | **Codigo** (override post-LLM) | Generado por `precedentes.resumir_logs()`; el modelo lo recibe como contexto y su copia se descarta |
+| `compensation_applicable` | **Codigo** (override post-LLM) | `decision.compensacion_por_sla()` — lee el SLA ya calculado (POL-SLA-004) |
+| `compensation_amount_usd` | **Codigo** (override post-LLM) | `decision.compensacion_por_sla()` — tope de POL-SLA-004, acotado al monto |
+| `transaction_id` | **LLM** | Lo devuelve tal como lo recibio |
 
-Incluso si el LLM devuelve valores diferentes para los campos deterministas, `ResolutionService.resolve()` los sobreescribe con los valores calculados por codigo (lineas 87-93 de `resolution.py`). Esto garantiza que la decision final es siempre determinista, sin importar alucinaciones del LLM.
+Incluso si el LLM devuelve valores diferentes para los campos deterministas, `ResolutionService.resolve()` los sobreescribe con los valores calculados por codigo (lineas 146-161 de `resolution.py`). Esto garantiza que la decision final es siempre determinista, sin importar alucinaciones del LLM.
 
 ### Especificacion de salida
 
@@ -326,7 +334,6 @@ Incluso si el LLM devuelve valores diferentes para los campos deterministas, `Re
   "confidence": 0.72,
   "justification": "Analisis estructurado con evidencias y razonamiento",
   "precedent_summary": "COPIA EXACTA de DECISION DETERMINADA",
-  "log_summary": "Resumen de anomalias en logs",
   "risk_level": "VALOR_DE_DECISION_DETERMINADA",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
@@ -360,8 +367,8 @@ Incluso si el LLM devuelve valores diferentes para los campos deterministas, `Re
 2. NO incluir policy_verdicts en el JSON — ya fueron evaluados por un modulo separado
 3. Citar codigos de politica y su veredicto (PASS/FAIL/BLOCKER)
 4. **Prohibido inventar datos** — solo usar valores que aparezcan LITERALMENTE en las secciones de datos
-5. `compensation_applicable` es true SOLO si se incumplio el SLA (POL-SLA-004)
-6. `compensation_amount_usd` maxima: USD 15
+5. `compensation_applicable` y `compensation_amount_usd`: si aparecen en la DECISION DETERMINADA, copiarlos EXACTAMENTE — el sistema ya los calculo contando dias habiles contra el limite de POL-SLA-004, no se recalculan ni se discuten. Si no aparecen, no hubo dato de SLA: quedan en false y 0.0
+6. Si `compensation_applicable` es true, explicar en `justification` por que, citando los dias transcurridos, el limite y la politica de la seccion CUMPLIMIENTO DE SLA
 7. `next_steps`: 2 a 5 pasos. Formato: "[verbo] + [dato] + [responsable]"
 8. `confidence`: 0.9+ si todos PASS, 0.7-0.9 si hay FAILs claros, 0.5-0.7 si hay datos faltantes
 9. Responder UNICAMENTE con JSON valido en espanol
@@ -390,7 +397,6 @@ El prompt exige una estructura de justificacion en 6 partes (maximo 200 palabras
   "confidence": 0.72,
   "justification": "Riesgo HIGH por 1 violacion de politica (POL-FRD-001). El riesgo no proviene de fraude sofisticado sino de un fraud_score=4 que incumple el umbral minimo de 30 segun POL-FRD-001. POL-EXC-002 PASS confirma trato VIP con SLA de 5 dias. CB-0020 [MOTIVO SIMILAR] fue aprobado en 2 dias, lo que sugiere que casos de fraude/no reconocido con este perfil tienden a resolverse a favor del cliente. CB-0033 tambien fue aprobado (3d), reforzando el patron: 2/2 precedentes aprobados — tendencia favorable al cliente. Dado este patron favorable, la decision PENDING_HITL permite confirmar el fraud_score antes de seguir la tendencia de aprobacion.",
   "precedent_summary": "CB-0020 [MOTIVO SIMILAR]: cargo no reconocido, aprobado en 2d, merchant=eBay. Relevancia: mismo patron de fraude / no reconocido | CB-0033: fraude tarjeta, aprobado en 3d, merchant=Amazon | Patron: de 2 precedentes, 2 aprobados, 0 rechazados. Motivo similar: 1/2, 1 aprobados",
-  "log_summary": "2 WARN: timeout gateway + reintento exitoso.",
   "risk_level": "HIGH",
   "compensation_applicable": false,
   "compensation_amount_usd": 0.0,
@@ -522,8 +528,10 @@ El cambio principal de v1.0 a v2.0 es la introduccion de rubricas granulares con
 |---|---|
 | >= 8.0 | Aprobado + auto-indexado como nuevo precedente en Qdrant |
 | 7.0–7.9 | Aprobado — entregado al analista como resolucion final |
-| 5.0–6.9 | No aprobado — enviado a HITL para revision de analista |
-| < 5.0 | No aprobado + flag `needs_review=true` en registro de feedback |
+| 5.0–6.9 | No aprobado — el informe sale igual, marcado (ver la nota de abajo) |
+| < 5.0 | No aprobado — mismo marcado que la banda anterior, mas el flag `needs_review=true` en el registro de feedback |
+
+El marcado no distingue bandas: la salida `false` de `¿Juez Aprueba?` —es decir, cualquier `overall_score` por debajo de `JUDGE_APPROVAL_THRESHOLD` (7.0)— pasa por el nodo Set `Marcar — Calidad Baja`, que escribe en `judge_evaluation.quality_flag` el string completo `"LOW_QUALITY — Revisar resolución manualmente"` (buscarlo por igualdad exacta con `"LOW_QUALITY"` no lo encuentra). Un score bajo no deriva a HITL: eso lo decide `resolution.requires_hitl` en el `Switch — Derivacion`.
 
 ### Reglas adicionales del prompt v2.0
 
@@ -541,8 +549,8 @@ El cambio principal de v1.0 a v2.0 es la introduccion de rubricas granulares con
 
 ## Analisis de logs (determinista — sin prompt LLM)
 
-**Implementacion:** `api/app/analysis/analyzer.py` → `patrones.count_severities()` + `patrones.detect_error_patterns()`
-**Integracion:** `ResolutionService.precedentes.resumir_logs()` en `api/app/services/resolution.py`
+**Implementacion:** `api/app/analysis/patrones.py` → `count_severities()` + `detect_error_patterns()` (funciones libres, no metodos de `Analyzer`: no tocan la base)
+**Integracion:** `precedentes.resumir_logs()`, llamada desde `ResolutionService.resolve()` en `api/app/services/resolution.py`
 
 ### Proposito
 
@@ -550,13 +558,13 @@ Analizar los eventos de log de procesamiento de pagos para contar severidades y 
 
 ### Como funciona
 
-1. `Analyzer.count_severities(logs)` produce `{"ERROR": N, "WARN": N, "INFO": N}`
-2. `Analyzer.detect_error_patterns(logs)` escanea 9 patrones de anomalia conocidos por nombre de evento
-3. `ResolutionService.precedentes.resumir_logs()` combina ambas salidas en un resumen de texto que se pasa al prompt v1_resolution como parametro `log_summary`
+1. `patrones.count_severities(logs)` produce `{"ERROR": N, "WARN": N, "INFO": N}`
+2. `patrones.detect_error_patterns(logs)` escanea 8 patrones de anomalia conocidos por nombre de evento
+3. `precedentes.resumir_logs()` combina ambas salidas en un resumen de texto que se pasa al prompt v1_resolution como parametro `log_summary`
 
 El LLM (v1_resolution) recibe el resumen pre-computado y lo interpreta junto con la demas evidencia — nunca procesa logs crudos directamente.
 
-### 9 patrones de anomalia detectados (determinista)
+### 8 patrones de anomalia detectados (determinista)
 
 | Patron | Descripcion | Politica relacionada |
 |---|---|---|
@@ -568,8 +576,8 @@ El LLM (v1_resolution) recibe el resumen pre-computado y lo interpreta junto con
 | `DOUBLE_CHARGE_DETECT` | Posible cargo duplicado | — |
 | `SLA_BREACH` | Violacion de SLA detectada por sistema | POL-SLA-002 |
 | `GEO_ANOMALY` | Anomalia geografica | POL-FRD-002 |
-| `AUTH_DECLINED` multiple | Intentos de autorizacion fallidos repetidos | POL-FRD-001 |
-| Secuencia de `ERROR` | Fallo sistematico de procesamiento | — |
+
+Son los ocho miembros de `ErrorPattern` (`domain/enums.py`) y las ocho ramas de `detect_error_patterns`: la tabla y el enum se cuentan igual.
 
 ### Justificacion del diseno
 

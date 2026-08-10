@@ -76,7 +76,7 @@ ataca el problema del enunciado ("poca reutilización del conocimiento generado"
 | Mecanismo | Dónde | Efecto |
 |---|---|---|
 | Precedentes | `historical_cases` en Qdrant | Cada caso avalado por un analista y con Judge ≥ 8.0 se reindexa y queda disponible para el siguiente |
-| Caché de idempotencia | `report_cache` en SQLite, clave (transacción, VIP) | Repetir un caso devuelve el informe ya generado, sin volver a pagar el LLM |
+| Caché de idempotencia | `report_cache` en SQLite, clave (transacción, VIP, motivo) | Repetir un caso devuelve el informe ya generado, sin volver a pagar el LLM |
 
 **Prompt engineering:** 3 prompts versionados en `api/app/llm/prompts/`, cada uno con su
 cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.md).
@@ -87,7 +87,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 | `v1_resolution.py` | v3.2 | Sonnet |
 | `v1_judge.py` | v2.2 | Sonnet |
 
-**El modelo de cada paso se elige por separado**, desde el panel, y se guarda en SQLite: `constants.py` tiene el default y cambiarlo no es un deploy. Son tres tareas distintas —comparar contra reglas, redactar, aplicar una rúbrica— y no hay motivo para que compartan modelo por defecto de implementación. Además de Anthropic hay cinco proveedores con free tier soportados vía `OpenAICompatibleClient`, que es la segunda implementación del `Protocol` y la prueba de que cambiar de proveedor no toca ningún llamador. Ver `decisions.md#21`.
+**El modelo de cada paso se elige por separado**, desde el panel, y se guarda en SQLite: el default sale de `config.py` (`CB_LLM_PROVIDER`, `CB_LLM_MODEL`, `CB_LLM_MODEL_RESOLUTION`) y cambiar la elección no es un deploy. Son tres tareas distintas —comparar contra reglas, redactar, aplicar una rúbrica— y no hay motivo para que compartan modelo por defecto de implementación. Además de Anthropic hay cinco proveedores con free tier soportados vía `OpenAICompatibleClient`, que es la segunda implementación del `Protocol` y la prueba de que cambiar de proveedor no toca ningún llamador. Ver `decisions.md#21`.
 
 ---
 
@@ -98,7 +98,7 @@ cabecera de versión, fecha y changelog. Documentados en [`prompts.md`](prompts.
 | Clasificación | `risk_level` ∈ BLOCKER / HIGH / MEDIUM / LOW, calculado por código (`domain/decision.py::decidir`), no por el LLM |
 | Derivación | `Switch — Derivación` en n8n enruta por **`requires_hitl`**, que es lo que decidió la API — no por el nivel de riesgo. Un caso MEDIUM que pide analista frenaba igual antes de llegar al Switch y salía cerrado; ahora frena en el `Wait`, que espera hasta 24 h. El nivel de riesgo dice cuán grave es; quién decide si hace falta una persona es `requires_hitl` |
 | Reportes | `POST /api/reports/html` — Jinja2, 9 secciones, formulario HITL condicional. Ejemplos en `docs/HTML_Output_Examples/` |
-| Alertas | Dos severidades con dos caminos. **Fallas** (`ERROR`): los tres workflows propagan a `workflow_ciri_errors.json` — el principal desde 3 nodos `Stop and Error`, el formulario desde 1 — que registra la alerta y avisa por mail. **Entradas rechazadas** (`WARN`): el formulario las registra directo, sin marcar la ejecución como fallida ni mandar mail, porque un tipeo no es una falla. `GET /api/alerts/` lista todo |
+| Alertas | Dos severidades con dos caminos. **Fallas** (`ERROR`): los otros dos workflows propagan a `workflow_ciri_errors.json` — el principal desde sus 4 nodos `Stop and Error`, el formulario desde cualquier nodo que falle sin salida de error propia — que registra la alerta con `POST /api/alerts/`. El nodo `Enviar Email de Alerta` existe y viaja **deshabilitado**: mandar mail pide credenciales SMTP que el entregable no puede traer, así que el aviso queda en el log de alertas y activarlo es un clic. **Entradas rechazadas** (`WARN`): el formulario las registra directo, sin marcar la ejecución como fallida ni mandar mail, porque un tipeo no es una falla. `GET /api/alerts/` lista todo |
 
 **El HITL no aprueba por defecto.** Si el plazo vence sin que nadie responda, el caso sale
 marcado `PENDING_HITL` y **no** se registra ninguna decisión de analista: antes, la ausencia de
@@ -127,7 +127,7 @@ sólo se descubre cuando ya falló algo.
 
 | Sub-eje | Resolución |
 |---|---|
-| Patrones de error | `analyzer.py::detect_error_patterns` sobre los 150 logs — 8 patrones nombrados (`ErrorPattern`): timeout sistemático del comercio, problema de conectividad, bloqueo por fraude, cargo duplicado, violación de SLA, falla de integración, pago interrumpido por sesión caída, anomalía geográfica |
+| Patrones de error | `patrones.py::detect_error_patterns` sobre los 150 logs — 8 patrones nombrados (`ErrorPattern`): timeout sistemático del comercio, problema de conectividad, bloqueo por fraude, cargo duplicado, violación de SLA, falla de integración, pago interrumpido por sesión caída, anomalía geográfica |
 | Comercios problemáticos | `analyzer.py::merchant_risk_profile` — `cb_ratio`, volumen, flags (`suspended_merchant`, `high_cb_ratio`). **El umbral es relativo a la línea base del corpus**, no un 2% absoluto: sobre una muestra de disputas donde 47 de 100 transacciones tienen contracargo, un umbral de industria marca los quince comercios y no distingue nada. Con la línea base quedan 2 suspendidos, 4 con ratio alto y 9 limpios |
 | Clientes con señales | `analyzer.py::client_flags` — reincidencia, anomalía geográfica |
 | Inconsistencias de política | El LLM evalúa cada política recuperada y emite veredicto PASS / WARNING / FAIL / BLOCKER con cita; los conflictos quedan visibles en el reporte. Sólo puede emitir BLOCKER la política que lo declara (`puede_bloquear`, columna de SQLite): habilitar una nueva es un `POST`, no un deploy |

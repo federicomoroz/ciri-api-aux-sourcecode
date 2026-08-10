@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml/badge.svg)](https://github.com/federicomoroz/ciri-api-aux-sourcecode/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![Tests](https://img.shields.io/badge/tests-1196%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-1235%20passed-brightgreen)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
 ![n8n](https://img.shields.io/badge/n8n-orchestrator-ff6d00)
 ![Claude](https://img.shields.io/badge/Claude-Haiku%20%2B%20Sonnet-blueviolet)
@@ -13,7 +13,9 @@ Ante un contracargo, el agente reúne todo lo que se sabe del caso —la transac
 
 > **Sobre el 9.1:** es el promedio del Juez sobre las corridas de desarrollo con la configuración
 > v3.0. Los tres informes que viajan en este paquete promedian 8.67 — son los tres casos más
-> contenciosos del dataset, elegidos por cubrir los tres caminos del enrutador y no por su puntaje.
+> contenciosos del dataset, elegidos por cubrir los dos desenlaces del enrutador —rechazo
+> automático y revisión humana— y tres situaciones de política distintas: el blocker de cripto, el
+> cliente VIP con score de fraude, y el SLA extendido fuera de LATAM. No por su puntaje.
 > Aquellas corridas no dejaron artefacto y hoy no son reproducibles sin saldo de API. El instrumento
 > para volver a medir sí viaja: `python scripts/evaluar.py --n 20` corre la muestra, escribe el
 > detalle caso por caso en `docs/evaluaciones/` y reporta el costo. El método completo está en
@@ -108,9 +110,9 @@ Los cinco archivos HTML numerados de esta carpeta. Se abren en cualquier navegad
 
 Están en orden de lectura: primero **qué** hace el circuito, después **cómo** se hablan las dos piezas.
 
-**«el circuito completo»** — los 39 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue. Se genera del propio JSON del workflow, así que no puede quedar desfasado del flujo real.
+**«el circuito completo»** — los 36 pasos en orden de ejecución más las 4 salidas de error, con el endpoint de cada uno. Al tocar un paso se abre una ficha con qué hace, de dónde recibe y hacia dónde sigue. Se genera del propio JSON del workflow, así que no puede quedar desfasado del flujo real.
 
-**«n8n y la API»** — quién le pide qué a quién. Las catorce llamadas en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
+**«n8n y la API»** — quién le pide qué a quién. Las quince llamadas en orden, qué toca cada una (SQLite, Qdrant, el modelo) y las dos veces que la conversación va al revés. Es el resumen: se lee en un minuto.
 
 **«La API por dentro»** — los 32 endpoints como un circuito, cada uno con su entrada. Además de qué hace cada pieza, explica por qué está separada así: qué principio SOLID sostiene cada corte, qué patrones de diseño usa y dónde. Es la más larga de las cinco y la única que habla de decisiones y no de flujo.
 
@@ -160,7 +162,7 @@ Devuelve el informe HTML listo. **No hay que configurar variables, credenciales 
 | Archivo | Qué es |
 |---|---|
 | `workflow_ciri_agent.json` | El orquestador: 46 nodos, 40 ejecutables |
-| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 39 pasos igual |
+| `workflow_ciri_form.json` | Un formulario como segunda vía de entrada. Tiene su propio trigger y, al recibir un caso, **llama al webhook del orquestador**: por eso corre los 36 pasos igual |
 | `workflow_ciri_errors.json` | Recibe los fallos de los otros dos y los registra |
 
 Tres pasos manuales al importar, inevitables porque n8n reasigna identificadores al recibir un workflow:
@@ -294,7 +296,7 @@ sólo el código que la API necesita para funcionar.
 pytest tests/unit tests/integration -q --cov=api/app --cov-fail-under=85
 ```
 
-**1162 tests** en 46 archivos y **92% de cobertura** sobre `api/app` — el número que
+**1201 tests** en 46 archivos y **92% de cobertura** sobre `api/app` — el número que
 reporta el CI sobre un checkout limpio, que es el reproducible: medido con un `.env` cargado
 sube unas décimas, porque se ejecutan ramas que sin configuración no corren. Los de `unit/` e `integration/` corren sin n8n ni Qdrant levantados; los 34 de
 `e2e/` llaman a la API publicada y al modelo, así que quedan fuera del CI a propósito —un test
@@ -305,7 +307,7 @@ Cada push corre tres pasos: **lint**, **tests con piso de cobertura del 85%**, y
 ningún nodo HTTP prometa reintentos que no tiene, que los Stop and Error tengan a dónde
 derivar—. Nada de eso rompe al importar el workflow, y todo eso rompe en producción.
 
-Lo que distingue a esta suite es que **53 de esos tests no verifican código**: que los números
+Lo que distingue a esta suite es que **132 de esos tests no verifican código**: que los números
 del README sean los reales, que los informes que viajan en el paquete se abran sin internet,
 que el workflow de n8n esté cableado y que ningún camino conteste `200` vacío. El diagrama **«los tests»** los recorre uno
 por uno, con el defecto concreto que cada uno fija.

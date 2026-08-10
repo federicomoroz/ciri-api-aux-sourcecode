@@ -12,16 +12,22 @@ API pública, sin claves ni configuración.
 
 ## Modo demo
 
-La instancia publicada corre en modo demo: **no llama al modelo**, para que probarla no consuma
-la cuenta de nadie. Sólo afecta a los dos endpoints que gastan (`resolve` y `judge`, y el
-pipeline que los usa). Todo el resto responde normalmente.
+La instancia publicada corre en modo demo: **no gasta de la cuenta de nadie**. Sólo afecta a los
+dos endpoints que cuestan (`resolve` y `judge`, y el pipeline que los usa). Todo el resto
+responde normalmente.
+
+Lo que hace el modo demo depende de si hay un modelo de free tier configurado, y el deploy lo
+tiene: **con free tier el pipeline corre entero de verdad**, contra ese modelo gratuito
+(`config_demo()` arma los tres pasos y `clientes_demo()` devuelve clientes reales). Sólo **sin**
+free tier se sirve el análisis ya calculado de los tres casos de ejemplo.
 
 El campo `demo_mode` del body elige el modo por petición; si no viene, decide el servidor.
 
 | Petición | Qué pasa |
 |---|---|
-| `demo_mode: true` · caso de ejemplo (`TXN-00051`, `TXN-00042`, `TXN-00089`) | Devuelve su informe ya generado. `X-Modo-Demo: true`, costo cero, y el HTML abre con el cartel **DEMO (Caso prearmado)** |
-| `demo_mode: true` · cualquier otro caso | Devuelve el ejemplo **más cercano en riesgo**, con el cartel nombrando las dos transacciones |
+| `demo_mode: true` · **con** free tier configurado | Corre el pipeline completo con el modelo gratuito, sobre **cualquier** transacción del dataset. `X-Modelo-Gratuito`, `cost_usd: 0.0`, y el HTML abre con **ANÁLISIS REAL (modelo gratuito)** nombrando el modelo y su desvío de ±2.5 |
+| `demo_mode: true` · **sin** free tier · caso de ejemplo (`TXN-00051`, `TXN-00042`, `TXN-00089`) | Devuelve su informe ya generado. `X-Modo-Demo: true`, costo cero, y el HTML abre con el cartel **DEMO (Caso prearmado)** |
+| `demo_mode: true` · **sin** free tier · cualquier otro caso | Devuelve el ejemplo **más cercano en riesgo**, con el cartel nombrando las dos transacciones |
 | `demo_mode: false` · con `api_key` | Corre el pipeline completo **con esa clave**, que reemplaza a la del servidor |
 | `demo_mode: false` · sin saldo | Devuelve el informe demo marcado, en vez de un error |
 | `demo_mode: false` · clave inválida | `500` diciendo que la clave no sirve y cómo es una válida |
@@ -62,7 +68,7 @@ No registra de dónde vino: la API es pública y compartida, así que anotar la 
 | Tu n8n no responde | `502` diciendo a qué dirección se llamó y qué revisar. Si la URL es local y la API no, lo explica: la llamada la hace ella |
 | El caso necesita una persona | `303` al formulario de aprobación, que así se abre solo |
 
-En los dos casos **no se ejecuta el pipeline directo en su lugar**. El informe sería idéntico al de una corrida real, y quien evalúa creería que pasó por los 39 nodos de orquestación sin haber pasado.
+En los dos casos **no se ejecuta el pipeline directo en su lugar**. El informe sería idéntico al de una corrida real, y quien evalúa creería que pasó por los 40 nodos de orquestación sin haber pasado.
 
 **El modo demo no cambia quién orquesta.** Es sobre plata, no sobre arquitectura: los nodos llaman a esta misma API, que resuelve el modelo del demo igual. Con un free tier configurado, `resolve` y `judge` corren de verdad con ese modelo y la resolución viaja con `demo_modelo` —el informe lo usa para declarar con qué se produjo—. Sin free tier responden con el análisis guardado, y cuando la resolución es la de otro caso, `/api/reports/html` responde con el informe completo de ese caso en vez de mezclar los dos.
 
@@ -129,9 +135,12 @@ curl -N -X POST "https://ciri-chargeback-agent.onrender.com/api/panel/analyze-st
   -d '{"transaction_id": "TXN-00051", "motivo": "No reconoce la compra"}'
 ```
 
-Cada línea es `data: {"step": "...", ...}`. Los pasos, en orden: `start`, `cache_check`,
-`transaction`, `logs`, `policies`, `cases`, `merchant_risk`, `client_flags`, `resolving`,
-`resolved`, `judging`, `judged`, `done`. Un `error` puede reemplazar a cualquiera.
+Cada línea es `data: {"step": "...", ...}`. Primero, en este orden: `start`, `cache_check`,
+`transaction`. Después los seis del contexto —`logs`, `policies`, `cases`, `merchant_risk`,
+`client_flags`, `sla`—, que corren en paralelo y se emiten **a medida que cada hilo termina**,
+así que su orden varía entre corridas (`policies` y `cases` sí llegan juntos: salen del mismo
+hilo). Y al cierre, otra vez en orden: `resolving`, `resolved`, `judging`, `judged`, `done`.
+Un `error` puede reemplazar a cualquiera.
 
 ---
 
@@ -200,7 +209,8 @@ curl https://ciri-chargeback-agent.onrender.com/api/merchants/Airbnb/risk
 ```
 ```json
 {"merchant": "Airbnb", "total_transactions": 4, "total_chargebacks": 3, "cb_ratio": 0.75,
- "total_volume_usd": 5521.08, "flags": ["suspended_merchant"], "is_strategic": false}
+ "total_volume_usd": 5521.08, "avg_transaction_usd": 1380.27, "cb_ratio_baseline": 0.6,
+ "flags": ["high_cb_ratio"], "is_strategic": false}
 ```
 
 ### `GET /api/clients/{client_id}/history` — historial del cliente
@@ -218,10 +228,14 @@ curl -X POST https://ciri-chargeback-agent.onrender.com/api/sla/check \
   -d '{"case_open_date": "2024-09-23", "country": "COL", "cliente_vip": false}'
 ```
 ```json
-{"within_sla": false, "days_elapsed": 682, "sla_limit_days": 10, "sla_type": "standard",
+{"within_sla": false, "days_elapsed": 490, "sla_limit_days": 10, "sla_type": "standard",
  "policy_reference": "POL-SLA-002 (resolucion estandar: 10 dias habiles)",
  "compensation_applicable": true}
 ```
+
+`days_elapsed` no es un valor fijo: se cuenta contra el día de la corrida mientras el caso siga
+abierto, así que sube un día hábil por cada día que pasa. Los 490 son los del día en que se
+escribió esto; mañana la misma llamada devuelve uno más.
 
 **El reloj corre sobre el reclamo, no sobre la compra.** Con `transaction_id`, las fechas salen
 del caso histórico: su apertura y, si está cerrado, su cierre. Sin caso registrado —53 de las 100
@@ -252,7 +266,7 @@ proponga el modelo. Si el modelo contradice a la evidencia, la contradicción qu
 en `guardrail_warnings` en vez de corregirse en silencio.
 
 Cuerpo: `transaction_id`, `tx_data`, `policies`, `similar_cases`, `logs`, `merchant_risk`,
-`client_history`, `motivo`, `cliente_vip`.
+`client_history`, `motivo`, `cliente_vip`, `sla`.
 
 ```json
 {
@@ -310,7 +324,8 @@ curl -X PUT https://ciri-chargeback-agent.onrender.com/api/policies/POL-FRD-001 
 
 El pipeline hace tres llamadas —evaluación de políticas, síntesis y juez— y cada una elige su
 proveedor y su modelo por separado. La elección se guarda en SQLite y se aplica a la siguiente
-investigación: no hay que reiniciar nada. El default vive en `constants.py`.
+investigación: no hay que reiniciar nada. El default vive en `config.py`
+(`CB_LLM_PROVIDER`, `CB_LLM_MODEL`, `CB_LLM_MODEL_RESOLUTION`).
 
 **Las claves no pasan por acá.** Se elige *qué* modelo, nunca *con qué credencial*: las claves
 viajan por petición o salen del entorno.
@@ -343,7 +358,7 @@ sólo el juez.
 ### `POST /api/config/modelos/reset`
 
 Borra lo guardado y vuelve al default. No lo pisa con valores: lo borra, así que el default sigue
-siendo el de `constants.py` aunque cambie.
+siendo el de `config.py` aunque cambie.
 
 ---
 

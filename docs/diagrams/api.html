@@ -32,7 +32,7 @@
     -webkit-font-smoothing:antialiased;
   }
   .hoja{max-width:980px; margin:0 auto; padding:56px 24px 96px}
-  code,.mono{font:13px/1.5 ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
+  code{font:13px/1.5 ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace}
 
   .eyebrow{
     font-size:11.5px; letter-spacing:.13em; text-transform:uppercase;
@@ -64,7 +64,7 @@
   .filtro{display:inline-flex; align-items:center; gap:7px}
   .punto{width:9px; height:9px; border-radius:50%; flex:none}
   .p-sql{background:var(--sql)} .p-rag{background:var(--rag)}
-  .p-llm{background:var(--llm)} .p-plano{background:var(--plano)}
+  .p-llm{background:var(--llm)}
 
   /* ── La placa ─────────────────────────────────────────────────── */
   .placa{
@@ -90,7 +90,6 @@
   .chip text.que{font:10px system-ui; fill:var(--muted)}
   .bus{stroke:var(--rule-mid); stroke-width:1; stroke-dasharray:2 3; fill:none}
   .rotulo{font:9.5px ui-monospace,monospace; fill:var(--faint); letter-spacing:.1em}
-  .pulso{fill:none; stroke-width:3; stroke-linecap:round; opacity:0}
   .pin.corriendo rect.caja{stroke:var(--llm); stroke-width:2.5}
   @media (prefers-reduced-motion: reduce){
     .traza,.pin rect.caja{transition:none}
@@ -188,8 +187,8 @@
   <p class="bajada">
     Son <b>32 endpoints</b> y ninguno decide en qué orden se llama a los otros. Eso lo hace n8n, en
     un canvas donde cada paso es un nodo con nombre. Acá no hay un nodo «AI&nbsp;Agent» eligiendo
-    herramientas por su cuenta: <b>14 de estos endpoints son el recorrido completo de un caso</b>,
-    en este orden, siempre.
+    herramientas por su cuenta: <b>14 de estos endpoints son el recorrido que se puede reproducir
+    sin analista</b>, y el orden lo fija el canvas de antemano, no un modelo.
   </p>
 
   <h2>El circuito</h2>
@@ -208,7 +207,7 @@
   </div>
 
   <div class="placa"><svg class="board" id="board" role="img"
-       aria-label="Circuito de la API: trece endpoints en orden conectados a SQLite, Qdrant y el modelo"></svg></div>
+       aria-label="Circuito de la API: catorce endpoints en orden conectados a SQLite, Qdrant y el modelo"></svg></div>
 
   <div class="ficha" id="ficha" aria-live="polite">
     <p class="vacia">Tocá una entrada del circuito, o reproducí el recorrido completo.</p>
@@ -663,7 +662,7 @@
         <div class="antes-despues">
           <span>resolution.py · 819 líneas</span>
           <span class="flecha">→</span>
-          <span class="bien">324 líneas + 3 módulos</span>
+          <span class="bien">331 líneas + 3 módulos</span>
         </div>
       </div>
     </details>
@@ -795,8 +794,10 @@
     </p>
     <p>
       <b>Por eso el orden importa y está a la vista.</b> Un agente que elige sus herramientas
-      resuelve el mismo caso distinto dos veces. Estas trece llamadas son las mismas siempre, y
-      cuando el resultado no convence se puede señalar cuál de ellas contestó mal.
+      resuelve el mismo caso distinto dos veces. Estas catorce llamadas están escritas de antemano
+      —cuáles corren depende del caso: con informe en caché el recorrido termina en la segunda, y
+      un BLOCKER no pasa por el formulario— y cuando el resultado no convence se puede señalar cuál
+      de ellas contestó mal.
     </p>
   </div>
 
@@ -811,11 +812,11 @@
 (function(){
   "use strict";
 
-  // Los trece del recorrido, con la latencia real medida contra Render (TXN-00042).
+  // Los catorce del recorrido, con la latencia real medida contra Render (TXN-00042).
   var PASOS = [
     {v:"GET", r:"/health", f:"plano", ms:961,
      t:"Despierta el contenedor",
-     d:"El free tier de Render duerme el servicio a los 15 minutos. La primera llamada paga ese costo; las doce siguientes no."},
+     d:"El free tier de Render duerme el servicio a los 15 minutos. La primera llamada paga ese costo; las trece siguientes no."},
     {v:"GET", r:"/api/cache/lookup", f:"sql", ms:260,
      t:"¿Este caso ya se investigó?",
      d:"Idempotencia por coincidencia exacta, no por parecido. Si el mismo caso ya tiene informe, el recorrido termina acá y no se gasta una llamada al modelo."},
@@ -832,7 +833,7 @@
      t:"5 precedentes, corte en 0,40",
      d:"Qué se resolvió antes en casos parecidos. El resumen que ve el modelo lo arma el código, con la tendencia contada: cuántos se aprobaron y cuántos se rechazaron."},
     {v:"GET", r:"/api/merchants/{name}/risk", f:"sql", ms:231,
-     t:"cb_ratio 0,75 contra una base de 0,47",
+     t:"cb_ratio 0,75 contra una base de 0,60",
      d:"El ratio solo se lee bien al lado de su referencia, y la referencia se consulta en vez de fijarse: si mañana se cargan más transacciones, la línea base se mueve sola."},
     {v:"GET", r:"/api/clients/{client_id}/history", f:"sql", ms:289,
      t:"1 contracargo previo · geo_anomaly",
@@ -842,19 +843,19 @@
      d:"Son 53 de las 100 transacciones del dataset. Sin fecha de apertura no se cae a la fecha de la compra —entre las dos puede haber meses— y no se afirma un incumplimiento que nadie puede sostener."},
     {v:"POST", r:"/api/analyze/resolve", f:"llm", ms:7320,
      t:"PENDING_HITL · riesgo HIGH · 17 veredictos",
-     d:"El modelo evalúa las políticas y redacta. La acción, el riesgo y la compensación las fija el código a partir de esos veredictos: 8 de 11 campos son deterministas."},
+     d:"El modelo evalúa las políticas y redacta. La acción, el riesgo y la compensación las fija el código a partir de esos veredictos: 9 de los 13 campos son deterministas. El modelo escribe cuatro."},
     {v:"POST", r:"/api/analyze/judge", f:"llm", ms:26284,
      t:"Score 9,2 sobre cinco criterios",
      d:"Califica la propuesta del modelo, no la corrección del código: sobre la versión ya corregida, dos de los cinco criterios no podrían bajar de 10 por construcción."},
     {v:"POST", r:"/api/alerts/", f:"sql", ms:283,
      t:"El caso necesita una persona",
-     d:"Publica la URL del formulario de aprobación, que es lo que consumiría Slack o un mail: el analista no es quien disparó el caso. Solo corre en esta rama — en un BLOCKER la decisión es automática y el recorrido son 13 llamadas en vez de 14."},
+     d:"Publica la URL del formulario de aprobación, que es lo que consumiría Slack o un mail: el analista no es quien disparó el caso. Solo corre en esta rama — en un BLOCKER la decisión es automática: el canvas no pasa por el formulario ni por la normalización, y el recorrido son 12 llamadas."},
     {v:"POST", r:"/api/reports/html", f:"plano", ms:277,
      t:"70 KB de HTML",
      d:"Con los estilos adentro: el informe se abre sin internet, que es la única forma de que siga sirviendo dentro de un año."},
     {v:"POST", r:"/api/hitl/decide", f:"plano", ms:4,
      t:"Sin respuesta: PENDING_HITL, no aprueba",
-     d:"Traduce lo que contestó el analista. Estuvo en 88 líneas de JavaScript dentro del workflow, fuera del alcance de pytest: ahí nacieron sus dos bugs —un MODIFY registrado como aprobación y un plazo vencido que caía en APPROVE— y ahí no podían tener test. Las tres reglas viven ahora en domain/hitl.py."}
+     d:"Traduce lo que contestó el analista. Estuvo en 88 líneas de JavaScript dentro del workflow, fuera del alcance de pytest: ahí nacieron sus dos bugs —un MODIFY registrado como aprobación y un plazo vencido que caía en APPROVE— y ahí no podían tener test. Las tres reglas viven ahora en domain/hitl.py. Este es el orden en que las llama el script, que corre sin analista; en el canvas la rama HITL normaliza la decisión ANTES de generar el informe —que la necesita— y cierra con un POST /api/feedback que acá no aparece porque nadie contestó."}
   ];
 
   var COLOR = {sql:"var(--sql)", rag:"var(--rag)", llm:"var(--llm)", plano:"var(--plano)"};
@@ -960,7 +961,7 @@
       '</div>' +
       '<p><b style="color:var(--ink)">' + p.t + '</b></p>' +
       '<p>' + p.d + '</p>' +
-      '<p class="dato">paso ' + (i+1) + ' de 13 · ' +
+      '<p class="dato">paso ' + (i+1) + ' de 14 · ' +
         p.ms.toLocaleString("es-AR") + ' ms medidos</p>';
   }
 

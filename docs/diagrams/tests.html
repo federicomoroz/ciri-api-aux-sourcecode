@@ -7,16 +7,16 @@
 <style>
   :root{
     --paper:#fcfcfa; --surface:#fff; --ink:#17171b; --muted:#68686f; --faint:#95959d;
-    --rule:#e5e4df; --rule-mid:#d3d2cb;
-    --pasa:#0d9488; --cuida:#2563eb; --real:#b45309; --falla:#be185d;
+    --rule:#e5e4df;
+    --pasa:#0d9488; --cuida:#2563eb; --real:#b45309;
     --barra:#e8e7e1;
     --shadow:0 1px 2px rgba(20,20,25,.06);
   }
   @media (prefers-color-scheme: dark){
     :root{
       --paper:#131316; --surface:#1b1b1f; --ink:#f0efec; --muted:#a3a3ac; --faint:#7a7a84;
-      --rule:#2b2b31; --rule-mid:#3a3a42;
-      --pasa:#4fd1c5; --cuida:#7ea6ff; --real:#e0a04a; --falla:#f472b6;
+      --rule:#2b2b31;
+      --pasa:#4fd1c5; --cuida:#7ea6ff; --real:#e0a04a;
       --barra:#2b2b31;
       --shadow:0 1px 2px rgba(0,0,0,.4);
     }
@@ -86,7 +86,6 @@
   .fila-n{font-size:13px; color:var(--muted); text-align:right}
   .pista{height:9px; background:var(--barra); border-radius:5px; overflow:hidden}
   .relleno{height:100%; border-radius:5px; background:var(--pasa)}
-  .relleno.baja{background:var(--real)}
   .fila-v{font-size:12.5px; color:var(--faint); font-variant-numeric:tabular-nums}
   .fila-v b{color:var(--ink); font-weight:600}
   .piso{
@@ -150,7 +149,7 @@
   <p class="eyebrow">Agente Inteligente de Contracargos · CIRI</p>
   <h1>Qué cuidan los tests</h1>
   <p class="bajada">
-    Son <b>1039</b>, y lo que los distingue no es la cantidad: <b>95 de ellos no verifican
+    Son <b>1235</b>, y lo que los distingue no es la cantidad: <b>132 de ellos no verifican
     código</b>. Verifican el entregable — que el workflow de n8n esté cableado, que los números
     del README sean los reales, que los informes que viajan se abran sin internet. Cosas que no
     rompen ningún import y rompen la entrega.
@@ -158,15 +157,15 @@
 
   <div class="cifras">
     <div class="cifra">
-      <b>1039</b><span>casos de test</span>
-      <p class="nota">823 unit · 113 integration · 33 E2E</p>
+      <b>1235</b><span>casos de test</span>
+      <p class="nota">1082 unit · 119 integration · 34 E2E</p>
     </div>
     <div class="cifra">
-      <b style="color:var(--pasa)">92,2%</b><span>cobertura de sentencias</span>
+      <b style="color:var(--pasa)">92,4%</b><span>cobertura de sentencias</span>
       <p class="nota">el número del CI, sobre un checkout limpio. Falla por debajo de 85</p>
     </div>
     <div class="cifra">
-      <b>38</b><span>archivos</span>
+      <b>47</b><span>archivos</span>
       <p class="nota">uno por pieza; ninguno mezcla dominios</p>
     </div>
     <div class="cifra">
@@ -179,24 +178,25 @@
     <h2>Tres capas, tres cosas distintas</h2>
     <p class="intro">
       Cada capa prueba algo que la anterior no puede. Separarlas importa porque
-      <b>tienen costos distintos</b>: las de arriba corren en segundos y en cada push; la de
-      abajo llama al modelo y a la API publicada, así que se corre a mano.
+      <b>tienen costos distintos</b>: las de arriba corren en un par de minutos y en cada push;
+      la de abajo llama al modelo y a la API publicada, así que se corre a mano.
     </p>
 
     <div class="capas">
       <div class="capa">
-        <div class="capa-n"><b>657</b><span>unit</span></div>
+        <div class="capa-n"><b>1082</b><span>unit</span></div>
         <div>
           <p class="capa-t">La lógica, aislada<span class="marca m-ci">en cada push</span></p>
           <p class="capa-d">
             Guardrails, evaluación de SLA, parseo de lo que devuelve el modelo, construcción de
-            la consulta al vector store. Sin red, sin modelo, sin disco salvo SQLite en memoria.
+            la consulta al vector store. Sin red ni modelo; del disco sólo se lee —el workflow,
+            los docs, los informes que viajan— y lo único que se escribe es SQLite en memoria.
             <em>Prueban decisiones, no integraciones.</em>
           </p>
         </div>
       </div>
       <div class="capa">
-        <div class="capa-n"><b>81</b><span>integration</span></div>
+        <div class="capa-n"><b>119</b><span>integration</span></div>
         <div>
           <p class="capa-t">Las piezas juntas<span class="marca m-ci">en cada push</span></p>
           <p class="capa-d">
@@ -207,7 +207,7 @@
         </div>
       </div>
       <div class="capa">
-        <div class="capa-n"><b>33</b><span>E2E</span></div>
+        <div class="capa-n"><b>34</b><span>E2E</span></div>
         <div>
           <p class="capa-t">Contra la API publicada<span class="marca m-fuera">a mano</span></p>
           <p class="capa-d">
@@ -228,49 +228,55 @@
     </p>
 
     <div class="cob">
-      <div class="fila"><span class="fila-n">domain</span>
-        <div class="pista"><div class="relleno" style="width:100.0%"></div></div>
-        <span class="fila-v"><b>100,0%</b> · 324</span></div>
       <div class="fila"><span class="fila-n">reports</span>
         <div class="pista"><div class="relleno" style="width:100.0%"></div></div>
-        <span class="fila-v"><b>100,0%</b> · 27</span></div>
+        <span class="fila-v"><b>100,0%</b> · 30</span></div>
+      <div class="fila"><span class="fila-n">domain</span>
+        <div class="pista"><div class="relleno" style="width:99.5%"></div></div>
+        <span class="fila-v"><b>99,5%</b> · 600</span></div>
+      <div class="fila"><span class="fila-n">analysis</span>
+        <div class="pista"><div class="relleno" style="width:96.2%"></div></div>
+        <span class="fila-v"><b>96,2%</b> · 132</span></div>
       <div class="fila"><span class="fila-n">services</span>
         <div class="pista"><div class="relleno" style="width:94.7%"></div></div>
-        <span class="fila-v"><b>94,7%</b> · 624</span></div>
-      <div class="fila"><span class="fila-n">analysis</span>
-        <div class="pista"><div class="relleno" style="width:92.1%"></div></div>
-        <span class="fila-v"><b>92,1%</b> · 114</span></div>
+        <span class="fila-v"><b>94,7%</b> · 529</span></div>
       <div class="fila"><span class="fila-n">llm</span>
-        <div class="pista"><div class="relleno" style="width:90.5%"></div></div>
-        <span class="fila-v"><b>90,5%</b> · 315</span></div>
-      <div class="fila"><span class="fila-n">data</span>
-        <div class="pista"><div class="relleno" style="width:89.5%"></div></div>
-        <span class="fila-v"><b>89,5%</b> · 295</span></div>
-      <div class="fila"><span class="fila-n">rag</span>
-        <div class="pista"><div class="relleno" style="width:87.2%"></div></div>
-        <span class="fila-v"><b>87,2%</b> · 327</span></div>
+        <div class="pista"><div class="relleno" style="width:91.7%"></div></div>
+        <span class="fila-v"><b>91,7%</b> · 348</span></div>
       <div class="fila"><span class="fila-n">routes</span>
-        <div class="pista"><div class="relleno baja" style="width:82.6%"></div></div>
-        <span class="fila-v"><b>82,6%</b> · 591</span></div>
+        <div class="pista"><div class="relleno" style="width:91.4%"></div></div>
+        <span class="fila-v"><b>91,4%</b> · 659</span></div>
       <div class="fila"><span class="fila-n">observability</span>
-        <div class="pista"><div class="relleno baja" style="width:70.3%"></div></div>
-        <span class="fila-v"><b>70,3%</b> · 138</span></div>
+        <div class="pista"><div class="relleno" style="width:91.2%"></div></div>
+        <span class="fila-v"><b>91,2%</b> · 160</span></div>
+      <div class="fila"><span class="fila-n">data</span>
+        <div class="pista"><div class="relleno" style="width:88.5%"></div></div>
+        <span class="fila-v"><b>88,5%</b> · 338</span></div>
+      <div class="fila"><span class="fila-n">rag</span>
+        <div class="pista"><div class="relleno" style="width:87.5%"></div></div>
+        <span class="fila-v"><b>87,5%</b> · 353</span></div>
+      <div class="fila"><span class="fila-n">(raíz)</span>
+        <div class="pista"><div class="relleno" style="width:86.5%"></div></div>
+        <span class="fila-v"><b>86,5%</b> · 333</span></div>
     </div>
 
     <p class="piso">
-      <b>Las dos más bajas son las que más dependen de que algo externo responda.</b>
-      En <code>routes</code>, las ramas de error de servicios caídos; en
-      <code>observability</code>, los caminos que sólo se ejecutan con Langfuse configurado.
-      Cubrirlas del todo sería mockear el mundo hasta que el test deje de significar algo.
+      <b>Las tres más bajas están abajo por motivos distintos, y sólo una es la de siempre.</b>
+      En <code>rag</code> sí es depender de que algo externo responda: las llamadas al embedder y
+      la creación de colecciones en Qdrant, que cubrir del todo sería mockear el mundo hasta que
+      el test deje de significar algo. En <code>data</code> el hueco es otro: la lectura del
+      Excel, más el DDL y la siembra de migración, que corren una sola vez al crear la base. En
+      la raíz del paquete, el arranque de la app y el armado de dependencias. Ninguna de las tres
+      baja del piso.
     </p>
   </section>
 
   <section>
-    <h2>Lo que se fija y no es código</h2>
+    <h2>Dieciséis defectos que no rompían ningún import</h2>
     <p class="intro">
       Esta es la parte que no suele existir. Cada línea es <b>una forma concreta de romper la
-      entrega sin romper un solo import</b>: cosas que un test de unidad no mira porque no viven
-      en una función, sino en el workflow, en la documentación o en un HTML que viaja.
+      entrega sin romper un solo import</b>: defectos que no se ven en el árbol de llamadas sino
+      en lo que sale — la respuesta HTTP, el workflow, la documentación, el HTML que viaja.
     </p>
 
     <div class="reg">
@@ -353,7 +359,7 @@
       </div>
       <div class="reg-fila">
         <span class="que">El informe declaraba una versión de prompt que no era la que corrió</span>
-        <span class="como">Decía <code>v1_</code> —el nombre del módulo— para prompts que van por v3.1</span>
+        <span class="como">Decía <code>v1_</code> —el nombre del módulo— para prompts que van por v3.2</span>
         <span class="quien">test_report_generator</span>
       </div>
     </div>

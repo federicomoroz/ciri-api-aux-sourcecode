@@ -74,15 +74,15 @@ Las reglas de enriquecimiento codifican conocimiento de dominio (ej: "pagos crip
 **Contexto:** Las rutas de FastAPI manejan requests HTTP. La pregunta es dónde poner la lógica de negocio.
 
 **Decisión:** Separación en tres capas:
-- **Routes** (~20 líneas cada una) — solo HTTP: parsear request, llamar servicio, devolver response. Todos los módulos de ruta incluyen `logger = logging.getLogger(__name__)` para observabilidad consistente.
+- **Routes** (la mayoría entre 13 y 55 líneas; las excepciones son `analyze.py` 123, `policies.py` 131 y `panel.py` 1036, que además sirve el HTML del panel) — solo HTTP: parsear request, llamar servicio, devolver response. Los módulos que loguean algo propio declaran `logger = logging.getLogger(__name__)` — hoy son 8 de 18.
 - **Services** (`ResolutionService`, `FeedbackService`, `PipelineService`) — orquestan múltiples pasos (llamadas LLM, guardrails, caching). `PipelineService` usa métodos compartidos (`_submit_context_futures`, `_judge`, `_build_report_data`) entre el modo síncrono y el streaming SSE, eliminando duplicación.
-- **Analyzer** (`analysis/analyzer.py`) — lógica de negocio pura: reglas SLA, flags de riesgo, patrones de error
+- **Analyzer** (`analysis/`: `sla.py`, `analyzer.py`, `patrones.py`) — lógica de negocio pura: reglas SLA, flags de riesgo, patrones de error
 
 El acceso a datos está aislado en `data/db.py`. Las definiciones de dominio (models, enums, 73+ constants) tienen cero dependencias externas. Todos los magic numbers y strings del dominio están centralizados en `constants.py` — umbrales de pipeline, tipos de alertas, prefijos de guardrails, nombres de templates.
 
 **Razonamiento:** Esto hace que cada capa sea testeable independientemente. Los tests unitarios mockean solo la capa de abajo. Las rutas se testean con `TestClient` y servicios mock. Los servicios se testean con clientes LLM mock. El analyzer son funciones puras — sin mocks.
 
-Con 1133 tests (1100 unit/integration + 33 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
+Con 1235 tests (1201 unit/integration + 34 E2E contra la API real), esta arquitectura demostró ser robusta para iterar rápido sin romper cosas.
 
 **Trade-offs:**
 - (+) Cada capa tiene una sola responsabilidad
@@ -146,16 +146,24 @@ La capa de acceso a datos (`db.py`) usa SQL estándar con queries parametrizadas
 **Decisión:** Dos mecanismos complementarios:
 
 **Overrides determinísticos** (el código siempre gana):
-- 6 de 11 campos de la resolución son calculados por Python y sobreescriben lo que diga el LLM: `recommended_action`, `risk_level`, `risk_reason`, `requires_hitl`, `precedent_summary`, `policy_verdicts`
+- 9 de los 13 campos de la resolución son calculados por Python y sobreescriben lo que diga el LLM: `recommended_action`, `risk_level`, `requires_hitl`, `hitl_reason`, `policy_verdicts`, `precedent_summary`, `log_summary`, `compensation_applicable` y `compensation_amount_usd`. El reparto lo verifica `tests/unit/test_campos_deterministas.py` contra el código, no contra este documento.
 - La whitelist de BLOCKER: solo `POL-EXC-003` (cripto) puede producir veredictos BLOCKER. Cualquier otro BLOCKER del LLM se degrada a FAIL automáticamente.
 
-**Guardrails de validación** (detección de inconsistencias):
-1. APPROVE + BLOCKER → auto-corrección a REJECT + flag de alucinación
-2. REJECT sin BLOCKER → auto-corrección a PENDING_HITL
-3. Compensación excesiva (> 110% del monto) → flag para revisión
-4. Confianza excesiva (> 0.95 con 2+ FAILs) → flag como sospechoso
+**Guardrails de validación** (detección de inconsistencias). Son seis, y lo que importa es que están partidos en dos momentos:
 
-**Razonamiento:** La filosofía es "el código decide, el LLM explica." El sistema de guardrails de la consigna es uno de los ejes explícitos, y me pareció fundamental que las decisiones críticas (acción, nivel de riesgo, escalamiento) no dependan de que el LLM interprete correctamente. Python calcula la acción basándose en los veredictos de política; el LLM llena los campos de texto (justificación, next_steps, log_summary).
+*Antes del override* — comparan lo que **propuso el modelo** contra la decisión determinística. Es la única ventana en que la contradicción es observable:
+1. APPROVE + BLOCKER → contradicción registrada; el override lo lleva a REJECT
+2. REJECT sin BLOCKER → contradicción registrada; el override lo lleva a PENDING_HITL
+3. `risk_level` BLOCKER sin ningún veredicto BLOCKER → riesgo inventado
+4. Compensación que el SLA ya calculado desmiente (ver decisión 15)
+
+*Después del override* — sobre los campos que el modelo sí controla:
+5. Compensación excesiva (> 110% del monto) → flag para revisión
+6. Confianza excesiva (> 0.95 con 2+ FAILs) → flag como sospechoso
+
+Viven en `services/guardrails.py` como una **tupla de reglas**, no como un cuerpo de función: agregar el séptimo es escribir una función y sumarla. El número «seis» que este documento publicita tiene que poder crecer sin editar el recorredor.
+
+**Razonamiento:** La filosofía es "el código decide, el LLM explica." El sistema de guardrails de la consigna es uno de los ejes explícitos, y me pareció fundamental que las decisiones críticas (acción, nivel de riesgo, escalamiento) no dependan de que el LLM interprete correctamente. Python calcula la acción basándose en los veredictos de política; el LLM llena los campos de texto (`justification`, `confidence`, `next_steps`).
 
 **Trade-offs:**
 - (+) Atrapa los errores de LLM de mayor impacto
@@ -172,9 +180,9 @@ La capa de acceso a datos (`db.py`) usa SQL estándar con queries parametrizadas
 
 **Contexto:** El LLM-as-Judge evalúa la calidad de cada resolución en 5 criterios. Inicialmente, n8n llamaba a la API de Anthropic directamente vía HTTP Request. Después lo cambié para que pase por FastAPI (`POST /api/analyze/judge`).
 
-**Decisión:** Rutear el Judge por FastAPI, donde el prompt, modelo y parsing están gestionados en código Python (`v2_judge.py` + `ResolutionService`).
+**Decisión:** Rutear el Judge por FastAPI, donde el prompt, modelo y parsing están gestionados en código Python (`v1_judge.py` + `ResolutionService`).
 
-**Razonamiento:** Tres beneficios: (1) **Versionado de prompts** — el prompt del Judge vive en `v1_judge.py`, versionado junto al código que lo usa. Inlinearlo en un body de HTTP Request de n8n lo hace invisible al code review. (2) **Observabilidad** — Langfuse captura la llamada completa del Judge (tokens, latencia, costo) junto con la resolución en el mismo trace. (3) **Consistencia** — todas las llamadas LLM pasan por el mismo `AnthropicClient` con el mismo error handling, retry logic y configuración.
+**Razonamiento:** Tres beneficios: (1) **Versionado de prompts** — el prompt del Judge vive en `v1_judge.py`, versionado junto al código que lo usa. Inlinearlo en un body de HTTP Request de n8n lo hace invisible al code review. (2) **Observabilidad** — Langfuse captura la llamada completa del Judge (tokens, latencia, costo) junto con la resolución en el mismo trace. (3) **Consistencia** — todas las llamadas LLM pasan por la misma puerta, el `Protocol` `LLMClient` (`AnthropicClient`, o `OpenAICompatibleClient` cuando el paso corre en un proveedor de free tier — ver decisión 21), con el mismo error handling, retry logic y configuración.
 
 Esto también me permitió iterar rápido en el prompt del Judge. La versión 2.0 con rubrics granulares (5 niveles por criterio) fue clave para romper el techo de 8.6 que tenía con la versión anterior.
 
@@ -290,7 +298,7 @@ Los archivos que si son entregables — el workflow, la API, los informes — qu
 **Trade-offs:**
 - (+) Cero riesgo sobre la unica pieza que el evaluador va a tocar sin instalar nada
 - (+) El esfuerzo se concentro donde se evalua la arquitectura
-- (-) 4031 lineas que nadie va a querer tocar
+- (-) 4120 lineas que nadie va a querer tocar
 - (-) Sin cache de estaticos: el navegador se baja el CSS y el JS en cada carga
 
 **En produccion:** separar en `static/panel.css` y `static/panel.js`, servirlos con `StaticFiles` y versionarlos por hash para poder cachearlos. Es media jornada, pero recien vale la pena cuando el panel deje de ser una herramienta de demostracion.
@@ -402,7 +410,8 @@ SLA (POL-SLA-004)» sin darle ningún dato de SLA: se le pedía una decisión a 
 Comparar una fecha contra un umbral es exactamente lo que el código hace mejor que un modelo. Una
 vez que el dato llega, dejar la decisión en manos del LLM sería elegir la peor de las dos opciones
 disponibles. Así que la compensación se suma a los campos determinísticos —pasan de 6 a 8 sobre
-11— y aparece en el prompt como dato, no como pregunta.
+13— y aparece en el prompt como dato, no como pregunta. El noveno llegó después, con v3.2:
+`log_summary`, que el prompt pedía y el modelo parafraseaba.
 
 El guardrail correspondiente corre **antes** del override, igual que los otros tres: si el modelo
 propone una compensación que el SLA desmiente, queda registrado en `guardrail_warnings` en vez de
@@ -599,8 +608,8 @@ razonamiento produjo.
 - (+) Los cinco criterios miden algo que puede fallar
 - (+) El score deja de estar inflado por construcción
 - (-) **Bajará**, y no sé cuánto: medirlo requiere correr el modelo, y eso cuesta saldo. El badge
-  sigue mostrando 8.7, que es el promedio de los informes guardados —generados con el Juez v2.0—,
-  y está declarado como tal
+  sigue mostrando 9.1, que es el promedio de las corridas de desarrollo con la configuración v3.0
+  —anterior a este cambio del Juez—, y está declarado como tal
 - (-) Un prompt más largo y con una sección condicional: si falta la propuesta, el Juez cae al
   comportamiento anterior y lo anota en `weaknesses`
 
@@ -610,8 +619,9 @@ razonamiento produjo.
 
 **Decisión:** Los tres pasos del pipeline —evaluación de políticas, síntesis y juez— eligen su
 proveedor y su modelo por separado. La elección vive en la tabla `configuracion_modelos` de
-SQLite, el panel la edita en caliente, y `constants.py` guarda el default. **Las claves no se
-guardan nunca.**
+SQLite, el panel la edita en caliente, y el default sale de `Settings` (`config.py`:
+`llm_provider`, `llm_model`, `llm_model_resolution`), que es lo que lee
+`ModelosService.por_defecto()`. **Las claves no se guardan nunca.**
 
 **Razonamiento:** Ya había dos modelos —Haiku para evaluar, Sonnet para sintetizar y juzgar—,
 pero la asignación estaba en `.env` y cambiarla era un redeploy. Y estaba mal repartida: el juez
@@ -659,7 +669,7 @@ genuino: agregar una política bloqueante es un POST— y no lo aplicó donde no
 funciones puras dentro de una clase cuyo estado usaban siete métodos. Cuando dos tercios de una
 clase no necesita la clase, el límite está mal trazado. `domain/decision.py` y
 `domain/precedentes.py` no dependen de nada; antes esa lógica arrastraba `Tracer`, `LLMClient` y
-`ModelosService` por compartir archivo. 819 → 328 líneas.
+`ModelosService` por compartir archivo. 819 → 331 líneas.
 
 **Los seis guardrails pasaron a ser una tupla de reglas.** Es el punto de OCP que faltaba: el
 proyecto presenta «seis guardrails» como diferenciador y ese número estaba congelado — agregar el

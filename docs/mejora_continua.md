@@ -14,8 +14,9 @@ Cuando arrancamos, el promedio del Judge era **8.2/10**. Funcionaba, pero habia 
 | v1.1 — Rubricas en el Judge | 8.6 | Se agregaron rubricas de 5 niveles por criterio al prompt del Judge. Mejoro la consistencia de las evaluaciones, pero el techo de Haiku limito el avance. |
 | Techo de Haiku | 8.6 | Por mas que afinamos los prompts, Haiku no podia generar el razonamiento analitico que necesitabamos en la sintesis. Techo claro. |
 | v2.0 — Sonnet para sintesis y juicio | 8.9 | Se introdujo modelo dual: Haiku para evaluacion de politicas (tarea mecanica), Sonnet para sintesis y Judge (tareas que requieren razonamiento). Salto inmediato. |
-| v3.0 — Ajustes dirigidos | **9.1** | Prompt v3.0 de resolucion desbloqueado para razonamiento analitico de Sonnet. Overrides deterministicos para 6/11 campos. Precedent summary deterministico con analisis de patron. |
-| v3.1 — SLA determinista | *sin medir* | El resultado de `/api/sla/check` entra al prompt y `compensation_applicable` / `compensation_amount_usd` pasan a calcularse por codigo. Overrides deterministicos para 8/11 campos. Ver «Lo que no esta medido». |
+| v3.0 — Ajustes dirigidos | **9.1** | Prompt v3.0 de resolucion desbloqueado para razonamiento analitico de Sonnet. Overrides deterministicos para 6 de los 13 campos. Precedent summary deterministico con analisis de patron. |
+| v3.1 — SLA determinista | *sin medir* | El resultado de `/api/sla/check` entra al prompt y `compensation_applicable` / `compensation_amount_usd` pasan a calcularse por codigo. Overrides deterministicos para 8 de los 13 campos. Ver «Lo que no esta medido». |
+| v3.2 — El resumen deja de parafrasearse | *sin medir* | `log_summary` y `precedent_summary` los fija el codigo; el prompt deja de pedirlos. Antes el modelo los reescribia y su version era la que quedaba, asi que el informe podia mostrar un resumen de logs que no coincidia con los logs impresos al lado. Overrides deterministicos para 9 de los 13 campos — el reparto actual. |
 | v2.1 — El Juez califica al modelo | *sin medir* | `policy_consistency` y `risk_assessment` pasan a evaluar la propuesta original en vez de la version ya corregida. **Se espera que baje**: hasta v2.0 esos dos criterios no podian fallar por construccion. Ver `decisions.md` 20. |
 | v2.2 — El umbral sale del dominio | *sin medir* | `approved = overall_score >= 7.0` estaba escrito en el prompt **y** en `constants.py`. El codigo solo aplica la constante cuando el modelo omite el campo, asi que gobernaba la copia del prompt: mover la constante cambiaba el color del informe pero no el flag. Ahora se inyecta. |
 
@@ -48,8 +49,9 @@ que no lo fue.
 
 **Que no es:** el promedio de los tres informes que viajan en este paquete. Esos tres promedian
 **8.67**, y la diferencia no es ruido: son los tres casos **mas contenciosos** del dataset,
-elegidos para la demo porque cubren los tres caminos del enrutador —BLOCKER, revision humana y
-comercio fuera de LATAM— y no porque puntuaran bien. Un caso con cuatro veredictos FAIL y un
+elegidos para la demo porque cubren los dos desenlaces del enrutador —rechazo automatico y
+revision humana— y tres situaciones de politica distintas: el blocker de cripto, el cliente VIP
+con score de fraude, y el SLA extendido fuera de LATAM. No porque puntuaran bien. Un caso con cuatro veredictos FAIL y un
 BLOCKER le da al Juez mucha mas superficie para descontar que uno que pasa limpio. Elegir los
 casos dificiles para mostrar y despues promediar sobre ellos mide otra cosa.
 
@@ -138,7 +140,7 @@ No todos los pasos de la pipeline necesitan el mismo nivel de razonamiento. La c
 
 ```
 CB_LLM_MODEL=claude-haiku-4-5-20251001          # llm — evaluacion de politicas
-CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-20250514 # llm_resolution — sintesis + judge
+CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-6       # llm_resolution — sintesis + judge
 ```
 
 | Paso | Modelo | Justificacion |
@@ -147,19 +149,19 @@ CB_LLM_MODEL_RESOLUTION=claude-sonnet-4-20250514 # llm_resolution — sintesis +
 | `v1_resolution` — sintesis de resolucion | Sonnet | Requiere razonamiento analitico: conectar precedentes, explicar riesgos, proponer acciones concretas. |
 | `v1_judge` — evaluacion de calidad | Sonnet | Requiere juicio calibrado: aplicar rubricas de 5 niveles con granularidad. |
 
-En `dependencies.py`, `ResolutionService` recibe ambos clientes:
+En `dependencies.py`, `ResolutionService` no recibe clientes: recibe el servicio que los resuelve paso por paso.
 
 ```python
-resolution_service = ResolutionService(llm, tracer, llm_resolution=llm_resolution)
+resolution_service = ResolutionService(tracer=tracer, modelos=modelos, alertas=db.save_alert)
 ```
 
-El servicio usa `self.llm` para la evaluacion de politicas y `self.llm_resolution` para la sintesis y el juicio. Si `CB_LLM_MODEL_RESOLUTION` no esta configurado, ambos usan el mismo modelo.
+El servicio pide el modelo por paso —`self._modelos.completar(paso, ...)`— y `ModelosService` traduce cada paso al proveedor y al modelo vigentes. Los clientes explicitos (`llm`, `llm_resolution`, `llm_judge`) siguen en la firma, pero solo los usan los tests. Si `CB_LLM_MODEL_RESOLUTION` no esta configurado, la sintesis y el juicio usan el mismo modelo que la evaluacion de politicas.
 
 ---
 
 ## Overrides deterministicos — "El codigo decide, el LLM explica"
 
-De los 11 campos principales de una resolucion, **6 son calculados por Python** y siempre sobreescriben lo que diga el LLM:
+De los 13 campos de `ResolutionOutput`, **9 los calcula Python** y siempre sobreescriben lo que diga el LLM:
 
 | Campo | Quien decide | Como |
 |-------|-------------|------|
@@ -169,8 +171,13 @@ De los 11 campos principales de una resolucion, **6 son calculados por Python** 
 | `hitl_reason` | Python (`decision.decidir`) | Razon explicita con conteo de violaciones |
 | `policy_verdicts` | LLM (Haiku) + whitelist | LLM evalua, pero BLOCKERs fuera de `puede_bloquear` se degradan a FAIL |
 | `precedent_summary` | Python (`precedentes.resumir_precedentes`) | Deterministico con tags, match de sinonimos y analisis de patron |
+| `log_summary` | Python (`precedentes.resumir_logs`) | Severidades + `patrones.detect_error_patterns()`. Desde v3.2: antes el prompt lo pedia y la parafrasis del modelo era la que quedaba, asi que el informe podia mostrar un resumen que no coincidia con los logs impresos al lado |
+| `compensation_applicable` | Python (`decision.compensacion_por_sla`) | Lee el plazo ya medido por `check_sla`. Desde v3.1 |
+| `compensation_amount_usd` | Python (`decision.compensacion_por_sla`) | Tope de la politica, acotado al monto de la transaccion. Desde v3.1 |
 
-Los 5 campos restantes (`justification`, `confidence`, `log_summary`, `next_steps`, `compensation_*`) los genera el LLM y se validan con guardrails post-generacion.
+Los 4 campos restantes los escribe el modelo: `justification`, `confidence`, `next_steps` y `transaction_id`, que devuelve tal como lo recibio. Se validan con guardrails post-generacion.
+
+**Esta tabla esta atada al codigo.** `tests/unit/test_campos_deterministas.py` cuenta los campos del modelo Pydantic y los que `resolve()` sobrescribe, y falla si el reparto que declara la documentacion deja de coincidir. Existe porque no lo estaba: esta tabla decia «6 de 11» cuando eran 9 de 13 — contaba `compensation_applicable` y `compensation_amount_usd` como uno solo, omitia `transaction_id`, y daba por escritos por el modelo `log_summary` y la compensacion, que el codigo ya sobreescribia.
 
 La razon es simple: si las politicas son editables (y lo son — via `PUT /api/policies/{code}`), la evaluacion individual puede ser LLM, pero la **decision final** no puede depender de que el LLM interprete correctamente la combinacion de todos los veredictos. Eso lo hace Python, siempre.
 
@@ -218,14 +225,18 @@ El feedback loop cierra la brecha entre la resolucion automatizada y la experien
 │                                                                             │
 │  2. EL AGENTE RESUELVE                                                      │
 │     RAG (politicas + precedentes) -> LLM -> Resolution JSON                │
-│     + 6 campos deterministicos sobreescritos por Python                    │
+│     + 9 campos deterministicos sobreescritos por Python                    │
 │                                                                             │
 │  3. EL JUDGE EVALUA                                                         │
 │     n8n HTTP Request -> FastAPI /api/analyze/judge -> score 1-10           │
 │           │                                                                 │
 │           ├── score >= 7.0 ──────────────────────────────────┐             │
 │           │                                                   │             │
-│           └── score < 7.0 -> HITL ──────────────────────────>│             │
+│           └── score < 7.0 -> marcado LOW_QUALITY ────────────>│             │
+│               (el juez no deriva: los dos caminos siguen)     │             │
+│                                                               │             │
+│      Despues, con el informe armado, el Switch — Derivacion   │             │
+│      deriva a HITL si resolution.requires_hitl ──────────────>│             │
 │                              Analista lee reporte HTML        │             │
 │                              APPROVE / REJECT / MODIFY        │             │
 │                                        │                      │             │
@@ -317,7 +328,7 @@ POST /api/feedback/
 
 ## Mecanismo del Judge (LLM-as-Judge)
 
-El Judge (`v1_judge`, version 2.0) proporciona una evaluacion independiente de calidad para cada resolucion. Evalua 5 criterios con rubricas granulares de 5 niveles, cada uno con score de 1.0 a 10.0.
+El Judge (`v1_judge`, version 2.2) proporciona una evaluacion independiente de calidad para cada resolucion. Evalua 5 criterios con rubricas granulares de 5 niveles, cada uno con score de 1.0 a 10.0. Desde v2.1, `policy_consistency` y `risk_assessment` se evaluan sobre la **propuesta original del modelo** —la que viaja aparte, antes del override— y no sobre la resolucion ya corregida; los otros tres criterios si miran la resolucion entregada.
 
 ### 5 criterios con rubricas granulares
 
@@ -380,13 +391,19 @@ Rango de score   Resultado
 ───────────────────────────────────────────────────────────────────
 >= 8.0           Aprobado + auto-indexado como nuevo precedente en Qdrant
 7.0 – 7.9        Aprobado — entregado como resolucion final
-5.0 – 6.9        No aprobado — redirigido a HITL (revision de analista)
-< 5.0            No aprobado + marcado needs_review=true en SQLite
+5.0 – 6.9        No aprobado — el informe sale marcado LOW_QUALITY (revision manual)
+< 5.0            No aprobado + needs_review=true en la respuesta de /api/feedback/
 ```
 
-### Por que 7.0 como umbral de HITL
+El score del Juez **no deriva a nadie**: la salida `false` de `¿Juez Aprueba?` pasa por
+`Marcar — Calidad Baja`, que solo agrega el `quality_flag`, y vuelve al mismo `Preparar
+Informe` que la salida `true`. Lo que manda un caso a HITL es `resolution.requires_hitl` en
+el `Switch — Derivacion`. Y `needs_review` no se guarda: lo calcula `FeedbackService` al
+vuelo y viaja en la respuesta HTTP; la tabla `feedback` no tiene esa columna.
 
-Un score de 7.0 significa que los 5 criterios promediaron al menos 7/10. Resoluciones por debajo de este umbral tipicamente tienen al menos uno de: razonamiento de politica incompleto, precedentes no utilizados, o next_steps vagos. Estos son exactamente los casos donde la revision de un analista agrega mas valor. Bajarlo a 6.0 dejaria pasar resoluciones mediocres sin revision.
+### Por que 7.0 como umbral de aprobacion
+
+Un score de 7.0 significa que los 5 criterios promediaron al menos 7/10. Resoluciones por debajo de este umbral tipicamente tienen al menos uno de: razonamiento de politica incompleto, precedentes no utilizados, o next_steps vagos. Estos son exactamente los casos donde la revision de un analista agrega mas valor. Bajarlo a 6.0 dejaria pasar resoluciones mediocres sin marcar para revision.
 
 ### Por que 8.0 como umbral de auto-indexacion
 
@@ -394,26 +411,34 @@ Los casos auto-indexados se convierten en precedentes permanentes que influencia
 
 ### El Judge como detector de alucinaciones
 
-El criterio `policy_consistency` detecta la alucinacion mas peligrosa: recomendar `APPROVE` cuando hay un veredicto `BLOCKER`. Si el Judge detecta esto, asigna `policy_consistency = 1.0` y el `overall_score` cae por debajo de 7.0, redirigiendo a HITL. Pero el guardrail en `/api/analyze/resolve` atrapa esto antes de que el Judge siquiera se ejecute (ver seccion Guardrails).
+El criterio `policy_consistency` detecta la alucinacion mas peligrosa: recomendar `APPROVE` cuando hay un veredicto `BLOCKER`. Si el Judge detecta esto, asigna `policy_consistency = 1.0` y el `overall_score` cae por debajo de 7.0, con lo que el informe sale marcado LOW_QUALITY. Y la ve aunque la resolucion entregada ya venga corregida: desde v2.1 ese criterio se evalua sobre la propuesta original del modelo, que viaja aparte del override. El guardrail 1 de `/api/analyze/resolve` deja constancia de la misma contradiccion en `guardrail_warnings`, pero no la atrapa antes ni corrige nada — corregir es tarea del override determinista (ver seccion Guardrails).
 
-**Ruta de llamada del Judge**: El Judge (prompt v1_judge v2.0) se invoca via FastAPI (`POST /api/analyze/judge`), donde el prompt esta versionado en `v1_judge.py` y se ejecuta a traves del mismo `AnthropicClient` que todas las llamadas LLM. Esto garantiza observabilidad consistente via Langfuse, manejo de errores unificado y versionado de prompts.
+**Ruta de llamada del Judge**: El Judge (prompt v1_judge v2.2) se invoca via FastAPI (`POST /api/analyze/judge`), donde el prompt esta versionado en `v1_judge.py` y se ejecuta por la misma puerta que todas las llamadas LLM — `ModelosService` -> `LLMManager`, que arma el cliente del proveedor configurado para ese paso. Esto garantiza observabilidad consistente via Langfuse, manejo de errores unificado y versionado de prompts.
 
 ---
 
 ## Deteccion de alucinaciones — Guardrails
 
-Cinco guardrails corren dentro de `ResolutionService.resolve()`, y estan en dos lugares
-distintos a proposito.
+Seis guardrails corren dentro de `ResolutionService.resolve()`, y estan en dos lugares
+distintos a proposito. Ninguno corrige nada: los cuatro primeros dejan constancia de lo que
+el override determinista ya corrigio; los dos ultimos miran campos que el override no fija,
+asi que ahi no corrige nadie — el aviso queda para el humano.
 
-**Tres detectan que el modelo se contradijo con la evidencia** (`guardrails.antes_del_override`). Corren
+**Cuatro detectan que el modelo se contradijo con la evidencia** (`guardrails.antes_del_override`:
+`approve_con_blocker`, `riesgo_blocker_inventado`, `reject_sin_blocker` y
+`compensacion_contra_el_sla`). Corren
 **antes** del override determinista, porque despues la propuesta del modelo ya fue reemplazada y
 la contradiccion deja de ser observable: el sistema seguiria estando protegido, pero la
 alucinacion se corregiria en silencio y no quedaria registrada en ningun lado. Al correr antes,
 el warning viaja en `guardrail_warnings` hasta el informe y hasta el audit trail.
 
-**Dos validan campos que el codigo no sobrescribe** (`guardrails.despues_del_override`): la compensacion y
-la confianza salen del modelo tal cual, asi que ahi si hay algo que comprobar sobre el valor
-final.
+**Dos validan campos que el codigo no siempre sobrescribe** (`guardrails.despues_del_override`:
+`compensacion_excede_el_cargo` y `confianza_excesiva`). La confianza sale del modelo tal cual
+y ahi siempre hay algo que comprobar. El monto de compensacion no: cuando `check_sla` midio el
+plazo, el override fija `compensation_applicable` y `compensation_amount_usd`, y el codigo ya
+acota el monto al tope de la politica y a la transaccion — con lo que en el camino normal el
+guardrail 5 no puede dispararse. Le queda el caso sin dato de SLA, donde el monto que llega al
+informe es el que propuso el modelo.
 
 ### Guardrail 1: APPROVE con BLOCKER activo
 
@@ -428,7 +453,9 @@ final.
 
 **Por que importa:** Esta es la alucinacion mas peligrosa posible. Aprobar un contracargo para una transaccion de criptomonedas (irreversible por diseño) o un caso de fraude confirmado resultaria en perdida financiera. El guardrail lo atrapa incluso cuando el LLM produce output contradictorio.
 
-### Guardrail 2: BLOCKER whitelist
+### La whitelist de BLOCKER — el mecanismo vecino
+
+No es uno de los seis: no vive en `guardrails.py` sino en `decision.degradar_blockers_no_habilitados()`, y corre sobre los veredictos apenas vuelven de la evaluacion de politicas, antes de que ningun guardrail mire nada. Se documenta aca porque es lo que hace que el guardrail 1 tenga sentido.
 
 **Condicion:** Un veredicto tiene `verdict == "BLOCKER"` pero `policy_code` no esta en `puede_bloquear`
 
@@ -442,18 +469,44 @@ final.
 POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})  # solo la semilla
 ```
 
-### Guardrail 3: BLOCKER sin veredictos reales
+### Guardrail 2: BLOCKER sin veredictos reales
 
 **Condicion:** `risk_level == "BLOCKER"` pero no hay ningun veredicto BLOCKER en policy_verdicts
 
-**Accion:** Auto-correccion — degradar a `risk_level = "HIGH"` + `recommended_action = "PENDING_HITL"` + `requires_hitl = true`
+**Accion:** El override determinista ya fijo el riesgo que sale de los veredictos —HIGH, MEDIUM o LOW segun cuantos FAIL haya—. El guardrail no corrige: **registra** que el modelo inflo el riesgo.
 
-**Warning agregado:**
+**Warning agregado** (ejemplo: el nivel del final lo interpola el codigo, y no siempre es HIGH):
 ```
-"GUARDRAIL: risk_level=BLOCKER sin veredictos BLOCKER reales — auto-corregido a HIGH + PENDING_HITL"
+"GUARDRAIL: el modelo propuso risk_level=BLOCKER sin veredictos BLOCKER reales — corregido a HIGH"
 ```
 
-### Guardrail 4: Compensacion excede monto de transaccion
+### Guardrail 3: REJECT sin BLOCKER
+
+**Condicion:** `recommended_action == "REJECT"` pero ningun veredicto tiene `verdict == "BLOCKER"`
+
+**Accion:** El override ya fijo la accion que sale de los veredictos. El guardrail **registra** que el modelo rechazo sin tener con que.
+
+**Warning agregado** (ejemplo: la accion del final la interpola el codigo, y no siempre es PENDING_HITL):
+```
+"GUARDRAIL: el modelo propuso REJECT sin veredictos BLOCKER — corregido a PENDING_HITL (requiere revision humana)"
+```
+
+**Por que importa:** Es la alucinacion espejo de la primera, y la que le cuesta al cliente: el caso se cierra en contra sin que ninguna politica lo pida.
+
+### Guardrail 4: Compensacion contra el SLA
+
+**Condicion:** el modelo propuso un `compensation_applicable` distinto del que sale del plazo ya medido por `check_sla`
+
+**Accion:** El override copia el valor del SLA. El guardrail **registra** la divergencia.
+
+**Warning agregado** (ejemplo: los dos valores los interpola el codigo, y pueden venir al reves):
+```
+"GUARDRAIL: el modelo propuso compensation_applicable=True contra un SLA que dice False — corregido segun POL-SLA-004"
+```
+
+**Por que importa:** Desde v3.1 la compensacion la calcula el codigo contando dias habiles. Si el modelo la propone igual y no coincide, esa diferencia es la señal de que leyo mal el plazo — y queda anotada en vez de desaparecer con el override.
+
+### Guardrail 5: Compensacion excede monto de transaccion
 
 **Condicion:** `compensation_amount_usd > transaction.amount_usd * 1.10`
 
@@ -466,7 +519,7 @@ POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})  # solo la 
 
 **Por que importa:** POL-SLA-004 fija la compensacion maxima en USD 15. El LLM podria alucinar un monto de compensacion basado en el valor de la transaccion en vez del tope fijo. Este guardrail señala la anomalia sin forzar una correccion (el analista puede tener razones legitimas para un override).
 
-### Guardrail 5: Confianza excesiva con multiples fallas de politica
+### Guardrail 6: Confianza excesiva con multiples fallas de politica
 
 **Condicion:** `confidence > 0.95` Y `fail_count >= 2` (veredictos FAIL o BLOCKER)
 
@@ -483,11 +536,13 @@ POLICY_SEED_BLOQUEANTES: frozenset[str] = frozenset({"POL-EXC-003"})  # solo la 
 
 | Guardrail | Auto-corrige | Trigger HITL | Severidad |
 |-----------|-------------|-------------|-----------|
-| APPROVE + BLOCKER | Si (forzar REJECT) | No (resuelto automaticamente) | Critica |
-| BLOCKER fuera de whitelist | Si (degradar a FAIL) | Si (requires_human_review) | Critica |
-| BLOCKER sin veredictos reales | Si (degradar a HIGH) | Si (PENDING_HITL) | Alta |
-| Compensacion > 110% | No | Si (warning registrado) | Alta |
-| Confianza > 95% con 2+ FAILs | No | Si (warning registrado) | Media |
+| 1. APPROVE + BLOCKER | No — el override ya fijo REJECT | No (resuelto automaticamente) | Critica |
+| 2. BLOCKER sin veredictos reales | No — el override ya fijo el riesgo real | Segun los FAILs que queden | Alta |
+| 3. REJECT sin BLOCKER | No — el override ya fijo la accion real | Segun los FAILs que queden | Critica |
+| 4. Compensacion contra el SLA | No — el override copia lo que midio `check_sla` | No | Media |
+| 5. Compensacion > 110% | No | No — solo queda el warning | Alta |
+| 6. Confianza > 95% con 2+ FAILs | No | No — solo queda el warning | Media |
+| *(vecino)* BLOCKER fuera de whitelist — `decision.py`, no es guardrail | Si (degradar a FAIL) | Si (requires_human_review) | Critica |
 
 ---
 
@@ -553,14 +608,14 @@ POST /api/feedback/ -> db.save_feedback() -> RAGUpdater.on_case_resolved(case, 8
 
 ```
 api/app/llm/prompts/
-  v1_policy_eval.py       <- v1.2 en produccion (mecanico, optimizado para Haiku)
-  v1_resolution.py        <- v3.0 en produccion (analitico, optimizado para Sonnet)
-  v1_judge.py             <- v2.0 en produccion (rubricas granulares)
+  v1_policy_eval.py       <- v1.5 en produccion (mecanico, optimizado para Haiku)
+  v1_resolution.py        <- v3.2 en produccion (analitico, optimizado para Sonnet)
+  v1_judge.py             <- v2.2 en produccion (rubricas granulares)
 ```
 
-Cada archivo comienza con un encabezado de version:
+Cada archivo comienza con el encabezado de la version vigente, y debajo quedan los de las anteriores:
 ```python
-# PROMPT VERSION: v3.0 | DATE: 2025-07 | CHANGES: Unlock analytical reasoning for Sonnet
+# PROMPT VERSION: v3.2 | DATE: 2026-08 | CHANGES: log_summary y precedent_summary los fija el codigo; el prompt deja de pedirlos
 ```
 
 ### Historia de versiones
@@ -569,7 +624,7 @@ Cada archivo comienza con un encabezado de version:
 |--------|------|------|------|
 | `policy_eval` | Instrucciones basicas | Logica de umbrales estricta, conteo PREVIO vs actual, determinacion LATAM | v1.2: fix igualdad en umbrales, documentacion |
 | `resolution` | Instruccional basico | Mecanico: formato rigido, restricciones de datos | Analitico: "codigo decide, LLM razona". Decision determinada pre-inyectada. Precedent analysis. |
-| `judge` | Criterios sin rubrica | Rubricas granulares de 5 niveles por criterio. Reglas anti-penalizacion para PENDING_HITL correcto. | — (v2.0 sigue en produccion) |
+| `judge` | Criterios sin rubrica | Rubricas granulares de 5 niveles por criterio. Reglas anti-penalizacion para PENDING_HITL correcto. | — (hoy en produccion corre v2.2: ver la tabla del comienzo) |
 
 ### Flujo de promocion de versiones
 
@@ -602,27 +657,33 @@ Langfuse se configura via `CB_LANGFUSE_ENABLED=true` y las credenciales en `.env
 | Metrica | Campo Langfuse | Donde se captura |
 |---------|---------------|------------------|
 | Tokens (input/output) | `usage.input_tokens`, `usage.output_tokens` | Cada llamada LLM |
-| Latencia por llamada | Duracion del span | Cada llamada LLM |
+| Latencia por llamada | `latency_ms` de la generacion | Cada llamada LLM |
 | Costo estimado por tokens | `usage.total_cost` | Cada llamada LLM |
 | Score del Judge | Score personalizado `judge_score` | POST /api/analyze/judge |
 | Feedback del analista | Score personalizado `analyst_feedback_judge_score` | POST /api/feedback/ |
-| Cache hit | Atributo del span `cache_hit: true/false` | Antes de llamadas LLM |
-| Tasa de error | Spans fallidos | Cada llamada LLM |
+| Cache hit | `cache_hit: true/false` en el `usage` de la respuesta | Antes de llamadas LLM (`pipeline.py`) |
+| Tasa de error | Llamadas que no llegan a registrar generacion | Cada llamada LLM |
 
 ### Estructura de traza por resolucion
 
 ```
-Trace: POST /api/analyze/resolve [TXN-00051]
-  ├── Span: qdrant_cache_check [hit=false, latency=12ms]
-  ├── Span: v1_policy_eval [model=haiku, tokens=1847, latency=890ms]
-  ├── Span: v1_resolution [model=sonnet, tokens=3204, latency=1340ms]
-  └── Span: guardrails [warnings=1: APPROVE+BLOCKER corregido]
+Trace: resolve_chargeback [TXN-00051]
+  ├── Generation: llm_call [v1_policy_eval, model=haiku, tokens=1847, latency=890ms]
+  └── Generation: llm_call [v1_resolution, model=sonnet, tokens=3204, latency=1340ms]
 
-Trace: POST /api/analyze/judge [TXN-00051]
-  ├── Span: v1_judge [model=sonnet, tokens=2400, latency=1100ms]
+Trace: judge_resolution [TXN-00051]
+  ├── Generation: llm_call [v1_judge, model=sonnet, tokens=2400, latency=1100ms]
   ├── Score: judge_score = 8.7
-  └── Score: judge_score -> adjunto a traza resolve
+  └── Score: judge_score -> adjunto tambien a la traza resolve_chargeback
 ```
+
+Los nombres de traza salen de `constants.py` (`TRACE_RESOLVE`, `TRACE_JUDGE`) y las tres
+generaciones se registran con el mismo nombre (`TRACE_LLM_CALL` = `llm_call`): lo que las
+distingue en el dashboard es el modelo y el orden dentro de la traza; el prompt entre
+corchetes esta aca para leerlo, no es parte del nombre. El chequeo de cache y los guardrails
+no dejan observacion propia: el Protocol `Tracer` expone `enabled`, `trace`, `generation` y
+`score`, y nada mas. El cache viaja en `cache_hit` dentro del `usage` de la respuesta, y los
+avisos de guardrail en `guardrail_warnings`.
 
 ### Casos de uso del dashboard
 
@@ -633,13 +694,13 @@ Langfuse agrega el uso de tokens por modelo, ruta y periodo. El dashboard revela
 Rastrear `judge_score` en el tiempo muestra si la calidad de las resoluciones esta mejorando a medida que se indexan nuevos precedentes. Una tendencia descendente indica que los casos auto-indexados recientes podrian ser de baja calidad.
 
 **Tasa de cache hit:**
-Una tasa alta (> 20%) indica que el sistema maneja muchos casos similares eficientemente. Una tasa baja puede indicar que el corpus es muy diverso o el umbral (0.92) es muy estricto.
+Una tasa alta (> 20%) indica que el sistema maneja muchos casos similares eficientemente. Una tasa baja indica que rara vez vuelve a entrar la misma consulta: la clave es exacta —`(transaction_id, cliente_vip, motivo)`— y no hay umbral de similitud que aflojar, porque el cache no es semantico.
 
 **Desglose de latencia:**
 Langfuse traza cada llamada de prompt por separado (policy_eval, resolution, judge). Si la latencia se dispara, la traza identifica cual prompt es el cuello de botella.
 
 **Tasa de error:**
-Parse de JSON fallido (a pesar de `validate_llm_output`), errores de conexion a Qdrant, o rate limits de la API de Anthropic se capturan como spans fallidos con mensajes de error.
+Parse de JSON fallido (a pesar de `validate_llm_output`), errores de conexion a Qdrant, o rate limits de la API de Anthropic hacen que la llamada suba la excepcion y no registre generacion: la traza queda con menos generaciones de las que deberia, y el error sale por el log.
 
 ### Alertas operativas
 
@@ -648,12 +709,12 @@ Complementando la observabilidad de Langfuse, el sistema emite alertas operativa
 | Evento | Severidad | Fuente |
 |--------|-----------|--------|
 | Caso BLOCKER (rechazo automatico) | ERROR | Pipeline de resolucion (`analyze.py`) |
-| Caso requiere HITL | WARNING | Pipeline de resolucion (`analyze.py`) |
+| Caso requiere HITL | WARN | Pipeline de resolucion (`analyze.py`) |
 | Error no manejado en n8n | ERROR | Error Handler (`workflow_ciri_errors.json`) |
 
 Las alertas se almacenan en SQLite (tabla `alerts`) y se consultan via `GET /api/alerts/`. El panel de testing incluye un log de alertas con polling automatico cada 30 segundos, visible en la seccion "Log de alertas".
 
-El Error Handler de n8n ademas envia un email a la direccion configurada en `$vars.ALERT_EMAIL`, asegurando notificacion inmediata para errores criticos.
+El Error Handler de n8n trae ademas un nodo de email a la direccion configurada en `$vars.ALERT_EMAIL`, pero **viene deshabilitado** para que el workflow importe limpio: tal como se entrega no sale ningun mail. Para tener notificacion inmediata hay que crear la credencial SMTP, setear la variable y habilitar el nodo.
 
 ### Habilitar observabilidad
 
