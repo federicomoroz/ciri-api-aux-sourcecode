@@ -685,6 +685,21 @@ esquivarlo con `getattr` para saber con cuál hablaba. Y `LangfuseTracer` tragab
 `enabled` en `True`: como de eso depende la caída al registro local, **encender la observabilidad
 dejaba al panel con menos métricas que apagarla**.
 
+**Y el SDK queda pineado en `langfuse>=2.0,<3.0`, que es una decisión y no inercia.** La v3 rehízo
+el cliente sobre OpenTelemetry y se llevó puesta la API que este adaptador usa: en la serie 4 no
+existe `Langfuse.trace()`, que es el método sobre el que están escritos los tres del `Protocol`.
+Migrar no es subir un número — es reescribir `LangfuseTracer` contra spans de OTEL y volver a
+decidir cómo se mapean generación y score. Eso es trabajo real sobre la pieza que hoy funciona, y
+la observabilidad es un *bonus* de la consigna, no uno de sus siete ejes: el rendimiento está en
+otro lado. El pin es la forma de decir «sé que estoy dos majors atrás y elijo estarlo», en vez de
+descubrirlo el día que un `pip install` sin restricción traiga la v4 y el tracer deje de anotar en
+silencio.
+
+Lo que sí se hizo es que ese día **no** sea silencioso. `tests/unit/test_tracer_contrato.py` lee el
+rango del propio `pyproject.toml` y, si la versión instalada queda afuera, saltea la cláusula
+nombrando las dos versiones en lugar de ponerse rojo sin explicación. El rango no está escrito en el
+test: si el pin cambia, la guarda lo sigue sola.
+
 **El limitador de tasa dejó de ser privado del LLM.** Había tres mecanismos de espera y solo uno
 era preventivo: la ventana deslizante de `LLMManager._espaciar`. Pero era un método privado, así que
 el camino del modelo tenía control y el de embeddings no — **y Voyage tiene el techo más ajustado del

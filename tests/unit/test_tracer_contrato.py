@@ -19,10 +19,52 @@ usa el tracer, no de una teoria:
    exactamente lo que devuelve un tracer apagado.
 """
 
+import importlib.metadata as metadatos
+import tomllib
+from pathlib import Path
+
 import pytest
+from packaging.requirements import Requirement
+from packaging.version import Version
 
 from api.app.observability.tracer import LangfuseTracer, NoOpTracer
 from api.app.observability.trazador_local import TrazadorLocal
+
+RAIZ = Path(__file__).resolve().parents[2]
+
+
+def langfuse_fuera_del_rango() -> str | None:
+    """El rango que declara `api/pyproject.toml`, contra lo que hay instalado.
+
+    El rango **no se escribe aca**: se lee del pyproject, que es donde vive. Si
+    el pin cambia, esta guarda lo sigue sola — la misma regla que el resto del
+    proyecto, un numero en un solo lugar.
+
+    Existe porque el sintoma enganaba. Con una `langfuse` de la serie 4 en el
+    entorno, el constructor arma el cliente, `enabled` queda en True y recien
+    `trace()` falla, porque el metodo no existe en esa API: el SDK se rehizo
+    sobre OpenTelemetry en la v3. El test de abajo se ponia rojo sin decir por
+    que, y lo que estaba mal no era el codigo sino el entorno. Ahora el mismo
+    hecho se lee como lo que es: una version que el proyecto no declara soportar.
+    """
+    deps = tomllib.loads((RAIZ / "api/pyproject.toml").read_text(encoding="utf-8"))
+    declarado = next(
+        (Requirement(d) for d in deps["project"]["dependencies"] if Requirement(d).name == "langfuse"),
+        None,
+    )
+    if declarado is None:
+        return None
+    try:
+        instalada = metadatos.version("langfuse")
+    except metadatos.PackageNotFoundError:
+        return None       # sin el paquete el tracer arranca apagado y el test se saltea solo
+    if Version(instalada) in declarado.specifier:
+        return None
+    return (
+        f"langfuse {instalada} instalada y el proyecto declara "
+        f"'{declarado}': el adaptador esta escrito contra esa serie, asi que el "
+        "contrato no se puede afirmar sobre otra. Ver decisions.md, decision 22"
+    )
 
 
 @pytest.fixture(params=["NoOpTracer", "TrazadorLocal", "LangfuseTracer"])
@@ -66,24 +108,28 @@ class TestElContratoQueTodasCumplen:
         assert isinstance(tracer.trace("x", {}, {}), str)
 
 
-class TestLaClausulaQueLangfuseIncumple:
-    """`enabled` tiene que decir la verdad, y hoy no la dice.
+class TestLaClausulaQueLangfuseIncumplia:
+    """`enabled` tiene que decir la verdad. Hubo un tiempo en que no la decia.
 
-    `LangfuseTracer.trace()` traga la excepcion, devuelve `""` y deja `_enabled`
-    en `True`. El objeto queda afirmando que observa mientras no anota nada.
+    `LangfuseTracer.trace()` tragaba la excepcion, devolvia `""` y dejaba
+    `_enabled` en `True`: el objeto quedaba afirmando que observa mientras no
+    anotaba nada.
 
-    No es teorico: `LangfuseStatsService.enabled` (`langfuse_stats.py:62`)
+    No era teorico. `LangfuseStatsService.enabled` (`langfuse_stats.py:62`)
     pregunta justamente eso para decidir si usa Langfuse o cae al registro local.
-    Con `enabled` mintiendo, **no** cae — y encender la observabilidad deja al
+    Con `enabled` mintiendo, **no** caia — y encender la observabilidad dejaba al
     panel con menos metricas que dejarla apagada.
 
-    El `xfail` es estricto a proposito: cuando la fase 3 lo arregle, este test
-    empieza a pasar y el marcador falla, obligando a sacarlo. Un incumplimiento
-    conocido queda documentado; uno arreglado no se queda escondido detras de un
-    xfail olvidado.
+    Esta arreglado (`decisions.md`, decision 22): una anotacion que falla ahora
+    apaga el tracer, y el segundo test de esta clase lo fija. El primero es la
+    clausula en si, y sigue siendo el que detecta si el adaptador deja de
+    entenderse con el SDK — que es exactamente lo que pasa con una `langfuse`
+    fuera del rango declarado.
     """
 
     def test_si_dice_que_observa_entonces_traza(self, tracer):
+        if isinstance(tracer, LangfuseTracer) and (motivo := langfuse_fuera_del_rango()):
+            pytest.skip(motivo)
         if not tracer.enabled:
             pytest.skip("apagado: la clausula no aplica")
         assert tracer.trace("analisis", {}, {}), (
